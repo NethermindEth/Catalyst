@@ -270,7 +270,7 @@ impl<T: Clock> SlotClock<T> {
 }
 
 #[cfg(test)]
-pub mod mock {
+pub mod mock {  
     use super::*;
     use chrono::DateTime;
 

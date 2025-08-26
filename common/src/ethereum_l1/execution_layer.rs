@@ -436,15 +436,45 @@ impl<T: ELExtension> ExecutionLayer<T> {
     }
 }
 
+pub trait PreconfOperator {
+    fn is_operator_for_current_epoch(
+        &self,
+    ) -> impl std::future::Future<Output = Result<bool, Error>> + Send;
+    fn is_operator_for_next_epoch(
+        &self,
+    ) -> impl std::future::Future<Output = Result<bool, Error>> + Send;
+    fn is_preconf_router_specified_in_taiko_wrapper(
+        &self,
+    ) -> impl std::future::Future<Output = Result<bool, Error>> + Send;
+}
+
+impl<ELE: ELExtension> PreconfOperator for ExecutionLayer<ELE> {
+    async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
+        let operator = self.get_operator_for_current_epoch().await?;
+        Ok(operator == self.preconfer_address)
+    }
+
+    async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
+        let operator = self.get_operator_for_next_epoch().await?;
+        Ok(operator == self.preconfer_address)
+    }
+
+    async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
+        let preconf_router = self.taiko_wrapper_contract.preconfRouter().call().await?;
+        Ok(preconf_router != Address::ZERO)
+    }
+}
+
 #[cfg(test)]
-impl ExecutionLayer {
+impl<T: ELExtension> ExecutionLayer<T> {
     pub async fn new_from_pk(
         ws_rpc_url: String,
         private_key: elliptic_curve::SecretKey<k256::Secp256k1>,
+        extension: Arc<T>,
     ) -> Result<Self, Error> {
         use super::l1_contracts_bindings::taiko_inbox::ITaikoInbox::ForkHeights;
-        use crate::Signer;
         use crate::metrics::Metrics;
+        use crate::shared::signer::Signer;
         use alloy::providers::ProviderBuilder;
         use alloy::providers::WsConnect;
         use alloy::{network::EthereumWallet, signers::local::PrivateKeySigner};
@@ -541,7 +571,8 @@ impl ExecutionLayer {
             .await
             .unwrap(),
             metrics,
-            chain_id: 1,
+            inner: Arc::new(ExecutionLayerInner::new(1, preconfer_address.parse()?)),
+            extension,
         })
     }
 
@@ -582,39 +613,22 @@ impl ExecutionLayer {
     }
 }
 
-pub trait PreconfOperator {
-    fn is_operator_for_current_epoch(
-        &self,
-    ) -> impl std::future::Future<Output = Result<bool, Error>> + Send;
-    fn is_operator_for_next_epoch(
-        &self,
-    ) -> impl std::future::Future<Output = Result<bool, Error>> + Send;
-    fn is_preconf_router_specified_in_taiko_wrapper(
-        &self,
-    ) -> impl std::future::Future<Output = Result<bool, Error>> + Send;
-}
-
-impl<ELE: ELExtension> PreconfOperator for ExecutionLayer<ELE> {
-    async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
-        let operator = self.get_operator_for_current_epoch().await?;
-        Ok(operator == self.preconfer_address)
-    }
-
-    async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
-        let operator = self.get_operator_for_next_epoch().await?;
-        Ok(operator == self.preconfer_address)
-    }
-
-    async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-        let preconf_router = self.taiko_wrapper_contract.preconfRouter().call().await?;
-        Ok(preconf_router != Address::ZERO)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloy::node_bindings::Anvil;
+
+    struct ExecutionLayerMock;
+    impl ELExtension for ExecutionLayerMock {
+        type Config = ();
+        fn new(
+            _inner: Arc<ExecutionLayerInner>,
+            _provider: DynProvider,
+            _config: Self::Config,
+        ) -> Self {
+            Self {}
+        }
+    }
 
     #[tokio::test]
     async fn test_call_contract() {
@@ -622,7 +636,7 @@ mod tests {
         let anvil = Anvil::new().try_spawn().unwrap();
         let ws_rpc_url = anvil.ws_endpoint();
         let private_key = anvil.keys()[0].clone();
-        let el = ExecutionLayer::new_from_pk(ws_rpc_url, private_key)
+        let el = ExecutionLayer::new_from_pk(ws_rpc_url, private_key, Arc::new(ExecutionLayerMock))
             .await
             .unwrap();
         el.call_test_contract().await.unwrap();

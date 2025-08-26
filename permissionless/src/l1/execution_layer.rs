@@ -1,9 +1,11 @@
+#![allow(unused)] // TODO: remove this once we have a used inner, provider, and config fields
+
 use super::bindings;
 use alloy::{
     primitives::Address,
     providers::{DynProvider, Provider},
     rpc::types::{Filter, Log},
-    sol_types::{SolCall, SolEvent},
+    sol_types::SolEvent,
 };
 use anyhow::Error;
 use common::ethereum_l1::{execution_layer_inner::ExecutionLayerInner, extension::ELExtension};
@@ -38,7 +40,6 @@ impl ELExtension for ExecutionLayer {
 
 impl ExecutionLayer {
     async fn get_logs_for_register_method(&self) -> Result<Vec<Log>, Error> {
-        // let chain_id = self.inner.chain_id();
         let registry_address = self.config.contract_addresses.registry_address;
 
         let filter = Filter::new()

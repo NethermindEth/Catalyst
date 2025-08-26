@@ -358,10 +358,25 @@ impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ethereum_l1::slot_clock::mock::*;
-    use crate::taiko::preconf_blocks;
-    const HANDOVER_WINDOW_SLOTS: i64 = 6;
     use alloy::primitives::B256;
+    use common::ethereum_l1::slot_clock::Clock;
+    use common::taiko::preconf_blocks;
+    use chrono::DateTime;
+    use std::time::SystemTime;
+
+    const HANDOVER_WINDOW_SLOTS: i64 = 6;
+
+
+    #[derive(Default)]
+    pub struct MockClock {
+        pub timestamp: i64,
+    }
+    impl Clock for MockClock {
+        fn now(&self) -> SystemTime {
+            SystemTime::from(DateTime::from_timestamp(self.timestamp, 0).unwrap())
+        }
+    }
+
     struct ExecutionLayerMock {
         current_operator: bool,
         next_operator: bool,

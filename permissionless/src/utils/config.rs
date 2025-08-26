@@ -1,3 +1,5 @@
+#![allow(unused)] // TODO: remove this once we have a used contract_addresses field
+
 use common::utils::config_trait::ConfigTrait;
 use tracing::warn;
 

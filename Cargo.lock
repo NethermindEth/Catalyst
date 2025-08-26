@@ -7335,8 +7335,10 @@ version = "1.5.0"
 dependencies = [
  "alloy",
  "anyhow",
+ "chrono",
  "clap",
  "common",
+ "serde_json",
  "tokio",
  "tokio-util",
  "tracing",
