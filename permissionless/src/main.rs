@@ -10,7 +10,10 @@ mod utils;
 async fn main() -> Result<(), Error> {
     common_utils::logging::init_logging();
 
-    info!("🚀 Starting URC Node v{}", env!("CARGO_PKG_VERSION"));
+    info!(
+        "🚀 Starting Permissionless Node v{}",
+        env!("CARGO_PKG_VERSION")
+    );
 
     let _config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
 
