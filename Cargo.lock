@@ -1626,41 +1626,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "catalyst_node"
-version = "1.6.0"
-dependencies = [
- "alloy",
- "alloy-json-rpc",
- "alloy-rlp",
- "anyhow",
- "async-trait",
- "c-kzg",
- "chrono",
- "clap",
- "dotenvy",
- "ecdsa",
- "elliptic-curve",
- "flate2",
- "futures-util",
- "hex",
- "http 1.3.1",
- "jsonrpsee",
- "jsonwebtoken",
- "k256",
- "lazy_static",
- "mockito",
- "prometheus",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "warp",
-]
-
-[[package]]
 name = "cbor4ii"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1802,7 +1767,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -7067,7 +7032,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "alloy",
  "anyhow",
@@ -7366,7 +7331,7 @@ dependencies = [
 
 [[package]]
 name = "whitelist"
-version = "1.5.0"
+version = "1.6.0"
 dependencies = [
  "alloy",
  "anyhow",

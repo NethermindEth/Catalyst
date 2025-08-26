@@ -1107,7 +1107,7 @@ mod tests {
 
     fn create_operator_with_high_taiko_inbox_height()
     -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
-        let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
+        let slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         Operator {
             cancel_token: CancellationToken::new(),
             cancel_counter: 0,
