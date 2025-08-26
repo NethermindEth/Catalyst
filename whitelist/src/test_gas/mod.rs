@@ -1,19 +1,20 @@
-use crate::ethereum_l1::{EthereumL1, extension::ELExtension};
-use crate::shared::l2_block::L2Block;
-use crate::shared::l2_tx_lists::PreBuiltTxList;
+use crate::l1::execution_layer::ExecutionLayer;
 use anyhow::Error;
+use common::ethereum_l1::EthereumL1;
+use common::shared::l2_block::L2Block;
+use common::shared::l2_tx_lists::PreBuiltTxList;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::time::{Duration, sleep};
 use tracing::info;
 
-pub async fn test_gas_params<T: ELExtension>(
-    ethereum_l1: Arc<ethereum_l1::EthereumL1<T>>,
+pub async fn test_gas_params(
+    ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     blocks: u32,
     anchor_height_lag: u64,
     max_bytes_size_of_batch: u64,
     mut transaction_error_receiver: tokio::sync::mpsc::Receiver<
-        ethereum_l1::transaction_error::TransactionError,
+        common::ethereum_l1::transaction_error::TransactionError,
     >,
 ) -> Result<(), Error> {
     let timestamp_sec = std::time::SystemTime::now()

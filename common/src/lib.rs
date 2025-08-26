@@ -8,6 +8,3 @@ pub mod metrics;
 pub mod shared;
 pub mod taiko;
 pub mod utils;
-
-#[cfg(feature = "test-gas")]
-pub mod test_gas;

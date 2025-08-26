@@ -18,10 +18,9 @@ mod node;
 mod utils;
 
 #[cfg(feature = "test-gas")]
-use clap::Parser;
+mod test_gas;
 #[cfg(feature = "test-gas")]
-use common::test_gas::test_gas_params;
-
+use clap::Parser;
 #[cfg(feature = "test-gas")]
 #[derive(Parser, Debug)]
 struct Args {
@@ -109,7 +108,7 @@ async fn main() -> Result<(), Error> {
     #[cfg(feature = "test-gas")]
     if let Some(gas) = args.test_gas {
         info!("Test gas block count: {}", gas);
-        test_gas_params(
+        test_gas::test_gas_params(
             ethereum_l1.clone(),
             gas,
             config.l1_height_lag,
