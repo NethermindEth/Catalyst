@@ -1,5 +1,5 @@
 [package]
-name = "urc"
+name = "permissionless"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 publish = false
 
 [[bin]]
-name = "urc"
+name = "catalyst_permissionless"
 path = "src/main.rs"
 
 [dependencies]

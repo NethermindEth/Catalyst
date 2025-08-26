@@ -7,7 +7,7 @@ license.workspace = true
 publish = false
 
 [[bin]]
-name = "whitelist"
+name = "catalyst_whitelist"
 path = "src/main.rs"
 
 [features]
