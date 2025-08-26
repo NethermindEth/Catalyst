@@ -44,6 +44,7 @@ clap = { version = "4.5", default-features = false, features = [
     "suggestions",
     "derive",
 ] }
+common = { path = "common" }
 discv5 = { version = "0.9.1", default-features = false, features = ["libp2p"] }
 dotenvy = { version = "0.15", default-features = false }
 ecdsa = { version = "0.16", default-features = false }

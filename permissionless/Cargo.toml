@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 repository.workspace = true
 license.workspace = true
+publish = false
 
 [[bin]]
 name = "urc"
@@ -12,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 alloy = { workspace = true }
 anyhow = { workspace = true }
-common = { path = "../common" }
+common = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
