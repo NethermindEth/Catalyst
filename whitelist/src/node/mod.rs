@@ -8,13 +8,13 @@ use crate::{
     metrics::Metrics,
     node::l2_head_verifier::L2HeadVerifier,
     shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
-    taiko::{Taiko, preconf_blocks::BuildPreconfBlockResponse},
 };
 use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     chain_monitor::ChainMonitor,
-    ethereum_l1::{EthereumL1, transaction_error::TransactionError},
+    l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
+    l2::{preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
 };
 use operator::{Operator, Status as OperatorStatus};
 use std::sync::Arc;

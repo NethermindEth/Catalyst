@@ -4,7 +4,7 @@ sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
     TaikoAnchor,
-    "src/taiko/abi/TaikoAnchor.json"
+    "src/l2/abi/TaikoAnchor.json"
 );
 
 sol! {

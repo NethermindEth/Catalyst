@@ -1,12 +1,12 @@
-pub mod config;
-mod fixed_k_signer_chainbound;
-mod l2_contracts_bindings;
-mod l2_execution_layer;
-pub mod operation_type;
-pub mod preconf_blocks;
-
+use super::{
+    bindings::LibSharedData,
+    config::TaikoConfig,
+    execution_layer::L2ExecutionLayer,
+    operation_type::OperationType,
+    preconf_blocks::{self, BuildPreconfBlockResponse},
+};
 use crate::{
-    ethereum_l1::{EthereumL1, extension::ELExtension},
+    l1::{ethereum_l1::EthereumL1, extension::ELExtension},
     metrics::Metrics,
     shared::{
         l2_block::L2Block,
@@ -21,10 +21,6 @@ use alloy::{
     primitives::{Address, B256},
 };
 use anyhow::Error;
-use config::TaikoConfig;
-use l2_contracts_bindings::LibSharedData;
-use l2_execution_layer::L2ExecutionLayer;
-use operation_type::OperationType;
 use serde_json::Value;
 use std::{
     cmp::{max, min},
@@ -251,7 +247,7 @@ impl<ELE: ELExtension> Taiko<ELE> {
         end_of_sequencing: bool,
         is_forced_inclusion: bool,
         operation_type: OperationType,
-    ) -> Result<Option<preconf_blocks::BuildPreconfBlockResponse>, Error> {
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         tracing::debug!(
             "Submitting new L2 block to the Taiko driver with {} txs",
             l2_block.prebuilt_tx_list.tx_list.len()
@@ -318,8 +314,7 @@ impl<ELE: ELExtension> Taiko<ELE> {
 
         trace!("Response from preconfBlocks: {:?}", response);
 
-        let preconfirmed_block =
-            preconf_blocks::BuildPreconfBlockResponse::new_from_value(response);
+        let preconfirmed_block = BuildPreconfBlockResponse::new_from_value(response);
 
         if preconfirmed_block.is_none() {
             tracing::error!("Block was preconfirmed, but failed to decode response from driver.");

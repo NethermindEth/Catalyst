@@ -1,5 +1,5 @@
 use super::forced_inclusion_info::ForcedInclusionInfo;
-use super::{l1_contracts_bindings::*, tools, transaction_error::TransactionError};
+use super::{bindings::*, tools, transaction_error::TransactionError};
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{Address, Bytes, FixedBytes},

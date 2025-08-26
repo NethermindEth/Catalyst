@@ -6,7 +6,7 @@ use tokio::{sync::mpsc::Sender, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::ethereum_l1::l1_contracts_bindings::taiko_inbox::ITaikoInbox;
+use crate::l1::bindings::taiko_inbox::ITaikoInbox;
 use crate::utils::event_listener::listen_for_event;
 
 const SLEEP_DURATION: Duration = Duration::from_secs(15);

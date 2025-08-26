@@ -72,7 +72,7 @@ pub mod taiko_inbox {
         #[allow(missing_docs)]
         #[sol(rpc)]
         ITaikoInbox,
-        "src/ethereum_l1/abi/ITaikoInbox.json"
+        "src/l1/abi/ITaikoInbox.json"
     );
 }
 
@@ -80,14 +80,14 @@ sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
     PreconfRouter,
-    "src/ethereum_l1/abi/PreconfRouter.json"
+    "src/l1/abi/PreconfRouter.json"
 );
 
 sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
     PreconfWhitelist,
-    "src/ethereum_l1/abi/PreconfWhitelist.json"
+    "src/l1/abi/PreconfWhitelist.json"
 );
 
 sol!(
@@ -115,6 +115,6 @@ pub mod taiko_wrapper {
         #[allow(missing_docs)]
         #[sol(rpc)]
         TaikoWrapper,
-        "src/ethereum_l1/abi/TaikoWrapper.json"
+        "src/l1/abi/TaikoWrapper.json"
     );
 }

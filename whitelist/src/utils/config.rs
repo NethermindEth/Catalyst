@@ -1,4 +1,4 @@
-use common::ethereum_l1::config::ContractAddresses;
+use common::l1::config::ContractAddresses;
 use common::utils::config_trait::ConfigTrait;
 use tokio::sync::OnceCell;
 use tracing::warn;

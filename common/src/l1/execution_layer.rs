@@ -5,8 +5,8 @@ use super::{
     transaction_error::TransactionError,
 };
 use crate::{
-    ethereum_l1::{
-        l1_contracts_bindings::*, monitor_transaction::TransactionMonitor,
+    l1::{
+        bindings::*, monitor_transaction::TransactionMonitor,
         propose_batch_builder::ProposeBatchBuilder,
     },
     metrics,
@@ -474,7 +474,7 @@ impl<T: ELExtension> ExecutionLayer<T> {
         private_key: elliptic_curve::SecretKey<k256::Secp256k1>,
         extension: Arc<T>,
     ) -> Result<Self, Error> {
-        use super::l1_contracts_bindings::taiko_inbox::ITaikoInbox::ForkHeights;
+        use super::bindings::taiko_inbox::ITaikoInbox::ForkHeights;
         use crate::metrics::Metrics;
         use crate::shared::signer::Signer;
         use alloy::providers::ProviderBuilder;

@@ -3,20 +3,23 @@ mod batch_builder;
 pub mod config;
 
 use crate::{
-    ethereum_l1::EthereumL1,
     forced_inclusion::ForcedInclusion,
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::batch_manager::config::BatchesToSend,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
-    taiko::{
-        self, Taiko, operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse,
-    },
 };
 use alloy::rpc::types::Transaction as GethTransaction;
 use alloy::{consensus::BlockHeader, consensus::Transaction, primitives::Address};
 use anyhow::Error;
 use batch_builder::BatchBuilder;
+use common::{
+    l1::ethereum_l1::EthereumL1,
+    l2::{
+        self, operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko,
+        taiko::Taiko,
+    },
+};
 use config::BatchBuilderConfig;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
@@ -247,7 +250,7 @@ impl BatchManager {
             .ok_or_else(|| anyhow::anyhow!("get_anchor_block_offset: No transactions in block"))?;
 
         let l2_anchor_tx = self.taiko.get_transaction_by_hash(*anchor_tx_hash).await?;
-        let l1_anchor_block_id = taiko::decode_anchor_id_from_tx_data(l2_anchor_tx.input())?;
+        let l1_anchor_block_id = l2::taiko::decode_anchor_id_from_tx_data(l2_anchor_tx.input())?;
 
         debug!(
             "get_l1_anchor_block_offset_for_l2_block: L2 block {l2_block_height} has L1 anchor block id {l1_anchor_block_id}"

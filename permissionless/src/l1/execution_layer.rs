@@ -8,7 +8,7 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::Error;
-use common::ethereum_l1::{execution_layer_inner::ExecutionLayerInner, extension::ELExtension};
+use common::l1::{execution_layer_inner::ExecutionLayerInner, extension::ELExtension};
 use std::sync::Arc;
 
 #[derive(Clone)]

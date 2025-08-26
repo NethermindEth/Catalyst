@@ -1,7 +1,7 @@
 use super::{
+    bindings::{Bridge, LibSharedData, TaikoAnchor},
     config::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY, TaikoConfig},
     fixed_k_signer_chainbound,
-    l2_contracts_bindings::{Bridge, LibSharedData, TaikoAnchor},
 };
 use crate::shared::alloy_tools;
 use alloy::{

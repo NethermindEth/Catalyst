@@ -1,6 +1,6 @@
 use anyhow::Error;
 use common::{
-    chain_monitor, ethereum_l1, funds_monitor, metrics, shared, taiko, utils as common_utils,
+    chain_monitor, funds_monitor, l1 as common_l1, l2, metrics, shared, utils as common_utils,
 };
 use metrics::Metrics;
 use shared::signer::Signer;
@@ -64,42 +64,43 @@ async fn main() -> Result<(), Error> {
     )
     .await?;
 
-    let ethereum_l1 = ethereum_l1::EthereumL1::<l1::execution_layer::ExecutionLayer>::new(
-        ethereum_l1::config::EthereumL1Config {
-            execution_rpc_urls: config.l1_rpc_urls.clone(),
-            contract_addresses: config
-                .specific_config
-                .contract_addresses
-                .clone()
-                .try_into()?,
-            consensus_rpc_url: config.l1_beacon_url,
-            slot_duration_sec: config.l1_slot_duration_sec,
-            slots_per_epoch: config.l1_slots_per_epoch,
-            preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-            min_priority_fee_per_gas_wei: config.min_priority_fee_per_gas_wei,
-            tx_fees_increase_percentage: config.tx_fees_increase_percentage,
-            max_attempts_to_send_tx: config.max_attempts_to_send_tx,
-            max_attempts_to_wait_tx: config.max_attempts_to_wait_tx,
-            delay_between_tx_attempts_sec: config.delay_between_tx_attempts_sec,
-            signer: l1_signer,
-            preconfer_address: config.preconfer_address.clone().map(|s| {
-                s.parse()
-                    .expect("Preconfer address is not a valid Ethereum address")
-            }),
-            extra_gas_percentage: config.extra_gas_percentage,
-        },
-        l1::execution_layer::EthereumL1Config {
-            contract_addresses: config
-                .specific_config
-                .contract_addresses
-                .clone()
-                .try_into()?,
-        },
-        transaction_error_sender,
-        metrics.clone(),
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?;
+    let ethereum_l1 =
+        common_l1::ethereum_l1::EthereumL1::<l1::execution_layer::ExecutionLayer>::new(
+            common_l1::config::EthereumL1Config {
+                execution_rpc_urls: config.l1_rpc_urls.clone(),
+                contract_addresses: config
+                    .specific_config
+                    .contract_addresses
+                    .clone()
+                    .try_into()?,
+                consensus_rpc_url: config.l1_beacon_url,
+                slot_duration_sec: config.l1_slot_duration_sec,
+                slots_per_epoch: config.l1_slots_per_epoch,
+                preconf_heartbeat_ms: config.preconf_heartbeat_ms,
+                min_priority_fee_per_gas_wei: config.min_priority_fee_per_gas_wei,
+                tx_fees_increase_percentage: config.tx_fees_increase_percentage,
+                max_attempts_to_send_tx: config.max_attempts_to_send_tx,
+                max_attempts_to_wait_tx: config.max_attempts_to_wait_tx,
+                delay_between_tx_attempts_sec: config.delay_between_tx_attempts_sec,
+                signer: l1_signer,
+                preconfer_address: config.preconfer_address.clone().map(|s| {
+                    s.parse()
+                        .expect("Preconfer address is not a valid Ethereum address")
+                }),
+                extra_gas_percentage: config.extra_gas_percentage,
+            },
+            l1::execution_layer::EthereumL1Config {
+                contract_addresses: config
+                    .specific_config
+                    .contract_addresses
+                    .clone()
+                    .try_into()?,
+            },
+            transaction_error_sender,
+            metrics.clone(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?;
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
@@ -124,10 +125,10 @@ async fn main() -> Result<(), Error> {
     let jwt_secret_bytes =
         common_utils::file_operations::read_jwt_secret(&config.jwt_secret_file_path)?;
     let taiko = Arc::new(
-        taiko::Taiko::new(
+        l2::taiko::Taiko::new(
             ethereum_l1.clone(),
             metrics.clone(),
-            taiko::config::TaikoConfig::new(
+            l2::config::TaikoConfig::new(
                 config.taiko_geth_rpc_url.clone(),
                 config.taiko_geth_auth_rpc_url,
                 config.taiko_driver_url,

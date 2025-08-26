@@ -1,25 +1,10 @@
-pub mod config;
-pub mod consensus_layer;
-pub mod execution_layer;
-pub mod execution_layer_inner;
-pub mod extension;
-pub mod forced_inclusion_info;
-pub mod l1_contracts_bindings;
-mod monitor_transaction;
-pub mod propose_batch_builder; // TODO: move to the whitelist module
-pub mod slot_clock;
-mod tools;
-pub mod transaction_error;
-
+use super::{
+    config::EthereumL1Config, consensus_layer::ConsensusLayer, execution_layer::ExecutionLayer,
+    extension::ELExtension, slot_clock::SlotClock, transaction_error::TransactionError,
+};
 use anyhow::Error;
-use config::EthereumL1Config;
-use consensus_layer::ConsensusLayer;
-use execution_layer::ExecutionLayer;
-use extension::ELExtension;
-use slot_clock::SlotClock;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::mpsc::Sender;
-use transaction_error::TransactionError;
 
 use crate::metrics::Metrics;
 

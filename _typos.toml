@@ -1,5 +1,5 @@
 [files]
 extend-exclude = [
-    "node/src/ethereum_l1/abi/*.json", 
-    "node/src/taiko/abi/*.json"
+    "node/src/l1/abi/*.json",
+    "node/src/l2/abi/*.json"
 ]

@@ -8,7 +8,7 @@ use tokio::sync::mpsc::{self, Receiver};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
-use crate::ethereum_l1::l1_contracts_bindings::taiko_inbox::ITaikoInbox;
+use crate::l1::bindings::taiko_inbox::ITaikoInbox;
 
 mod batch_proposed_receiver;
 mod l2_block_receiver;

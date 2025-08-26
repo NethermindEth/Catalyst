@@ -1,8 +1,8 @@
-use crate::{ethereum_l1::EthereumL1, l1::execution_layer::ExecutionLayer};
+use crate::l1::execution_layer::ExecutionLayer;
 use anyhow::Error;
 use common::{
     blob::blob_parser::extract_transactions_from_blob,
-    ethereum_l1::forced_inclusion_info::ForcedInclusionInfo,
+    l1::{ethereum_l1::EthereumL1, forced_inclusion_info::ForcedInclusionInfo},
 };
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, atomic::AtomicU64};

@@ -1,13 +1,16 @@
 use crate::l1::execution_layer::ExecutionLayer;
 use anyhow::Error;
 use common::{
-    ethereum_l1::{
-        EthereumL1,
+    l1::{
+        ethereum_l1::EthereumL1,
         execution_layer::{ExecutionLayer as ExecutionLayerCommon, PreconfOperator},
         slot_clock::{Clock, RealClock, SlotClock},
     },
+    l2::{
+        preconf_blocks::TaikoStatus,
+        taiko::{PreconfDriver, Taiko},
+    },
     shared::l2_slot_info::L2SlotInfo,
-    taiko::{PreconfDriver, Taiko, preconf_blocks::TaikoStatus},
     utils::types::*,
 };
 use std::sync::Arc;
@@ -378,8 +381,8 @@ mod tests {
     use super::*;
     use alloy::primitives::B256;
     use chrono::DateTime;
-    use common::ethereum_l1::slot_clock::Clock;
-    use common::taiko::preconf_blocks;
+    use common::l1::slot_clock::Clock;
+    use common::l2::preconf_blocks;
     use std::time::SystemTime;
 
     const HANDOVER_WINDOW_SLOTS: i64 = 6;

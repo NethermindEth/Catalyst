@@ -1,7 +1,7 @@
 #![allow(unused)] // TODO: remove this once we have a used ethereum_l1 field
 
 use crate::l1::execution_layer::ExecutionLayer;
-use common::ethereum_l1::EthereumL1;
+use common::l1::ethereum_l1::EthereumL1;
 use std::sync::Arc;
 
 pub struct Registry {

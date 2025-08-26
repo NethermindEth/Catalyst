@@ -2,16 +2,16 @@ use std::{collections::VecDeque, sync::Arc};
 
 use super::config::{BatchesToSend, ForcedInclusionBatch};
 use crate::{
-    ethereum_l1::{
-        EthereumL1, extension::ELExtension, slot_clock::SlotClock,
-        transaction_error::TransactionError,
-    },
     metrics::Metrics,
     node::batch_manager::{batch::Batch, config::BatchBuilderConfig},
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
 };
 use alloy::primitives::Address;
 use anyhow::Error;
+use common::l1::{
+    ethereum_l1::EthereumL1, extension::ELExtension, slot_clock::SlotClock,
+    transaction_error::TransactionError,
+};
 use tracing::{debug, error, trace, warn};
 
 pub struct BatchBuilder {

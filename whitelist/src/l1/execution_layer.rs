@@ -6,9 +6,9 @@ use alloy::{
     providers::DynProvider,
 };
 use anyhow::{Error, anyhow};
-use common::ethereum_l1::{
-    config::ContractAddresses, execution_layer_inner::ExecutionLayerInner, extension::ELExtension,
-    forced_inclusion_info::ForcedInclusionInfo, l1_contracts_bindings::BatchParams,
+use common::l1::{
+    bindings::BatchParams, config::ContractAddresses, execution_layer_inner::ExecutionLayerInner,
+    extension::ELExtension, forced_inclusion_info::ForcedInclusionInfo,
     propose_batch_builder::ProposeBatchBuilder,
 };
 use std::sync::Arc;

@@ -1,6 +1,6 @@
 use super::batch::Batch;
-use crate::ethereum_l1::l1_contracts_bindings::BatchParams;
 use alloy::primitives::Address;
+use common::l1::bindings::BatchParams;
 use std::collections::VecDeque;
 
 pub type ForcedInclusionBatch = Option<BatchParams>;

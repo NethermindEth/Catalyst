@@ -1,6 +1,6 @@
 use crate::l1::execution_layer::ExecutionLayer;
 use anyhow::Error;
-use common::ethereum_l1::EthereumL1;
+use common::l1::ethereum_l1::EthereumL1;
 use common::shared::l2_block::L2Block;
 use common::shared::l2_tx_lists::PreBuiltTxList;
 use std::str::FromStr;
@@ -14,7 +14,7 @@ pub async fn test_gas_params(
     anchor_height_lag: u64,
     max_bytes_size_of_batch: u64,
     mut transaction_error_receiver: tokio::sync::mpsc::Receiver<
-        common::ethereum_l1::transaction_error::TransactionError,
+        common::l1::transaction_error::TransactionError,
     >,
 ) -> Result<(), Error> {
     let timestamp_sec = std::time::SystemTime::now()

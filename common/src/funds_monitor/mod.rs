@@ -6,9 +6,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::{
-    ethereum_l1::{EthereumL1, extension::ELExtension},
+    l1::{ethereum_l1::EthereumL1, extension::ELExtension},
+    l2::taiko::Taiko,
     metrics::Metrics,
-    taiko::Taiko,
 };
 
 pub struct FundsMonitor<T: ELExtension> {
