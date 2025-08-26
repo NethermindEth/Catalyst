@@ -1,4 +1,3 @@
-pub mod blob;
 pub mod config;
 pub mod config_trait;
 pub mod event_listener;

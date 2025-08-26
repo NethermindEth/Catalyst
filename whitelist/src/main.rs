@@ -1,6 +1,6 @@
 use anyhow::Error;
 use common::{
-    chain_monitor, ethereum_l1, funds_monitor, metrics, node, shared, taiko, utils as common_utils,
+    chain_monitor, ethereum_l1, funds_monitor, metrics, shared, taiko, utils as common_utils,
 };
 use metrics::Metrics;
 use shared::signer::Signer;
@@ -12,7 +12,9 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+mod forced_inclusion;
 mod l1;
+mod node;
 mod utils;
 
 #[cfg(feature = "test-gas")]
@@ -87,7 +89,13 @@ async fn main() -> Result<(), Error> {
             }),
             extra_gas_percentage: config.extra_gas_percentage,
         },
-        l1::execution_layer::EthereumL1Config {},
+        l1::execution_layer::EthereumL1Config {
+            contract_addresses: config
+                .specific_config
+                .contract_addresses
+                .clone()
+                .try_into()?,
+        },
         transaction_error_sender,
         metrics.clone(),
     )

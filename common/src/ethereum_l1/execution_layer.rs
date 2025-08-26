@@ -6,21 +6,16 @@ use super::{
 };
 use crate::{
     ethereum_l1::{
-        l1_contracts_bindings::{
-            forced_inclusion_store::IForcedInclusionStore::{self, ForcedInclusion},
-            *,
-        },
-        monitor_transaction::TransactionMonitor,
+        l1_contracts_bindings::*, monitor_transaction::TransactionMonitor,
         propose_batch_builder::ProposeBatchBuilder,
     },
-    forced_inclusion::ForcedInclusionInfo,
     metrics,
     shared::{alloy_tools, l2_block::L2Block, l2_tx_lists::encode_and_compress},
     utils::types::*,
 };
 use alloy::{
     eips::BlockNumberOrTag,
-    primitives::{Address, B256, U256},
+    primitives::{Address, B256},
     providers::{DynProvider, Provider},
     rpc::types::{Filter, Log},
 };
@@ -44,7 +39,7 @@ pub struct ExecutionLayer<T: ELExtension> {
     metrics: Arc<metrics::Metrics>,
     taiko_wrapper_contract: taiko_wrapper::TaikoWrapper::TaikoWrapperInstance<DynProvider>,
     inner: Arc<ExecutionLayerInner>,
-    extension: T,
+    pub extension: Arc<T>,
 }
 
 impl<T: ELExtension> ExecutionLayer<T> {
@@ -93,8 +88,8 @@ impl<T: ELExtension> ExecutionLayer<T> {
                 .await
                 .map_err(|e| Error::msg(format!("Failed to fetch pacaya config: {e}")))?;
 
-        let inner = Arc::new(ExecutionLayerInner::new(chain_id));
-        let extension = T::new(inner.clone(), provider.clone(), specific_config);
+        let inner = Arc::new(ExecutionLayerInner::new(chain_id, preconfer_address));
+        let extension = Arc::new(T::new(inner.clone(), provider.clone(), specific_config));
 
         Ok(Self {
             provider,
@@ -431,62 +426,6 @@ impl<T: ELExtension> ExecutionLayer<T> {
                 block_number_or_tag
             ))?;
         Ok(block.header.timestamp)
-    }
-
-    pub async fn get_forced_inclusion_head(&self) -> Result<u64, Error> {
-        let contract = IForcedInclusionStore::new(
-            self.contract_addresses.forced_inclusion_store,
-            self.provider.clone(),
-        );
-        contract
-            .head()
-            .call()
-            .await
-            .map_err(|e| anyhow!("Failed to get forced inclusion head: {}", e))
-    }
-
-    pub async fn get_forced_inclusion_tail(&self) -> Result<u64, Error> {
-        let contract = IForcedInclusionStore::new(
-            self.contract_addresses.forced_inclusion_store,
-            self.provider.clone(),
-        );
-        contract
-            .tail()
-            .call()
-            .await
-            .map_err(|e| anyhow!("Failed to get forced inclusion tail: {}", e))
-    }
-
-    pub async fn get_forced_inclusion(&self, index: u64) -> Result<ForcedInclusion, Error> {
-        let contract = IForcedInclusionStore::new(
-            self.contract_addresses.forced_inclusion_store,
-            self.provider.clone(),
-        );
-        contract
-            .getForcedInclusion(U256::from(index))
-            .call()
-            .await
-            .map_err(|e| {
-                Error::msg(format!(
-                    "Failed to get forced inclusion at index {index}: {e}"
-                ))
-            })
-    }
-
-    pub fn build_forced_inclusion_batch(
-        &self,
-        coinbase: Address,
-        last_anchor_origin_height: u64,
-        last_l2_block_timestamp: u64,
-        info: &ForcedInclusionInfo,
-    ) -> BatchParams {
-        ProposeBatchBuilder::build_forced_inclusion_batch(
-            self.preconfer_address,
-            coinbase,
-            last_anchor_origin_height,
-            last_l2_block_timestamp,
-            info,
-        )
     }
 
     pub async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>, Error> {

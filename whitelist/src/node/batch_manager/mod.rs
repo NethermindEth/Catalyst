@@ -3,8 +3,9 @@ mod batch_builder;
 pub mod config;
 
 use crate::{
-    ethereum_l1::{EthereumL1, extension::ELExtension},
+    ethereum_l1::EthereumL1,
     forced_inclusion::ForcedInclusion,
+    l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::batch_manager::config::BatchesToSend,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
@@ -28,22 +29,22 @@ enum CachedForcedInclusion {
     Txs(Vec<GethTransaction>),
 }
 
-pub struct BatchManager<T: ELExtension> {
+pub struct BatchManager {
     batch_builder: BatchBuilder,
-    ethereum_l1: Arc<EthereumL1<T>>,
-    pub taiko: Arc<Taiko<T>>,
+    ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
+    pub taiko: Arc<Taiko<ExecutionLayer>>,
     l1_height_lag: u64,
-    forced_inclusion: Arc<ForcedInclusion<T>>,
+    forced_inclusion: Arc<ForcedInclusion>,
     cached_forced_inclusion_txs: CachedForcedInclusion,
     metrics: Arc<Metrics>,
 }
 
-impl<T: ELExtension> BatchManager<T> {
+impl BatchManager {
     pub fn new(
         l1_height_lag: u64,
         config: BatchBuilderConfig,
-        ethereum_l1: Arc<EthereumL1<T>>,
-        taiko: Arc<Taiko<T>>,
+        ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
+        taiko: Arc<Taiko<ExecutionLayer>>,
         metrics: Arc<Metrics>,
     ) -> Self {
         info!(
@@ -59,7 +60,7 @@ impl<T: ELExtension> BatchManager<T> {
             config.max_time_shift_between_blocks_sec,
             config.max_anchor_height_offset,
         );
-        let forced_inclusion = Arc::new(ForcedInclusion::<T>::new(ethereum_l1.clone()));
+        let forced_inclusion = Arc::new(ForcedInclusion::new(ethereum_l1.clone()));
         Self {
             batch_builder: BatchBuilder::new(
                 config,
@@ -105,7 +106,7 @@ impl<T: ELExtension> BatchManager<T> {
                             .decode_current_forced_inclusion()
                             .await?
                         {
-                            let res = BatchManager::<T>::compare_transactions_list(&fi.txs, txs);
+                            let res = BatchManager::compare_transactions_list(&fi.txs, txs);
                             self.cached_forced_inclusion_txs = CachedForcedInclusion::Txs(fi.txs);
                             res
                         } else {
@@ -114,7 +115,7 @@ impl<T: ELExtension> BatchManager<T> {
                         }
                     }
                     CachedForcedInclusion::Txs(cached_txs) => {
-                        BatchManager::<T>::compare_transactions_list(cached_txs, txs)
+                        BatchManager::compare_transactions_list(cached_txs, txs)
                     }
                 }
             }
@@ -145,6 +146,7 @@ impl<T: ELExtension> BatchManager<T> {
                 let forced_inclusion_batch = self
                     .ethereum_l1
                     .execution_layer
+                    .extension
                     .build_forced_inclusion_batch(
                         coinbase,
                         anchor_block_id,
@@ -361,6 +363,7 @@ impl<T: ELExtension> BatchManager<T> {
             let forced_inclusion_batch = self
                 .ethereum_l1
                 .execution_layer
+                .extension
                 .build_forced_inclusion_batch(
                     self.batch_builder.get_config().default_coinbase,
                     anchor_block_id,
@@ -577,6 +580,7 @@ impl<T: ELExtension> BatchManager<T> {
             let forced_inclusion_batch = self
                 .ethereum_l1
                 .execution_layer
+                .extension
                 .build_forced_inclusion_batch(
                     self.batch_builder.get_config().default_coinbase,
                     anchor_block_id,

@@ -3,9 +3,10 @@ pub mod consensus_layer;
 pub mod execution_layer;
 pub mod execution_layer_inner;
 pub mod extension;
+pub mod forced_inclusion_info;
 pub mod l1_contracts_bindings;
 mod monitor_transaction;
-mod propose_batch_builder;
+pub mod propose_batch_builder; // TODO: move to the whitelist module
 pub mod slot_clock;
 mod tools;
 pub mod transaction_error;

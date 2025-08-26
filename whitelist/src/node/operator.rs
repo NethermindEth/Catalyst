@@ -1,25 +1,23 @@
-use crate::{
+use crate::l1::execution_layer::ExecutionLayer;
+use anyhow::Error;
+use common::{
     ethereum_l1::{
         EthereumL1,
-        execution_layer::{ExecutionLayer, PreconfOperator},
-        extension::ELExtension,
+        execution_layer::{ExecutionLayer as ExecutionLayerCommon, PreconfOperator},
         slot_clock::{Clock, RealClock, SlotClock},
     },
     shared::l2_slot_info::L2SlotInfo,
     taiko::{PreconfDriver, Taiko, preconf_blocks::TaikoStatus},
     utils::types::*,
 };
-use anyhow::Error;
-use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 pub struct Operator<
-    ELE: ELExtension,
-    T: PreconfOperator = ExecutionLayer<ELE>,
+    T: PreconfOperator = ExecutionLayerCommon<ExecutionLayer>,
     U: Clock = RealClock,
-    V: PreconfDriver = Taiko<ELE>,
+    V: PreconfDriver = Taiko<ExecutionLayer>,
 > {
     execution_layer: Arc<T>,
     slot_clock: Arc<SlotClock<U>>,
@@ -33,7 +31,6 @@ pub struct Operator<
     cancel_token: CancellationToken,
     cancel_counter: u64,
     operator_transition_slots: u64,
-    _phantom: PhantomData<ELE>, // Add this line
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -97,10 +94,10 @@ impl std::fmt::Display for Status {
     }
 }
 
-impl<ELE: ELExtension> Operator<ELE> {
+impl Operator {
     pub fn new(
-        ethereum_l1: &EthereumL1<ELE>,
-        taiko: Arc<Taiko<ELE>>,
+        ethereum_l1: &EthereumL1<ExecutionLayer>,
+        taiko: Arc<Taiko<ExecutionLayer>>,
         handover_window_slots: u64,
         handover_start_buffer_ms: u64,
         simulate_not_submitting_at_the_end_of_epoch: bool,
@@ -119,12 +116,11 @@ impl<ELE: ELExtension> Operator<ELE> {
             cancel_token,
             cancel_counter: 0,
             operator_transition_slots: OPERATOR_TRANSITION_SLOTS,
-            _phantom: PhantomData,
         })
     }
 }
 
-impl<ELE: ELExtension, T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<ELE, T, U, V> {
+impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
     /// Get the current status of the operator based on the current L1 and L2 slots
     pub async fn get_status(&mut self, l2_slot_info: &L2SlotInfo) -> Result<Status, Error> {
         if !self
@@ -994,7 +990,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             operator_transition_slots: 1,
-            _phantom: PhantomData,
         }
     }
 
@@ -1025,7 +1020,6 @@ mod tests {
             was_synced_preconfer: false,
             cancel_counter: 0,
             operator_transition_slots: 1,
-            _phantom: PhantomData,
         }
     }
 
@@ -1056,7 +1050,6 @@ mod tests {
             was_synced_preconfer: false,
             cancel_counter: 0,
             operator_transition_slots: 1,
-            _phantom: PhantomData,
         }
     }
 

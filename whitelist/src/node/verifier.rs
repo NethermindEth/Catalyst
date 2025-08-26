@@ -1,19 +1,18 @@
-use alloy::primitives::B256;
-use anyhow::Error;
-use std::{cmp::Ordering, sync::Arc};
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
-
+use super::batch_manager::BatchManager;
 use crate::{
     ethereum_l1::{EthereumL1, extension::ELExtension},
     metrics::Metrics,
     node::batch_manager::config::BatchesToSend,
+    l1::execution_layer::ExecutionLayer,
     taiko::Taiko,
-    utils::types::Slot,
 };
-
-use super::batch_manager::BatchManager;
+use alloy::primitives::B256;
+use anyhow::Error;
+use common::utils::types::*;
+use std::{cmp::Ordering, sync::Arc};
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info, warn};
 
 pub enum VerificationResult {
     SuccessNoBatches,
@@ -29,24 +28,24 @@ struct PreconfirmationRootBlock {
     hash: B256,
 }
 
-pub struct Verifier<ELE: ELExtension> {
+pub struct Verifier {
     verification_slot: Slot,
-    verifier_thread: Option<VerifierThread<ELE>>,
+    verifier_thread: Option<VerifierThread>,
     verifier_thread_handle: Option<JoinHandle<Result<BatchesToSend, Error>>>,
 }
 
-struct VerifierThread<ELE: ELExtension> {
-    taiko: Arc<Taiko<ELE>>,
+struct VerifierThread {
+    taiko: Arc<Taiko<ExecutionLayer>>,
     preconfirmation_root: PreconfirmationRootBlock,
-    batch_manager: BatchManager<ELE>,
+    batch_manager: BatchManager,
     cancel_token: CancellationToken,
 }
 
-impl<ELE: ELExtension + 'static> Verifier<ELE> {
+impl Verifier {
     pub async fn new_with_taiko_height(
         taiko_geth_height: u64,
-        taiko: Arc<Taiko<ELE>>,
-        batch_manager: BatchManager<ELE>,
+        taiko: Arc<Taiko<ExecutionLayer>>,
+        batch_manager: BatchManager,
         verification_slot: Slot,
         cancel_token: CancellationToken,
     ) -> Result<Self, Error> {
@@ -152,7 +151,7 @@ impl<ELE: ELExtension + 'static> Verifier<ELE> {
     }
 }
 
-impl<ELE: ELExtension> VerifierThread<ELE> {
+impl VerifierThread {
     async fn verify_submitted_blocks(
         &mut self,
         taiko_inbox_height: u64,

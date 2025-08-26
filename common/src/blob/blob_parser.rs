@@ -3,11 +3,9 @@ use std::{sync::Arc, time::Duration};
 use alloy::{eips::eip4844::kzg_to_versioned_hash, primitives::B256, rpc::types::Transaction};
 use anyhow::Error;
 
+use super::blob_decoder::BlobDecoder;
+use crate::ethereum_l1::{EthereumL1, extension::ELExtension};
 use crate::shared::l2_tx_lists::uncompress_and_decode;
-use crate::{
-    ethereum_l1::{EthereumL1, extension::ELExtension},
-    utils::blob::decode_blob,
-};
 
 pub async fn extract_transactions_from_blob<T: ELExtension>(
     ethereum_l1: Arc<EthereumL1<T>>,
@@ -57,7 +55,7 @@ async fn blob_to_vec<T: ELExtension>(
     for hash in blob_hash {
         for (i, sidecar) in sidecars.data.iter().enumerate() {
             if sidecar_hashes[i] == hash {
-                let data = decode_blob(sidecar.blob.as_ref())?;
+                let data = BlobDecoder::decode_blob(sidecar.blob.as_ref())?;
                 result.extend(data);
                 break;
             }

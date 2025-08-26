@@ -3,6 +3,7 @@ use anyhow::Error;
 
 mod blob_coder;
 mod blob_decoder;
+pub mod blob_parser;
 pub mod constants;
 
 use crate::crypto::kzg::{blob_to_kzg_commitment, compute_blob_kzg_proof};

@@ -1,12 +1,10 @@
 pub mod batch_manager;
-pub mod blob_parser;
 mod l2_head_verifier;
 mod operator;
 mod verifier;
 
-use crate::chain_monitor;
 use crate::{
-    ethereum_l1::{EthereumL1, extension::ELExtension, transaction_error::TransactionError},
+    l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::l2_head_verifier::L2HeadVerifier,
     shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
@@ -14,7 +12,10 @@ use crate::{
 };
 use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
-use chain_monitor::ChainMonitor;
+use common::{
+    chain_monitor::ChainMonitor,
+    ethereum_l1::{EthereumL1, transaction_error::TransactionError},
+};
 use operator::{Operator, Status as OperatorStatus};
 use std::sync::Arc;
 use tokio::{
@@ -34,14 +35,14 @@ pub struct NodeConfig {
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
 }
 
-pub struct Node<T: ELExtension> {
+pub struct Node {
     cancel_token: CancellationToken,
-    ethereum_l1: Arc<EthereumL1<T>>,
+    ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     chain_monitor: Arc<ChainMonitor>,
-    operator: Operator<T>,
-    batch_manager: BatchManager<T>,
-    verifier: Option<verifier::Verifier<T>>,
-    taiko: Arc<Taiko<T>>,
+    operator: Operator,
+    batch_manager: BatchManager,
+    verifier: Option<verifier::Verifier>,
+    taiko: Arc<Taiko<ExecutionLayer>>,
     transaction_error_channel: Receiver<TransactionError>,
     metrics: Arc<Metrics>,
     watchdog: u64,
@@ -49,12 +50,12 @@ pub struct Node<T: ELExtension> {
     config: NodeConfig,
 }
 
-impl<T: ELExtension + 'static> Node<T> {
+impl Node {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         cancel_token: CancellationToken,
-        taiko: Arc<Taiko<T>>,
-        ethereum_l1: Arc<EthereumL1<T>>,
+        taiko: Arc<Taiko<ExecutionLayer>>,
+        ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         chain_monitor: Arc<ChainMonitor>,
         transaction_error_channel: Receiver<TransactionError>,
         metrics: Arc<Metrics>,

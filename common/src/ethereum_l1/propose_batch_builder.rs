@@ -1,5 +1,5 @@
+use super::forced_inclusion_info::ForcedInclusionInfo;
 use super::{l1_contracts_bindings::*, tools, transaction_error::TransactionError};
-use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{Address, Bytes, FixedBytes},
@@ -337,7 +337,7 @@ impl ProposeBatchBuilder {
         };
 
         // Build sidecar
-        let sidecar = crate::utils::blob::build_blob_sidecar(tx_list)?;
+        let sidecar = crate::blob::build_blob_sidecar(tx_list)?;
         let num_blobs = u8::try_from(sidecar.blobs.len())?;
 
         let batch_params = BatchParams {

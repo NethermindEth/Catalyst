@@ -1,7 +1,8 @@
 use std::time::Duration;
 use tracing::{info, warn};
 
-use super::{blob::constants::MAX_BLOB_DATA_SIZE, config_trait::ConfigTrait};
+use super::config_trait::ConfigTrait;
+use crate::blob::constants::MAX_BLOB_DATA_SIZE;
 
 pub struct Config<T: ConfigTrait> {
     pub preconfer_address: Option<String>,
