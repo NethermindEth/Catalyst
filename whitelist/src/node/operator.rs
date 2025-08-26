@@ -241,16 +241,25 @@ impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
         l2_slot_info: &L2SlotInfo,
         driver_status: &TaikoStatus,
     ) -> Result<bool, Error> {
-        if !self
+        let taiko_geth_synced_with_l1 = self.is_taiko_geth_synced_with_l1(l2_slot_info).await?;
+        let geth_and_driver_synced = self
             .is_block_height_synced_between_taiko_geth_and_the_driver(driver_status, l2_slot_info)
-            .await?
-        {
-            self.cancel_counter += 1;
-            self.cancel_if_not_synced_for_sufficient_long_time();
-            return Ok(false);
+            .await?;
+        if taiko_geth_synced_with_l1 && geth_and_driver_synced {
+            self.cancel_counter = 0;
+            return Ok(true);
         }
-        self.cancel_counter = 0;
-        Ok(true)
+
+        if !taiko_geth_synced_with_l1 {
+            warn!("Taiko Geth is not synced with Taiko inbox height");
+        }
+        if !geth_and_driver_synced {
+            warn!("Geth and driver are not synced");
+        }
+
+        self.cancel_counter += 1;
+        self.cancel_if_not_synced_for_sufficient_long_time();
+        Ok(false)
     }
 
     async fn is_preconfer(
@@ -353,6 +362,15 @@ impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
 
         Ok(taiko_geth_height == status.highest_unsafe_l2_payload_block_id)
     }
+
+    async fn is_taiko_geth_synced_with_l1(&self, l2_slot_info: &L2SlotInfo) -> Result<bool, Error> {
+        let taiko_inbox_height = self
+            .execution_layer
+            .get_l2_height_from_taiko_inbox()
+            .await?;
+
+        Ok(l2_slot_info.parent_id() >= taiko_inbox_height)
+    }
 }
 
 #[cfg(test)]
@@ -380,6 +398,7 @@ mod tests {
         current_operator: bool,
         next_operator: bool,
         is_preconf_router_specified: bool,
+        taiko_inbox_height: u64,
     }
 
     impl PreconfOperator for ExecutionLayerMock {
@@ -393,6 +412,10 @@ mod tests {
 
         async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
             Ok(self.is_preconf_router_specified)
+        }
+
+        async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
+            Ok(self.taiko_inbox_height)
         }
     }
 
@@ -636,6 +659,18 @@ mod tests {
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
             Status {
                 preconfer: true,
+                submitter: false,
+                preconfirmation_started: false,
+                end_of_sequencing: false,
+                is_driver_synced: false,
+            }
+        );
+
+        let mut operator = create_operator_with_high_taiko_inbox_height();
+        assert_eq!(
+            operator.get_status(&get_l2_slot_info()).await.unwrap(),
+            Status {
+                preconfer: false,
                 submitter: false,
                 preconfirmation_started: false,
                 end_of_sequencing: false,
@@ -984,7 +1019,7 @@ mod tests {
         is_preconf_router_specified: bool,
     ) -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
-        slot_clock.clock.timestamp = timestamp; // second l1 slot, second l2 slot
+        slot_clock.clock.timestamp = timestamp;
         Operator {
             cancel_token: CancellationToken::new(),
             cancel_counter: 0,
@@ -995,6 +1030,7 @@ mod tests {
                 current_operator,
                 next_operator,
                 is_preconf_router_specified,
+                taiko_inbox_height: 0,
             }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS as u64,
@@ -1014,7 +1050,7 @@ mod tests {
         is_preconf_router_specified: bool,
     ) -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
-        slot_clock.clock.timestamp = timestamp; // second l1 slot, second l2 slot
+        slot_clock.clock.timestamp = timestamp;
         Operator {
             cancel_token: CancellationToken::new(),
             taiko: Arc::new(TaikoMock {
@@ -1024,6 +1060,7 @@ mod tests {
                 current_operator,
                 next_operator,
                 is_preconf_router_specified,
+                taiko_inbox_height: 0,
             }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS as u64,
@@ -1044,7 +1081,7 @@ mod tests {
         is_preconf_router_specified: bool,
     ) -> Operator<ExecutionLayerMock, MockClock, TaikoUnsyncedMock> {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
-        slot_clock.clock.timestamp = timestamp; // second l1 slot, second l2 slot
+        slot_clock.clock.timestamp = timestamp;
         Operator {
             cancel_token: CancellationToken::new(),
             taiko: Arc::new(TaikoUnsyncedMock {
@@ -1054,6 +1091,7 @@ mod tests {
                 current_operator,
                 next_operator,
                 is_preconf_router_specified,
+                taiko_inbox_height: 0,
             }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS as u64,
@@ -1063,6 +1101,32 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             cancel_counter: 0,
+            operator_transition_slots: 1,
+        }
+    }
+
+    fn create_operator_with_high_taiko_inbox_height()
+    -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
+        let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
+        Operator {
+            cancel_token: CancellationToken::new(),
+            cancel_counter: 0,
+            taiko: Arc::new(TaikoMock {
+                end_of_sequencing_block_hash: B256::ZERO,
+            }),
+            execution_layer: Arc::new(ExecutionLayerMock {
+                current_operator: true,
+                next_operator: true,
+                is_preconf_router_specified: true,
+                taiko_inbox_height: 1000,
+            }),
+            slot_clock: Arc::new(slot_clock),
+            handover_window_slots: HANDOVER_WINDOW_SLOTS as u64,
+            handover_start_buffer_ms: 1000,
+            next_operator: false,
+            continuing_role: false,
+            simulate_not_submitting_at_the_end_of_epoch: false,
+            was_synced_preconfer: false,
             operator_transition_slots: 1,
         }
     }
