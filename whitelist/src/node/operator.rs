@@ -359,13 +359,12 @@ impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
 mod tests {
     use super::*;
     use alloy::primitives::B256;
+    use chrono::DateTime;
     use common::ethereum_l1::slot_clock::Clock;
     use common::taiko::preconf_blocks;
-    use chrono::DateTime;
     use std::time::SystemTime;
 
     const HANDOVER_WINDOW_SLOTS: i64 = 6;
-
 
     #[derive(Default)]
     pub struct MockClock {

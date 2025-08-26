@@ -3,7 +3,6 @@ use alloy::primitives::Address;
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 
-
 #[derive(Clone)]
 pub struct ContractAddresses {
     pub taiko_inbox: Address,

@@ -1,9 +1,9 @@
 use super::batch_manager::BatchManager;
 use crate::{
     ethereum_l1::{EthereumL1, extension::ELExtension},
+    l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::batch_manager::config::BatchesToSend,
-    l1::execution_layer::ExecutionLayer,
     taiko::Taiko,
 };
 use alloy::primitives::B256;
