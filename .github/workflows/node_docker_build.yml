@@ -84,15 +84,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Determine event type and set tags
+        id: event
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "is_tag=true" >> $GITHUB_OUTPUT
+            echo "is_branch=false" >> $GITHUB_OUTPUT
+            VERSION=${GITHUB_REF#refs/tags/}
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag_list=type=raw,value=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "is_tag=false" >> $GITHUB_OUTPUT
+            echo "is_branch=true" >> $GITHUB_OUTPUT
+            echo "tag_list=type=raw,value=latest" >> $GITHUB_OUTPUT
+          fi
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.DOCKER_IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=ref,event=tag
-
+          tags: ${{ steps.event.outputs.tag_list }}
+          
       - name: Create manifest list and push
         run: |
           docker buildx imagetools create \
