@@ -10,9 +10,9 @@ name = "urc"
 path = "src/main.rs"
 
 [dependencies]
-common = { path = "../common" }
 alloy = { workspace = true }
 anyhow = { workspace = true }
+common = { path = "../common" }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
