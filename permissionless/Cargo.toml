@@ -1,0 +1,22 @@
+[package]
+name = "permissionless"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "catalyst_permissionless"
+path = "src/main.rs"
+
+[dependencies]
+alloy = { workspace = true }
+anyhow = { workspace = true }
+common = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

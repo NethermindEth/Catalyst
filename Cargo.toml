@@ -1,16 +1,18 @@
 
 [workspace]
 members = [
-    "node",
+    "common",
+    "permissionless",
     "tools/p2p_node/p2p_boot_node",
     "tools/p2p_node/p2p_network",
     "tools/p2p_node/p2p_test_node",
+    "whitelist",
 ]
 resolver = "2"
-default-members = ["node"]
+default-members = ["whitelist"]
 
 [workspace.package]
-version = "1.6.0"
+version = "1.7.0"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -42,6 +44,7 @@ clap = { version = "4.5", default-features = false, features = [
     "suggestions",
     "derive",
 ] }
+common = { path = "common" }
 discv5 = { version = "0.9.1", default-features = false, features = ["libp2p"] }
 dotenvy = { version = "0.15", default-features = false }
 ecdsa = { version = "0.16", default-features = false }

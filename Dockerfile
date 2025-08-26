@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Set the working directory inside the container
-WORKDIR /app/catalyst_node
+WORKDIR /app/catalyst_whitelist
 
 # Copy only the toolchain file first
 COPY rust-toolchain.toml .
@@ -19,19 +19,19 @@ RUN rustup show
 # Now copy the rest of the files
 COPY . .
 
-# Build catalyst_node
+# Build catalyst_whitelist
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/app/catalyst_node/target \
-    cargo build -p catalyst_node --release \
-    && mv /app/catalyst_node/target/release/catalyst_node /root
+    --mount=type=cache,target=/app/catalyst_whitelist/target \
+    cargo build -p whitelist --release \
+    && mv /app/catalyst_whitelist/target/release/catalyst_whitelist /root
 
 # Use small size system for final image
 FROM gcr.io/distroless/cc
 
 # Copy artifacts
-COPY --from=builder /root/catalyst_node /usr/local/bin/catalyst_node
+COPY --from=builder /root/catalyst_whitelist /usr/local/bin/catalyst_whitelist
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /bin/sleep /bin/sleep
 
-ENTRYPOINT ["catalyst_node"]
+ENTRYPOINT ["catalyst_whitelist"]
