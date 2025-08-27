@@ -748,7 +748,12 @@ impl BatchManager {
             .taiko
             .get_last_synced_anchor_block_id_from_taiko_anchor()
             .await?;
-        let l1_height = self.ethereum_l1.execution_layer.get_l1_height().await?;
+        let l1_height = self
+            .ethereum_l1
+            .execution_layer
+            .inner
+            .get_l1_height()
+            .await?;
         let l1_height_with_lag = l1_height - self.l1_height_lag;
         let anchor_id_from_last_l2_block =
             match self.taiko.get_last_synced_anchor_block_id_from_geth().await {

@@ -3,7 +3,6 @@ use anyhow::Error;
 use common::{
     l1::{
         ethereum_l1::EthereumL1,
-        execution_layer::ExecutionLayer as ExecutionLayerCommon,
         slot_clock::{Clock, RealClock, SlotClock},
     },
     l2::{
@@ -18,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 pub struct Operator<
-    T: PreconfOperator = ExecutionLayerCommon<ExecutionLayer>,
+    T: PreconfOperator = ExecutionLayer,
     U: Clock = RealClock,
     V: PreconfDriver = Taiko<ExecutionLayer>,
 > {
@@ -107,7 +106,7 @@ impl Operator {
         cancel_token: CancellationToken,
     ) -> Result<Self, Error> {
         Ok(Self {
-            execution_layer: ethereum_l1.execution_layer.clone(),
+            execution_layer: ethereum_l1.execution_layer.extension.clone(),
             slot_clock: ethereum_l1.slot_clock.clone(),
             taiko,
             handover_window_slots,

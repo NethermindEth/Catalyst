@@ -1,10 +1,7 @@
 use crate::l1::execution_layer::ExecutionLayer;
 use alloy::rpc::types::Transaction;
 use anyhow::Error;
-use common::{
-    blob::blob_parser::extract_transactions_from_blob,
-    l1::{ethereum_l1::EthereumL1, forced_inclusion_info::ForcedInclusionInfo},
-};
+use common::{blob::blob_parser::extract_transactions_from_blob, l1::ethereum_l1::EthereumL1};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, atomic::AtomicU64};
 

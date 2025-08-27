@@ -4,6 +4,7 @@ mod operator;
 mod verifier;
 
 use crate::{
+    chain_monitor::ChainMonitor,
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::l2_head_verifier::L2HeadVerifier,
@@ -12,7 +13,6 @@ use crate::{
 use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
-    chain_monitor::ChainMonitor,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::{preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
 };
@@ -118,6 +118,7 @@ impl Node {
         let taiko_inbox_height = self
             .ethereum_l1
             .execution_layer
+            .extension
             .get_l2_height_from_taiko_inbox()
             .await?;
 
@@ -162,6 +163,7 @@ impl Node {
             let nonce_pending: u64 = self
                 .ethereum_l1
                 .execution_layer
+                .inner
                 .get_preconfer_nonce_pending()
                 .await?;
             if nonce_pending == nonce_latest {
@@ -239,6 +241,7 @@ impl Node {
             let nonce_pending: u64 = self
                 .ethereum_l1
                 .execution_layer
+                .inner
                 .get_preconfer_nonce_pending()
                 .await?;
             debug!("Nonce Latest: {nonce_latest}, Nonce Pending: {nonce_pending}");
@@ -435,6 +438,7 @@ impl Node {
         let taiko_inbox_height = self
             .ethereum_l1
             .execution_layer
+            .extension
             .get_l2_height_from_taiko_inbox()
             .await?;
         if taiko_inbox_height < l2_slot_info.parent_id() {
@@ -571,6 +575,7 @@ impl Node {
                     let taiko_inbox_height = match self
                         .ethereum_l1
                         .execution_layer
+                        .extension
                         .get_l2_height_from_taiko_inbox()
                         .await
                     {
@@ -643,6 +648,7 @@ impl Node {
                 let taiko_inbox_height = match self
                     .ethereum_l1
                     .execution_layer
+                    .extension
                     .get_l2_height_from_taiko_inbox()
                     .await
                 {

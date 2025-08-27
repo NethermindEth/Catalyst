@@ -5,7 +5,7 @@ use alloy::{
 };
 use anyhow::Error;
 
-struct FeesPerGas {
+pub struct FeesPerGas {
     base_fee_per_gas: u128,
     base_fee_per_blob_gas: u128,
     max_fee_per_gas: u128,
@@ -13,24 +13,24 @@ struct FeesPerGas {
 }
 
 impl FeesPerGas {
-    fn update_eip1559(&self, tx: TransactionRequest, gas_limit: u64) -> TransactionRequest {
+    pub fn update_eip1559(&self, tx: TransactionRequest, gas_limit: u64) -> TransactionRequest {
         tx.with_gas_limit(gas_limit)
             .with_max_fee_per_gas(self.max_fee_per_gas)
             .with_max_priority_fee_per_gas(self.max_priority_fee_per_gas)
     }
 
-    fn update_eip4844(&self, tx: TransactionRequest, gas_limit: u64) -> TransactionRequest {
+    pub fn update_eip4844(&self, tx: TransactionRequest, gas_limit: u64) -> TransactionRequest {
         tx.with_gas_limit(gas_limit)
             .with_max_fee_per_gas(self.max_fee_per_gas)
             .with_max_priority_fee_per_gas(self.max_priority_fee_per_gas)
             .with_max_fee_per_blob_gas(self.base_fee_per_blob_gas)
     }
 
-    async fn get_eip1559_cost(&self, gas_used: u64) -> u128 {
+    pub async fn get_eip1559_cost(&self, gas_used: u64) -> u128 {
         (self.base_fee_per_gas + self.max_priority_fee_per_gas) * u128::from(gas_used)
     }
 
-    async fn get_eip4844_cost(&self, blob_count: u64, gas_used: u64) -> u128 {
+    pub async fn get_eip4844_cost(&self, blob_count: u64, gas_used: u64) -> u128 {
         let blob_gas_used = alloy::eips::eip4844::DATA_GAS_PER_BLOB * blob_count;
         let execution_gas_cost =
             u128::from(gas_used) * (self.base_fee_per_gas + self.max_priority_fee_per_gas);
@@ -38,7 +38,7 @@ impl FeesPerGas {
         execution_gas_cost + blob_gas_cost
     }
 
-    async fn get_fees_per_gas(provider_ws: &DynProvider) -> Result<Self, Error> {
+    pub async fn get_fees_per_gas(provider_ws: &DynProvider) -> Result<Self, Error> {
         // Get base fee per gas
         let fee_history = provider_ws
             .get_fee_history(2, alloy::eips::BlockNumberOrTag::Latest, &[])

@@ -2,6 +2,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use super::config::{BatchesToSend, ForcedInclusionBatch};
 use crate::{
+    l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::batch_manager::{batch::Batch, config::BatchBuilderConfig},
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
@@ -9,8 +10,7 @@ use crate::{
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::l1::{
-    ethereum_l1::EthereumL1, extension::ELExtension, slot_clock::SlotClock,
-    transaction_error::TransactionError,
+    ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError,
 };
 use tracing::{debug, error, trace, warn};
 
@@ -273,9 +273,9 @@ impl BatchBuilder {
         self.current_batch.is_none() && self.batches_to_send.is_empty()
     }
 
-    pub async fn try_submit_oldest_batch<T: ELExtension>(
+    pub async fn try_submit_oldest_batch(
         &mut self,
-        ethereum_l1: Arc<EthereumL1<T>>,
+        ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         submit_only_full_batches: bool,
     ) -> Result<(), Error> {
         if self.current_batch.is_some()
@@ -318,6 +318,7 @@ impl BatchBuilder {
 
             if let Err(err) = ethereum_l1
                 .execution_layer
+                .extension
                 .send_batch_to_l1(
                     batch.l2_blocks.clone(),
                     batch.anchor_block_id,

@@ -8,7 +8,9 @@ use alloy::{
     sol_types::SolEvent,
 };
 use anyhow::Error;
-use common::l1::{execution_layer_inner::ExecutionLayerInner, extension::ELExtension};
+use common::l1::{
+    config::ProtocolConfig, execution_layer_inner::ExecutionLayerInner, extension::ELExtension,
+};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -39,6 +41,14 @@ impl ELExtension for ExecutionLayer {
             provider,
             config,
         }
+    }
+
+    async fn fetch_protocol_config(&self) -> Result<ProtocolConfig, Error> {
+        todo!()
+    }
+
+    async fn get_preconfer_total_bonds(&self) -> Result<alloy::primitives::U256, Error> {
+        todo!()
     }
 }
 

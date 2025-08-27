@@ -8,5 +8,5 @@ pub mod extension;
 pub mod fees_per_gas;
 mod monitor_transaction;
 pub mod slot_clock;
-mod tools;
+pub mod tools;
 pub mod transaction_error;

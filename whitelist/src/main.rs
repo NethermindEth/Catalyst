@@ -1,7 +1,5 @@
 use anyhow::Error;
-use common::{
-    chain_monitor, funds_monitor, l1 as common_l1, l2, metrics, shared, utils as common_utils,
-};
+use common::{funds_monitor, l1 as common_l1, l2, metrics, shared, utils as common_utils};
 use metrics::Metrics;
 use shared::signer::Signer;
 use std::{sync::Arc, time::Duration};
@@ -12,6 +10,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+mod chain_monitor;
 mod forced_inclusion;
 mod l1;
 mod node;

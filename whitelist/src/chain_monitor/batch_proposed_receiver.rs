@@ -1,13 +1,11 @@
+use crate::l1::bindings::taiko_inbox::ITaikoInbox;
 use alloy::primitives::Address;
 use alloy::sol_types::SolEvent;
 use anyhow::Error;
-
+use common::utils::event_listener::listen_for_event;
 use tokio::{sync::mpsc::Sender, time::Duration};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-
-use crate::l1::bindings::taiko_inbox::ITaikoInbox;
-use crate::utils::event_listener::listen_for_event;
 
 const SLEEP_DURATION: Duration = Duration::from_secs(15);
 

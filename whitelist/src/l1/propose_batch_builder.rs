@@ -1,5 +1,5 @@
-use super::forced_inclusion_info::ForcedInclusionInfo;
-use super::{bindings::*, tools, transaction_error::TransactionError};
+use super::bindings::*;
+use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{Address, Bytes, FixedBytes},
@@ -9,7 +9,7 @@ use alloy::{
 };
 use alloy_json_rpc::RpcError;
 use anyhow::{Error, anyhow};
-use common::l1::fees_per_gas::FeesPerGas;
+use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use tracing::warn;
 
 pub struct ProposeBatchBuilder {
@@ -251,7 +251,7 @@ impl ProposeBatchBuilder {
         };
 
         // Build sidecar
-        let sidecar = crate::blob::build_blob_sidecar(tx_list)?;
+        let sidecar = common::blob::build_blob_sidecar(tx_list)?;
         let num_blobs = u8::try_from(sidecar.blobs.len())?;
 
         let batch_params = BatchParams {

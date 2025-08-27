@@ -100,7 +100,7 @@ impl<ELE: ELExtension> Taiko<ELE> {
             Value::Number(
                 self.ethereum_l1
                     .execution_layer
-                    .get_config_block_max_gas_limit()
+                    .get_block_max_gas_limit()
                     .into(),
             ), // blockMaxGasLimit
             Value::Number(max_bytes_per_tx_list.into()), // maxBytesPerTxList (128KB by default)
@@ -390,13 +390,13 @@ impl<ELE: ELExtension> Taiko<ELE> {
     }
 
     fn get_base_fee_config(&self) -> LibSharedData::BaseFeeConfig {
-        let config = self.ethereum_l1.execution_layer.get_pacaya_config();
+        let config = self.ethereum_l1.execution_layer.get_protocol_config();
         LibSharedData::BaseFeeConfig {
-            adjustmentQuotient: config.baseFeeConfig.adjustmentQuotient,
-            sharingPctg: config.baseFeeConfig.sharingPctg,
-            gasIssuancePerSecond: config.baseFeeConfig.gasIssuancePerSecond,
-            minGasExcess: config.baseFeeConfig.minGasExcess,
-            maxGasIssuancePerBlock: config.baseFeeConfig.maxGasIssuancePerBlock,
+            adjustmentQuotient: config.base_fee_config.adjustment_quotient,
+            sharingPctg: config.base_fee_config.sharing_pctg,
+            gasIssuancePerSecond: config.base_fee_config.gas_issuance_per_second,
+            minGasExcess: config.base_fee_config.min_gas_excess,
+            maxGasIssuancePerBlock: config.base_fee_config.max_gas_issuance_per_block,
         }
     }
 

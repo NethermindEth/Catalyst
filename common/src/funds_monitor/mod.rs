@@ -91,6 +91,7 @@ impl<T: ELExtension + 'static> FundsMonitor<T> {
         let total_balance = self
             .ethereum_l1
             .execution_layer
+            .extension
             .get_preconfer_total_bonds()
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch bond balance: {e}")))?;
@@ -145,6 +146,7 @@ impl<T: ELExtension + 'static> FundsMonitor<T> {
         let taiko_balance_str = match self
             .ethereum_l1
             .execution_layer
+            .extension
             .get_preconfer_total_bonds()
             .await
         {
