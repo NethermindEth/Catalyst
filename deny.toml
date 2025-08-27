@@ -45,11 +45,6 @@ ignore = false
 registries = []
 
 [[licenses.exceptions]]
-allow = ["MPL-2.0"]
-name = "attohttpc"
-version = "*"
-
-[[licenses.exceptions]]
 allow = ["MPL-2.0", "CDLA-Permissive-2.0"]
 name = "webpki-roots"
 version = "*"
