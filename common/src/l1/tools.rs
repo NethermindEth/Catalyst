@@ -38,7 +38,6 @@ pub fn check_for_not_the_operator_in_current_epoch(err_str: &str) -> bool {
 }
 
 pub fn convert_error_payload(err: &str) -> Option<TransactionError> {
-    // TimestampTooLarge or ZeroAnchorBlockHash contract error
     if check_for_too_early_estimation(err) {
         return Some(TransactionError::EstimationTooEarly);
     }
