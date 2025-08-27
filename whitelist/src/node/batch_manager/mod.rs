@@ -202,6 +202,7 @@ impl BatchManager {
         let anchor_block_timestamp_sec = self
             .ethereum_l1
             .execution_layer
+            .inner
             .get_block_timestamp_by_number(anchor_block_id)
             .await?;
 
@@ -259,6 +260,7 @@ impl BatchManager {
         self.ethereum_l1.slot_clock.slots_since_l1_block(
             self.ethereum_l1
                 .execution_layer
+                .inner
                 .get_block_timestamp_by_number(l1_anchor_block_id)
                 .await?,
         )
@@ -476,6 +478,7 @@ impl BatchManager {
         let anchor_block_timestamp_sec = self
             .ethereum_l1
             .execution_layer
+            .inner
             .get_block_timestamp_by_number(anchor_block_id)
             .await?;
         tracing::debug!(
@@ -726,6 +729,7 @@ impl BatchManager {
             let anchor_block_timestamp_sec = self
                 .ethereum_l1
                 .execution_layer
+                .inner
                 .get_block_timestamp_by_number(anchor_block_id)
                 .await?;
             // Add the L2 block to the new batch

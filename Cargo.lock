@@ -1767,7 +1767,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.7.1"
+version = "1.7.2"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -4940,7 +4940,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.7.1"
+version = "1.7.2"
 dependencies = [
  "anyhow",
  "discv5",
@@ -4952,7 +4952,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-network"
-version = "1.7.1"
+version = "1.7.2"
 dependencies = [
  "discv5",
  "futures",
@@ -4967,7 +4967,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-node"
-version = "1.7.1"
+version = "1.7.2"
 dependencies = [
  "anyhow",
  "jsonrpsee",
@@ -5069,7 +5069,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "permissionless"
-version = "1.7.1"
+version = "1.7.2"
 dependencies = [
  "alloy",
  "anyhow",
@@ -7331,7 +7331,7 @@ dependencies = [
 
 [[package]]
 name = "whitelist"
-version = "1.7.1"
+version = "1.7.2"
 dependencies = [
  "alloy",
  "alloy-json-rpc",

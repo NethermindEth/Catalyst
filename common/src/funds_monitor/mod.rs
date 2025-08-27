@@ -110,6 +110,7 @@ impl<T: ELExtension + 'static> FundsMonitor<T> {
         let balance = self
             .ethereum_l1
             .execution_layer
+            .inner
             .get_preconfer_wallet_eth()
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch ETH balance: {e}")))?;
@@ -131,6 +132,7 @@ impl<T: ELExtension + 'static> FundsMonitor<T> {
         let eth_balance = self
             .ethereum_l1
             .execution_layer
+            .inner
             .get_preconfer_wallet_eth()
             .await;
         let eth_balance_str = match eth_balance.as_ref() {

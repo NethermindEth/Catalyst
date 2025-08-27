@@ -256,6 +256,7 @@ impl<ELE: ELExtension> Taiko<ELE> {
         let anchor_block_state_root = self
             .ethereum_l1
             .execution_layer
+            .inner
             .get_block_state_root_by_number(anchor_origin_height)
             .await?;
 

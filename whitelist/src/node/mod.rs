@@ -158,6 +158,7 @@ impl Node {
             let nonce_latest: u64 = self
                 .ethereum_l1
                 .execution_layer
+                .inner
                 .get_preconfer_nonce_latest()
                 .await?;
             let nonce_pending: u64 = self
@@ -236,6 +237,7 @@ impl Node {
             let nonce_latest: u64 = self
                 .ethereum_l1
                 .execution_layer
+                .inner
                 .get_preconfer_nonce_latest()
                 .await?;
             let nonce_pending: u64 = self

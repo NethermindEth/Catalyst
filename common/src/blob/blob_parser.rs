@@ -37,6 +37,7 @@ async fn blob_to_vec<T: ELExtension>(
 ) -> Result<Vec<u8>, Error> {
     let timestamp = ethereum_l1
         .execution_layer
+        .inner
         .get_block_timestamp_by_number(block)
         .await?;
     let slot = ethereum_l1
