@@ -7,7 +7,9 @@ on:
     tags:
       - "v*"
     paths:
-      - "node/**"
+      - "common/**"
+      - "permissionless/**"
+      - "whitelist/**"
       - "tools/p2p_node/p2p_network/**"
 
 env:
@@ -105,7 +107,7 @@ jobs:
         with:
           images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.DOCKER_IMAGE_NAME }}
           tags: ${{ steps.event.outputs.tag_list }}
-          
+
       - name: Create manifest list and push
         run: |
           docker buildx imagetools create \
