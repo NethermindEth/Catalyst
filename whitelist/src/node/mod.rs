@@ -625,12 +625,6 @@ impl Node {
                     "Transaction estimation too early, skipping slot"
                 ));
             }
-            TransactionError::TimestampTooLarge => {
-                self.cancel_token.cancel();
-                return Err(anyhow::anyhow!(
-                    "Transaction reverted with TimestampTooLarge error"
-                ));
-            }
             TransactionError::InsufficientFunds => {
                 self.cancel_token.cancel();
                 return Err(anyhow::anyhow!(
@@ -654,30 +648,23 @@ impl Node {
                 {
                     Ok(height) => height,
                     Err(err) => {
-                        error!(
-                            "OldestForcedInclusionDue: Failed to get L2 height from Taiko inbox: {}",
-                            err
+                        let err_msg = format!(
+                            "OldestForcedInclusionDue: Failed to get L2 height from Taiko inbox: {err}"
                         );
+                        error!("{}", err_msg);
                         self.cancel_token.cancel();
-                        return Err(anyhow::anyhow!(
-                            "OldestForcedInclusionDue: Failed to get L2 height from Taiko inbox: {}",
-                            err
-                        ));
+                        return Err(anyhow::anyhow!("{}", err_msg));
                     }
                 };
                 if let Err(err) = self
                     .reanchor_blocks(taiko_inbox_height, "OldestForcedInclusionDue", true)
                     .await
                 {
-                    error!(
-                        "OldestForcedInclusionDue: Failed to reanchor blocks: {}",
-                        err
-                    );
+                    let err_msg =
+                        format!("OldestForcedInclusionDue: Failed to reanchor blocks: {err}");
+                    error!("{}", err_msg);
                     self.cancel_token.cancel();
-                    return Err(anyhow::anyhow!(
-                        "OldestForcedInclusionDue: Failed to reanchor blocks: {}",
-                        err
-                    ));
+                    return Err(anyhow::anyhow!("{}", err_msg));
                 }
                 return Err(anyhow::anyhow!(
                     "Need to include forced inclusion, reanchoring done, skipping slot"

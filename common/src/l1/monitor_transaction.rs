@@ -332,25 +332,8 @@ impl TransactionMonitorThread {
             match tx_status {
                 TxStatus::Confirmed(_) => return true,
                 TxStatus::Failed(err_str) => {
-                    if err_str.contains("0x3d32ffdb") {
-                        warn!("⚠️ Transaction reverted TimestampTooLarge()");
-                        self.send_error_signal(TransactionError::TimestampTooLarge)
-                            .await;
-                        return true;
-                    } else if tools::check_for_insufficient_funds(&err_str) {
-                        self.send_error_signal(TransactionError::InsufficientFunds)
-                            .await;
-                        return true;
-                    } else if tools::check_for_reanchor_required(&err_str) {
-                        warn!("Reanchor required: {}", err_str);
-                        self.send_error_signal(TransactionError::ReanchorRequired)
-                            .await;
-                        return true;
-                    // 0x1e66a770 -> OldestForcedInclusionDue()
-                    } else if tools::check_oldest_forced_inclusion_due(&err_str) {
-                        warn!("⚠️ Transaction reverted OldestForcedInclusionDue()");
-                        self.send_error_signal(TransactionError::OldestForcedInclusionDue)
-                            .await;
+                    if let Some(error) = tools::convert_error_payload(&err_str) {
+                        self.send_error_signal(error).await;
                         return true;
                     }
                     self.send_error_signal(TransactionError::TransactionReverted)

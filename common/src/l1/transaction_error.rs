@@ -6,7 +6,6 @@ pub enum TransactionError {
     NotConfirmed,
     UnsupportedTransactionType,
     GetBlockNumberFailed,
-    TimestampTooLarge,
     InsufficientFunds,
     ReanchorRequired,
     OldestForcedInclusionDue,
