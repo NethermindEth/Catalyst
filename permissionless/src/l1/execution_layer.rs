@@ -29,7 +29,11 @@ pub struct ExecutionLayer {
 
 impl ELExtension for ExecutionLayer {
     type Config = EthereumL1Config;
-    fn new(inner: Arc<ExecutionLayerInner>, provider: DynProvider, config: Self::Config) -> Self {
+    async fn new(
+        inner: Arc<ExecutionLayerInner>,
+        provider: DynProvider,
+        config: Self::Config,
+    ) -> Self {
         Self {
             inner,
             provider,

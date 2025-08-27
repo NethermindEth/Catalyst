@@ -1,4 +1,5 @@
 use crate::l1::execution_layer::ExecutionLayer;
+use alloy::rpc::types::Transaction;
 use anyhow::Error;
 use common::{
     blob::blob_parser::extract_transactions_from_blob,
@@ -6,6 +7,14 @@ use common::{
 };
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, atomic::AtomicU64};
+
+pub struct ForcedInclusionInfo {
+    pub blob_hash: alloy::primitives::B256,
+    pub blob_byte_offset: u32,
+    pub blob_byte_size: u32,
+    pub created_in: u64,
+    pub txs: Vec<Transaction>,
+}
 
 pub struct ForcedInclusion {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,

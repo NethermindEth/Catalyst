@@ -1,9 +1,9 @@
-use crate::l1::execution_layer::ExecutionLayer;
+use crate::l1::execution_layer::{ExecutionLayer, PreconfOperator};
 use anyhow::Error;
 use common::{
     l1::{
         ethereum_l1::EthereumL1,
-        execution_layer::{ExecutionLayer as ExecutionLayerCommon, PreconfOperator},
+        execution_layer::ExecutionLayer as ExecutionLayerCommon,
         slot_clock::{Clock, RealClock, SlotClock},
     },
     l2::{
