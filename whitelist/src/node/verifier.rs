@@ -6,10 +6,7 @@ use crate::{
 use alloy::primitives::B256;
 use anyhow::Error;
 use common::utils::types::*;
-use common::{
-    l1::{ethereum_l1::EthereumL1, extension::ELExtension},
-    l2::taiko::Taiko,
-};
+use common::{l1::ethereum_l1::EthereumL1, l2::taiko::Taiko};
 use std::{cmp::Ordering, sync::Arc};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -97,9 +94,9 @@ impl Verifier {
     }
 
     /// Returns true if the operation succeeds
-    pub async fn verify<T: ELExtension>(
+    pub async fn verify(
         &mut self,
-        ethereum_l1: Arc<EthereumL1<T>>,
+        ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         metrics: Arc<Metrics>,
     ) -> Result<VerificationResult, Error> {
         if let Some(handle) = self.verifier_thread_handle.as_mut() {

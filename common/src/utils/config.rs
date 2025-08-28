@@ -19,7 +19,6 @@ pub struct Config<T: ConfigTrait> {
     pub l1_slots_per_epoch: u64,
     pub preconf_heartbeat_ms: u64,
     pub msg_expiry_sec: u64,
-    // pub contract_addresses: T,
     pub jwt_secret_file_path: String,
     pub rpc_l2_execution_layer_timeout: Duration,
     pub rpc_driver_preconf_timeout: Duration,

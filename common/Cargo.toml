@@ -40,6 +40,7 @@ warp = { workspace = true }
 
 [dev-dependencies]
 mockito = { workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
 
 [lints]
 workspace = true

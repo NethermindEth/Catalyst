@@ -1,9 +1,8 @@
-use crate::l1::execution_layer::ExecutionLayer;
+use crate::l1::execution_layer::{ExecutionLayer, PreconfOperator};
 use anyhow::Error;
 use common::{
     l1::{
         ethereum_l1::EthereumL1,
-        execution_layer::{ExecutionLayer as ExecutionLayerCommon, PreconfOperator},
         slot_clock::{Clock, RealClock, SlotClock},
     },
     l2::{
@@ -18,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
 pub struct Operator<
-    T: PreconfOperator = ExecutionLayerCommon<ExecutionLayer>,
+    T: PreconfOperator = ExecutionLayer,
     U: Clock = RealClock,
     V: PreconfDriver = Taiko<ExecutionLayer>,
 > {

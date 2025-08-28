@@ -1,11 +1,17 @@
 use crate::l1::execution_layer::ExecutionLayer;
+use alloy::rpc::types::Transaction;
 use anyhow::Error;
-use common::{
-    blob::blob_parser::extract_transactions_from_blob,
-    l1::{ethereum_l1::EthereumL1, forced_inclusion_info::ForcedInclusionInfo},
-};
+use common::{blob::blob_parser::extract_transactions_from_blob, l1::ethereum_l1::EthereumL1};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, atomic::AtomicU64};
+
+pub struct ForcedInclusionInfo {
+    pub blob_hash: alloy::primitives::B256,
+    pub blob_byte_offset: u32,
+    pub blob_byte_size: u32,
+    pub created_in: u64,
+    pub txs: Vec<Transaction>,
+}
 
 pub struct ForcedInclusion {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
@@ -24,7 +30,6 @@ impl ForcedInclusion {
         let head = self
             .ethereum_l1
             .execution_layer
-            .extension
             .get_forced_inclusion_head()
             .await?;
         self.index.store(head, Ordering::SeqCst);
@@ -39,7 +44,6 @@ impl ForcedInclusion {
         let tail = self
             .ethereum_l1
             .execution_layer
-            .extension
             .get_forced_inclusion_tail()
             .await?;
         tracing::debug!("Decode forced inclusion at index {}, tail: {}", i, tail);
@@ -49,7 +53,6 @@ impl ForcedInclusion {
         let forced_inclusion = self
             .ethereum_l1
             .execution_layer
-            .extension
             .get_forced_inclusion(i)
             .await?;
 

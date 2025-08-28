@@ -1,6 +1,7 @@
 use anyhow::Error;
 use common::{
-    chain_monitor, funds_monitor, l1 as common_l1, l2, metrics, shared, utils as common_utils,
+    funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, shared,
+    utils as common_utils,
 };
 use metrics::Metrics;
 use shared::signer::Signer;
@@ -12,6 +13,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+mod chain_monitor;
 mod forced_inclusion;
 mod l1;
 mod node;
@@ -150,6 +152,7 @@ async fn main() -> Result<(), Error> {
 
     let max_anchor_height_offset = ethereum_l1
         .execution_layer
+        .common()
         .get_config_max_anchor_height_offset();
     if config.max_anchor_height_offset_reduction >= max_anchor_height_offset {
         panic!(
@@ -160,6 +163,7 @@ async fn main() -> Result<(), Error> {
 
     let l1_max_blocks_per_batch = ethereum_l1
         .execution_layer
+        .common()
         .get_config_max_blocks_per_batch();
 
     if config.max_blocks_per_batch > l1_max_blocks_per_batch {
@@ -216,7 +220,10 @@ async fn main() -> Result<(), Error> {
             max_time_shift_between_blocks_sec: config.max_time_shift_between_blocks_sec,
             max_anchor_height_offset: max_anchor_height_offset
                 - config.max_anchor_height_offset_reduction,
-            default_coinbase: ethereum_l1.execution_layer.get_preconfer_alloy_address(),
+            default_coinbase: ethereum_l1
+                .execution_layer
+                .common()
+                .get_preconfer_alloy_address(),
             preconf_min_txs: config.preconf_min_txs,
             preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
         },

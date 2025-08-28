@@ -6,7 +6,7 @@ use super::{
     preconf_blocks::{self, BuildPreconfBlockResponse},
 };
 use crate::{
-    l1::{ethereum_l1::EthereumL1, extension::ELExtension},
+    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
     metrics::Metrics,
     shared::{
         l2_block::L2Block,
@@ -29,7 +29,7 @@ use std::{
 };
 use tracing::{debug, trace};
 
-pub struct Taiko<ELE: ELExtension> {
+pub struct Taiko<ELE: ELTrait> {
     l2_execution_layer: L2ExecutionLayer,
     taiko_geth_auth_rpc: JSONRPCClient,
     driver_preconf_rpc: HttpRPCClient,
@@ -39,7 +39,7 @@ pub struct Taiko<ELE: ELExtension> {
     config: TaikoConfig,
 }
 
-impl<ELE: ELExtension> Taiko<ELE> {
+impl<ELE: ELTrait> Taiko<ELE> {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         ethereum_l1: Arc<EthereumL1<ELE>>,
@@ -94,13 +94,19 @@ impl<ELE: ELExtension> Taiko<ELE> {
         let params = vec![
             Value::String(format!(
                 "0x{}",
-                hex::encode(self.ethereum_l1.execution_layer.get_preconfer_address())
+                hex::encode(
+                    self.ethereum_l1
+                        .execution_layer
+                        .common()
+                        .get_preconfer_address()
+                )
             )), // beneficiary address
             Value::from(base_fee), // baseFee
             Value::Number(
                 self.ethereum_l1
                     .execution_layer
-                    .get_config_block_max_gas_limit()
+                    .common()
+                    .get_block_max_gas_limit()
                     .into(),
             ), // blockMaxGasLimit
             Value::Number(max_bytes_per_tx_list.into()), // maxBytesPerTxList (128KB by default)
@@ -256,6 +262,7 @@ impl<ELE: ELExtension> Taiko<ELE> {
         let anchor_block_state_root = self
             .ethereum_l1
             .execution_layer
+            .common()
             .get_block_state_root_by_number(anchor_origin_height)
             .await?;
 
@@ -286,7 +293,12 @@ impl<ELE: ELExtension> Taiko<ELE> {
             extra_data: format!("0x{:0>64}", hex::encode(extra_data)),
             fee_recipient: format!(
                 "0x{}",
-                hex::encode(self.ethereum_l1.execution_layer.get_preconfer_address())
+                hex::encode(
+                    self.ethereum_l1
+                        .execution_layer
+                        .common()
+                        .get_preconfer_address()
+                )
             ),
             gas_limit: 241_000_000u64,
             parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
@@ -390,13 +402,17 @@ impl<ELE: ELExtension> Taiko<ELE> {
     }
 
     fn get_base_fee_config(&self) -> LibSharedData::BaseFeeConfig {
-        let config = self.ethereum_l1.execution_layer.get_pacaya_config();
+        let config = self
+            .ethereum_l1
+            .execution_layer
+            .common()
+            .get_protocol_config();
         LibSharedData::BaseFeeConfig {
-            adjustmentQuotient: config.baseFeeConfig.adjustmentQuotient,
-            sharingPctg: config.baseFeeConfig.sharingPctg,
-            gasIssuancePerSecond: config.baseFeeConfig.gasIssuancePerSecond,
-            minGasExcess: config.baseFeeConfig.minGasExcess,
-            maxGasIssuancePerBlock: config.baseFeeConfig.maxGasIssuancePerBlock,
+            adjustmentQuotient: config.base_fee_config.adjustment_quotient,
+            sharingPctg: config.base_fee_config.sharing_pctg,
+            gasIssuancePerSecond: config.base_fee_config.gas_issuance_per_second,
+            minGasExcess: config.base_fee_config.min_gas_excess,
+            maxGasIssuancePerBlock: config.base_fee_config.max_gas_issuance_per_block,
         }
     }
 
@@ -437,9 +453,10 @@ impl<ELE: ELExtension> Taiko<ELE> {
         self.l2_execution_layer
             .transfer_eth_from_l2_to_l1(
                 amount,
-                self.ethereum_l1.execution_layer.chain_id(),
+                self.ethereum_l1.execution_layer.common().chain_id(),
                 self.ethereum_l1
                     .execution_layer
+                    .common()
                     .get_preconfer_alloy_address(),
                 bridge_relayer_fee,
             )
@@ -453,7 +470,7 @@ pub trait PreconfDriver {
     ) -> impl std::future::Future<Output = Result<preconf_blocks::TaikoStatus, Error>> + Send;
 }
 
-impl<ELE: ELExtension> PreconfDriver for Taiko<ELE> {
+impl<ELE: ELTrait> PreconfDriver for Taiko<ELE> {
     async fn get_status(&self) -> Result<preconf_blocks::TaikoStatus, Error> {
         Taiko::get_status(self).await
     }

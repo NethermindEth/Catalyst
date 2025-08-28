@@ -1,6 +1,6 @@
 use super::{
-    config::EthereumL1Config, consensus_layer::ConsensusLayer, execution_layer::ExecutionLayer,
-    extension::ELExtension, slot_clock::SlotClock, transaction_error::TransactionError,
+    config::EthereumL1Config, consensus_layer::ConsensusLayer, el_trait::ELTrait,
+    slot_clock::SlotClock, transaction_error::TransactionError,
 };
 use anyhow::Error;
 use std::{sync::Arc, time::Duration};
@@ -8,13 +8,13 @@ use tokio::sync::mpsc::Sender;
 
 use crate::metrics::Metrics;
 
-pub struct EthereumL1<T: ELExtension> {
+pub struct EthereumL1<T: ELTrait> {
     pub slot_clock: Arc<SlotClock>,
     pub consensus_layer: ConsensusLayer,
-    pub execution_layer: Arc<ExecutionLayer<T>>,
+    pub execution_layer: Arc<T>,
 }
 
-impl<T: ELExtension> EthereumL1<T> {
+impl<T: ELTrait> EthereumL1<T> {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         config: EthereumL1Config,
@@ -37,8 +37,7 @@ impl<T: ELExtension> EthereumL1<T> {
         ));
 
         let execution_layer =
-            ExecutionLayer::new(config, specific_config, transaction_error_channel, metrics)
-                .await?;
+            T::new(config, specific_config, transaction_error_channel, metrics).await?;
 
         Ok(Self {
             slot_clock,

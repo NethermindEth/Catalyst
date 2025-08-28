@@ -19,6 +19,7 @@ test-gas = ["clap"]
 
 [dependencies]
 alloy = { workspace = true }
+alloy-json-rpc = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, optional = true }
