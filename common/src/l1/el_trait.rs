@@ -9,8 +9,8 @@ use std::marker::Send;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 
-/// Execution layer extension trait.
-/// Enables additional features to the execution layer, specific for URC or whitelist implementation.
+/// Execution layer trait.
+/// Enables additional features to the execution layer, specific for permissionless or whitelist implementation.
 pub trait ELTrait: Send + Sync + Sized {
     type Config;
     fn new(
