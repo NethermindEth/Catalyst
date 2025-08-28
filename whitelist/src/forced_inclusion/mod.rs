@@ -30,7 +30,6 @@ impl ForcedInclusion {
         let head = self
             .ethereum_l1
             .execution_layer
-            .extension
             .get_forced_inclusion_head()
             .await?;
         self.index.store(head, Ordering::SeqCst);
@@ -45,7 +44,6 @@ impl ForcedInclusion {
         let tail = self
             .ethereum_l1
             .execution_layer
-            .extension
             .get_forced_inclusion_tail()
             .await?;
         tracing::debug!("Decode forced inclusion at index {}, tail: {}", i, tail);
@@ -55,7 +53,6 @@ impl ForcedInclusion {
         let forced_inclusion = self
             .ethereum_l1
             .execution_layer
-            .extension
             .get_forced_inclusion(i)
             .await?;
 

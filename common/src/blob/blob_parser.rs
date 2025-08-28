@@ -4,10 +4,10 @@ use alloy::{eips::eip4844::kzg_to_versioned_hash, primitives::B256, rpc::types::
 use anyhow::Error;
 
 use super::blob_decoder::BlobDecoder;
-use crate::l1::{ethereum_l1::EthereumL1, extension::ELExtension};
+use crate::l1::{el_trait::ELTrait, ethereum_l1::EthereumL1};
 use crate::shared::l2_tx_lists::uncompress_and_decode;
 
-pub async fn extract_transactions_from_blob<T: ELExtension>(
+pub async fn extract_transactions_from_blob<T: ELTrait>(
     ethereum_l1: Arc<EthereumL1<T>>,
     block: u64,
     blob_hash: Vec<B256>,
@@ -28,7 +28,7 @@ pub async fn extract_transactions_from_blob<T: ELExtension>(
     Ok(txs)
 }
 
-async fn blob_to_vec<T: ELExtension>(
+async fn blob_to_vec<T: ELTrait>(
     ethereum_l1: Arc<EthereumL1<T>>,
     block: u64,
     blob_hash: Vec<B256>,
@@ -37,7 +37,7 @@ async fn blob_to_vec<T: ELExtension>(
 ) -> Result<Vec<u8>, Error> {
     let timestamp = ethereum_l1
         .execution_layer
-        .inner
+        .common()
         .get_block_timestamp_by_number(block)
         .await?;
     let slot = ethereum_l1

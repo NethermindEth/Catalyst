@@ -1,10 +1,10 @@
 use crate::l1::execution_layer::ExecutionLayer;
 use anyhow::Error;
-use common::l1::ethereum_l1::EthereumL1;
-use common::shared::l2_block::L2Block;
-use common::shared::l2_tx_lists::PreBuiltTxList;
-use std::str::FromStr;
-use std::sync::Arc;
+use common::{
+    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
+    shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
+};
+use std::{str::FromStr, sync::Arc};
 use tokio::time::{Duration, sleep};
 use tracing::info;
 
@@ -72,7 +72,7 @@ pub async fn test_gas_params(
     let coinbase =
         alloy::primitives::Address::from_str("0xC4B0F902f4CEd6dC1Ad1Be7FFeC47ab50845955e")?;
 
-    let l1_height = ethereum_l1.execution_layer.inner.get_l1_height().await?;
+    let l1_height = ethereum_l1.execution_layer.common().get_l1_height().await?;
     let anchor_block_id = l1_height - anchor_height_lag;
 
     info!("anchor_block_id: {}", anchor_block_id);
@@ -82,7 +82,6 @@ pub async fn test_gas_params(
 
     let _ = ethereum_l1
         .execution_layer
-        .extension
         .send_batch_to_l1(
             l2_blocks,
             anchor_block_id,
@@ -94,6 +93,7 @@ pub async fn test_gas_params(
 
     while ethereum_l1
         .execution_layer
+        .common()
         .is_transaction_in_progress()
         .await?
     {

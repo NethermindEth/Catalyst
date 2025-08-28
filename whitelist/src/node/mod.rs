@@ -13,7 +13,7 @@ use crate::{
 use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
-    l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
+    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::{preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
 };
 use operator::{Operator, Status as OperatorStatus};
@@ -24,7 +24,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
-use verifier::VerificationResult;
+use verifier::{VerificationResult, Verifier};
 
 pub struct NodeConfig {
     pub preconf_heartbeat_ms: u64,
@@ -41,7 +41,7 @@ pub struct Node {
     chain_monitor: Arc<ChainMonitor>,
     operator: Operator,
     batch_manager: BatchManager,
-    verifier: Option<verifier::Verifier>,
+    verifier: Option<Verifier>,
     taiko: Arc<Taiko<ExecutionLayer>>,
     transaction_error_channel: Receiver<TransactionError>,
     metrics: Arc<Metrics>,
@@ -118,7 +118,6 @@ impl Node {
         let taiko_inbox_height = self
             .ethereum_l1
             .execution_layer
-            .extension
             .get_l2_height_from_taiko_inbox()
             .await?;
 
@@ -158,13 +157,13 @@ impl Node {
             let nonce_latest: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .inner
+                .common()
                 .get_preconfer_nonce_latest()
                 .await?;
             let nonce_pending: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .inner
+                .common()
                 .get_preconfer_nonce_pending()
                 .await?;
             if nonce_pending == nonce_latest {
@@ -237,20 +236,20 @@ impl Node {
             let nonce_latest: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .inner
+                .common()
                 .get_preconfer_nonce_latest()
                 .await?;
             let nonce_pending: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .inner
+                .common()
                 .get_preconfer_nonce_pending()
                 .await?;
             debug!("Nonce Latest: {nonce_latest}, Nonce Pending: {nonce_pending}");
             if nonce_latest == nonce_pending {
                 // Just create a new verifier, we will check it in preconfirmation loop
                 self.verifier = Some(
-                    verifier::Verifier::new_with_taiko_height(
+                    Verifier::new_with_taiko_height(
                         taiko_geth_height,
                         self.taiko.clone(),
                         self.batch_manager
@@ -282,6 +281,7 @@ impl Node {
         let transaction_in_progress = self
             .ethereum_l1
             .execution_layer
+            .common()
             .is_transaction_in_progress()
             .await?;
 
@@ -311,7 +311,7 @@ impl Node {
                 // It is for handover window
                 let taiko_geth_height = l2_slot_info.parent_id();
                 let verification_slot = self.ethereum_l1.slot_clock.get_next_epoch_start_slot()?;
-                let verifier_result = verifier::Verifier::new_with_taiko_height(
+                let verifier_result = Verifier::new_with_taiko_height(
                     taiko_geth_height,
                     self.taiko.clone(),
                     self.batch_manager
@@ -440,7 +440,6 @@ impl Node {
         let taiko_inbox_height = self
             .ethereum_l1
             .execution_layer
-            .extension
             .get_l2_height_from_taiko_inbox()
             .await?;
         if taiko_inbox_height < l2_slot_info.parent_id() {
@@ -452,6 +451,7 @@ impl Node {
             let max_anchor_height_offset = self
                 .ethereum_l1
                 .execution_layer
+                .common()
                 .get_config_max_anchor_height_offset();
 
             // +1 because we are checking the next block
@@ -577,7 +577,6 @@ impl Node {
                     let taiko_inbox_height = match self
                         .ethereum_l1
                         .execution_layer
-                        .extension
                         .get_l2_height_from_taiko_inbox()
                         .await
                     {
@@ -650,7 +649,6 @@ impl Node {
                 let taiko_inbox_height = match self
                     .ethereum_l1
                     .execution_layer
-                    .extension
                     .get_l2_height_from_taiko_inbox()
                     .await
                 {

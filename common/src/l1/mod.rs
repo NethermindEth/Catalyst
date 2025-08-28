@@ -1,10 +1,9 @@
 pub mod bindings;
 pub mod config;
 pub mod consensus_layer;
+pub mod el_trait;
 pub mod ethereum_l1;
 pub mod execution_layer;
-pub mod execution_layer_inner;
-pub mod extension;
 pub mod fees_per_gas;
 mod monitor_transaction;
 pub mod slot_clock;
