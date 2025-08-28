@@ -3,6 +3,7 @@ use common::utils as common_utils;
 use tracing::info;
 
 mod l1;
+mod node;
 mod registration;
 mod utils;
 
@@ -16,6 +17,8 @@ async fn main() -> Result<(), Error> {
     );
 
     let _config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+
+    let node = node::Node::new();
 
     Ok(())
 }
