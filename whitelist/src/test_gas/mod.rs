@@ -82,7 +82,7 @@ pub async fn test_gas_params(
 
     let _ = ethereum_l1
         .execution_layer
-        .inner
+        .extension
         .send_batch_to_l1(
             l2_blocks,
             anchor_block_id,
