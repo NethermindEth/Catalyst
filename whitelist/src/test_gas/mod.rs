@@ -72,7 +72,7 @@ pub async fn test_gas_params(
     let coinbase =
         alloy::primitives::Address::from_str("0xC4B0F902f4CEd6dC1Ad1Be7FFeC47ab50845955e")?;
 
-    let l1_height = ethereum_l1.execution_layer.inner.get_l1_height().await?;
+    let l1_height = ethereum_l1.execution_layer.common().get_l1_height().await?;
     let anchor_block_id = l1_height - anchor_height_lag;
 
     info!("anchor_block_id: {}", anchor_block_id);

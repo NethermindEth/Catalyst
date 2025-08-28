@@ -114,7 +114,6 @@ impl Verifier {
                     Err(err) => {
                         let taiko_inbox_height = ethereum_l1
                             .execution_layer
-                            .extension
                             .get_l2_height_from_taiko_inbox()
                             .await?;
                         Ok(VerificationResult::ReanchorNeeded(
@@ -140,7 +139,6 @@ impl Verifier {
 
             let taiko_inbox_height = ethereum_l1
                 .execution_layer
-                .extension
                 .get_l2_height_from_taiko_inbox()
                 .await?;
             self.start_verification_thread(taiko_inbox_height, metrics)

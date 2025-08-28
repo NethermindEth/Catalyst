@@ -14,7 +14,7 @@ use alloy::{consensus::BlockHeader, consensus::Transaction, primitives::Address}
 use anyhow::Error;
 use batch_builder::BatchBuilder;
 use common::{
-    l1::ethereum_l1::EthereumL1,
+    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
     l2::{
         self, operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko,
         taiko::Taiko,
@@ -149,7 +149,6 @@ impl BatchManager {
                 let forced_inclusion_batch = self
                     .ethereum_l1
                     .execution_layer
-                    .extension
                     .build_forced_inclusion_batch(
                         coinbase,
                         anchor_block_id,
@@ -202,7 +201,7 @@ impl BatchManager {
         let anchor_block_timestamp_sec = self
             .ethereum_l1
             .execution_layer
-            .inner
+            .common()
             .get_block_timestamp_by_number(anchor_block_id)
             .await?;
 
@@ -260,7 +259,7 @@ impl BatchManager {
         self.ethereum_l1.slot_clock.slots_since_l1_block(
             self.ethereum_l1
                 .execution_layer
-                .inner
+                .common()
                 .get_block_timestamp_by_number(l1_anchor_block_id)
                 .await?,
         )
@@ -271,6 +270,7 @@ impl BatchManager {
             < self
                 .ethereum_l1
                 .execution_layer
+                .common()
                 .get_config_max_anchor_height_offset()
     }
 
@@ -368,7 +368,6 @@ impl BatchManager {
             let forced_inclusion_batch = self
                 .ethereum_l1
                 .execution_layer
-                .extension
                 .build_forced_inclusion_batch(
                     self.batch_builder.get_config().default_coinbase,
                     anchor_block_id,
@@ -478,7 +477,7 @@ impl BatchManager {
         let anchor_block_timestamp_sec = self
             .ethereum_l1
             .execution_layer
-            .inner
+            .common()
             .get_block_timestamp_by_number(anchor_block_id)
             .await?;
         tracing::debug!(
@@ -586,7 +585,6 @@ impl BatchManager {
             let forced_inclusion_batch = self
                 .ethereum_l1
                 .execution_layer
-                .extension
                 .build_forced_inclusion_batch(
                     self.batch_builder.get_config().default_coinbase,
                     anchor_block_id,
@@ -729,7 +727,7 @@ impl BatchManager {
             let anchor_block_timestamp_sec = self
                 .ethereum_l1
                 .execution_layer
-                .inner
+                .common()
                 .get_block_timestamp_by_number(anchor_block_id)
                 .await?;
             // Add the L2 block to the new batch
@@ -755,7 +753,7 @@ impl BatchManager {
         let l1_height = self
             .ethereum_l1
             .execution_layer
-            .inner
+            .common()
             .get_l1_height()
             .await?;
         let l1_height_with_lag = l1_height - self.l1_height_lag;

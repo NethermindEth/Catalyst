@@ -106,7 +106,7 @@ impl Operator {
         cancel_token: CancellationToken,
     ) -> Result<Self, Error> {
         Ok(Self {
-            execution_layer: ethereum_l1.execution_layer.extension.clone(),
+            execution_layer: ethereum_l1.execution_layer.clone(),
             slot_clock: ethereum_l1.slot_clock.clone(),
             taiko,
             handover_window_slots,
