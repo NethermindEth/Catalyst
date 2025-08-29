@@ -1,4 +1,5 @@
 pub mod batch_manager;
+pub mod config;
 mod l2_head_verifier;
 mod operator;
 mod verifier;
@@ -15,7 +16,9 @@ use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::{preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
+    utils as common_utils,
 };
+use config::NodeConfig;
 use operator::{Operator, Status as OperatorStatus};
 use std::sync::Arc;
 use tokio::{
@@ -25,15 +28,6 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use verifier::{VerificationResult, Verifier};
-
-pub struct NodeConfig {
-    pub preconf_heartbeat_ms: u64,
-    pub handover_window_slots: u64,
-    pub handover_start_buffer_ms: u64,
-    pub l1_height_lag: u64,
-    pub propose_forced_inclusion: bool,
-    pub simulate_not_submitting_at_the_end_of_epoch: bool,
-}
 
 pub struct Node {
     cancel_token: CancellationToken,
@@ -45,7 +39,7 @@ pub struct Node {
     taiko: Arc<Taiko<ExecutionLayer>>,
     transaction_error_channel: Receiver<TransactionError>,
     metrics: Arc<Metrics>,
-    watchdog: u64,
+    watchdog: common_utils::watchdog::Watchdog,
     head_verifier: L2HeadVerifier,
     config: NodeConfig,
 }
@@ -79,6 +73,10 @@ impl Node {
             metrics.clone(),
         );
         let head_verifier = L2HeadVerifier::new();
+        let watchdog = common_utils::watchdog::Watchdog::new(
+            cancel_token.clone(),
+            ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
+        );
         Ok(Self {
             cancel_token,
             batch_manager,
@@ -89,7 +87,7 @@ impl Node {
             taiko,
             transaction_error_channel,
             metrics,
-            watchdog: 0,
+            watchdog,
             head_verifier,
             config,
         })
@@ -180,19 +178,7 @@ impl Node {
 
     async fn preconfirmation_loop(&mut self) {
         debug!("Main perconfirmation loop started");
-        // Synchronize with L1 Slot Start Time
-        match self.ethereum_l1.slot_clock.duration_to_next_slot() {
-            Ok(duration) => {
-                info!(
-                    "Sleeping for {} ms to synchronize with L1 slot start",
-                    duration.as_millis()
-                );
-                sleep(duration).await;
-            }
-            Err(err) => {
-                error!("Failed to get duration to next slot: {}", err);
-            }
-        }
+        common_utils::synchronization::synchronize_with_l1_slot_start(&self.ethereum_l1).await;
 
         // start preconfirmation loop
         let mut interval =
@@ -207,18 +193,10 @@ impl Node {
             }
 
             if let Err(err) = self.main_block_preconfirmation_step().await {
-                self.watchdog += 1;
                 error!("Failed to execute main block preconfirmation step: {}", err);
-                if self.watchdog > self.ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2 {
-                    error!(
-                        "Watchdog triggered after {} heartbeats, shutting down...",
-                        self.watchdog
-                    );
-                    self.cancel_token.cancel();
-                    return;
-                }
+                self.watchdog.increment();
             } else {
-                self.watchdog = 0;
+                self.watchdog.reset();
             }
         }
     }

@@ -1,11 +1,9 @@
 use anyhow::Error;
 use common::{
-    funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, shared,
+    funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, metrics::Metrics, shared,
     utils as common_utils,
 };
-use metrics::Metrics;
-use shared::signer::Signer;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tokio::{
     signal::unix::{SignalKind, signal},
     sync::mpsc,
@@ -30,8 +28,6 @@ struct Args {
     test_gas: Option<u32>,
 }
 
-const SIGNER_TIMEOUT: Duration = Duration::from_secs(10);
-
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     common_utils::logging::init_logging();
@@ -53,13 +49,13 @@ async fn main() -> Result<(), Error> {
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
 
-    let l1_signer = create_signer(
+    let l1_signer = common_utils::constructors::create_signer(
         config.web3signer_l1_url.clone(),
         config.catalyst_node_ecdsa_private_key.clone(),
         config.preconfer_address.clone(),
     )
     .await?;
-    let l2_signer = create_signer(
+    let l2_signer = common_utils::constructors::create_signer(
         config.web3signer_l2_url.clone(),
         config.catalyst_node_ecdsa_private_key.clone(),
         config.preconfer_address.clone(),
@@ -68,36 +64,8 @@ async fn main() -> Result<(), Error> {
 
     let ethereum_l1 =
         common_l1::ethereum_l1::EthereumL1::<l1::execution_layer::ExecutionLayer>::new(
-            common_l1::config::EthereumL1Config {
-                execution_rpc_urls: config.l1_rpc_urls.clone(),
-                contract_addresses: config
-                    .specific_config
-                    .contract_addresses
-                    .clone()
-                    .try_into()?,
-                consensus_rpc_url: config.l1_beacon_url,
-                slot_duration_sec: config.l1_slot_duration_sec,
-                slots_per_epoch: config.l1_slots_per_epoch,
-                preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-                min_priority_fee_per_gas_wei: config.min_priority_fee_per_gas_wei,
-                tx_fees_increase_percentage: config.tx_fees_increase_percentage,
-                max_attempts_to_send_tx: config.max_attempts_to_send_tx,
-                max_attempts_to_wait_tx: config.max_attempts_to_wait_tx,
-                delay_between_tx_attempts_sec: config.delay_between_tx_attempts_sec,
-                signer: l1_signer,
-                preconfer_address: config.preconfer_address.clone().map(|s| {
-                    s.parse()
-                        .expect("Preconfer address is not a valid Ethereum address")
-                }),
-                extra_gas_percentage: config.extra_gas_percentage,
-            },
-            l1::execution_layer::EthereumL1Config {
-                contract_addresses: config
-                    .specific_config
-                    .contract_addresses
-                    .clone()
-                    .try_into()?,
-            },
+            common_l1::config::EthereumL1Config::new(&config, l1_signer),
+            l1::config::EthereumL1Config::try_from(config.specific_config.clone())?,
             transaction_error_sender,
             metrics.clone(),
         )
@@ -114,7 +82,7 @@ async fn main() -> Result<(), Error> {
         test_gas::test_gas_params(
             ethereum_l1.clone(),
             gas,
-            config.l1_height_lag,
+            config.specific_config.l1_height_lag,
             config.max_bytes_size_of_batch,
             transaction_error_receiver,
         )
@@ -132,11 +100,11 @@ async fn main() -> Result<(), Error> {
             metrics.clone(),
             l2::config::TaikoConfig::new(
                 config.taiko_geth_rpc_url.clone(),
-                config.taiko_geth_auth_rpc_url,
-                config.taiko_driver_url,
+                config.taiko_geth_auth_rpc_url.clone(),
+                config.taiko_driver_url.clone(),
                 jwt_secret_bytes,
-                config.taiko_anchor_address,
-                config.taiko_bridge_address,
+                config.taiko_anchor_address.clone(),
+                config.taiko_bridge_address.clone(),
                 config.max_bytes_per_tx_list,
                 config.min_bytes_per_tx_list,
                 config.throttling_factor,
@@ -186,8 +154,12 @@ async fn main() -> Result<(), Error> {
                 .first()
                 .expect("L1 RPC URL is required")
                 .clone(),
-            config.taiko_geth_rpc_url,
-            config.specific_config.contract_addresses.taiko_inbox,
+            config.taiko_geth_rpc_url.clone(),
+            config
+                .specific_config
+                .contract_addresses
+                .taiko_inbox
+                .clone(),
             cancel_token.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create ChainMonitor: {}", e))?,
@@ -204,15 +176,7 @@ async fn main() -> Result<(), Error> {
         chain_monitor.clone(),
         transaction_error_receiver,
         metrics.clone(),
-        node::NodeConfig {
-            preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-            handover_window_slots: config.handover_window_slots,
-            handover_start_buffer_ms: config.handover_start_buffer_ms,
-            l1_height_lag: config.l1_height_lag,
-            propose_forced_inclusion: config.propose_forced_inclusion,
-            simulate_not_submitting_at_the_end_of_epoch: config
-                .simulate_not_submitting_at_the_end_of_epoch,
-        },
+        node::config::NodeConfig::from(config.clone()),
         node::batch_manager::config::BatchBuilderConfig {
             max_bytes_size_of_batch: config.max_bytes_size_of_batch,
             max_blocks_per_batch,
@@ -254,29 +218,6 @@ async fn main() -> Result<(), Error> {
     wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await;
 
     Ok(())
-}
-
-async fn create_signer(
-    web3signer_url: Option<String>,
-    catalyst_node_ecdsa_private_key: Option<String>,
-    preconfer_address: Option<String>,
-) -> Result<Arc<Signer>, Error> {
-    Ok(Arc::new(if let Some(web3signer_url) = web3signer_url {
-        Signer::Web3signer(Arc::new(
-            shared::web3signer::Web3Signer::new(
-                &web3signer_url,
-                SIGNER_TIMEOUT,
-                preconfer_address
-                    .as_ref()
-                    .expect("preconfer address is required for web3signer usage"),
-            )
-            .await?,
-        ))
-    } else if let Some(catalyst_node_ecdsa_private_key) = catalyst_node_ecdsa_private_key {
-        Signer::PrivateKey(catalyst_node_ecdsa_private_key)
-    } else {
-        panic!("No signer provided");
-    }))
 }
 
 async fn wait_for_the_termination(cancel_token: CancellationToken, shutdown_delay_secs: u64) {

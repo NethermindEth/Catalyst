@@ -1,6 +1,4 @@
-use common::l1::config::ContractAddresses;
 use common::utils::config_trait::ConfigTrait;
-use tokio::sync::OnceCell;
 use tracing::warn;
 
 #[derive(Debug, Clone)]
@@ -15,6 +13,11 @@ pub struct L1ContractAddresses {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub contract_addresses: L1ContractAddresses,
+    pub handover_window_slots: u64,
+    pub handover_start_buffer_ms: u64,
+    pub l1_height_lag: u64,
+    pub propose_forced_inclusion: bool,
+    pub simulate_not_submitting_at_the_end_of_epoch: bool,
 }
 
 impl ConfigTrait for Config {
@@ -67,6 +70,32 @@ impl ConfigTrait for Config {
                 default_empty_address.clone()
             });
 
+        let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")
+            .unwrap_or("4".to_string())
+            .parse::<u64>()
+            .expect("HANDOVER_WINDOW_SLOTS must be a number");
+
+        let handover_start_buffer_ms = std::env::var("HANDOVER_START_BUFFER_MS")
+            .unwrap_or("6000".to_string())
+            .parse::<u64>()
+            .expect("HANDOVER_START_BUFFER_MS must be a number");
+
+        let l1_height_lag = std::env::var("L1_HEIGHT_LAG")
+            .unwrap_or("4".to_string())
+            .parse::<u64>()
+            .expect("L1_HEIGHT_LAG must be a number");
+
+        let propose_forced_inclusion = std::env::var("PROPOSE_FORCED_INCLUSION")
+            .unwrap_or("true".to_string())
+            .parse::<bool>()
+            .expect("PROPOSE_FORCED_INCLUSION must be a boolean");
+
+        let simulate_not_submitting_at_the_end_of_epoch =
+            std::env::var("SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH")
+                .unwrap_or("false".to_string())
+                .parse::<bool>()
+                .expect("SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH must be a boolean");
+
         Config {
             contract_addresses: L1ContractAddresses {
                 taiko_inbox,
@@ -75,27 +104,37 @@ impl ConfigTrait for Config {
                 taiko_wrapper,
                 forced_inclusion_store,
             },
+            handover_window_slots,
+            handover_start_buffer_ms,
+            l1_height_lag,
+            propose_forced_inclusion,
+            simulate_not_submitting_at_the_end_of_epoch,
         }
     }
 }
 
-impl TryFrom<L1ContractAddresses> for ContractAddresses {
-    type Error = anyhow::Error;
+use std::fmt;
+impl fmt::Display for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Contract addresses: {:#?}", self.contract_addresses)?;
+        writeln!(f, "handover window slots: {}", self.handover_window_slots)?;
+        writeln!(
+            f,
+            "handover start buffer: {}ms",
+            self.handover_start_buffer_ms
+        )?;
+        writeln!(f, "l1 height lag: {}", self.l1_height_lag)?;
+        writeln!(
+            f,
+            "propose forced inclusion: {}",
+            self.propose_forced_inclusion
+        )?;
+        writeln!(
+            f,
+            "simulate not submitting at the end of epoch: {}",
+            self.simulate_not_submitting_at_the_end_of_epoch
+        )?;
 
-    fn try_from(l1_contract_addresses: L1ContractAddresses) -> Result<Self, Self::Error> {
-        let taiko_inbox = l1_contract_addresses.taiko_inbox.parse()?;
-        let preconf_whitelist = l1_contract_addresses.preconf_whitelist.parse()?;
-        let preconf_router = l1_contract_addresses.preconf_router.parse()?;
-        let taiko_wrapper = l1_contract_addresses.taiko_wrapper.parse()?;
-        let forced_inclusion_store = l1_contract_addresses.forced_inclusion_store.parse()?;
-
-        Ok(ContractAddresses {
-            taiko_inbox,
-            taiko_token: OnceCell::new(),
-            preconf_whitelist,
-            preconf_router,
-            taiko_wrapper,
-            forced_inclusion_store,
-        })
+        Ok(())
     }
 }

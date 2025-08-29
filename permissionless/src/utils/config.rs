@@ -1,6 +1,7 @@
 #![allow(unused)] // TODO: remove this once we have a used contract_addresses field
 
 use common::utils::config_trait::ConfigTrait;
+use std::fmt;
 use tracing::warn;
 
 #[derive(Debug, Clone)]
@@ -29,5 +30,13 @@ impl ConfigTrait for Config {
         Config {
             contract_addresses: L1ContractAddresses { registry_address },
         }
+    }
+}
+
+impl fmt::Display for Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Contract addresses: {:#?}", self.contract_addresses)?;
+
+        Ok(())
     }
 }

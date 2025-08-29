@@ -4,6 +4,7 @@ use super::{
         forced_inclusion_store::{IForcedInclusionStore, IForcedInclusionStore::ForcedInclusion},
         taiko_inbox, taiko_wrapper,
     },
+    config::EthereumL1Config,
     propose_batch_builder::ProposeBatchBuilder,
 };
 use crate::forced_inclusion::ForcedInclusionInfo;
@@ -15,7 +16,7 @@ use anyhow::{Error, anyhow};
 use common::{
     l1::{
         bindings::IERC20,
-        config::{BaseFeeConfig, ContractAddresses, ProtocolConfig},
+        config::{BaseFeeConfig, ProtocolConfig},
         el_trait::ELTrait,
         execution_layer::ExecutionLayer as ExecutionLayerCommon,
         transaction_error::TransactionError,
@@ -27,10 +28,6 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, info, warn};
-
-pub struct EthereumL1Config {
-    pub contract_addresses: ContractAddresses,
-}
 
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
