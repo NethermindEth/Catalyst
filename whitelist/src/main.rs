@@ -1,7 +1,7 @@
 use anyhow::Error;
 use common::{
-    funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, shared,
-    utils as common_utils,
+    funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l1::ethereum_l1::EthereumL1, l2,
+    metrics, shared, utils as common_utils,
 };
 use metrics::Metrics;
 use shared::signer::Signer;
@@ -11,7 +11,7 @@ use tokio::{
     sync::mpsc,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 mod chain_monitor;
 mod forced_inclusion;
@@ -66,43 +66,42 @@ async fn main() -> Result<(), Error> {
     )
     .await?;
 
-    let ethereum_l1 =
-        common_l1::ethereum_l1::EthereumL1::<l1::execution_layer::ExecutionLayer>::new(
-            common_l1::config::EthereumL1Config {
-                execution_rpc_urls: config.l1_rpc_urls.clone(),
-                contract_addresses: config
-                    .specific_config
-                    .contract_addresses
-                    .clone()
-                    .try_into()?,
-                consensus_rpc_url: config.l1_beacon_url,
-                slot_duration_sec: config.l1_slot_duration_sec,
-                slots_per_epoch: config.l1_slots_per_epoch,
-                preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-                min_priority_fee_per_gas_wei: config.min_priority_fee_per_gas_wei,
-                tx_fees_increase_percentage: config.tx_fees_increase_percentage,
-                max_attempts_to_send_tx: config.max_attempts_to_send_tx,
-                max_attempts_to_wait_tx: config.max_attempts_to_wait_tx,
-                delay_between_tx_attempts_sec: config.delay_between_tx_attempts_sec,
-                signer: l1_signer,
-                preconfer_address: config.preconfer_address.clone().map(|s| {
-                    s.parse()
-                        .expect("Preconfer address is not a valid Ethereum address")
-                }),
-                extra_gas_percentage: config.extra_gas_percentage,
-            },
-            l1::execution_layer::EthereumL1Config {
-                contract_addresses: config
-                    .specific_config
-                    .contract_addresses
-                    .clone()
-                    .try_into()?,
-            },
-            transaction_error_sender,
-            metrics.clone(),
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?;
+    let ethereum_l1 = EthereumL1::<l1::execution_layer::ExecutionLayer>::new(
+        common_l1::config::EthereumL1Config {
+            execution_rpc_urls: config.l1_rpc_urls.clone(),
+            contract_addresses: config
+                .specific_config
+                .contract_addresses
+                .clone()
+                .try_into()?,
+            consensus_rpc_url: config.l1_beacon_url,
+            slot_duration_sec: config.l1_slot_duration_sec,
+            slots_per_epoch: config.l1_slots_per_epoch,
+            preconf_heartbeat_ms: config.preconf_heartbeat_ms,
+            min_priority_fee_per_gas_wei: config.min_priority_fee_per_gas_wei,
+            tx_fees_increase_percentage: config.tx_fees_increase_percentage,
+            max_attempts_to_send_tx: config.max_attempts_to_send_tx,
+            max_attempts_to_wait_tx: config.max_attempts_to_wait_tx,
+            delay_between_tx_attempts_sec: config.delay_between_tx_attempts_sec,
+            signer: l1_signer,
+            preconfer_address: config.preconfer_address.clone().map(|s| {
+                s.parse()
+                    .expect("Preconfer address is not a valid Ethereum address")
+            }),
+            extra_gas_percentage: config.extra_gas_percentage,
+        },
+        l1::execution_layer::EthereumL1Config {
+            contract_addresses: config
+                .specific_config
+                .contract_addresses
+                .clone()
+                .try_into()?,
+        },
+        transaction_error_sender,
+        metrics.clone(),
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?;
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
@@ -197,6 +196,9 @@ async fn main() -> Result<(), Error> {
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start ChainMonitor: {}", e))?;
 
+    let handover_window_slots =
+        get_handover_window_slots(ethereum_l1.clone(), config.handover_window_slots).await;
+
     let node = node::Node::new(
         cancel_token.clone(),
         taiko.clone(),
@@ -206,7 +208,7 @@ async fn main() -> Result<(), Error> {
         metrics.clone(),
         node::NodeConfig {
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-            handover_window_slots: config.handover_window_slots,
+            handover_window_slots: handover_window_slots,
             handover_start_buffer_ms: config.handover_start_buffer_ms,
             l1_height_lag: config.l1_height_lag,
             propose_forced_inclusion: config.propose_forced_inclusion,
@@ -254,6 +256,29 @@ async fn main() -> Result<(), Error> {
     wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await;
 
     Ok(())
+}
+
+async fn get_handover_window_slots(
+    ethereum_l1: Arc<EthereumL1<l1::execution_layer::ExecutionLayer>>,
+    config_handover_window_slots: u64,
+) -> u64 {
+    match ethereum_l1
+        .execution_layer
+        .get_preconf_router_config()
+        .await
+    {
+        Ok(router_config) => router_config.handOverSlots.try_into().unwrap_or_else(|_| {
+            warn!("Failed to get preconf router config, using default handover window slots");
+            config_handover_window_slots
+        }),
+        Err(e) => {
+            warn!(
+                "Failed to get preconf router config, using default handover window slots: {}",
+                e
+            );
+            config_handover_window_slots
+        }
+    }
 }
 
 async fn create_signer(

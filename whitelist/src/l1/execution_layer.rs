@@ -2,6 +2,7 @@ use super::{
     bindings::{
         BatchParams, BlockParams, PreconfWhitelist,
         forced_inclusion_store::{IForcedInclusionStore, IForcedInclusionStore::ForcedInclusion},
+        preconf_router::IPreconfRouter,
         taiko_inbox, taiko_wrapper,
     },
     propose_batch_builder::ProposeBatchBuilder,
@@ -398,6 +399,15 @@ impl ExecutionLayer {
             last_l2_block_timestamp,
             info,
         )
+    }
+
+    pub async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {
+        let contract = IPreconfRouter::new(
+            self.config.contract_addresses.preconf_router,
+            self.provider.clone(),
+        );
+        let config = contract.getConfig().call().await?;
+        Ok(config)
     }
 }
 
