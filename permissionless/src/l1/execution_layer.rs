@@ -1,6 +1,6 @@
 #![allow(unused)] // TODO: remove this once we have a used inner, provider, and config fields
 
-use super::bindings;
+use super::{bindings, config::EthereumL1Config};
 use alloy::{
     primitives::Address,
     providers::{DynProvider, Provider},
@@ -20,16 +20,6 @@ use common::{
 };
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
-
-#[derive(Clone)]
-pub struct L1ContractAddresses {
-    pub registry_address: Address,
-}
-
-#[derive(Clone)]
-pub struct EthereumL1Config {
-    contract_addresses: L1ContractAddresses,
-}
 
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
