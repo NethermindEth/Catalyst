@@ -1598,7 +1598,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.7.3"
+version = "1.8.0"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -1907,7 +1907,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d162beedaa69905488a8da94f5ac3edb4dd4788b732fadb7bd120b2625c1976"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -4319,7 +4319,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.7.3"
+version = "1.8.0"
 dependencies = [
  "anyhow",
  "discv5",
@@ -4331,7 +4331,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-network"
-version = "1.7.3"
+version = "1.8.0"
 dependencies = [
  "discv5",
  "futures",
@@ -4346,7 +4346,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-node"
-version = "1.7.3"
+version = "1.8.0"
 dependencies = [
  "anyhow",
  "jsonrpsee",
@@ -4439,7 +4439,7 @@ checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
 name = "permissionless"
-version = "1.7.3"
+version = "1.8.0"
 dependencies = [
  "alloy",
  "anyhow",
@@ -5053,9 +5053,9 @@ dependencies = [
 
 [[package]]
 name = "ruint"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11256b5fe8c68f56ac6f39ef0720e592f33d2367a4782740d9c9142e889c7fb4"
+checksum = "9ecb38f82477f20c5c3d62ef52d7c4e536e38ea9b73fb570a20c5cae0e14bcf6"
 dependencies = [
  "alloy-rlp",
  "ark-ff 0.3.0",
@@ -6535,7 +6535,7 @@ dependencies = [
 
 [[package]]
 name = "whitelist"
-version = "1.7.3"
+version = "1.8.0"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6543,6 +6543,7 @@ dependencies = [
  "chrono",
  "clap",
  "common",
+ "ruint",
  "serde_json",
  "tokio",
  "tokio-util",

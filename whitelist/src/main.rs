@@ -9,7 +9,7 @@ use tokio::{
     sync::mpsc,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 mod chain_monitor;
 mod forced_inclusion;
@@ -169,9 +169,6 @@ async fn main() -> Result<(), Error> {
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start ChainMonitor: {}", e))?;
 
-    let handover_window_slots =
-        get_handover_window_slots(ethereum_l1.clone(), config.handover_window_slots).await;
-
     let node = node::Node::new(
         cancel_token.clone(),
         taiko.clone(),
@@ -221,29 +218,6 @@ async fn main() -> Result<(), Error> {
     wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await;
 
     Ok(())
-}
-
-async fn get_handover_window_slots(
-    ethereum_l1: Arc<EthereumL1<l1::execution_layer::ExecutionLayer>>,
-    config_handover_window_slots: u64,
-) -> u64 {
-    match ethereum_l1
-        .execution_layer
-        .get_preconf_router_config()
-        .await
-    {
-        Ok(router_config) => router_config.handOverSlots.try_into().unwrap_or_else(|_| {
-            warn!("Failed to get preconf router config, using default handover window slots");
-            config_handover_window_slots
-        }),
-        Err(e) => {
-            warn!(
-                "Failed to get preconf router config, using default handover window slots: {}",
-                e
-            );
-            config_handover_window_slots
-        }
-    }
 }
 
 async fn wait_for_the_termination(cancel_token: CancellationToken, shutdown_delay_secs: u64) {

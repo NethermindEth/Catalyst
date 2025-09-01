@@ -408,7 +408,6 @@ impl ExecutionLayer {
     }
 }
 
-use std::future::Future;
 pub trait PreconfOperator {
     fn is_operator_for_current_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
     fn is_operator_for_next_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
@@ -416,6 +415,9 @@ pub trait PreconfOperator {
         &self,
     ) -> impl Future<Output = Result<bool, Error>> + Send;
     fn get_l2_height_from_taiko_inbox(&self) -> impl Future<Output = Result<u64, Error>> + Send;
+    fn get_preconf_router_config(
+        &self,
+    ) -> impl Future<Output = Result<IPreconfRouter::Config, Error>> + Send;
 }
 
 impl PreconfOperator for ExecutionLayer {
@@ -437,35 +439,8 @@ impl PreconfOperator for ExecutionLayer {
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
         self.get_l2_height_from_taiko_inbox().await
     }
-}
 
-use std::future::Future;
-pub trait PreconfOperator {
-    fn is_operator_for_current_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
-    fn is_operator_for_next_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
-    fn is_preconf_router_specified_in_taiko_wrapper(
-        &self,
-    ) -> impl Future<Output = Result<bool, Error>> + Send;
-    fn get_l2_height_from_taiko_inbox(&self) -> impl Future<Output = Result<u64, Error>> + Send;
-}
-
-impl PreconfOperator for ExecutionLayer {
-    async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
-        let operator = self.get_operator_for_current_epoch().await?;
-        Ok(operator == self.common.preconfer_address())
-    }
-
-    async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
-        let operator = self.get_operator_for_next_epoch().await?;
-        Ok(operator == self.common.preconfer_address())
-    }
-
-    async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-        let preconf_router = self.taiko_wrapper_contract.preconfRouter().call().await?;
-        Ok(preconf_router != Address::ZERO)
-    }
-
-    async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
-        self.get_l2_height_from_taiko_inbox().await
+    async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {
+        self.get_preconf_router_config().await
     }
 }
