@@ -386,8 +386,7 @@ impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
 
     async fn get_handover_window_slots(&self) -> u64 {
         match self.execution_layer.get_preconf_router_config().await {
-            Ok(router_config) => router_config.handOverSlots.try_into().unwrap_or_else(|_| {
-                warn!("Failed to get preconf router config, using default handover window slots");
+                warn!("Failed to convert handOverSlots from preconf router config, using default handover window slots");
                 self.handover_window_slots_default
             }),
             Err(e) => {
