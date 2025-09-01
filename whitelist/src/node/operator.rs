@@ -406,10 +406,10 @@ mod tests {
     use super::*;
     use crate::l1::bindings::preconf_router::IPreconfRouter;
     use alloy::primitives::B256;
+    use alloy::primitives::U256;
     use chrono::DateTime;
     use common::l1::slot_clock::Clock;
     use common::l2::preconf_blocks;
-    use ruint::Uint;
     use std::time::SystemTime;
 
     const HANDOVER_WINDOW_SLOTS: u64 = 6;
@@ -453,7 +453,7 @@ mod tests {
 
         async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {
             Ok(IPreconfRouter::Config {
-                handOverSlots: Uint::<256, 4>::from(self.handover_window_slots),
+                handOverSlots: U256::from(self.handover_window_slots),
             })
         }
     }

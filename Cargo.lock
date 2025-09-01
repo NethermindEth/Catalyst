@@ -6543,7 +6543,6 @@ dependencies = [
  "chrono",
  "clap",
  "common",
- "ruint",
  "serde_json",
  "tokio",
  "tokio-util",
