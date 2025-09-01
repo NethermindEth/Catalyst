@@ -4,6 +4,7 @@ use tracing::{info, warn};
 use super::config_trait::ConfigTrait;
 use crate::blob::constants::MAX_BLOB_DATA_SIZE;
 
+#[derive(Debug, Clone)]
 pub struct Config<T: ConfigTrait> {
     pub preconfer_address: Option<String>,
     pub taiko_geth_rpc_url: String,
@@ -25,9 +26,6 @@ pub struct Config<T: ConfigTrait> {
     pub rpc_driver_status_timeout: Duration,
     pub taiko_anchor_address: String,
     pub taiko_bridge_address: String,
-    pub handover_window_slots: u64,
-    pub handover_start_buffer_ms: u64,
-    pub l1_height_lag: u64,
     pub max_bytes_size_of_batch: u64,
     pub max_blocks_per_batch: u16,
     pub max_time_shift_between_blocks_sec: u64,
@@ -41,11 +39,9 @@ pub struct Config<T: ConfigTrait> {
     pub threshold_taiko: u128,
     pub amount_to_bridge_from_l2_to_l1: u128,
     pub disable_bridging: bool,
-    pub simulate_not_submitting_at_the_end_of_epoch: bool,
     pub max_bytes_per_tx_list: u64,
     pub throttling_factor: u64,
     pub min_bytes_per_tx_list: u64,
-    pub propose_forced_inclusion: bool,
     pub extra_gas_percentage: u64,
     pub preconf_min_txs: u64,
     pub preconf_max_skipped_l2_slots: u64,
@@ -166,21 +162,6 @@ impl<T: ConfigTrait> Config<T> {
             default_empty_address.clone()
         });
 
-        let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")
-            .unwrap_or("4".to_string())
-            .parse::<u64>()
-            .expect("HANDOVER_WINDOW_SLOTS must be a number");
-
-        let handover_start_buffer_ms = std::env::var("HANDOVER_START_BUFFER_MS")
-            .unwrap_or("6000".to_string())
-            .parse::<u64>()
-            .expect("HANDOVER_START_BUFFER_MS must be a number");
-
-        let l1_height_lag = std::env::var("L1_HEIGHT_LAG")
-            .unwrap_or("4".to_string())
-            .parse::<u64>()
-            .expect("L1_HEIGHT_LAG must be a number");
-
         let blobs_per_batch = std::env::var("BLOBS_PER_BATCH")
             .unwrap_or("3".to_string())
             .parse::<u64>()
@@ -270,17 +251,6 @@ impl<T: ConfigTrait> Config<T> {
             .parse::<bool>()
             .expect("DISABLE_BRIDGING must be a boolean");
 
-        let simulate_not_submitting_at_the_end_of_epoch =
-            std::env::var("SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH")
-                .unwrap_or("false".to_string())
-                .parse::<bool>()
-                .expect("SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH must be a boolean");
-
-        let propose_forced_inclusion = std::env::var("PROPOSE_FORCED_INCLUSION")
-            .unwrap_or("true".to_string())
-            .parse::<bool>()
-            .expect("PROPOSE_FORCED_INCLUSION must be a boolean");
-
         let max_bytes_per_tx_list = std::env::var("MAX_BYTES_PER_TX_LIST")
             .unwrap_or(MAX_BLOB_DATA_SIZE.to_string())
             .parse::<u64>()
@@ -351,9 +321,6 @@ impl<T: ConfigTrait> Config<T> {
             rpc_driver_status_timeout,
             taiko_anchor_address,
             taiko_bridge_address,
-            handover_window_slots,
-            handover_start_buffer_ms,
-            l1_height_lag,
             max_bytes_size_of_batch,
             max_blocks_per_batch,
             max_time_shift_between_blocks_sec,
@@ -367,11 +334,9 @@ impl<T: ConfigTrait> Config<T> {
             threshold_taiko,
             amount_to_bridge_from_l2_to_l1,
             disable_bridging,
-            simulate_not_submitting_at_the_end_of_epoch,
             max_bytes_per_tx_list,
             throttling_factor,
             min_bytes_per_tx_list,
-            propose_forced_inclusion,
             extra_gas_percentage,
             preconf_min_txs,
             preconf_max_skipped_l2_slots,
@@ -380,7 +345,6 @@ impl<T: ConfigTrait> Config<T> {
             bridge_transaction_fee,
         };
 
-        // Contract addresses: {:#?}
         info!(
             r#"
 Configuration:{}
@@ -402,9 +366,6 @@ rpc driver preconf timeout: {}ms
 rpc driver status timeout: {}ms
 taiko anchor address: {}
 taiko bridge address: {}
-handover window slots: {}
-handover start buffer: {}ms
-l1 height lag: {}
 max bytes per tx list from taiko driver: {}
 throttling factor: {}
 min pending tx list size: {} bytes
@@ -421,12 +382,11 @@ threshold_eth: {}
 threshold_taiko: {}
 amount to bridge from l2 to l1: {}
 disable bridging: {}
-simulate not submitting at the end of epoch: {}
-propose_forced_inclusion: {}
 min number of transaction to create a L2 block: {}
 max number of skipped L2 slots while creating a L2 block: {}
 bridge relayer fee: {}wei
 bridge transaction fee: {}wei
+{}
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -452,16 +412,12 @@ bridge transaction fee: {}wei
             config.l1_slots_per_epoch,
             config.preconf_heartbeat_ms,
             config.msg_expiry_sec,
-            // config.contract_addresses,
             config.jwt_secret_file_path,
             config.rpc_l2_execution_layer_timeout.as_millis(),
             config.rpc_driver_preconf_timeout.as_millis(),
             config.rpc_driver_status_timeout.as_millis(),
             config.taiko_anchor_address,
             config.taiko_bridge_address,
-            config.handover_window_slots,
-            config.handover_start_buffer_ms,
-            config.l1_height_lag,
             config.max_bytes_per_tx_list,
             config.throttling_factor,
             config.min_bytes_per_tx_list,
@@ -478,12 +434,11 @@ bridge transaction fee: {}wei
             threshold_taiko,
             config.amount_to_bridge_from_l2_to_l1,
             config.disable_bridging,
-            config.simulate_not_submitting_at_the_end_of_epoch,
-            config.propose_forced_inclusion,
             config.preconf_min_txs,
             config.preconf_max_skipped_l2_slots,
             config.bridge_relayer_fee,
             config.bridge_transaction_fee,
+            config.specific_config,
         );
 
         config

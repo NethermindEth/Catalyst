@@ -5,6 +5,7 @@ use super::{
         preconf_router::IPreconfRouter,
         taiko_inbox, taiko_wrapper,
     },
+    config::EthereumL1Config,
     propose_batch_builder::ProposeBatchBuilder,
 };
 use crate::forced_inclusion::ForcedInclusionInfo;
@@ -16,7 +17,7 @@ use anyhow::{Error, anyhow};
 use common::{
     l1::{
         bindings::IERC20,
-        config::{BaseFeeConfig, ContractAddresses, ProtocolConfig},
+        config::{BaseFeeConfig, ProtocolConfig},
         el_trait::ELTrait,
         execution_layer::ExecutionLayer as ExecutionLayerCommon,
         transaction_error::TransactionError,
@@ -28,10 +29,6 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, info, warn};
-
-pub struct EthereumL1Config {
-    pub contract_addresses: ContractAddresses,
-}
 
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -408,6 +405,37 @@ impl ExecutionLayer {
         );
         let config = contract.getConfig().call().await?;
         Ok(config)
+    }
+}
+
+use std::future::Future;
+pub trait PreconfOperator {
+    fn is_operator_for_current_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
+    fn is_operator_for_next_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
+    fn is_preconf_router_specified_in_taiko_wrapper(
+        &self,
+    ) -> impl Future<Output = Result<bool, Error>> + Send;
+    fn get_l2_height_from_taiko_inbox(&self) -> impl Future<Output = Result<u64, Error>> + Send;
+}
+
+impl PreconfOperator for ExecutionLayer {
+    async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
+        let operator = self.get_operator_for_current_epoch().await?;
+        Ok(operator == self.common.preconfer_address())
+    }
+
+    async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
+        let operator = self.get_operator_for_next_epoch().await?;
+        Ok(operator == self.common.preconfer_address())
+    }
+
+    async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
+        let preconf_router = self.taiko_wrapper_contract.preconfRouter().call().await?;
+        Ok(preconf_router != Address::ZERO)
+    }
+
+    async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
+        self.get_l2_height_from_taiko_inbox().await
     }
 }
 

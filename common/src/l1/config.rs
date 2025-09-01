@@ -1,22 +1,11 @@
 use crate::shared::signer::Signer;
+use crate::utils::{config::Config, config_trait::ConfigTrait};
 use alloy::primitives::Address;
 use std::sync::Arc;
-use tokio::sync::OnceCell;
-
-#[derive(Clone)]
-pub struct ContractAddresses {
-    pub taiko_inbox: Address,
-    pub taiko_token: OnceCell<Address>,
-    pub preconf_whitelist: Address,
-    pub preconf_router: Address,
-    pub taiko_wrapper: Address,
-    pub forced_inclusion_store: Address,
-}
 
 #[derive(Clone)]
 pub struct EthereumL1Config {
     pub execution_rpc_urls: Vec<String>,
-    pub contract_addresses: ContractAddresses,
     pub consensus_rpc_url: String,
     pub min_priority_fee_per_gas_wei: u64,
     pub tx_fees_increase_percentage: u64,
@@ -29,6 +18,29 @@ pub struct EthereumL1Config {
     pub signer: Arc<Signer>,
     pub preconfer_address: Option<Address>,
     pub extra_gas_percentage: u64,
+}
+
+impl EthereumL1Config {
+    pub fn new<T: ConfigTrait>(config: &Config<T>, l1_signer: Arc<Signer>) -> Self {
+        Self {
+            execution_rpc_urls: config.l1_rpc_urls.clone(),
+            consensus_rpc_url: config.l1_beacon_url.clone(),
+            slot_duration_sec: config.l1_slot_duration_sec,
+            slots_per_epoch: config.l1_slots_per_epoch,
+            preconf_heartbeat_ms: config.preconf_heartbeat_ms,
+            min_priority_fee_per_gas_wei: config.min_priority_fee_per_gas_wei,
+            tx_fees_increase_percentage: config.tx_fees_increase_percentage,
+            max_attempts_to_send_tx: config.max_attempts_to_send_tx,
+            max_attempts_to_wait_tx: config.max_attempts_to_wait_tx,
+            delay_between_tx_attempts_sec: config.delay_between_tx_attempts_sec,
+            signer: l1_signer,
+            preconfer_address: config.preconfer_address.clone().map(|s| {
+                s.parse()
+                    .expect("Preconfer address is not a valid Ethereum address")
+            }),
+            extra_gas_percentage: config.extra_gas_percentage,
+        }
+    }
 }
 
 #[derive(Clone)]
