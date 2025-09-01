@@ -403,8 +403,11 @@ impl ExecutionLayer {
             self.config.contract_addresses.preconf_router,
             self.provider.clone(),
         );
-        let config = contract.getConfig().call().await?;
-        Ok(config)
+        contract
+            .getConfig()
+            .call()
+            .await
+            .map_err(|e| Error::msg(format!("Failed to get preconf router config: {e}")))
     }
 }
 
