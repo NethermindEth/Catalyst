@@ -13,9 +13,11 @@ on:
       - "tools/p2p_node/p2p_network/**"
 
 env:
-  DOCKER_REGISTRY: docker.io
-  DOCKER_IMAGE_NAME: catalyst-node
-  DOCKER_REPOSITORY: nethermind
+  DOCKER_PUBLIC_REGISTRY: docker.io 
+  DOCKER_PUBLIC_REPOSITORY: nethermind/catalyst-node
+  DOCKER_REGISTRY: nethermind.jfrog.io
+  DOCKER_REPOSITORY_STAGING: core-oci-local-staging/catalyst-node
+  DOCKER_REPOSITORY_PROD: core-oci-local-prod/catalyst-node
 
 jobs:
   build:
@@ -49,8 +51,8 @@ jobs:
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.ARTIFACTORY_CORE_USERNAME }}
+          password: ${{ secrets.ARTIFACTORY_CORE_TOKEN_DEVELOPER }}
 
       - name: Build and push by digest
         id: build
@@ -60,7 +62,7 @@ jobs:
           file: Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.DOCKER_IMAGE_NAME }},push-by-digest=true,name-canonical=true
+          outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }},push-by-digest=true,name-canonical=true
 
       - name: Set digest output
         id: digest
@@ -80,8 +82,8 @@ jobs:
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.ARTIFACTORY_CORE_USERNAME }}
+          password: ${{ secrets.ARTIFACTORY_CORE_TOKEN_DEVELOPER }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -105,7 +107,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY }}/${{ env.DOCKER_IMAGE_NAME }}
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}
           tags: ${{ steps.event.outputs.tag_list }}
 
       - name: Create manifest list and push
@@ -115,10 +117,63 @@ jobs:
             ${{ needs.build.outputs.digest-amd64 }} \
             ${{ needs.build.outputs.digest-arm64 }}
 
+      - name: Check ORAS version
+        run: oras version
+
+      - name: Login to registry with ORAS
+        run: |
+          oras login ${{ env.DOCKER_REGISTRY }} \
+            -u ${{ secrets.ARTIFACTORY_CORE_USERNAME }} \
+            -p ${{ secrets.ARTIFACTORY_CORE_TOKEN_DEVELOPER }}
+
+      - name: Determine tags to promote
+        id: promote-tags
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+            BASE_VERSION=${VERSION%}
+            echo "TAGS=latest $BASE_VERSION" >> $GITHUB_ENV
+          else
+            echo "TAGS=latest" >> $GITHUB_ENV
+          fi
+
+      - name: Promote to Jfrog Production
+        run: |
+          for tag in $TAGS; do
+            echo "Current tag: $tag"
+            source_image="${DOCKER_REGISTRY}/${DOCKER_REPOSITORY_STAGING}:${tag}"
+            prod_image="${DOCKER_REGISTRY}/${DOCKER_REPOSITORY_PROD}:${tag}"
+            echo "Promoting ${source_image} to ${prod_image}"
+            oras cp -r "${source_image}" "${prod_image}"
+          done
+
+      - name: Login to Dockerhub registry with ORAS
+        run: |
+          oras login ${{ env.DOCKER_PUBLIC_REGISTRY }} \
+            -u ${{ secrets.DOCKER_USERNAME }} \
+            -p ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Promote to Dockerhub Production
+        run: |
+          for tag in $TAGS; do
+            echo "Current tag: $tag"
+            source_image="${DOCKER_REGISTRY}/${DOCKER_REPOSITORY_STAGING}:${tag}"
+            prod_image="${DOCKER_PUBLIC_REGISTRY}/${DOCKER_PUBLIC_REPOSITORY}:${tag}"
+            echo "Promoting ${source_image} to ${prod_image}"
+            oras cp -r "${source_image}" "${prod_image}"
+          done
+  
       - name: Summary
         run: |
-          echo "## Docker build completed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "## Catalyst Node Docker build Completed" >> $GITHUB_STEP_SUMMARY
           echo "### Tags" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" | while IFS= read -r TAG; do
-            echo "- $TAG" >> $GITHUB_STEP_SUMMARY
+          for tag in $TAGS; do
+            echo "- $tag" >> $GITHUB_STEP_SUMMARY
           done
+          echo "### Notes" >> $GITHUB_STEP_SUMMARY
+          echo "- The images have been pushed to ${DOCKER_REPOSITORY_STAGING} repo" >> $GITHUB_STEP_SUMMARY
+          echo "- **STAGING Repository**: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PROD Repository**: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+
