@@ -116,7 +116,10 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             ${{ needs.build.outputs.digest-amd64 }} \
             ${{ needs.build.outputs.digest-arm64 }}
-
+            
+      - name: Setup ORAS
+        uses: oras-project/setup-oras@v1
+        
       - name: Check ORAS version
         run: oras version
 
