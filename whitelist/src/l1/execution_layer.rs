@@ -2,6 +2,7 @@ use super::{
     bindings::{
         BatchParams, BlockParams, PreconfWhitelist,
         forced_inclusion_store::{IForcedInclusionStore, IForcedInclusionStore::ForcedInclusion},
+        preconf_router::IPreconfRouter,
         taiko_inbox, taiko_wrapper,
     },
     config::EthereumL1Config,
@@ -396,9 +397,20 @@ impl ExecutionLayer {
             info,
         )
     }
+
+    pub async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {
+        let contract = IPreconfRouter::new(
+            self.config.contract_addresses.preconf_router,
+            self.provider.clone(),
+        );
+        contract
+            .getConfig()
+            .call()
+            .await
+            .map_err(|e| Error::msg(format!("Failed to get preconf router config: {e}")))
+    }
 }
 
-use std::future::Future;
 pub trait PreconfOperator {
     fn is_operator_for_current_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
     fn is_operator_for_next_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
@@ -406,6 +418,9 @@ pub trait PreconfOperator {
         &self,
     ) -> impl Future<Output = Result<bool, Error>> + Send;
     fn get_l2_height_from_taiko_inbox(&self) -> impl Future<Output = Result<u64, Error>> + Send;
+    fn get_preconf_router_config(
+        &self,
+    ) -> impl Future<Output = Result<IPreconfRouter::Config, Error>> + Send;
 }
 
 impl PreconfOperator for ExecutionLayer {
@@ -426,5 +441,9 @@ impl PreconfOperator for ExecutionLayer {
 
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
         self.get_l2_height_from_taiko_inbox().await
+    }
+
+    async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {
+        self.get_preconf_router_config().await
     }
 }

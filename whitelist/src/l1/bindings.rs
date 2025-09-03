@@ -90,6 +90,26 @@ sol!(
     "src/l1/abi/PreconfRouter.json"
 );
 
+pub mod preconf_router {
+    use super::*;
+
+    sol!(
+        #[allow(missing_docs)]
+        #[sol(rpc)]
+        interface IPreconfRouter is IProposeBatch {
+            error ForcedInclusionNotSupported();
+            error NotPreconferOrFallback();
+            error ProposerIsNotPreconfer();
+
+            struct Config {
+                uint256 handOverSlots;
+            }
+
+            function getConfig() external view returns (Config memory);
+        }
+    );
+}
+
 pub mod taiko_wrapper {
     use super::*;
 
