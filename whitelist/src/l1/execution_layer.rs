@@ -435,7 +435,12 @@ impl PreconfOperator for ExecutionLayer {
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-        let preconf_router = self.taiko_wrapper_contract.preconfRouter().call().await?;
+        let preconf_router = self
+            .taiko_wrapper_contract
+            .preconfRouter()
+            .call()
+            .await
+            .map_err(|e| Error::msg(format!("Failed to get preconf router: {e}")))?;
         Ok(preconf_router != Address::ZERO)
     }
 

@@ -3,13 +3,14 @@ use common::{
     funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, metrics::Metrics, shared,
     utils as common_utils,
 };
+use l1::execution_layer::ExecutionLayer;
 use std::sync::Arc;
 use tokio::{
     signal::unix::{SignalKind, signal},
     sync::mpsc,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 mod chain_monitor;
 mod forced_inclusion;
@@ -62,15 +63,14 @@ async fn main() -> Result<(), Error> {
     )
     .await?;
 
-    let ethereum_l1 =
-        common_l1::ethereum_l1::EthereumL1::<l1::execution_layer::ExecutionLayer>::new(
-            common_l1::config::EthereumL1Config::new(&config, l1_signer),
-            l1::config::EthereumL1Config::try_from(config.specific_config.clone())?,
-            transaction_error_sender,
-            metrics.clone(),
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?;
+    let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
+        common_l1::config::EthereumL1Config::new(&config, l1_signer),
+        l1::config::EthereumL1Config::try_from(config.specific_config.clone())?,
+        transaction_error_sender,
+        metrics.clone(),
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?;
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
@@ -169,6 +169,13 @@ async fn main() -> Result<(), Error> {
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start ChainMonitor: {}", e))?;
 
+    let handover_window_slots = get_handover_window_slots(&ethereum_l1.execution_layer)
+        .await
+        .unwrap_or_else(|e| {
+            warn!("Failed to get handover window slots: {e}");
+            config.specific_config.handover_window_slots
+        });
+
     let node = node::Node::new(
         cancel_token.clone(),
         taiko.clone(),
@@ -176,7 +183,16 @@ async fn main() -> Result<(), Error> {
         chain_monitor.clone(),
         transaction_error_receiver,
         metrics.clone(),
-        node::config::NodeConfig::from(config.clone()),
+        node::config::NodeConfig {
+            preconf_heartbeat_ms: config.preconf_heartbeat_ms,
+            handover_window_slots,
+            handover_start_buffer_ms: config.specific_config.handover_start_buffer_ms,
+            l1_height_lag: config.specific_config.l1_height_lag,
+            propose_forced_inclusion: config.specific_config.propose_forced_inclusion,
+            simulate_not_submitting_at_the_end_of_epoch: config
+                .specific_config
+                .simulate_not_submitting_at_the_end_of_epoch,
+        },
         node::batch_manager::config::BatchBuilderConfig {
             max_bytes_size_of_batch: config.max_bytes_size_of_batch,
             max_blocks_per_batch,
@@ -218,6 +234,15 @@ async fn main() -> Result<(), Error> {
     wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await;
 
     Ok(())
+}
+
+async fn get_handover_window_slots(execution_layer: &ExecutionLayer) -> Result<u64, Error> {
+    match execution_layer.get_preconf_router_config().await {
+        Ok(router_config) => router_config.handOverSlots.try_into().map_err(|e| {
+            anyhow::anyhow!("Failed to convert handOverSlots from preconf router config: {e}")
+        }),
+        Err(e) => Err(anyhow::anyhow!("Failed to get preconf router config: {e}")),
+    }
 }
 
 async fn wait_for_the_termination(cancel_token: CancellationToken, shutdown_delay_secs: u64) {
