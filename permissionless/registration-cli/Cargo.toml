@@ -1,0 +1,25 @@
+[package]
+name = "registration-cli"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "registration-cli"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+alloy = { workspace = true }
+alloy-json-rpc = { workspace = true }
+alloy-rlp = { workspace = true }
+anyhow = { workspace = true }
+bindings = { path = "../bindings" }
+clap = { workspace = true }
+rand_core = { workspace = true }
+blst = { workspace = true }
+
+[lints]
+workspace = true
