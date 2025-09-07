@@ -16,7 +16,7 @@ alloy = { workspace = true }
 alloy-json-rpc = { workspace = true }
 alloy-rlp = { workspace = true }
 anyhow = { workspace = true }
-bindings = { path = "../bindings" }
+bindings = { workspace = true }
 clap = { workspace = true }
 rand_core = { workspace = true }
 blst = { workspace = true }
