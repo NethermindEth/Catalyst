@@ -1,3 +1,6 @@
+mod bls;
+mod commands;
+
 use urc::bindings::{
     BLS::{G1Point, G2Point},
     IRegistry,
@@ -13,9 +16,9 @@ use alloy::{
     sol_types::SolValue,
 };
 use anyhow::Error;
+use bls::BLSService;
 use clap::Parser;
-use urc::cli::bls::BLSService;
-use urc::cli::commands::{Cli, Commands};
+use commands::{Cli, Commands};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
