@@ -14,8 +14,8 @@ use alloy::{
 };
 use anyhow::Error;
 use clap::Parser;
-use urc::cli::commands::{Cli, Commands};
 use urc::cli::bls::BLSService;
+use urc::cli::commands::{Cli, Commands};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
