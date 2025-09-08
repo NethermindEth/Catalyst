@@ -5,6 +5,12 @@ pub struct Config {
     pub l1_start_block: u64,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Config {
     pub fn new() -> Self {
         // Load environment variables from .env file

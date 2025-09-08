@@ -14,7 +14,7 @@ use alloy::{
 };
 use anyhow::Error;
 use clap::Parser;
-use urc::cli::cli::{Cli, Commands};
+use urc::cli::commands::{Cli, Commands};
 use urc::cli::bls::BLSService;
 
 #[tokio::main]
