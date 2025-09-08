@@ -87,19 +87,19 @@ impl RegistryMonitor {
     }
 
     pub async fn index_register(&self, block_to_index: u64) -> Result<(), Error> {
-        let batch_proposed = IRegistry::OperatorRegistered::SIGNATURE_HASH;
+        let operator_registered = IRegistry::OperatorRegistered::SIGNATURE_HASH;
         let filter = Filter::new()
             .address(self.registry_address)
-            .event_signature(batch_proposed)
+            .event_signature(operator_registered)
             .from_block(block_to_index)
             .to_block(block_to_index);
         let logs = self.l1_provider.get_logs(&filter).await?;
 
         for log in logs {
             // Add operator
-            let operator_regestred = log.log_decode::<IRegistry::OperatorRegistered>()?;
-            let registration_root = operator_regestred.inner.registrationRoot.to_string();
-            let owner = operator_regestred.inner.owner.to_string();
+            let operator_registered = log.log_decode::<IRegistry::OperatorRegistered>()?;
+            let registration_root = operator_registered.inner.registrationRoot.to_string();
+            let owner = operator_registered.inner.owner.to_string();
             let block_number = log
                 .block_number
                 .unwrap_or_else(|| panic!("Block number not found"));
@@ -163,10 +163,10 @@ impl RegistryMonitor {
     }
 
     pub async fn index_opt_in(&self, block_to_index: u64) -> Result<(), Error> {
-        let batch_proposed = IRegistry::OperatorOptedIn::SIGNATURE_HASH;
+        let operator_opt_in = IRegistry::OperatorOptedIn::SIGNATURE_HASH;
         let filter = Filter::new()
             .address(self.registry_address)
-            .event_signature(batch_proposed)
+            .event_signature(operator_opt_in)
             .from_block(block_to_index)
             .to_block(block_to_index);
         let logs = self.l1_provider.get_logs(&filter).await?;
