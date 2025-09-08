@@ -1,9 +1,6 @@
 use anyhow::Error;
-use config::Config;
-use registry_monitor::RegistryMonitor;
-mod config;
-mod db;
-mod registry_monitor;
+use urc::monitor::config::Config;
+use urc::monitor::registry_monitor::RegistryMonitor;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {

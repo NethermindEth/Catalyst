@@ -2,13 +2,11 @@
 [workspace]
 members = [
     "common",
-    "permissionless/bindings",
-    "permissionless/node",
-    "permissionless/registration-cli",
-    "permissionless/registration-monitor",
+    "permissionless",
     "tools/p2p_node/p2p_boot_node",
     "tools/p2p_node/p2p_network",
     "tools/p2p_node/p2p_test_node",
+    "urc",
     "whitelist",
 ]
 resolver = "2"
@@ -32,7 +30,6 @@ alloy-json-rpc = { version = "1.0", default-features = false }
 alloy-rlp = { version = "0.3", default-features = false }
 anyhow = { version = "1", default-features = false }
 async-trait = { version = "0.1", default-features = false }
-bindings = { path = "permissionless/bindings" }
 blst = { version = "0.3", default-features = false }
 c-kzg = { version = "2.1", default-features = false }
 chrono = { version = "0.4", default-features = false, features = [

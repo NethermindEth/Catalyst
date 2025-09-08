@@ -1339,13 +1339,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
 
 [[package]]
-name = "bindings"
-version = "1.8.1"
-dependencies = [
- "alloy",
-]
-
-[[package]]
 name = "bit-set"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5111,37 +5104,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
-name = "registration-cli"
-version = "1.8.1"
-dependencies = [
- "alloy",
- "alloy-json-rpc",
- "alloy-rlp",
- "anyhow",
- "bindings",
- "blst",
- "clap",
- "rand_core 0.9.3",
- "tokio",
-]
-
-[[package]]
-name = "registration-monitor"
-version = "1.8.1"
-dependencies = [
- "alloy",
- "alloy-json-rpc",
- "alloy-rlp",
- "anyhow",
- "bindings",
- "dotenvy",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "reqwest"
 version = "0.12.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6706,6 +6668,24 @@ name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
+
+[[package]]
+name = "urc"
+version = "1.8.1"
+dependencies = [
+ "alloy",
+ "alloy-json-rpc",
+ "alloy-rlp",
+ "anyhow",
+ "blst",
+ "clap",
+ "dotenvy",
+ "rand_core 0.9.3",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "url"

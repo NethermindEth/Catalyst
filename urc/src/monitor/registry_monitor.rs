@@ -9,9 +9,9 @@ use alloy::{
 };
 use anyhow::Error;
 
-use crate::{config::Config, db::DataBase};
+use crate::monitor::{config::Config, db::DataBase};
 
-use bindings::IRegistry;
+use crate::bindings::IRegistry;
 
 use tokio::time::{Duration, sleep};
 

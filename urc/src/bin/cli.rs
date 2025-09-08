@@ -1,7 +1,4 @@
-mod bls;
-mod cli;
-
-use bindings::{
+use urc::bindings::{
     BLS::{G1Point, G2Point},
     IRegistry,
 };
@@ -17,7 +14,8 @@ use alloy::{
 };
 use anyhow::Error;
 use clap::Parser;
-use cli::{Cli, Commands};
+use urc::cli::cli::{Cli, Commands};
+use urc::cli::bls::BLSService;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -55,7 +53,7 @@ async fn main() -> Result<(), Error> {
 }
 
 fn generate_bls_key() {
-    let bls_service = bls::BLSService::generate_key().expect("Failed to generate BLS key");
+    let bls_service = BLSService::generate_key().expect("Failed to generate BLS key");
     println!(
         "Public key: {}",
         alloy::hex::encode(bls_service.get_public_key().to_bytes())
@@ -77,7 +75,7 @@ async fn register(rpc: &str, registry: &str, owner_pk: &str, bls_pk: &str) -> Re
 
     let message = owner.abi_encode_packed();
 
-    let bls_service = bls::BLSService::new(bls_pk)?;
+    let bls_service = BLSService::new(bls_pk)?;
 
     let pk_point = bls_service.pubkey_to_g1_point();
     let pubkey = G1Point {
