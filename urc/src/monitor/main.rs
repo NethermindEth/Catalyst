@@ -21,9 +21,9 @@ async fn main() -> Result<(), Error> {
 
     tracing::info!("App started");
 
-    let config = Config::new();
+    let config = Config::new()?;
     let mut registry_monitor = RegistryMonitor::new(config).await?;
-    registry_monitor.run_indexing_loop().await;
+    registry_monitor.run_indexing_loop().await?;
 
     Ok(())
 }

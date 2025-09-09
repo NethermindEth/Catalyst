@@ -40,7 +40,7 @@ impl RegistryMonitor {
         })
     }
 
-    pub async fn run_indexing_loop(&mut self) {
+    pub async fn run_indexing_loop(&mut self) -> Result<(), Error> {
         tracing::info!("Starting indexing loop");
         loop {
             let current_block = self
@@ -52,17 +52,21 @@ impl RegistryMonitor {
 
             if current_block >= block_to_index {
                 if let Err(e) = self.index_register(block_to_index).await {
-                    panic!("Failed to index OperatorRegistered events: {e}");
+                    return Err(anyhow::anyhow!(
+                        "Failed to index OperatorRegistered events: {e}"
+                    ));
                 }
 
                 if let Err(e) = self.index_opt_in(block_to_index).await {
-                    panic!("Failed to index OperatorOptedIn events: {e}")
+                    return Err(anyhow::anyhow!(
+                        "Failed to index OperatorOptedIn events: {e}"
+                    ));
                 }
 
                 self.indexed_block = block_to_index;
 
                 if let Err(e) = self.db.update_status(self.indexed_block).await {
-                    panic!("Failed to update status: {e}");
+                    return Err(anyhow::anyhow!("Failed to update status: {e}"));
                 }
             }
 
@@ -100,9 +104,10 @@ impl RegistryMonitor {
             let operator_registered = log.log_decode::<IRegistry::OperatorRegistered>()?;
             let registration_root = operator_registered.inner.registrationRoot.to_string();
             let owner = operator_registered.inner.owner.to_string();
-            let block_number = log
-                .block_number
-                .unwrap_or_else(|| panic!("Block number not found"));
+            let block_number = match log.block_number {
+                Some(n) => n,
+                None => return Err(anyhow::anyhow!("Block number not found")),
+            };
             let block = self
                 .l1_provider
                 .get_block(block_number.into())
@@ -129,10 +134,12 @@ impl RegistryMonitor {
                 .await?
             {
                 Some(tx) => tx,
-                None => panic!(
-                    "Transaction receipt not found for {:?}",
-                    log.transaction_hash
-                ),
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "Transaction receipt not found for {:?}",
+                        log.transaction_hash
+                    ));
+                }
             };
 
             let register_call = IRegistry::registerCall::abi_decode(tx.input())?;
@@ -176,9 +183,10 @@ impl RegistryMonitor {
             let registration_root = operator_opt_in.inner.registrationRoot.to_string();
             let slasher = operator_opt_in.inner.slasher.to_string();
             let committer = operator_opt_in.inner.committer.to_string();
-            let block_number = log
-                .block_number
-                .unwrap_or_else(|| panic!("Block number not found"));
+            let block_number = match log.block_number {
+                Some(n) => n,
+                None => return Err(anyhow::anyhow!("Block number not found")),
+            };
 
             let block = self
                 .l1_provider
