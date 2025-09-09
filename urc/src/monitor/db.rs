@@ -4,27 +4,6 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
 };
 
-#[allow(dead_code)]
-#[derive(sqlx::FromRow)]
-pub struct Batch {
-    pub batch_id: i64,
-    pub sender: String,
-    pub proposer: String,
-    pub coinbase: String,
-    pub propose_tx: String,
-    pub proposed_at: i64,
-    pub last_block_id: i64,
-    pub block_count: i64,
-    pub propose_fee: String,
-    pub l2_fee_earned: Option<String>,
-    pub prover: Option<String>,
-    pub prove_tx: Option<String>,
-    pub prove_fee: Option<String>,
-    pub is_sent_by_proposer: bool,
-    pub is_profitable: Option<bool>,
-    pub is_proved_by_proposer: Option<bool>,
-}
-
 pub struct DataBase {
     pool: SqlitePool,
 }
@@ -48,12 +27,9 @@ impl DataBase {
             CREATE TABLE IF NOT EXISTS operators (
                 registration_root TEXT PRIMARY KEY,
                 owner TEXT NOT NULL,
-                committer TEXT,
                 registered_at INTEGER NOT NULL,
                 unregistered_at INTEGER,
-                slashed_at INTEGER,
-                opted_in_at INTEGER,
-                opted_out_at INTEGER
+                slashed_at INTEGER
             );
             "#,
         )
@@ -83,14 +59,15 @@ impl DataBase {
         // Create slashers table
         sqlx::query(
             r#"
-                CREATE TABLE IF NOT EXISTS slashers (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                CREATE TABLE IF NOT EXISTS protocols (
                     slasher TEXT NOT NULL,
                     registration_root TEXT NOT NULL,
+                    opted_in_at INTEGER NOT NULL,
+                    opted_out_at INTEGER NOT NULL,
+                    committer TEXT NOT NULL,
+                    PRIMARY KEY (slasher, registration_root),
                     FOREIGN KEY (registration_root) REFERENCES operators(registration_root)
                 );
-                CREATE INDEX IF NOT EXISTS idx_slashers_slasher
-                    ON slashers (slasher);
             "#,
         )
         .execute(&pool)
@@ -182,59 +159,28 @@ impl DataBase {
         Ok(())
     }
 
-    pub async fn insert_slasher(
+    pub async fn insert_protocol(
         &self,
         registration_root: &str,
         slasher: String,
-    ) -> Result<(), Error> {
-        sqlx::query(
-            r#"
-            INSERT INTO slashers (
-                slasher, registration_root
-            ) VALUES (?, ?)
-            "#,
-        )
-        .bind(slasher)
-        .bind(registration_root)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    pub async fn update_operator_on_opt_in(
-        &self,
-        registration_root: &str,
         committer: String,
         opt_in_at: u64,
     ) -> Result<(), Error> {
         let opt_in_at: i64 = opt_in_at.try_into()?;
         sqlx::query(
             r#"
-            UPDATE operators SET
-                committer = ?,
-                opted_in_at = ?
-            WHERE registration_root = ?
+            INSERT INTO protocols (
+                slasher, registration_root, opted_in_at, opted_out_at, committer
+            ) VALUES (?, ?, ?, 0, ?)
             "#,
         )
-        .bind(committer)
-        .bind(opt_in_at)
+        .bind(slasher)
         .bind(registration_root)
+        .bind(opt_in_at)
+        .bind(committer)
         .execute(&self.pool)
         .await?;
-        Ok(())
-    }
 
-    pub async fn on_operator_opt_in(
-        &self,
-        registration_root: &str,
-        slasher: String,
-        committer: String,
-        opt_in_at: u64,
-    ) -> Result<(), Error> {
-        self.insert_slasher(registration_root, slasher).await?;
-        self.update_operator_on_opt_in(registration_root, committer, opt_in_at)
-            .await?;
         Ok(())
     }
 

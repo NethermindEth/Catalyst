@@ -205,7 +205,7 @@ impl RegistryMonitor {
             );
 
             self.db
-                .on_operator_opt_in(&registration_root, slasher, committer, opt_in_at)
+                .insert_protocol(&registration_root, slasher, committer, opt_in_at)
                 .await?;
         }
 
