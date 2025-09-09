@@ -5,6 +5,7 @@ pub struct Config {
     pub l1_rpc_url: String,
     pub registry_address: String,
     pub l1_start_block: u64,
+    pub max_l1_fork_depth: u64,
 }
 
 impl Config {
@@ -35,11 +36,26 @@ impl Config {
                 Ok(val)
             })?;
 
+        let max_l1_fork_depth = std::env::var("MAX_L1_FORK_DEPTH")
+            .unwrap_or("2".to_string())
+            .parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("MAX_L1_FORK_DEPTH must be a number"))?;
+
+        tracing::info!(
+            "Startup config:\ndb_filename: {}\nl1_rpc_url: {}\nregistry_address: {}\nl1_start_block: {}\nmax_l1_fork_depth: {}",
+            db_filename,
+            l1_rpc_url,
+            registry_address,
+            l1_start_block,
+            max_l1_fork_depth,
+        );
+
         Ok(Config {
             db_filename,
             l1_rpc_url,
             registry_address,
             l1_start_block,
+            max_l1_fork_depth,
         })
     }
 }

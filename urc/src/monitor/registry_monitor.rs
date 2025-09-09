@@ -20,6 +20,7 @@ pub struct RegistryMonitor {
     db: DataBase,
     l1_provider: DynProvider,
     registry_address: Address,
+    max_l1_fork_depth: u64,
 }
 
 impl RegistryMonitor {
@@ -37,6 +38,7 @@ impl RegistryMonitor {
             db,
             l1_provider,
             registry_address,
+            max_l1_fork_depth: config.max_l1_fork_depth,
         })
     }
 
@@ -48,6 +50,7 @@ impl RegistryMonitor {
                 .get_block_number()
                 .await
                 .expect("Could not get block number");
+            let current_block = current_block.saturating_sub(self.max_l1_fork_depth);
             let block_to_index = self.indexed_block + 1;
 
             if current_block >= block_to_index {
