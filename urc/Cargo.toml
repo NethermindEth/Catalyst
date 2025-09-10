@@ -1,0 +1,32 @@
+[package]
+name = "urc"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "urc-cli"
+path = "src/cli/main.rs"
+
+[[bin]]
+name = "urc-monitor"
+path = "src/monitor/main.rs"
+
+[dependencies]
+tokio = { workspace = true }
+alloy = { workspace = true }
+alloy-json-rpc = { workspace = true }
+alloy-rlp = { workspace = true }
+anyhow = { workspace = true }
+dotenvy = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros"] }
+clap = { workspace = true }
+rand_core = { workspace = true }
+blst = { workspace = true }
+
+[lints]
+workspace = true
