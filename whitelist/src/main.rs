@@ -1,7 +1,7 @@
 use anyhow::Error;
 use common::{
     funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, metrics::Metrics, shared,
-    utils as common_utils,
+    signer, utils as common_utils,
 };
 use l1::execution_layer::ExecutionLayer;
 use std::sync::Arc;
@@ -50,13 +50,13 @@ async fn main() -> Result<(), Error> {
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
 
-    let l1_signer = common_utils::constructors::create_signer(
+    let l1_signer = signer::create_signer(
         config.web3signer_l1_url.clone(),
         config.catalyst_node_ecdsa_private_key.clone(),
         config.preconfer_address.clone(),
     )
     .await?;
-    let l2_signer = common_utils::constructors::create_signer(
+    let l2_signer = signer::create_signer(
         config.web3signer_l2_url.clone(),
         config.catalyst_node_ecdsa_private_key.clone(),
         config.preconfer_address.clone(),

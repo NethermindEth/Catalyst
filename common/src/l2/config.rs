@@ -1,4 +1,4 @@
-use crate::shared::signer::Signer;
+use crate::signer::Signer;
 use alloy::primitives::{Address, B256};
 use anyhow::Error;
 use std::str::FromStr;

@@ -1,4 +1,4 @@
-use super::signer::Signer;
+use crate::signer::Signer;
 use alloy::{
     network::{Ethereum, EthereumWallet},
     primitives::{Address, B256},
@@ -105,7 +105,7 @@ pub async fn construct_alloy_provider(
                 ));
             };
 
-            let tx_signer = crate::shared::web3signer::Web3TxSigner::new(
+            let tx_signer = crate::signer::web3signer::Web3TxSigner::new(
                 web3signer.clone(),
                 preconfer_address,
             )?;

@@ -1,4 +1,4 @@
-use crate::shared::signer::Signer;
+use crate::signer::Signer;
 use crate::utils::{config::Config, config_trait::ConfigTrait};
 use alloy::primitives::Address;
 use std::sync::Arc;
