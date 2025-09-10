@@ -1,7 +1,15 @@
-use crate::shared::{signer::Signer, web3signer::Web3Signer};
+pub mod web3signer;
+
 use anyhow::Error;
 use std::sync::Arc;
 use tokio::time::Duration;
+use web3signer::Web3Signer;
+
+#[derive(Debug)]
+pub enum Signer {
+    Web3signer(Arc<Web3Signer>),
+    PrivateKey(String),
+}
 
 const SIGNER_TIMEOUT: Duration = Duration::from_secs(10);
 

@@ -1,6 +1,6 @@
 use anyhow::Error;
 use common::{
-    l1 as common_l1, l1::ethereum_l1::EthereumL1, metrics::Metrics, utils as common_utils,
+    l1 as common_l1, l1::ethereum_l1::EthereumL1, metrics::Metrics, utils as common_utils, signer,
 };
 use std::sync::Arc;
 use tokio::{
@@ -36,7 +36,7 @@ async fn main() -> Result<(), Error> {
         info!("Cancellation token triggered, initiating shutdown...");
     }));
 
-    let l1_signer = common_utils::constructors::create_signer(
+    let l1_signer = signer::create_signer(
         config.web3signer_l1_url.clone(),
         config.catalyst_node_ecdsa_private_key.clone(),
         config.preconfer_address.clone(),
