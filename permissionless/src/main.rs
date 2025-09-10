@@ -1,6 +1,6 @@
 use anyhow::Error;
 use common::{
-    l1 as common_l1, l1::ethereum_l1::EthereumL1, metrics::Metrics, utils as common_utils, signer,
+    l1 as common_l1, l1::ethereum_l1::EthereumL1, metrics::Metrics, signer, utils as common_utils,
 };
 use std::sync::Arc;
 use tokio::{

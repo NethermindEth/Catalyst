@@ -1,7 +1,7 @@
 use anyhow::Error;
 use common::{
     funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, metrics::Metrics, shared,
-    utils as common_utils, signer,
+    signer, utils as common_utils,
 };
 use l1::execution_layer::ExecutionLayer;
 use std::sync::Arc;
