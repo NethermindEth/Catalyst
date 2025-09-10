@@ -1,7 +1,6 @@
 use super::{
     bindings::{Bridge, LibSharedData, TaikoAnchor},
     config::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY, TaikoConfig},
-    fixed_k_signer_chainbound,
 };
 use crate::shared::alloy_tools;
 use alloy::{
@@ -205,7 +204,7 @@ impl L2ExecutionLayer {
     }
 
     fn sign_hash_deterministic(&self, hash: B256) -> Result<Signature, Error> {
-        fixed_k_signer_chainbound::sign_hash_deterministic(GOLDEN_TOUCH_PRIVATE_KEY, hash)
+        crate::crypto::fixed_k_signer::sign_hash_deterministic(GOLDEN_TOUCH_PRIVATE_KEY, hash)
     }
 
     pub async fn get_transaction_by_hash(
