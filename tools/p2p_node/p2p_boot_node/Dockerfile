@@ -15,8 +15,8 @@ COPY . .
 # Build the project in release mode
 RUN cargo build -p p2p-boot-node --release
 
-# Use ubuntu as the base image
-FROM ubuntu:latest
+# Use debian slim as the base image
+FROM debian:bookworm-slim
 
 # Copy the build artifact from the builder stage
 COPY --from=builder /usr/src/build/target/release/p2p-boot-node /usr/local/bin/p2p-boot-node
