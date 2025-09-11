@@ -87,6 +87,8 @@ def spam_transactions(count):
     while sent_count < count:
         # Get latest gas parameters for this batch
         base_fee = w3.eth.get_block('latest')['baseFeePerGas']
+        if base_fee < 25000000:
+            base_fee = 25000000
         priority_fee = w3.eth.max_priority_fee
         max_fee_per_gas = base_fee * 2 + priority_fee
 
