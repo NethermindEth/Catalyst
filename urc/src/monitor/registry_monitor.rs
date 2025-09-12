@@ -21,6 +21,7 @@ pub struct RegistryMonitor {
     l1_provider: DynProvider,
     registry_address: Address,
     max_l1_fork_depth: u64,
+    index_block_batch_size: u64,
 }
 
 impl RegistryMonitor {
@@ -39,6 +40,7 @@ impl RegistryMonitor {
             l1_provider,
             registry_address,
             max_l1_fork_depth: config.max_l1_fork_depth,
+            index_block_batch_size: config.index_block_batch_size,
         })
     }
 
@@ -51,22 +53,23 @@ impl RegistryMonitor {
                 .await
                 .expect("Could not get block number");
             let current_block = current_block.saturating_sub(self.max_l1_fork_depth);
-            let block_to_index = self.indexed_block + 1;
+            let start_block = self.indexed_block + 1;
+            let end_block = std::cmp::min(start_block + self.index_block_batch_size, current_block);
 
-            if current_block >= block_to_index {
-                if let Err(e) = self.index_register(block_to_index).await {
+            if current_block >= start_block {
+                if let Err(e) = self.index_register(start_block, end_block).await {
                     return Err(anyhow::anyhow!(
                         "Failed to index OperatorRegistered events: {e}"
                     ));
                 }
 
-                if let Err(e) = self.index_opt_in(block_to_index).await {
+                if let Err(e) = self.index_opt_in(start_block, end_block).await {
                     return Err(anyhow::anyhow!(
                         "Failed to index OperatorOptedIn events: {e}"
                     ));
                 }
 
-                self.indexed_block = block_to_index;
+                self.indexed_block = end_block;
 
                 if let Err(e) = self.db.update_status(self.indexed_block).await {
                     return Err(anyhow::anyhow!("Failed to update status: {e}"));
@@ -93,13 +96,13 @@ impl RegistryMonitor {
         }
     }
 
-    pub async fn index_register(&self, block_to_index: u64) -> Result<(), Error> {
+    pub async fn index_register(&self, start_block: u64, end_block: u64) -> Result<(), Error> {
         let operator_registered = IRegistry::OperatorRegistered::SIGNATURE_HASH;
         let filter = Filter::new()
             .address(self.registry_address)
             .event_signature(operator_registered)
-            .from_block(block_to_index)
-            .to_block(block_to_index);
+            .from_block(start_block)
+            .to_block(end_block);
         let logs = self.l1_provider.get_logs(&filter).await?;
 
         for log in logs {
@@ -172,13 +175,13 @@ impl RegistryMonitor {
         Ok(())
     }
 
-    pub async fn index_opt_in(&self, block_to_index: u64) -> Result<(), Error> {
+    pub async fn index_opt_in(&self, start_block: u64, end_block: u64) -> Result<(), Error> {
         let operator_opt_in = IRegistry::OperatorOptedIn::SIGNATURE_HASH;
         let filter = Filter::new()
             .address(self.registry_address)
             .event_signature(operator_opt_in)
-            .from_block(block_to_index)
-            .to_block(block_to_index);
+            .from_block(start_block)
+            .to_block(end_block);
         let logs = self.l1_provider.get_logs(&filter).await?;
 
         for log in logs {

@@ -6,6 +6,7 @@ pub struct Config {
     pub registry_address: String,
     pub l1_start_block: u64,
     pub max_l1_fork_depth: u64,
+    pub index_block_batch_size: u64,
 }
 
 impl Config {
@@ -26,7 +27,7 @@ impl Config {
             .map_err(|_| anyhow::anyhow!("REGISTRY_ADDRESS env var not found"))?;
 
         let l1_start_block = std::env::var("L1_START_BLOCK")
-            .unwrap_or("0".to_string())
+            .unwrap_or("1".to_string())
             .parse::<u64>()
             .map_err(|_| anyhow::anyhow!("L1_START_BLOCK must be a number"))
             .and_then(|val| {
@@ -41,13 +42,27 @@ impl Config {
             .parse::<u64>()
             .map_err(|_| anyhow::anyhow!("MAX_L1_FORK_DEPTH must be a number"))?;
 
+        let index_block_batch_size = std::env::var("INDEX_BLOCK_BATCH_SIZE")
+            .unwrap_or("10".to_string())
+            .parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("INDEX_BLOCK_BATCH_SIZE must be a number"))
+            .and_then(|val| {
+                if val == 0 {
+                    return Err(anyhow::anyhow!(
+                        "INDEX_BLOCK_BATCH_SIZE must be a positive number"
+                    ));
+                }
+                Ok(val)
+            })?;
+
         tracing::info!(
-            "Startup config:\ndb_filename: {}\nl1_rpc_url: {}\nregistry_address: {}\nl1_start_block: {}\nmax_l1_fork_depth: {}",
+            "Startup config:\ndb_filename: {}\nl1_rpc_url: {}\nregistry_address: {}\nl1_start_block: {}\nmax_l1_fork_depth: {}\nindex_block_batch_size: {}",
             db_filename,
             l1_rpc_url,
             registry_address,
             l1_start_block,
             max_l1_fork_depth,
+            index_block_batch_size
         );
 
         Ok(Config {
@@ -56,6 +71,7 @@ impl Config {
             registry_address,
             l1_start_block,
             max_l1_fork_depth,
+            index_block_batch_size,
         })
     }
 }
