@@ -54,9 +54,11 @@ impl RegistryMonitor {
                 .expect("Could not get block number");
             let current_block = current_block.saturating_sub(self.max_l1_fork_depth);
             let start_block = self.indexed_block + 1;
-            let end_block = std::cmp::min(start_block + self.index_block_batch_size, current_block);
 
             if current_block >= start_block {
+                let end_block =
+                    std::cmp::min(start_block + self.index_block_batch_size, current_block);
+
                 if let Err(e) = self.index_register(start_block, end_block).await {
                     return Err(anyhow::anyhow!(
                         "Failed to index OperatorRegistered events: {e}"
