@@ -57,7 +57,7 @@ impl RegistryMonitor {
 
             if current_block >= start_block {
                 let end_block =
-                    std::cmp::min(start_block + self.index_block_batch_size, current_block);
+                    std::cmp::min(start_block + self.index_block_batch_size - 1, current_block);
 
                 if let Err(e) = self.index_register(start_block, end_block).await {
                     return Err(anyhow::anyhow!(

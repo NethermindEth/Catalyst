@@ -42,10 +42,19 @@ impl Config {
             .parse::<u64>()
             .map_err(|_| anyhow::anyhow!("MAX_L1_FORK_DEPTH must be a number"))?;
 
+        // How many blocks to index at once when we are not yet fully synced
         let index_block_batch_size = std::env::var("INDEX_BLOCK_BATCH_SIZE")
-            .unwrap_or("10".to_string())
+            .unwrap_or("1".to_string())
             .parse::<u64>()
-            .map_err(|_| anyhow::anyhow!("INDEX_BLOCK_BATCH_SIZE must be a number"))?;
+            .map_err(|_| anyhow::anyhow!("INDEX_BLOCK_BATCH_SIZE must be a number"))
+            .and_then(|val| {
+                if val == 0 {
+                    return Err(anyhow::anyhow!(
+                        "INDEX_BLOCK_BATCH_SIZE must be a positive number"
+                    ));
+                }
+                Ok(val)
+            })?;
 
         tracing::info!(
             "Startup config:\ndb_filename: {}\nl1_rpc_url: {}\nregistry_address: {}\nl1_start_block: {}\nmax_l1_fork_depth: {}\nindex_block_batch_size: {}",
