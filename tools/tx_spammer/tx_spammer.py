@@ -64,41 +64,12 @@ account = w3.eth.account.from_key(private_key)
 amount = w3.to_wei(args.amount, 'ether')
 print(f'Sending transactions from: {account.address}')
 
-def send_transaction(nonce : int):
-    try:
-        estimated_gas = w3.eth.estimate_gas({
-            'to': recipient,
-            'value': amount,
-            'from': account.address
-        })
-        gas_limit = int(estimated_gas * 1.2)  # Add 20% buffer to avoid out-of-gas errors
-    except Exception as e:
-        print(f"Gas estimation failed: {e}")
-        gas_limit = 40000
-
-    # Dynamically set gas parameters based on network conditions for EIP-1559
-    base_fee = w3.eth.get_block('latest')['baseFeePerGas']
-    priority_fee = w3.eth.max_priority_fee
-    max_fee_per_gas = base_fee * 2 + priority_fee  # 2x base fee + priority fee for buffer
-
-    tx = {
-        'nonce': nonce,
-        'to': recipient,
-        'value': amount,
-        'gas': gas_limit,
-        'maxFeePerGas': max_fee_per_gas,
-        'maxPriorityFeePerGas': priority_fee,
-        'chainId': w3.eth.chain_id,
-        'type': 2  # EIP-1559 transaction type
-    }
-    signed_tx = w3.eth.account.sign_transaction(tx, private_key)
-    tx_hash = w3.eth.send_raw_transaction(signed_tx.raw_transaction)
-    return tx_hash.hex()
-
 def spam_transactions(count):
     # Create batches of transactions
     batch_size = min(args.batch_size, count)
     print(f"Sending {count} transactions in batches of {batch_size}")
+
+    chain_id = w3.eth.chain_id
 
     # Get gas parameters once per batch to reduce RPC calls
     try:
@@ -116,6 +87,8 @@ def spam_transactions(count):
     while sent_count < count:
         # Get latest gas parameters for this batch
         base_fee = w3.eth.get_block('latest')['baseFeePerGas']
+        if base_fee < 25000000:
+            base_fee = 25000000
         priority_fee = w3.eth.max_priority_fee
         max_fee_per_gas = base_fee * 2 + priority_fee
 
@@ -134,7 +107,7 @@ def spam_transactions(count):
                 'gas': gas_limit,
                 'maxFeePerGas': max_fee_per_gas,
                 'maxPriorityFeePerGas': priority_fee,
-                'chainId': w3.eth.chain_id,
+                'chainId': chain_id,
                 'type': 2  # EIP-1559 transaction type
             }
             signed_tx = w3.eth.account.sign_transaction(tx, private_key)
