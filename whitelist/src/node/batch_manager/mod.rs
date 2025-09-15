@@ -511,7 +511,7 @@ impl BatchManager {
                     )
                     .await?,
                 ));
-            };
+            }
         }
 
         Ok((
