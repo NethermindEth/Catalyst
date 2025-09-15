@@ -501,7 +501,7 @@ impl BatchManager {
                 .await?;
             if forced_inclusion_block_response.is_some() {
                 let (l2_block, l2_slot_info) = self.get_l2_block_after_forced_inclusion().await?;
-                Ok((
+                return Ok((
                     forced_inclusion_block_response,
                     self.add_new_l2_block_to_new_batch(
                         l2_block,
@@ -510,22 +510,20 @@ impl BatchManager {
                         operation_type,
                     )
                     .await?,
-                ))
-            } else {
-                Ok((None, None))
+                ));
             }
-        } else {
-            Ok((
-                None,
-                self.add_new_l2_block_to_new_batch(
-                    l2_block,
-                    l2_slot_info,
-                    end_of_sequencing,
-                    operation_type,
-                )
-                .await?,
-            ))
         }
+
+        Ok((
+            None,
+            self.add_new_l2_block_to_new_batch(
+                l2_block,
+                l2_slot_info,
+                end_of_sequencing,
+                operation_type,
+            )
+            .await?,
+        ))
     }
 
     async fn add_new_l2_block_to_new_batch(
