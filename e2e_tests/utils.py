@@ -61,3 +61,12 @@ def wait_for_handover_window(beacon_client):
     seconds_to_handover_window = get_seconds_to_handover_window(beacon_client)
     print(f"Seconds to handover window: {seconds_to_handover_window}")
     wait_for_secs(seconds_to_handover_window)
+
+def spam_n_txs(eth_client, private_key, n):
+    account = eth_client.eth.account.from_key(private_key)
+    nonce = eth_client.eth.get_transaction_count(account.address)
+    last_tx_hash = None
+    for i in range(n):
+        last_tx_hash = send_transaction(nonce, account, '0.00009', eth_client, private_key)
+        wait_for_tx_to_be_included(eth_client, last_tx_hash)
+        nonce += 1
