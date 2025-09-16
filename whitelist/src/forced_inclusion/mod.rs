@@ -82,7 +82,11 @@ impl ForcedInclusion {
         Ok(fi)
     }
 
-    pub fn increment_index(&self) {
+    fn increment_index(&self) {
         self.index.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub async fn release_forced_inclusion(&self) {
+        self.index.fetch_sub(1, Ordering::SeqCst);
     }
 }

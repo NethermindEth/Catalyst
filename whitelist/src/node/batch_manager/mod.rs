@@ -22,6 +22,7 @@ use common::{
 };
 use config::BatchBuilderConfig;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 // Temporary struct while we don't have forced inclusion flag in extra data
@@ -40,6 +41,7 @@ pub struct BatchManager {
     forced_inclusion: Arc<ForcedInclusion>,
     cached_forced_inclusion_txs: CachedForcedInclusion,
     metrics: Arc<Metrics>,
+    cancel_token: CancellationToken,
 }
 
 impl BatchManager {
@@ -49,6 +51,7 @@ impl BatchManager {
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko<ExecutionLayer>>,
         metrics: Arc<Metrics>,
+        cancel_token: CancellationToken,
     ) -> Self {
         info!(
             "Batch builder config:\n\
@@ -76,6 +79,7 @@ impl BatchManager {
             forced_inclusion,
             cached_forced_inclusion_txs: CachedForcedInclusion::Empty,
             metrics,
+            cancel_token,
         }
     }
 
@@ -570,6 +574,14 @@ impl BatchManager {
         operation_type: OperationType,
         anchor_block_id: u64,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+        if self.batch_builder.has_current_forced_inclusion() {
+            // we should not enter this function if we already have a forced inclusion
+            // if we see this error in logs that means something is wrong in the code logic
+            error!(
+                "Bug in code: Try to add new l2 block with forced inclusion when we already have one"
+            );
+            return Ok(None);
+        }
         // get current forced inclusion
         let start = std::time::Instant::now();
         let forced_inclusion = self.forced_inclusion.consume_forced_inclusion().await?;
@@ -622,6 +634,7 @@ impl BatchManager {
                         "Failed to advance head to new forced inclusion L2 block: {}",
                         err
                     );
+                    self.forced_inclusion.release_forced_inclusion().await;
                     self.batch_builder.remove_current_batch();
                     return Ok(None); // TODO: why not return error here?
                 }
@@ -631,9 +644,12 @@ impl BatchManager {
                 .batch_builder
                 .set_forced_inclusion(Some(forced_inclusion_batch))
             {
+                // We should never enter here because it means we already have a forced inclusion
+                // but we didn't set it yet. And at the beginning of the function we checked if
+                // the forced inclusion is empty. This is a bug in the code logic
                 error!("Failed to set forced inclusion to batch");
-                self.batch_builder.remove_current_batch();
-                return Ok(None); // TODO: why not return error here?
+                self.cancel_token.cancel();
+                return Err(anyhow::anyhow!("Failed to set forced inclusion to batch"));
             }
             return Ok(forced_inclusion_block_response);
         }
@@ -821,6 +837,7 @@ impl BatchManager {
             forced_inclusion: self.forced_inclusion.clone(),
             cached_forced_inclusion_txs: CachedForcedInclusion::Empty,
             metrics: self.metrics.clone(),
+            cancel_token: self.cancel_token.clone(),
         }
     }
 
