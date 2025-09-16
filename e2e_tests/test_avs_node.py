@@ -15,7 +15,6 @@ if not l2_prefunded_priv_key:
     raise Exception("Environment variable TEST_L2_PREFUNDED_PRIVATE_KEY not set")
 
 
-
 def test_rpcs(l1_client, l2_client_node1, l2_client_node2, beacon_client):
     """Test to verify the chain IDs of L1 and L2 networks"""
     l1_chain_id = l1_client.eth.chain_id
