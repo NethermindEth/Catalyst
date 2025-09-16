@@ -71,6 +71,7 @@ impl Node {
             ethereum_l1.clone(),
             taiko.clone(),
             metrics.clone(),
+            cancel_token.clone(),
         );
         let head_verifier = L2HeadVerifier::new();
         let watchdog = common_utils::watchdog::Watchdog::new(
