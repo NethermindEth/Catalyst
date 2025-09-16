@@ -580,7 +580,9 @@ impl BatchManager {
             error!(
                 "Bug in code: Try to add new l2 block with forced inclusion when we already have one"
             );
-            return Ok(None);
+            return Err(anyhow::anyhow!(
+                "Bug in code: Try to add new l2 block with forced inclusion when we already have one"
+            ));
         }
         // get current forced inclusion
         let start = std::time::Instant::now();
@@ -636,7 +638,10 @@ impl BatchManager {
                     );
                     self.forced_inclusion.release_forced_inclusion().await;
                     self.batch_builder.remove_current_batch();
-                    return Ok(None); // TODO: why not return error here?
+                    return Err(anyhow::anyhow!(
+                        "Failed to advance head to new forced inclusion L2 block: {}",
+                        err
+                    ));
                 }
             };
             // set it to batch builder
