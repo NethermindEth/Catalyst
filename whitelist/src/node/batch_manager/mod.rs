@@ -9,7 +9,6 @@ use crate::{
     node::batch_manager::config::BatchesToSend,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
 };
-use alloy::rpc::types::Transaction as GethTransaction;
 use alloy::{consensus::BlockHeader, consensus::Transaction, primitives::Address};
 use anyhow::Error;
 use batch_builder::BatchBuilder;
@@ -27,21 +26,12 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-// Temporary struct while we don't have forced inclusion flag in extra data
-#[derive(PartialEq)]
-enum CachedForcedInclusion {
-    Empty,
-    NoData,
-    Txs(Vec<GethTransaction>),
-}
-
 pub struct BatchManager {
     batch_builder: BatchBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko<ExecutionLayer>>,
     l1_height_lag: u64,
     forced_inclusion: Arc<ForcedInclusion>,
-    cached_forced_inclusion_txs: CachedForcedInclusion,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
 }
@@ -79,25 +69,12 @@ impl BatchManager {
             taiko,
             l1_height_lag,
             forced_inclusion,
-            cached_forced_inclusion_txs: CachedForcedInclusion::Empty,
             metrics,
             cancel_token,
         }
     }
 
-    fn compare_transactions_list(tx1: &[GethTransaction], tx2: &[GethTransaction]) -> bool {
-        tx1.len() == tx2.len()
-            && tx1
-                .iter()
-                .zip(tx2.iter())
-                .all(|(a, b)| a.inner.hash() == b.inner.hash())
-    }
-
-    pub async fn is_forced_inclusion(
-        &mut self,
-        block_id: u64,
-        txs: &[GethTransaction],
-    ) -> Result<bool, Error> {
+    pub async fn is_forced_inclusion(&mut self, block_id: u64) -> Result<bool, Error> {
         let is_forced_inclusion = match self
             .taiko
             .get_forced_inclusion_form_l1origin(block_id)
@@ -105,28 +82,10 @@ impl BatchManager {
         {
             Ok(fi) => fi,
             Err(e) => {
-                warn!("Failed to get forced inclusion from Taiko Geth: {}", e);
-                // TODO remove it once geth updated on all networks
-                match &self.cached_forced_inclusion_txs {
-                    CachedForcedInclusion::NoData => false,
-                    CachedForcedInclusion::Empty => {
-                        if let Some(fi) = self
-                            .forced_inclusion
-                            .decode_current_forced_inclusion()
-                            .await?
-                        {
-                            let res = BatchManager::compare_transactions_list(&fi.txs, txs);
-                            self.cached_forced_inclusion_txs = CachedForcedInclusion::Txs(fi.txs);
-                            res
-                        } else {
-                            self.cached_forced_inclusion_txs = CachedForcedInclusion::NoData;
-                            false
-                        }
-                    }
-                    CachedForcedInclusion::Txs(cached_txs) => {
-                        BatchManager::compare_transactions_list(cached_txs, txs)
-                    }
-                }
+                error!("Failed to get forced inclusion flag from Taiko Geth: {e}");
+                return Err(anyhow::anyhow!(
+                    "Failed to get forced inclusion flag from Taiko Geth: {e}"
+                ));
             }
         };
 
@@ -136,12 +95,11 @@ impl BatchManager {
     pub async fn check_and_handle_forced_inclusion(
         &mut self,
         block_id: u64,
-        txs: &[GethTransaction],
         coinbase: Address,
         anchor_block_id: u64,
         timestamp: u64,
     ) -> Result<bool, Error> {
-        let forced_inclusion = self.is_forced_inclusion(block_id, txs).await?;
+        let forced_inclusion = self.is_forced_inclusion(block_id).await?;
         debug!(
             "Handle forced inclusion: is forced inclusion: {}",
             forced_inclusion
@@ -150,7 +108,6 @@ impl BatchManager {
         if forced_inclusion {
             self.batch_builder.try_finalize_current_batch()?;
             let forced_inclusion = self.forced_inclusion.consume_forced_inclusion().await?;
-            self.cached_forced_inclusion_txs = CachedForcedInclusion::Empty;
             if let Some(forced_inclusion) = forced_inclusion {
                 let forced_inclusion_batch = self
                     .ethereum_l1
@@ -215,7 +172,6 @@ impl BatchManager {
         let forced_inclusion_handled = self
             .check_and_handle_forced_inclusion(
                 block_height,
-                &txs,
                 coinbase,
                 anchor_block_id,
                 block.header.timestamp,
@@ -358,7 +314,6 @@ impl BatchManager {
 
         let start = std::time::Instant::now();
         let forced_inclusion = self.forced_inclusion.consume_forced_inclusion().await?;
-        self.cached_forced_inclusion_txs = CachedForcedInclusion::Empty;
         debug!(
             "Got forced inclusion in {} milliseconds",
             start.elapsed().as_millis()
@@ -563,7 +518,6 @@ impl BatchManager {
         // get next forced inclusion
         let start = std::time::Instant::now();
         let forced_inclusion = self.forced_inclusion.consume_forced_inclusion().await?;
-        self.cached_forced_inclusion_txs = CachedForcedInclusion::Empty;
         debug!(
             "Got forced inclusion in {} milliseconds",
             start.elapsed().as_millis()
@@ -791,7 +745,6 @@ impl BatchManager {
 
     pub async fn reset_builder(&mut self) -> Result<(), Error> {
         warn!("Resetting batch builder");
-        self.cached_forced_inclusion_txs = CachedForcedInclusion::Empty;
         self.forced_inclusion.sync_queue_index_with_head().await?;
 
         self.batch_builder = batch_builder::BatchBuilder::new(
@@ -810,7 +763,6 @@ impl BatchManager {
             taiko: self.taiko.clone(),
             l1_height_lag: self.l1_height_lag,
             forced_inclusion: self.forced_inclusion.clone(),
-            cached_forced_inclusion_txs: CachedForcedInclusion::Empty,
             metrics: self.metrics.clone(),
             cancel_token: self.cancel_token.clone(),
         }
