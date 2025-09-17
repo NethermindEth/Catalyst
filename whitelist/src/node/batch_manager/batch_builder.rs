@@ -104,7 +104,7 @@ impl BatchBuilder {
         self.current_forced_inclusion.is_some()
     }
 
-    pub fn curent_batch_is_empty(&self) -> bool {
+    pub fn current_batch_is_empty(&self) -> bool {
         self.current_batch
             .as_ref()
             .is_none_or(|b| b.l2_blocks.is_empty())

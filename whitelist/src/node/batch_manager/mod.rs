@@ -392,7 +392,7 @@ impl BatchManager {
         if !allow_forced_inclusion || self.has_current_forced_inclusion() {
             return Ok(None);
         }
-        if !self.batch_builder.curent_batch_is_empty() {
+        if !self.batch_builder.current_batch_is_empty() {
             error!(
                 "Cannot add new L2 block with forced inclusion because there are existing blocks in the current batch"
             );
