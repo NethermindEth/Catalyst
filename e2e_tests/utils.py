@@ -17,7 +17,7 @@ def send_transaction(nonce : int, account, amount, eth_client, private_key):
         'type': 2  # EIP-1559 transaction type
     }
 
-    print(f'RPC URL: {eth_client.provider.endpoint_uri}, Sending from: {account.address}')
+    print(f'RPC URL: {eth_client.provider.endpoint_uri}, Sending from: {account.address}, nonce: {nonce}')
     signed_tx = eth_client.eth.account.sign_transaction(tx, private_key)
     tx_hash = eth_client.eth.send_raw_transaction(signed_tx.raw_transaction)
     print(f'Transaction sent: {tx_hash.hex()}')
@@ -43,8 +43,12 @@ def get_seconds_to_handover_window(beacon_client):
 
 def wait_for_tx_to_be_included(eth_client, tx_hash):
     try:
-        eth_client.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
-        return True
+        receipt = eth_client.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
+        if receipt.status == 1:
+            return True
+        else:
+            print(f"Transaction {tx_hash} reverted")
+            return False
     except Exception as e:
         print(f"Error waiting for transaction to be included: {e}")
         return False
@@ -64,9 +68,8 @@ def wait_for_handover_window(beacon_client):
 
 def spam_n_txs(eth_client, private_key, n):
     account = eth_client.eth.account.from_key(private_key)
-    nonce = eth_client.eth.get_transaction_count(account.address)
     last_tx_hash = None
     for i in range(n):
+        nonce = eth_client.eth.get_transaction_count(account.address)
         last_tx_hash = send_transaction(nonce, account, '0.00009', eth_client, private_key)
         wait_for_tx_to_be_included(eth_client, last_tx_hash)
-        nonce += 1
