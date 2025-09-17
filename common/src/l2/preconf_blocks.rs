@@ -2,6 +2,23 @@ use alloy::primitives::B256;
 use hex::FromHex;
 use serde::{Deserialize, Deserializer, Serialize};
 
+pub struct PreconfedBlocks {
+    pub forced_inclusion_block: Option<BuildPreconfBlockResponse>,
+    pub block: Option<BuildPreconfBlockResponse>,
+}
+
+impl PreconfedBlocks {
+    pub fn new(
+        forced_inclusion_block: Option<BuildPreconfBlockResponse>,
+        block: Option<BuildPreconfBlockResponse>,
+    ) -> Self {
+        Self {
+            forced_inclusion_block,
+            block,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildPreconfBlockRequestBody {
