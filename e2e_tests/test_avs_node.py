@@ -101,7 +101,7 @@ def test_forced_inclusion(l2_client_node1):
         forced_inclusion_tx_hash = match.group(1)
         print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
 
-        # Spam 41 transactions to L2 Node to create two batches
+        # Spam 41 transactions to L2 Node to at least one batch which will include the forced inclusion tx
         spam_n_txs(l2_client_node1, l2_prefunded_priv_key, 41)
 
         assert wait_for_tx_to_be_included(l2_client_node1, forced_inclusion_tx_hash), "Forced inclusion tx should be included in L2 Node 1"
