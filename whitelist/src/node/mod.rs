@@ -768,23 +768,9 @@ impl Node {
 
         let mut forced_inclusion_flags: Vec<bool> = Vec::with_capacity(blocks.len());
         for block in &blocks {
-            let (_, txs) = match block.transactions.as_transactions() {
-                Some(txs) => txs.split_first().ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Cannot get anchor transaction from block {}",
-                        block.header.number
-                    )
-                })?,
-                None => {
-                    return Err(anyhow::anyhow!(
-                        "No transactions in block {}",
-                        block.header.number
-                    ));
-                }
-            };
             forced_inclusion_flags.push(
                 self.batch_manager
-                    .is_forced_inclusion(block.header.number, txs)
+                    .is_forced_inclusion(block.header.number)
                     .await?,
             );
         }
