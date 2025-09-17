@@ -15,7 +15,10 @@ use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
-    l2::{preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
+    l2::{
+        preconf_blocks::{BuildPreconfBlockResponse, PreconfedBlocks},
+        taiko::Taiko,
+    },
     utils as common_utils,
 };
 use config::NodeConfig;
@@ -338,7 +341,7 @@ impl Node {
                     "Unexpected L2 head detected. Restarting node..."
                 ));
             }
-            let (forced_inclusion_block, block) = self
+            let preconfed_blocks = self
                 .preconfirm_block(
                     pending_tx_list,
                     l2_slot_info,
@@ -349,8 +352,9 @@ impl Node {
                 )
                 .await?;
 
-            self.verify_preconfed_block(forced_inclusion_block).await?;
-            self.verify_preconfed_block(block).await?;
+            self.verify_preconfed_block(preconfed_blocks.forced_inclusion_block)
+                .await?;
+            self.verify_preconfed_block(preconfed_blocks.block).await?;
         }
 
         if current_status.is_submitter() && !transaction_in_progress {
@@ -670,13 +674,7 @@ impl Node {
         l2_slot_info: L2SlotInfo,
         end_of_sequencing: bool,
         allow_forced_inclusion: bool,
-    ) -> Result<
-        (
-            Option<BuildPreconfBlockResponse>,
-            Option<BuildPreconfBlockResponse>,
-        ),
-        Error,
-    > {
+    ) -> Result<PreconfedBlocks, Error> {
         let result = self
             .batch_manager
             .preconfirm_block(
