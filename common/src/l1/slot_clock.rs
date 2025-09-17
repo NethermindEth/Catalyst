@@ -253,7 +253,7 @@ impl<T: Clock> SlotClock<T> {
         let block_slot = self.slot_of(Duration::from_secs(l1_block_timestamp))?;
         let current_slot = self.get_current_slot()?;
 
-        tracing::debug!(
+        tracing::trace!(
             "slots_since_l1_block: block slot {}, current slot {}",
             block_slot,
             current_slot

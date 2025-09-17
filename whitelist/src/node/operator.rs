@@ -14,7 +14,7 @@ use common::{
 };
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{debug, warn};
 
 pub struct Operator<
     T: PreconfOperator = ExecutionLayer,
@@ -150,6 +150,10 @@ impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
         let epoch = self.slot_clock.get_current_epoch()?;
         if epoch > self.last_config_reload_epoch {
             self.handover_window_slots = self.get_handover_window_slots().await;
+            debug!(
+                "Reloaded router config. Handover window slots: {}",
+                self.handover_window_slots
+            );
             self.last_config_reload_epoch = epoch;
         }
 

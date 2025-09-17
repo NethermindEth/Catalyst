@@ -172,7 +172,10 @@ async fn main() -> Result<(), Error> {
     let handover_window_slots = get_handover_window_slots(&ethereum_l1.execution_layer)
         .await
         .unwrap_or_else(|e| {
-            warn!("Failed to get handover window slots: {e}");
+            warn!(
+                "Failed to get handover window slots: {e}, using default handover window slots: {}",
+                config.specific_config.handover_window_slots
+            );
             config.specific_config.handover_window_slots
         });
 
@@ -237,12 +240,19 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn get_handover_window_slots(execution_layer: &ExecutionLayer) -> Result<u64, Error> {
-    match execution_layer.get_preconf_router_config().await {
+    let handover_window_slots = match execution_layer.get_preconf_router_config().await {
         Ok(router_config) => router_config.handOverSlots.try_into().map_err(|e| {
             anyhow::anyhow!("Failed to convert handOverSlots from preconf router config: {e}")
         }),
-        Err(e) => Err(anyhow::anyhow!("Failed to get preconf router config: {e}")),
+        Err(e) => return Err(anyhow::anyhow!("Failed to get preconf router config: {e}")),
+    };
+    if let Ok(handover_window_slots) = handover_window_slots {
+        info!(
+            "Handover window slots from preconf router config: {}",
+            handover_window_slots
+        );
     }
+    handover_window_slots
 }
 
 async fn wait_for_the_termination(cancel_token: CancellationToken, shutdown_delay_secs: u64) {
