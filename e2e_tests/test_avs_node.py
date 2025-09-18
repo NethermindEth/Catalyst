@@ -14,6 +14,14 @@ l2_prefunded_priv_key = os.getenv("TEST_L2_PREFUNDED_PRIVATE_KEY")
 if not l2_prefunded_priv_key:
     raise Exception("Environment variable TEST_L2_PREFUNDED_PRIVATE_KEY not set")
 
+l2_prefunded_priv_key_2 = os.getenv("TEST_L2_PREFUNDED_PRIVATE_KEY_2")
+if not l2_prefunded_priv_key_2:
+    raise Exception("Environment variable TEST_L2_PREFUNDED_PRIVATE_KEY_2 not set")
+
+taiko_inbox_address = os.getenv("TAIKO_INBOX_ADDRESS")
+if not taiko_inbox_address:
+    raise Exception("Environment variable TAIKO_INBOX_ADDRESS not set")
+
 
 def test_rpcs(l1_client, l2_client_node1, l2_client_node2, beacon_client):
     """Test to verify the chain IDs of L1 and L2 networks"""
@@ -112,4 +120,14 @@ def test_forced_inclusion(l2_client_node1):
         print("stdout:", e.stdout)
         print("stderr:", e.stderr)
         assert False, "Forced inclusion toolbox docker command failed"
+
+def test_propose_batch_to_l1_after_reaching_max_blocks_per_batch(l2_client_node1, l1_client):
+    current_block = l1_client.eth.block_number
+    current_block_timestamp = l1_client.eth.get_block(current_block).timestamp
+    spam_n_txs(l2_client_node1, l2_prefunded_priv_key, 11)
+
+    event = get_last_propose_batch_event(l1_client, taiko_inbox_address, current_block)
+
+    assert event['args']['meta']['proposer'] in [l1_client.eth.account.from_key(l2_prefunded_priv_key).address, l1_client.eth.account.from_key(l2_prefunded_priv_key_2).address], "Proposer should be L2 Node 1 or L2 Node 2"
+    assert event['args']['meta']['proposedAt'] > current_block_timestamp, "Proposed at timestamp should be larger than current block timestamp"
 
