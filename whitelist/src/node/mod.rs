@@ -632,6 +632,7 @@ impl Node {
                 return Err(anyhow::anyhow!("Transaction reverted, exiting"));
             }
             TransactionError::OldestForcedInclusionDue => {
+                self.metrics.inc_critical_errors();
                 let taiko_inbox_height = match self
                     .ethereum_l1
                     .execution_layer
