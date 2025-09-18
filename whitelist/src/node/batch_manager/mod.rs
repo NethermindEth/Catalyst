@@ -17,7 +17,7 @@ use common::{
     l2::{
         self,
         operation_type::OperationType,
-        preconf_blocks::{BuildPreconfBlockResponse, PreconfedBlocks},
+        preconf_blocks::BuildPreconfBlockResponse,
         taiko::{self, Taiko},
     },
 };
@@ -254,16 +254,14 @@ impl BatchManager {
             self.preconfirm_forced_inclusion_block(l2_slot_info, OperationType::Reanchor)
                 .await?
         } else {
-            let preconfed_blocks = self
-                .add_new_l2_block(
-                    l2_block,
-                    l2_slot_info,
-                    false,
-                    OperationType::Reanchor,
-                    allow_forced_inclusion,
-                )
-                .await?;
-            preconfed_blocks.block
+            self.add_new_l2_block(
+                l2_block,
+                l2_slot_info,
+                false,
+                OperationType::Reanchor,
+                allow_forced_inclusion,
+            )
+            .await?
         };
 
         Ok(block)
@@ -275,7 +273,7 @@ impl BatchManager {
         l2_slot_info: L2SlotInfo,
         end_of_sequencing: bool,
         allow_forced_inclusion: bool,
-    ) -> Result<PreconfedBlocks, Error> {
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let result = if let Some(l2_block) = self.batch_builder.try_creating_l2_block(
             pending_tx_list,
             l2_slot_info.slot_timestamp(),
@@ -290,7 +288,7 @@ impl BatchManager {
             )
             .await?
         } else {
-            PreconfedBlocks::new(None, None)
+            None
         };
 
         if self
@@ -475,48 +473,12 @@ impl BatchManager {
         Ok(None)
     }
 
-    async fn get_l2_block_after_forced_inclusion(
-        &mut self,
-    ) -> Result<(L2Block, L2SlotInfo), Error> {
-        // update slot info for next block
-        let l2_slot_info = self
-            .taiko
-            .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Latest)
-            .await?;
-        // we need to update tx list because some txs might be in forced inclusion
-        let pending_tx_list = match self
-            .taiko
-            .get_pending_l2_tx_list_from_taiko_geth(l2_slot_info.base_fee(), 0)
-            .await?
-        {
-            Some(pending_tx_list) => pending_tx_list,
-            None => {
-                warn!(
-                    "Failed to get pending tx list from taiko geth after forced inclusion. Add empty tx list"
-                );
-                PreBuiltTxList::empty()
-            }
-        };
-        let l2_block = L2Block::new_from(pending_tx_list, l2_slot_info.slot_timestamp());
-        info!(
-            "Adding new L2 block after FI id: {}, timestamp: {}, parent gas used: {}, pending txs: {}",
-            l2_slot_info.parent_id() + 1,
-            l2_slot_info.slot_timestamp(),
-            l2_slot_info.parent_gas_used(),
-            l2_block.prebuilt_tx_list.tx_list.len(),
-        );
-        Ok((l2_block, l2_slot_info))
-    }
-
     async fn add_new_l2_block_to_batch(
         &mut self,
         l2_block: L2Block,
         l2_slot_info: L2SlotInfo,
         end_of_sequencing: bool,
         operation_type: OperationType,
-        // When we previously add a forced inclusion block, we don't want to return an error
-        // because we don't want to break verify_preconfed_block
-        can_return_error: bool,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let anchor_block_id = self
             .batch_builder
@@ -538,14 +500,10 @@ impl BatchManager {
             Err(err) => {
                 error!("Failed to advance head to new L2 block: {}", err);
                 self.remove_last_l2_block();
-                if can_return_error {
-                    Err(anyhow::anyhow!(
-                        "Failed to advance head to new L2 block: {}",
-                        err
-                    ))
-                } else {
-                    Ok(None)
-                }
+                Err(anyhow::anyhow!(
+                    "Failed to advance head to new L2 block: {}",
+                    err
+                ))
             }
         }
     }
@@ -557,7 +515,7 @@ impl BatchManager {
         end_of_sequencing: bool,
         operation_type: OperationType,
         allow_forced_inclusion: bool,
-    ) -> Result<PreconfedBlocks, Error> {
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         info!(
             "Adding new L2 block id: {}, timestamp: {}, parent gas used: {}, allow_forced_inclusion: {}",
             l2_slot_info.parent_id() + 1,
@@ -566,7 +524,7 @@ impl BatchManager {
             allow_forced_inclusion,
         );
 
-        let forced_inclusion_block = if !self.batch_builder.can_consume_l2_block(&l2_block) {
+        if !self.batch_builder.can_consume_l2_block(&l2_block) {
             // Calculate the anchor block ID and create a new batch
             let anchor_block_id = self.calculate_anchor_block_id().await?;
             let anchor_block_timestamp_sec = self
@@ -581,36 +539,24 @@ impl BatchManager {
                 .create_new_batch(anchor_block_id, anchor_block_timestamp_sec);
 
             // Add forced inclusion when needed
-            self.add_new_l2_block_with_forced_inclusion_when_needed(
-                &l2_slot_info,
-                operation_type,
-                anchor_block_id,
-                allow_forced_inclusion,
-            )
-            .await?
-        } else {
-            None
-        };
-
-        let (next_l2_block, next_l2_slot_info) = match forced_inclusion_block {
-            Some(_) => self.get_l2_block_after_forced_inclusion().await?,
-            None => (l2_block, l2_slot_info),
-        };
+            if let Some(fi_block) = self
+                .add_new_l2_block_with_forced_inclusion_when_needed(
+                    &l2_slot_info,
+                    operation_type,
+                    anchor_block_id,
+                    allow_forced_inclusion,
+                )
+                .await?
+            {
+                return Ok(Some(fi_block));
+            }
+        }
 
         let preconfed_block = self
-            .add_new_l2_block_to_batch(
-                next_l2_block,
-                next_l2_slot_info,
-                end_of_sequencing,
-                operation_type,
-                forced_inclusion_block.is_some(),
-            )
+            .add_new_l2_block_to_batch(l2_block, l2_slot_info, end_of_sequencing, operation_type)
             .await?;
 
-        Ok(PreconfedBlocks::new(
-            forced_inclusion_block,
-            preconfed_block,
-        ))
+        Ok(preconfed_block)
     }
 
     fn remove_last_l2_block(&mut self) {
