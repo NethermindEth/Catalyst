@@ -239,7 +239,7 @@ impl BatchManager {
     pub async fn reanchor_block(
         &mut self,
         pending_tx_list: PreBuiltTxList,
-        l2_slot_info: L2SlotInfo,
+        l2_slot_info: &L2SlotInfo,
         is_forced_inclusion: bool,
         allow_forced_inclusion: bool,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
@@ -270,7 +270,7 @@ impl BatchManager {
     pub async fn preconfirm_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_info: L2SlotInfo,
+        l2_slot_info: &L2SlotInfo,
         end_of_sequencing: bool,
         allow_forced_inclusion: bool,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
@@ -305,7 +305,7 @@ impl BatchManager {
 
     async fn preconfirm_forced_inclusion_block(
         &mut self,
-        l2_slot_info: L2SlotInfo,
+        l2_slot_info: &L2SlotInfo,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let anchor_block_id = self.calculate_anchor_block_id().await?;
@@ -341,7 +341,7 @@ impl BatchManager {
                 .advance_head_to_new_l2_block(
                     forced_inclusion_block,
                     anchor_block_id,
-                    &l2_slot_info,
+                    l2_slot_info,
                     false,
                     true,
                     operation_type,
@@ -476,7 +476,7 @@ impl BatchManager {
     async fn add_new_l2_block_to_batch(
         &mut self,
         l2_block: L2Block,
-        l2_slot_info: L2SlotInfo,
+        l2_slot_info: &L2SlotInfo,
         end_of_sequencing: bool,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
@@ -489,7 +489,7 @@ impl BatchManager {
             .advance_head_to_new_l2_block(
                 l2_block,
                 anchor_block_id,
-                &l2_slot_info,
+                l2_slot_info,
                 end_of_sequencing,
                 false,
                 operation_type,
@@ -508,10 +508,43 @@ impl BatchManager {
         }
     }
 
+    async fn create_new_batch(&mut self) -> Result<u64, Error> {
+        // Calculate the anchor block ID and create a new batch
+        let anchor_block_id = self.calculate_anchor_block_id().await?;
+        let anchor_block_timestamp_sec = self
+            .ethereum_l1
+            .execution_layer
+            .common()
+            .get_block_timestamp_by_number(anchor_block_id)
+            .await?;
+
+        // Create new batch
+        self.batch_builder
+            .create_new_batch(anchor_block_id, anchor_block_timestamp_sec);
+
+        Ok(anchor_block_id)
+    }
+
+    pub async fn add_new_l2_block_with_forced_inclusion(
+        &mut self,
+        operation_type: OperationType,
+        l2_slot_info: &L2SlotInfo,
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+        // TODO Should we use try here?
+        let anchor_block_id = self.create_new_batch().await?;
+
+        self.add_new_l2_block_with_forced_inclusion_when_needed(
+            l2_slot_info,
+            operation_type,
+            anchor_block_id,
+        )
+        .await
+    }
+
     async fn add_new_l2_block(
         &mut self,
         l2_block: L2Block,
-        l2_slot_info: L2SlotInfo,
+        l2_slot_info: &L2SlotInfo,
         end_of_sequencing: bool,
         operation_type: OperationType,
         allow_forced_inclusion: bool,
@@ -525,18 +558,8 @@ impl BatchManager {
         );
 
         if !self.batch_builder.can_consume_l2_block(&l2_block) {
-            // Calculate the anchor block ID and create a new batch
-            let anchor_block_id = self.calculate_anchor_block_id().await?;
-            let anchor_block_timestamp_sec = self
-                .ethereum_l1
-                .execution_layer
-                .common()
-                .get_block_timestamp_by_number(anchor_block_id)
-                .await?;
-
             // Create new batch
-            self.batch_builder
-                .create_new_batch(anchor_block_id, anchor_block_timestamp_sec);
+            let anchor_block_id = self.create_new_batch().await?;
 
             // Add forced inclusion when needed
             // not add forced inclusion when end_of_sequencing is true
@@ -544,7 +567,7 @@ impl BatchManager {
                 && !end_of_sequencing
                 && let Some(fi_block) = self
                     .add_new_l2_block_with_forced_inclusion_when_needed(
-                        &l2_slot_info,
+                        l2_slot_info,
                         operation_type,
                         anchor_block_id,
                     )
