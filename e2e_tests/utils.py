@@ -1,4 +1,5 @@
 import time
+import web3
 
 def send_transaction(nonce : int, account, amount, eth_client, private_key):
     base_fee = eth_client.eth.get_block('latest')['baseFeePerGas']
@@ -73,3 +74,38 @@ def spam_n_txs(eth_client, private_key, n):
         nonce = eth_client.eth.get_transaction_count(account.address)
         last_tx_hash = send_transaction(nonce, account, '0.00009', eth_client, private_key)
         wait_for_tx_to_be_included(eth_client, last_tx_hash)
+
+def get_last_propose_batch_event(eth_client, l1_contract_address, from_block):
+    import json
+    with open("../whitelist/src/l1/abi/ITaikoInbox.json") as f:
+        abi = json.load(f)
+
+    contract = eth_client.eth.contract(address=l1_contract_address, abi=abi)
+
+    # Create an event filter for BatchProposed events
+    batch_proposed_filter = contract.events.BatchProposed.create_filter(
+        from_block=from_block
+    )
+
+    wait_time = 0;
+    while True:
+        if wait_time > 100:
+            print("Warning waited 100 seconds for BatchProposed event without getting one")
+            return None
+
+        new_entries = batch_proposed_filter.get_all_entries()
+        if len(new_entries) > 0:
+            event = new_entries[-1]
+            print("BatchProposed event detected:")
+            print(f"  Batch ID: {event['args']['meta']['batchId']}")
+            print(f"  Proposer: {event['args']['meta']['proposer']}")
+            print(f"  Proposed At: {event['args']['meta']['proposedAt']}")
+            print(f"  Last Block ID: {event['args']['info']['lastBlockId']}")
+            print(f"  Last Block Timestamp: {event['args']['info']['lastBlockTimestamp']}")
+            print(f"  Transaction Hash: {event['transactionHash'].hex}")
+            print(f"  Block Number: {event['blockNumber']}")
+            print("---")
+            return event
+
+        time.sleep(1)
+        wait_time += 1
