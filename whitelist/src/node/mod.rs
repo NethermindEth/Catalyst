@@ -15,10 +15,7 @@ use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
-    l2::{
-        preconf_blocks::{BuildPreconfBlockResponse, PreconfedBlocks},
-        taiko::Taiko,
-    },
+    l2::{operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
     utils as common_utils,
 };
 use config::NodeConfig;
@@ -267,7 +264,7 @@ impl Node {
             .is_transaction_in_progress()
             .await?;
 
-        self.check_transaction_error_channel(&current_status)
+        self.check_transaction_error_channel(&current_status, &l2_slot_info)
             .await?;
 
         if current_status.is_preconfirmation_start_slot() {
@@ -341,10 +338,10 @@ impl Node {
                     "Unexpected L2 head detected. Restarting node..."
                 ));
             }
-            let preconfed_blocks = self
+            let preconfed_block = self
                 .preconfirm_block(
                     pending_tx_list,
-                    l2_slot_info,
+                    &l2_slot_info,
                     current_status.is_end_of_sequencing(),
                     self.config.propose_forced_inclusion
                         && current_status.is_submitter()
@@ -352,9 +349,7 @@ impl Node {
                 )
                 .await?;
 
-            self.verify_preconfed_block(preconfed_blocks.forced_inclusion_block)
-                .await?;
-            self.verify_preconfed_block(preconfed_blocks.block).await?;
+            self.verify_preconfed_block(preconfed_block).await?;
         }
 
         if current_status.is_submitter() && !transaction_in_progress {
@@ -366,8 +361,12 @@ impl Node {
                     .await
                 {
                     if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
-                        self.handle_transaction_error(transaction_error, &current_status)
-                            .await?;
+                        self.handle_transaction_error(
+                            transaction_error,
+                            &current_status,
+                            &l2_slot_info,
+                        )
+                        .await?;
                     }
                     return Err(err);
                 }
@@ -530,10 +529,13 @@ impl Node {
     async fn check_transaction_error_channel(
         &mut self,
         current_status: &OperatorStatus,
+        l2_slot_info: &L2SlotInfo,
     ) -> Result<(), Error> {
         match self.transaction_error_channel.try_recv() {
             Ok(error) => {
-                return self.handle_transaction_error(&error, current_status).await;
+                return self
+                    .handle_transaction_error(&error, current_status, l2_slot_info)
+                    .await;
             }
             Err(err) => match err {
                 TryRecvError::Empty => {
@@ -553,6 +555,7 @@ impl Node {
         &mut self,
         error: &TransactionError,
         current_status: &OperatorStatus,
+        l2_slot_info: &L2SlotInfo,
     ) -> Result<(), Error> {
         match error {
             TransactionError::ReanchorRequired => {
@@ -629,6 +632,7 @@ impl Node {
                 return Err(anyhow::anyhow!("Transaction reverted, exiting"));
             }
             TransactionError::OldestForcedInclusionDue => {
+                self.metrics.inc_critical_errors();
                 let taiko_inbox_height = match self
                     .ethereum_l1
                     .execution_layer
@@ -646,11 +650,14 @@ impl Node {
                     }
                 };
                 if let Err(err) = self
-                    .reanchor_blocks(taiko_inbox_height, "OldestForcedInclusionDue", true)
+                    .handle_oldest_forced_inclusion_due(
+                        taiko_inbox_height,
+                        current_status,
+                        l2_slot_info,
+                    )
                     .await
                 {
-                    let err_msg =
-                        format!("OldestForcedInclusionDue: Failed to reanchor blocks: {err}");
+                    let err_msg = format!("OldestForcedInclusionDue: Failed to reorg: {err}");
                     error!("{}", err_msg);
                     self.cancel_token.cancel();
                     return Err(anyhow::anyhow!("{}", err_msg));
@@ -671,10 +678,10 @@ impl Node {
     async fn preconfirm_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_info: L2SlotInfo,
+        l2_slot_info: &L2SlotInfo,
         end_of_sequencing: bool,
         allow_forced_inclusion: bool,
-    ) -> Result<PreconfedBlocks, Error> {
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let result = self
             .batch_manager
             .preconfirm_block(
@@ -732,6 +739,44 @@ impl Node {
         Ok(())
     }
 
+    async fn handle_oldest_forced_inclusion_due(
+        &mut self,
+        parent_block_id: u64,
+        current_status: &OperatorStatus,
+        l2_slot_info: &L2SlotInfo,
+    ) -> Result<(), Error> {
+        warn!(
+            "⛓️‍💥 OldestForcedInclusionDue Error. Reorg to parent block: {} and add forced inclusion",
+            parent_block_id
+        );
+
+        // Update self state
+        self.verifier = None;
+        self.batch_manager.reset_builder().await?;
+
+        self.chain_monitor.set_expected_reorg(parent_block_id).await;
+
+        if self
+            .batch_manager
+            .add_new_l2_block_with_forced_inclusion(OperationType::Reanchor, l2_slot_info)
+            .await?
+            .is_none()
+        {
+            let err_msg = format!(
+                "Failed to reorg to parent block: {parent_block_id} and add forced inclusion",
+            );
+            error!("{}", err_msg);
+            return Err(anyhow::anyhow!("{}", err_msg));
+        }
+
+        // If now is an end of sequencing block we must preconfirm the block
+        if current_status.is_end_of_sequencing() {
+            // TODO
+        }
+
+        Ok(())
+    }
+
     async fn reanchor_blocks(
         &mut self,
         parent_block_id: u64,
@@ -768,23 +813,9 @@ impl Node {
 
         let mut forced_inclusion_flags: Vec<bool> = Vec::with_capacity(blocks.len());
         for block in &blocks {
-            let (_, txs) = match block.transactions.as_transactions() {
-                Some(txs) => txs.split_first().ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Cannot get anchor transaction from block {}",
-                        block.header.number
-                    )
-                })?,
-                None => {
-                    return Err(anyhow::anyhow!(
-                        "No transactions in block {}",
-                        block.header.number
-                    ));
-                }
-            };
             forced_inclusion_flags.push(
                 self.batch_manager
-                    .is_forced_inclusion(block.header.number, txs)
+                    .is_forced_inclusion(block.header.number)
                     .await?,
             );
         }
@@ -827,7 +858,7 @@ impl Node {
                 .batch_manager
                 .reanchor_block(
                     pending_tx_list,
-                    l2_slot_info,
+                    &l2_slot_info,
                     is_forced_inclusion,
                     allow_forced_inclusion,
                 )
