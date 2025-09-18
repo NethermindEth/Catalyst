@@ -385,9 +385,9 @@ impl BatchManager {
         l2_slot_info: &L2SlotInfo,
         operation_type: OperationType,
         anchor_block_id: u64,
-        allow_forced_inclusion: bool,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        if !allow_forced_inclusion || self.has_current_forced_inclusion() {
+        if self.has_current_forced_inclusion() {
+            warn!("There is already a forced inclusion in the current batch");
             return Ok(None);
         }
         if !self.batch_builder.current_batch_is_empty() {
@@ -539,14 +539,16 @@ impl BatchManager {
                 .create_new_batch(anchor_block_id, anchor_block_timestamp_sec);
 
             // Add forced inclusion when needed
-            if let Some(fi_block) = self
-                .add_new_l2_block_with_forced_inclusion_when_needed(
-                    &l2_slot_info,
-                    operation_type,
-                    anchor_block_id,
-                    allow_forced_inclusion,
-                )
-                .await?
+            // not add forced inclusion when end_of_sequencing is true
+            if allow_forced_inclusion
+                && !end_of_sequencing
+                && let Some(fi_block) = self
+                    .add_new_l2_block_with_forced_inclusion_when_needed(
+                        &l2_slot_info,
+                        operation_type,
+                        anchor_block_id,
+                    )
+                    .await?
             {
                 return Ok(Some(fi_block));
             }
