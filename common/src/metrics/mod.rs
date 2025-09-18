@@ -23,6 +23,7 @@ pub struct Metrics {
     rpc_driver_call: CounterVec,
     rpc_driver_call_error: CounterVec,
     skipped_l2_slots_by_low_txs_count: Counter,
+    critical_errors: Counter,
     registry: Registry,
 }
 
@@ -222,6 +223,13 @@ impl Metrics {
             );
         }
 
+        let critical_errors = Counter::new("critical_errors", "Number of critical errors")
+            .expect("Failed to create critical_errors counter");
+
+        if let Err(err) = registry.register(Box::new(critical_errors.clone())) {
+            error!("Error: Failed to register critical_errors: {}", err);
+        }
+
         Self {
             preconfer_eth_balance,
             preconfer_taiko_balance,
@@ -239,6 +247,7 @@ impl Metrics {
             rpc_driver_call,
             rpc_driver_call_error,
             skipped_l2_slots_by_low_txs_count,
+            critical_errors,
             registry,
         }
     }
@@ -339,6 +348,10 @@ impl Metrics {
         self.skipped_l2_slots_by_low_txs_count.inc();
     }
 
+    pub fn inc_critical_errors(&self) {
+        self.critical_errors.inc();
+    }
+
     fn u256_to_f64(balance: alloy::primitives::U256) -> f64 {
         let balance_str = balance.to_string();
         let len = balance_str.len();
@@ -401,6 +414,7 @@ mod tests {
         metrics.observe_batch_info(5, 1000);
         metrics.observe_block_tx_count(3);
         metrics.inc_skipped_l2_slots_by_low_txs_count();
+        metrics.inc_critical_errors();
 
         let output = metrics.gather();
         println!("{output}");
@@ -419,6 +433,7 @@ mod tests {
         assert!(output.contains("block_tx_count_count 1"));
         assert!(output.contains("block_tx_count_sum 3"));
         assert!(output.contains("skipped_l2_slots_by_low_txs_count 1"));
+        assert!(output.contains("critical_errors 1"));
     }
 
     #[test]
