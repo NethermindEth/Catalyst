@@ -1,3 +1,4 @@
+mod add_l2_block_error;
 pub mod batch;
 mod batch_builder;
 pub mod config;
@@ -9,6 +10,7 @@ use crate::{
     node::batch_manager::config::BatchesToSend,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
 };
+use add_l2_block_error::AddL2BlockError;
 use alloy::{consensus::BlockHeader, consensus::Transaction, primitives::Address};
 use anyhow::Error;
 use batch_builder::BatchBuilder;
@@ -514,13 +516,11 @@ impl BatchManager {
         l2_slot_info: L2SlotInfo,
         end_of_sequencing: bool,
         operation_type: OperationType,
-        // When we previously add a forced inclusion block, we don't want to return an error
-        // because we don't want to break verify_preconfed_block
-        can_return_error: bool,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+    ) -> Result<Option<BuildPreconfBlockResponse>, AddL2BlockError> {
         let anchor_block_id = self
             .batch_builder
-            .add_l2_block_and_get_current_anchor_block_id(l2_block.clone())?;
+            .add_l2_block_and_get_current_anchor_block_id(l2_block.clone())
+            .map_err(|e| AddL2BlockError::BatchError(e.to_string()))?;
 
         match self
             .taiko
@@ -538,14 +538,7 @@ impl BatchManager {
             Err(err) => {
                 error!("Failed to advance head to new L2 block: {}", err);
                 self.remove_last_l2_block();
-                if can_return_error {
-                    Err(anyhow::anyhow!(
-                        "Failed to advance head to new L2 block: {}",
-                        err
-                    ))
-                } else {
-                    Ok(None)
-                }
+                Err(AddL2BlockError::AdvanceHeadError(err.to_string()))
             }
         }
     }
@@ -597,15 +590,26 @@ impl BatchManager {
             None => (l2_block, l2_slot_info),
         };
 
-        let preconfed_block = self
+        let preconfed_block = match self
             .add_new_l2_block_to_batch(
                 next_l2_block,
                 next_l2_slot_info,
                 end_of_sequencing,
                 operation_type,
-                forced_inclusion_block.is_some(),
             )
-            .await?;
+            .await
+        {
+            Ok(preconfed_block) => preconfed_block,
+            Err(err) => {
+                if forced_inclusion_block.is_some() {
+                    // When we previously add a forced inclusion block, we don't want to return an error
+                    // because we don't want to break verify_preconfed_block
+                    None
+                } else {
+                    return Err(err.into());
+                }
+            }
+        };
 
         Ok(PreconfedBlocks::new(
             forced_inclusion_block,
