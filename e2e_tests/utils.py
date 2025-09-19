@@ -77,6 +77,8 @@ def wait_for_slot_beginning(beacon_client, desired_slot):
     number_of_slots_in_epoch = int(beacon_client.get_spec()['data']['SLOTS_PER_EPOCH'])
 
     slots_to_wait = (number_of_slots_in_epoch - slot_in_epoch + desired_slot) % number_of_slots_in_epoch - 1
+    if slots_to_wait < 0:   # if we are in the desired slot, we need to wait for the next epoch
+        slots_to_wait = number_of_slots_in_epoch - 1
     seconds_till_end_of_slot = seconds_per_slot - int(time.time()) % seconds_per_slot
 
     seconds_to_wait = seconds_till_end_of_slot + slots_to_wait * seconds_per_slot + 1  # +1 second to be sure we are in the next slot
