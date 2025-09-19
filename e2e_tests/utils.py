@@ -1,5 +1,8 @@
 import time
 import web3
+import subprocess
+import json
+import os
 
 def send_transaction(nonce : int, account, amount, eth_client, private_key):
     base_fee = eth_client.eth.get_block('latest')['baseFeePerGas']
@@ -67,6 +70,22 @@ def wait_for_handover_window(beacon_client):
     print(f"Seconds to handover window: {seconds_to_handover_window}")
     wait_for_secs(seconds_to_handover_window)
 
+def wait_for_slot_beginning(beacon_client, desired_slot):
+    slot_in_epoch = get_slot_in_epoch(beacon_client)
+    seconds_per_slot = int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
+    print(f"Slot in epoch: {slot_in_epoch}")
+    number_of_slots_in_epoch = int(beacon_client.get_spec()['data']['SLOTS_PER_EPOCH'])
+
+    slots_to_wait = (number_of_slots_in_epoch - slot_in_epoch + desired_slot) % number_of_slots_in_epoch - 1
+    if slots_to_wait < 0:   # if we are in the desired slot, we need to wait for the next epoch
+        slots_to_wait = number_of_slots_in_epoch - 1
+    seconds_till_end_of_slot = seconds_per_slot - int(time.time()) % seconds_per_slot
+
+    seconds_to_wait = seconds_till_end_of_slot + slots_to_wait * seconds_per_slot + 1  # +1 second to be sure we are in the next slot
+    print(f"Seconds to wait: {seconds_to_wait}")
+
+    wait_for_secs(seconds_to_wait)
+
 def spam_n_txs(eth_client, private_key, n):
     account = eth_client.eth.account.from_key(private_key)
     last_tx_hash = None
@@ -74,13 +93,25 @@ def spam_n_txs(eth_client, private_key, n):
         nonce = eth_client.eth.get_transaction_count(account.address)
         last_tx_hash = send_transaction(nonce, account, '0.00009', eth_client, private_key)
         wait_for_tx_to_be_included(eth_client, last_tx_hash)
+    return last_tx_hash
 
-def get_last_propose_batch_event(eth_client, l1_contract_address, from_block):
-    import json
+def spam_n_blocks(eth_client, private_key, n, preconf_min_txs):
+    """Spam as many tx to create n blocks, wait for each block to be mined"""
+    account = eth_client.eth.account.from_key(private_key)
+    last_tx_hash = None
+    for i in range(n):
+        nonce = eth_client.eth.get_transaction_count(account.address)
+        for j in range(preconf_min_txs):
+            last_tx_hash = send_transaction(nonce, account, '0.00009', eth_client, private_key)
+            nonce += 1
+        wait_for_tx_to_be_included(eth_client, last_tx_hash)
+    return last_tx_hash
+
+def wait_for_batch_proposed_event(eth_client, taiko_inbox_address, from_block):
     with open("../whitelist/src/l1/abi/ITaikoInbox.json") as f:
         abi = json.load(f)
 
-    contract = eth_client.eth.contract(address=l1_contract_address, abi=abi)
+    contract = eth_client.eth.contract(address=taiko_inbox_address, abi=abi)
 
     # Create an event filter for BatchProposed events
     batch_proposed_filter = contract.events.BatchProposed.create_filter(
@@ -90,22 +121,116 @@ def get_last_propose_batch_event(eth_client, l1_contract_address, from_block):
     wait_time = 0;
     while True:
         if wait_time > 100:
-            print("Warning waited 100 seconds for BatchProposed event without getting one")
-            return None
+            assert False, "Warning waited 100 seconds for BatchProposed event without getting one"
 
         new_entries = batch_proposed_filter.get_all_entries()
         if len(new_entries) > 0:
             event = new_entries[-1]
-            print("BatchProposed event detected:")
-            print(f"  Batch ID: {event['args']['meta']['batchId']}")
-            print(f"  Proposer: {event['args']['meta']['proposer']}")
-            print(f"  Proposed At: {event['args']['meta']['proposedAt']}")
-            print(f"  Last Block ID: {event['args']['info']['lastBlockId']}")
-            print(f"  Last Block Timestamp: {event['args']['info']['lastBlockTimestamp']}")
-            print(f"  Transaction Hash: {event['transactionHash'].hex}")
-            print(f"  Block Number: {event['blockNumber']}")
-            print("---")
+            print_batch_info(event)
             return event
 
         time.sleep(1)
         wait_time += 1
+
+def print_batch_info(event):
+    print("BatchProposed event detected:")
+    print(f"  Batch ID: {event['args']['meta']['batchId']}")
+    print(f"  Proposer: {event['args']['meta']['proposer']}")
+    print(f"  Proposed At: {event['args']['meta']['proposedAt']}")
+    print(f"  Last Block ID: {event['args']['info']['lastBlockId']}")
+    print(f"  Last Block Timestamp: {event['args']['info']['lastBlockTimestamp']}")
+    print(f"  Transaction Hash: {event['transactionHash'].hex}")
+    print(f"  Block Number: {event['blockNumber']}")
+    print("---")
+
+def get_current_operator(eth_client, l1_contract_address):
+    with open("../whitelist/src/l1/abi/PreconfWhitelist.json") as f:
+        abi = json.load(f)
+
+    contract = eth_client.eth.contract(address=l1_contract_address, abi=abi)
+    return contract.functions.getOperatorForCurrentEpoch().call()
+
+def get_next_operator(eth_client, l1_contract_address):
+    import json
+    with open("../whitelist/src/l1/abi/PreconfWhitelist.json") as f:
+        abi = json.load(f)
+
+    contract = eth_client.eth.contract(address=l1_contract_address, abi=abi)
+    return contract.functions.getOperatorForNextEpoch().call()
+
+def spam_txs_until_new_batch_is_proposed(l1_eth_client, l2_eth_client, private_key, taiko_inbox_address, beacon_client, preconf_min_txs):
+    current_block = l1_eth_client.eth.block_number
+    l1_slot_duration = int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
+
+    number_of_blocks = 10
+    for i in range(number_of_blocks):
+        spam_n_blocks(l2_eth_client, private_key, 1, preconf_min_txs)
+        wait_till_next_l1_slot(beacon_client)
+        event = get_last_batch_proposed_event(l1_eth_client, taiko_inbox_address, current_block)
+        if event is not None:
+            return event
+
+    wait_for_batch_proposed_event(l1_eth_client, taiko_inbox_address, current_block)
+
+def wait_till_next_l1_slot(beacon_client):
+    l1_slot_duration = int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
+    current_time = int(time.time()) % l1_slot_duration
+    time.sleep(l1_slot_duration - current_time)
+
+def get_last_batch_proposed_event(eth_client, taiko_inbox_address, from_block):
+    with open("../whitelist/src/l1/abi/ITaikoInbox.json") as f:
+        abi = json.load(f)
+
+    contract = eth_client.eth.contract(address=taiko_inbox_address, abi=abi)
+    batch_proposed_filter = contract.events.BatchProposed.create_filter(
+        from_block=from_block
+    )
+    new_entries = batch_proposed_filter.get_all_entries()
+    if len(new_entries) > 0:
+        event = new_entries[-1]
+        print_batch_info(event)
+        return event
+    return None
+
+def stop_catalyst_node(node_number):
+    container_name = choose_catalyst_node(node_number)
+
+    result = subprocess.run(["docker", "stop", container_name], capture_output=True, text=True, check=True)
+    print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
+
+def start_catalyst_node(node_number):
+    container_name = choose_catalyst_node(node_number)
+
+    result = subprocess.run(["docker", "start", container_name], capture_output=True, text=True, check=True)
+    print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
+
+def choose_catalyst_node(node_number):
+    container_name = "catalyst-node-1" if node_number == 1 else "catalyst-node-2" if node_number == 2 else None
+    if container_name is None:
+        raise Exception("Invalid node number")
+    return container_name
+
+def is_catalyst_node_running(node_number):
+    container_name = choose_catalyst_node(node_number)
+    try:
+        result = subprocess.run(
+            ["docker", "inspect", "-f", "{{.State.Running}}", container_name],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip() == "true"
+    except subprocess.CalledProcessError:
+        return False
+
+def ensure_catalyst_node_running(node_number):
+    """Ensure the catalyst node is running, start it if it's not"""
+    if not is_catalyst_node_running(node_number):
+        print(f"Catalyst node {node_number} is not running, starting it...")
+        start_catalyst_node(node_number)
+    else:
+        print(f"Catalyst node {node_number} is already running")

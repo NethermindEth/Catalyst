@@ -4,6 +4,7 @@ from web3.beacon import Beacon
 from eth_account import Account
 import os
 from dotenv import load_dotenv
+from utils import ensure_catalyst_node_running
 
 load_dotenv()
 
@@ -29,3 +30,11 @@ def beacon_client():
         raise Exception("Environment variable BEACON_RPC_URL not set")
 
     return Beacon(beacon_rpc_url)
+
+@pytest.fixture
+def catalyst_node_teardown():
+    """Fixture to ensure both catalyst nodes are running after test"""
+    yield None
+    print("Test teardown: ensuring both catalyst nodes are running")
+    ensure_catalyst_node_running(1)
+    ensure_catalyst_node_running(2)
