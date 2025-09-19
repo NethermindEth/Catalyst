@@ -22,6 +22,15 @@ taiko_inbox_address = os.getenv("TAIKO_INBOX_ADDRESS")
 if not taiko_inbox_address:
     raise Exception("Environment variable TAIKO_INBOX_ADDRESS not set")
 
+preconf_whitelist_address = os.getenv("PRECONF_WHITELIST_ADDRESS")
+if not preconf_whitelist_address:
+    raise Exception("Environment variable PRECONF_WHITELIST_ADDRESS not set")
+
+preconf_min_txs = os.getenv("PRECONF_MIN_TXS")
+if preconf_min_txs is None:
+    raise Exception("PRECONF_MIN_TXS is not set")
+preconf_min_txs = int(preconf_min_txs)
+
 
 def test_rpcs(l1_client, l2_client_node1, l2_client_node2, beacon_client):
     """Test to verify the chain IDs of L1 and L2 networks"""
@@ -126,8 +135,44 @@ def test_propose_batch_to_l1_after_reaching_max_blocks_per_batch(l2_client_node1
     current_block_timestamp = l1_client.eth.get_block(current_block).timestamp
     spam_n_txs(l2_client_node1, l2_prefunded_priv_key, 11)
 
-    event = get_last_propose_batch_event(l1_client, taiko_inbox_address, current_block)
+    event = wait_for_batch_proposed_event(l1_client, taiko_inbox_address, current_block)
 
     assert event['args']['meta']['proposer'] in [l1_client.eth.account.from_key(l2_prefunded_priv_key).address, l1_client.eth.account.from_key(l2_prefunded_priv_key_2).address], "Proposer should be L2 Node 1 or L2 Node 2"
     assert event['args']['meta']['proposedAt'] > current_block_timestamp, "Proposed at timestamp should be larger than current block timestamp"
 
+def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_client, catalyst_node_teardown):
+    catalyst_node_teardown
+    account1 = l1_client.eth.account.from_key(l2_prefunded_priv_key)
+    # account2 = l1_client.eth.account.from_key(l2_prefunded_priv_key_2)
+
+    # wait till 23 slot
+    current_slot = get_slot_in_epoch(beacon_client)
+    print(f"Current slot: {current_slot}")
+
+    for i in range(100):
+        ## start early to be sure we finish current batch and add single block to the next batch
+        wait_for_slot_beginning(beacon_client, 5)
+        current_operator = get_current_operator(l1_client, preconf_whitelist_address)
+        next_operator = get_next_operator(l1_client, preconf_whitelist_address)
+        print(f"Current operator: {current_operator}")
+        print(f"Next operator: {next_operator}")
+        if current_operator != next_operator:
+            break
+    assert current_operator != next_operator, "Current operator should be different from next operator"
+
+    node_number = 1 if current_operator == account1.address else 2
+
+    spam_txs_until_new_batch_is_proposed(l1_client, l2_client_node1, l2_prefunded_priv_key, taiko_inbox_address, beacon_client, preconf_min_txs)
+
+    # should create new block in new batch
+    tx_hash = spam_n_txs(l2_client_node1, l2_prefunded_priv_key, 1)
+    assert wait_for_tx_to_be_included(l2_client_node1, tx_hash), "Transaction should be included in L2 Node 1"
+
+    stop_catalyst_node(node_number)
+
+    wait_for_slot_beginning(beacon_client, 0)
+    wait_for_batch_proposed_event(l1_client, taiko_inbox_address, l1_client.eth.block_number)
+
+    # sent tx should still be included, no reorg
+    wait_for_tx_to_be_included(l2_client_node1, tx_hash)
+    pass
