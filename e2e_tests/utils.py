@@ -234,3 +234,33 @@ def ensure_catalyst_node_running(node_number):
         start_catalyst_node(node_number)
     else:
         print(f"Catalyst node {node_number} is already running")
+
+def sleep_until_slot_in_epoch(beacon_client, slot):
+    sec = get_seconds_to_slot_in_epoch(beacon_client, slot)
+    print("Sleep for", sec, "s")
+    time.sleep(sec)
+
+def get_seconds_to_slot_in_epoch(beacon_client, slot):
+    spec = beacon_client.get_spec()
+    sec_per_slot = int(spec['data']['SECONDS_PER_SLOT'])
+    slots_per_epoch = int(spec['data']['SLOTS_PER_EPOCH'])
+    current_slot = int(beacon_client.get_syncing()['data']['head_slot'])
+    slot_in_epoch = current_slot % slots_per_epoch
+    if slot_in_epoch == slot:
+        return 0
+    elif slot_in_epoch < slot:
+        return (slot - slot_in_epoch) * sec_per_slot
+    else:  # slot_in_epoch > slot
+        return (slots_per_epoch - (slot_in_epoch - slot)) * sec_per_slot
+
+def spam_n_txs_no_wait(eth_client, private_key, n, delay):
+    account = eth_client.eth.account.from_key(private_key)
+    last_tx_hash = None
+    nonce = eth_client.eth.get_transaction_count(account.address)
+    for i in range(n):
+        last_tx_hash = send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
+        time.sleep(delay)
+    wait_for_tx_to_be_included(eth_client, last_tx_hash)
+
+def get_slot_duration_sec(beacon_client):
+    return int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
