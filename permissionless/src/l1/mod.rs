@@ -1,3 +1,3 @@
-mod bindings;
+pub mod bindings;
 pub mod config;
 pub mod execution_layer;

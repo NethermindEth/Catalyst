@@ -4588,10 +4588,12 @@ version = "1.9.1"
 dependencies = [
  "alloy",
  "anyhow",
+ "blst",
  "common",
  "tokio",
  "tokio-util",
  "tracing",
+ "urc",
 ]
 
 [[package]]
