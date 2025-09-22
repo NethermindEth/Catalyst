@@ -218,7 +218,7 @@ impl DataBase {
         slasher: &str,
         validator_pubkey: (String, String, String, String),
     ) -> Result<Vec<(String, u8, String)>, Error> {
-        let results = sqlx::query_as::<_, (String, i64, String)>(
+        let results = sqlx::query_as::<_, (String, u64, String)>(
             r#"
             SELECT DISTINCT 
                 sr.registration_root
@@ -257,7 +257,7 @@ impl DataBase {
         registration_root: &str,
         slasher: &str,
     ) -> Result<Option<(String, u64, Option<u64>, Option<u64>, String, u64, u64)>, Error> {
-        let row = sqlx::query_as::<_, (String, i64, Option<i64>, Option<i64>, String, u64, u64)>(
+        let row = sqlx::query_as::<_, (String, u64, Option<u64>, Option<u64>, String, u64, u64)>(
             r#"
             SELECT 
                 o.owner,
@@ -279,28 +279,6 @@ impl DataBase {
         .fetch_optional(&self.pool)
         .await?;
 
-        let result = row.map(
-            |(
-                owner,
-                registered_at,
-                unregistered_at,
-                slashed_at,
-                committer,
-                opted_in_out,
-                opted_out_at,
-            )| {
-                (
-                    owner,
-                    registered_at as u64,
-                    unregistered_at.map(|v| v as u64),
-                    slashed_at.map(|v| v as u64),
-                    committer,
-                    opted_in_out as u64,
-                    opted_out_at as u64,
-                )
-            },
-        );
-
-        Ok(result)
+        Ok(row)
     }
 }
