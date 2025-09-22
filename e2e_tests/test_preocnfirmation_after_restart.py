@@ -41,14 +41,13 @@ def restart_container(container_name):
         print(result.stderr)
         assert False, "Error restarting container"
 
-def test_first_preocnfirmation(l1_client, beacon_client, l2_client_node1):
+def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1):
     """
-    Send three proposeBatch after node restart
+    We restart the nodes and then produce 30 transactions every 2 L2 slots. We expect to receive 30 L2 blocks and 3 batches at the end
     """
-    assert l2_private_key != l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
     slot_duration_sec = get_slot_duration_sec(beacon_client)
     # wait for block 30 in epoch
-    sleep_until_slot_in_epoch(beacon_client, 1)
+    wait_for_slot_beginning(beacon_client, 1)
     slot = get_slot_in_epoch(beacon_client)
     print("Slot: ", slot)
     try:
@@ -62,7 +61,8 @@ def test_first_preocnfirmation(l1_client, beacon_client, l2_client_node1):
         print("Block number:", block_number)
         batch_id = get_last_batch_id(l1_client)
         # send transactions to create 3 batches
-        delay = preconf_heartbeat_ms / 500
+        # produce 1 L2 block every 2 L2 slots
+        delay = get_two_l2_slots_duration_sec(preconf_heartbeat_ms)
         print("delay", delay)
         spam_n_txs_no_wait(l2_client_node1, l2_prefunded_priv_key, 3 * max_blocks_per_batch, delay)
         # wait for transactions to be included on L1

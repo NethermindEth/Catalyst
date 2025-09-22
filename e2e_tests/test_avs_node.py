@@ -95,41 +95,6 @@ def test_handover_transaction(l2_client_node1, l2_client_node2, beacon_client):
     tx_hash = send_transaction(nonce+1, account, '0.00008', l2_client_node2, l2_prefunded_priv_key)
     assert wait_for_tx_to_be_included(l2_client_node2, tx_hash), "Transaction should be included in L2 Node 2"
 
-def test_forced_inclusion(l2_client_node1):
-    """
-    This test runs the forced inclusion toolbox docker command and prints its output.
-    """
-    cmd = [
-        "docker", "run", "--network", "host", "--env-file", ".env", "--rm", "-it",
-        "nethswitchboard/taiko-forced-inclusion-toolbox", "send"
-    ]
-    print("Running forced inclusion toolbox docker command...")
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        print("Forced inclusion toolbox output:")
-        print(result.stdout)
-        if result.stderr:
-            print("Forced inclusion toolbox error output:")
-            print(result.stderr)
-
-        regex = r"hash=(0x[a-fA-F0-9]{64})"
-        match = re.search(regex, result.stdout)
-        assert match, "Could not find tx hash in forced inclusion toolbox output"
-        forced_inclusion_tx_hash = match.group(1)
-        print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
-
-        # Spam 41 transactions to L2 Node to at least one batch which will include the forced inclusion tx
-        spam_n_txs(l2_client_node1, l2_prefunded_priv_key, 41)
-
-        assert wait_for_tx_to_be_included(l2_client_node1, forced_inclusion_tx_hash), "Forced inclusion tx should be included in L2 Node 1"
-
-    except subprocess.CalledProcessError as e:
-        print("Error running forced inclusion toolbox docker command:")
-        print(e)
-        print("stdout:", e.stdout)
-        print("stderr:", e.stderr)
-        assert False, "Forced inclusion toolbox docker command failed"
-
 def test_propose_batch_to_l1_after_reaching_max_blocks_per_batch(l2_client_node1, l1_client):
     current_block = l1_client.eth.block_number
     current_block_timestamp = l1_client.eth.get_block(current_block).timestamp

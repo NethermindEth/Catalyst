@@ -50,6 +50,29 @@ def send_forced_inclusion(nonce_delta):
     print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
     return forced_inclusion_tx_hash
 
+def test_forced_inclusion(l2_client_node1):
+    """
+    This test runs the forced inclusion toolbox docker command and prints its output.
+    """
+    try:
+        #send forced inclusion
+        forced_inclusion_tx_hash = send_forced_inclusion(0)
+        print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
+
+        # Spam 41 transactions to L2 Node to at least one batch which will include the forced inclusion tx
+        delay = get_two_l2_slots_duration_sec(preconf_heartbeat_ms)
+        print("spam 41 transactions with delay", delay)
+        spam_n_txs_no_wait(l2_client_node1, l2_prefunded_priv_key, 41, delay)
+
+        assert wait_for_tx_to_be_included(l2_client_node1, forced_inclusion_tx_hash), "Forced inclusion tx should be included in L2 Node 1"
+
+    except subprocess.CalledProcessError as e:
+        print("Error running forced inclusion toolbox docker command:")
+        print(e)
+        print("stdout:", e.stdout)
+        print("stderr:", e.stderr)
+        assert False, "Forced inclusion toolbox docker command failed"
+
 
 def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_node1):
     """
@@ -58,7 +81,7 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
     assert l2_private_key != l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
     slot_duration_sec = get_slot_duration_sec(beacon_client)
     # wait for block 30 in epoch
-    sleep_until_slot_in_epoch(beacon_client, 30)
+    wait_for_slot_beginning(beacon_client, 30)
     slot = get_slot_in_epoch(beacon_client)
     print("Slot: ", slot)
     try:
@@ -75,7 +98,7 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
         print("Block number:", block_number)
         batch_id = get_last_batch_id(l1_client)
         # send transactions to create 4 batches
-        delay = preconf_heartbeat_ms / 500
+        delay = get_two_l2_slots_duration_sec(preconf_heartbeat_ms)
         print("delay", delay)
         spam_n_txs_no_wait(l2_client_node1, l2_prefunded_priv_key, max_blocks_per_batch, delay)
         # Sleep due to a node bug: the first gas history retrieval after restart takes too long
