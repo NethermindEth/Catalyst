@@ -79,7 +79,7 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
         print("Block number:", block_number)
         batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
         # send transactions to create 4 batches
-        delay = get_two_l2_slots_duration_sec(preconf_heartbeat_ms)
+        delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
         print("delay", delay)
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
         # Sleep due to a node bug: the first gas history retrieval after restart takes too long

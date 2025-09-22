@@ -107,7 +107,8 @@ def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_clie
     wait_for_tx_to_be_included(l2_client_node1, tx_hash)
     pass
 
-def test_verification_of_unproposed_blocks(l1_client, l2_client_node1, catalyst_node_teardown, beacon_client, env_vars):
+def test_verification_after_node_restart(l1_client, l2_client_node1, catalyst_node_teardown, beacon_client, env_vars):
+    """Test if verification mechanism after node restarts works correctly and propose left blocks"""
     catalyst_node_teardown
 
     wait_for_slot_beginning(beacon_client, 5)
