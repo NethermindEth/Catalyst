@@ -7,7 +7,10 @@ use alloy::{
 };
 use anyhow::Error;
 use blst::min_pk::PublicKey;
-use common::l1::{el_trait::ELTrait, ethereum_l1::EthereumL1};
+use common::{
+    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
+    utils::types::Slot,
+};
 use std::{str::FromStr, sync::Arc};
 use urc::monitor::db::DataBase as UrcDataBase;
 
@@ -16,6 +19,8 @@ use crate::l1::bindings::{
     ILookaheadStore::{self, ILookaheadStoreInstance, LookaheadSlot},
 };
 use crate::l1::execution_layer::ExecutionLayer;
+
+use super::types::Lookahead;
 
 pub struct LookaheadBuilder {
     urc_db: UrcDataBase,
@@ -44,8 +49,8 @@ impl LookaheadBuilder {
         }
     }
 
-    pub async fn build(&self, epoch: u64) -> Result<Vec<LookaheadSlot>, Error> {
-        let mut lookahead_slots: Vec<LookaheadSlot> = Vec::with_capacity(32);
+    pub async fn build(&self, epoch: u64) -> Result<Lookahead, Error> {
+        let mut lookahead_slots: Lookahead = Vec::with_capacity(32);
 
         let epoch_timestamp = self
             .ethereum_l1
@@ -101,6 +106,87 @@ impl LookaheadBuilder {
         }
 
         Ok(lookahead_slots)
+    }
+
+    pub async fn get_opted_in_preconfer_for_slot(
+        &self,
+        preconfing_slot: Slot,
+        current_lookahead: Lookahead,
+        next_lookahead: Lookahead,
+    ) -> Result<(Option<Address>, U256), Error> {
+        // The current lookahead is empty, and thus, no opted in preconfer
+        if current_lookahead.len() == 0 {
+            return Ok((None, U256::ZERO));
+        }
+
+        let current_epoch = self
+            .ethereum_l1
+            .slot_clock
+            .get_epoch_for_timestamp(current_lookahead[0].timestamp.try_into().unwrap())?;
+        let epoch_of_preconfing_slot = self
+            .ethereum_l1
+            .slot_clock
+            .get_epoch_from_slot(preconfing_slot);
+
+        // The provided slot must be in the current epoch
+        if current_epoch != epoch_of_preconfing_slot {
+            return Err(anyhow::anyhow!(format!(
+                "Slot {:?} is not in epoch {:?}",
+                preconfing_slot, current_epoch
+            )));
+        }
+
+        let preconfing_slot_timestamp = self
+            .ethereum_l1
+            .slot_clock
+            .start_of(preconfing_slot)?
+            .as_secs();
+        let last_timestamp_in_current_lookahead: u64 = current_lookahead
+            [current_lookahead.len() - 1]
+            .timestamp
+            .try_into()
+            .unwrap();
+
+        if preconfing_slot_timestamp > last_timestamp_in_current_lookahead {
+            // Cross epoch preconfing
+
+            if next_lookahead.len() == 0 {
+                // Next lookahead is empty, and thus, no opted in preconfer
+                return Ok((None, U256::MAX));
+            } else {
+                // The first entry in the next lookahead preconfs in advanced
+                return Ok((Some(next_lookahead[0].committer), U256::MAX));
+            }
+        } else {
+            // Same epoch preconfing
+
+            let slot_duration = self.ethereum_l1.slot_clock.get_slot_duration().as_secs();
+            let current_epoch_timestamp = self
+                .ethereum_l1
+                .slot_clock
+                .get_epoch_begin_timestamp(current_epoch)?;
+
+            let mut preconfer = Address::default();
+            let mut lookahead_slot_index = U256::default();
+            let mut previous_lookahead_slot_timestamp = current_epoch_timestamp - slot_duration;
+
+            // Compute the lookahead index conforming to the preconfing slot
+            for (index, lookahead_slot) in current_lookahead.iter().enumerate() {
+                let lookahead_slot_timestamp = lookahead_slot.timestamp.try_into().unwrap();
+
+                if preconfing_slot_timestamp > previous_lookahead_slot_timestamp
+                    && preconfing_slot_timestamp <= lookahead_slot_timestamp
+                {
+                    preconfer = lookahead_slot.committer;
+                    lookahead_slot_index = U256::from(index);
+                    break;
+                } else {
+                    previous_lookahead_slot_timestamp = lookahead_slot_timestamp;
+                }
+            }
+
+            return Ok((Some(preconfer), U256::from(lookahead_slot_index)));
+        }
     }
 
     fn pubkey_bytes_to_g1_point(pubkey_bytes: &[u8]) -> Result<G1Point, Error> {
