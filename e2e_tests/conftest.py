@@ -16,6 +16,7 @@ class EnvVars:
     l2_prefunded_priv_key_2: str
     taiko_inbox_address: str
     preconf_whitelist_address: str
+    forced_inclusion_store_address: str
     preconf_min_txs: int
     preconf_heartbeat_ms: int
     l2_private_key: str
@@ -41,6 +42,10 @@ class EnvVars:
         preconf_whitelist_address = os.getenv("PRECONF_WHITELIST_ADDRESS")
         if not preconf_whitelist_address:
             raise Exception("Environment variable PRECONF_WHITELIST_ADDRESS not set")
+
+        forced_inclusion_store_address = os.getenv("FORCED_INCLUSION_STORE_ADDRESS")
+        if not forced_inclusion_store_address:
+            raise Exception("Environment variable FORCED_INCLUSION_STORE_ADDRESS not set")
 
         preconf_min_txs = os.getenv("PRECONF_MIN_TXS")
         if preconf_min_txs is None:
@@ -72,6 +77,7 @@ class EnvVars:
             l2_prefunded_priv_key_2=l2_prefunded_priv_key_2,
             taiko_inbox_address=taiko_inbox_address,
             preconf_whitelist_address=preconf_whitelist_address,
+            forced_inclusion_store_address=forced_inclusion_store_address,
             preconf_min_txs=preconf_min_txs,
             preconf_heartbeat_ms=preconf_heartbeat_ms,
             l2_private_key=l2_private_key,
