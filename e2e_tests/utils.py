@@ -107,6 +107,21 @@ def spam_n_blocks(eth_client, private_key, n, preconf_min_txs):
         wait_for_tx_to_be_included(eth_client, last_tx_hash)
     return last_tx_hash
 
+def spam_n_txs_wait_only_for_the_last(eth_client, private_key, n, delay):
+    account = eth_client.eth.account.from_key(private_key)
+    last_tx_hash = None
+    nonce = eth_client.eth.get_transaction_count(account.address)
+    for i in range(n):
+        last_tx_hash = send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
+        time.sleep(delay)
+    wait_for_tx_to_be_included(eth_client, last_tx_hash)
+
+def send_n_txs_without_waiting(eth_client, private_key, n):
+    account = eth_client.eth.account.from_key(private_key)
+    nonce = eth_client.eth.get_transaction_count(account.address)
+    for i in range(n):
+        send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
+
 def wait_for_batch_proposed_event(eth_client, taiko_inbox_address, from_block):
     with open("../whitelist/src/l1/abi/ITaikoInbox.json") as f:
         abi = json.load(f)
@@ -235,17 +250,26 @@ def ensure_catalyst_node_running(node_number):
     else:
         print(f"Catalyst node {node_number} is already running")
 
-def spam_n_txs_no_wait(eth_client, private_key, n, delay):
-    account = eth_client.eth.account.from_key(private_key)
-    last_tx_hash = None
-    nonce = eth_client.eth.get_transaction_count(account.address)
-    for i in range(n):
-        last_tx_hash = send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
-        time.sleep(delay)
-    wait_for_tx_to_be_included(eth_client, last_tx_hash)
+def get_current_operator_number(l1_client, l2_prefunded_priv_key, preconf_whitelist_address):
+    account1 = l1_client.eth.account.from_key(l2_prefunded_priv_key)
+    current_operator = get_current_operator(l1_client, preconf_whitelist_address)
+    return 1 if current_operator == account1.address else 2
 
 def get_slot_duration_sec(beacon_client):
     return int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
 
 def get_two_l2_slots_duration_sec(preconf_heartbeat_ms):
      return int(preconf_heartbeat_ms / 500) # preconf_heartbeat_ms / 1000 * 2
+
+def wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, preconf_whitelist_address, desired_slot):
+    """Wait for the epoch after which the operator will switch and given slot"""
+    for i in range(100):
+        ## start early to be sure we finish current batch and add single block to the next batch
+        wait_for_slot_beginning(beacon_client, desired_slot)
+        current_operator = get_current_operator(l1_client, preconf_whitelist_address)
+        next_operator = get_next_operator(l1_client, preconf_whitelist_address)
+        print(f"Current operator: {current_operator}")
+        print(f"Next operator: {next_operator}")
+        if current_operator != next_operator:
+            break
+    assert current_operator != next_operator, "Current operator should be different from next operator"
