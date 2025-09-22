@@ -100,7 +100,7 @@ def test_forced_inclusion(l2_client_node1):
     This test runs the forced inclusion toolbox docker command and prints its output.
     """
     cmd = [
-        "docker", "run", "--network", "host", "--env-file", ".env", "--rm", "-it",
+        "docker", "run", "--network", "host", "--env-file", ".env", "--rm",
         "nethswitchboard/taiko-forced-inclusion-toolbox", "send"
     ]
     print("Running forced inclusion toolbox docker command...")
