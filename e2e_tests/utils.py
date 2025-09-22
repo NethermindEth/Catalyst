@@ -234,3 +234,8 @@ def ensure_catalyst_node_running(node_number):
         start_catalyst_node(node_number)
     else:
         print(f"Catalyst node {node_number} is already running")
+
+def get_current_operator_number(l1_client, l2_prefunded_priv_key, preconf_whitelist_address):
+    account1 = l1_client.eth.account.from_key(l2_prefunded_priv_key)
+    current_operator = get_current_operator(l1_client, preconf_whitelist_address)
+    return 1 if current_operator == account1.address else 2

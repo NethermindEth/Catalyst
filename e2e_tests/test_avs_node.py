@@ -142,8 +142,6 @@ def test_propose_batch_to_l1_after_reaching_max_blocks_per_batch(l2_client_node1
 
 def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_client, catalyst_node_teardown):
     catalyst_node_teardown
-    account1 = l1_client.eth.account.from_key(l2_prefunded_priv_key)
-    # account2 = l1_client.eth.account.from_key(l2_prefunded_priv_key_2)
 
     # wait till 23 slot
     current_slot = get_slot_in_epoch(beacon_client)
@@ -160,7 +158,7 @@ def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_clie
             break
     assert current_operator != next_operator, "Current operator should be different from next operator"
 
-    node_number = 1 if current_operator == account1.address else 2
+    node_number = get_current_operator_number(l1_client, l2_prefunded_priv_key, preconf_whitelist_address)
 
     spam_txs_until_new_batch_is_proposed(l1_client, l2_client_node1, l2_prefunded_priv_key, taiko_inbox_address, beacon_client, preconf_min_txs)
 
@@ -176,3 +174,21 @@ def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_clie
     # sent tx should still be included, no reorg
     wait_for_tx_to_be_included(l2_client_node1, tx_hash)
     pass
+
+def test_verification_of_unproposed_blocks(l1_client, l2_client_node1, catalyst_node_teardown, beacon_client):
+    catalyst_node_teardown
+
+    wait_for_slot_beginning(beacon_client, 5)
+
+    spam_txs_until_new_batch_is_proposed(l1_client, l2_client_node1, l2_prefunded_priv_key, taiko_inbox_address, beacon_client, preconf_min_txs)
+    current_block = l1_client.eth.block_number
+
+    # spam additional block
+    spam_n_blocks(l2_client_node1, l2_prefunded_priv_key, 1, preconf_min_txs)
+
+    current_node = get_current_operator_number(l1_client, l2_prefunded_priv_key, preconf_whitelist_address)
+    stop_catalyst_node(current_node)
+    start_catalyst_node(current_node)
+
+    wait_for_batch_proposed_event(l1_client, taiko_inbox_address, current_block)
+
