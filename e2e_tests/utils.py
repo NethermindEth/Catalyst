@@ -234,3 +234,18 @@ def ensure_catalyst_node_running(node_number):
         start_catalyst_node(node_number)
     else:
         print(f"Catalyst node {node_number} is already running")
+
+def spam_n_txs_no_wait(eth_client, private_key, n, delay):
+    account = eth_client.eth.account.from_key(private_key)
+    last_tx_hash = None
+    nonce = eth_client.eth.get_transaction_count(account.address)
+    for i in range(n):
+        last_tx_hash = send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
+        time.sleep(delay)
+    wait_for_tx_to_be_included(eth_client, last_tx_hash)
+
+def get_slot_duration_sec(beacon_client):
+    return int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
+
+def get_two_l2_slots_duration_sec(preconf_heartbeat_ms):
+     return int(preconf_heartbeat_ms / 500) # preconf_heartbeat_ms / 1000 * 2
