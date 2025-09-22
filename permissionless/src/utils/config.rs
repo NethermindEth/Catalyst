@@ -9,6 +9,7 @@ pub struct L1ContractAddresses {
     pub registry_address: String,
     pub lookahead_store_address: String,
     pub lookahead_slasher_address: String,
+    pub preconf_slasher_address: String,
 }
 
 #[derive(Debug, Clone)]
@@ -48,11 +49,21 @@ impl ConfigTrait for Config {
                 default_empty_address.clone()
             });
 
+        const PRECONF_SLASHER_ADDRESS: &str = "PRECONF_SLASHER_ADDRESS";
+        let preconf_slasher_address = std::env::var(PRECONF_SLASHER_ADDRESS).unwrap_or_else(|_| {
+            warn!(
+                "No Preconf Slasher contract address found in {} env var, using default",
+                PRECONF_SLASHER_ADDRESS
+            );
+            default_empty_address.clone()
+        });
+
         Config {
             contract_addresses: L1ContractAddresses {
                 registry_address,
                 lookahead_store_address,
                 lookahead_slasher_address,
+                preconf_slasher_address,
             },
         }
     }

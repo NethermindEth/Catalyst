@@ -6,6 +6,7 @@ pub struct ContractAddresses {
     pub registry_address: Address,
     pub lookahead_store_address: Address,
     pub lookahead_slasher_address: Address,
+    pub preconf_slasher_address: Address,
 }
 
 impl TryFrom<L1ContractAddresses> for ContractAddresses {
@@ -15,11 +16,13 @@ impl TryFrom<L1ContractAddresses> for ContractAddresses {
         let registry_address = l1_contract_addresses.registry_address.parse()?;
         let lookahead_store_address = l1_contract_addresses.lookahead_store_address.parse()?;
         let lookahead_slasher_address = l1_contract_addresses.lookahead_slasher_address.parse()?;
+        let preconf_slasher_address = l1_contract_addresses.preconf_slasher_address.parse()?;
 
         Ok(ContractAddresses {
             registry_address,
             lookahead_store_address,
             lookahead_slasher_address,
+            preconf_slasher_address,
         })
     }
 }

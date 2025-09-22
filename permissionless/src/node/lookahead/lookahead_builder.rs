@@ -26,7 +26,7 @@ pub struct LookaheadBuilder {
     urc_db: UrcDataBase,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     lookahead_store_contract: ILookaheadStoreInstance<DynProvider>,
-    lookahead_slasher_address: Address,
+    preconf_slasher_address: Address,
 }
 
 impl LookaheadBuilder {
@@ -34,7 +34,7 @@ impl LookaheadBuilder {
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         urc_db: UrcDataBase,
         lookahead_store_address: Address,
-        lookahead_slasher_address: Address,
+        preconf_slasher_address: Address,
     ) -> Self {
         let lookahead_store_contract = ILookaheadStore::new(
             lookahead_store_address,
@@ -45,7 +45,7 @@ impl LookaheadBuilder {
             ethereum_l1,
             urc_db,
             lookahead_store_contract,
-            lookahead_slasher_address,
+            preconf_slasher_address,
         }
     }
 
@@ -72,7 +72,7 @@ impl LookaheadBuilder {
             let operators = self
                 .urc_db
                 .get_operators_by_pubkey(
-                    self.lookahead_slasher_address.to_string().as_str(),
+                    self.preconf_slasher_address.to_string().as_str(),
                     (
                         pubkey_g1.x_a.to_string(),
                         pubkey_g1.x_b.to_string(),
@@ -108,85 +108,64 @@ impl LookaheadBuilder {
         Ok(lookahead_slots)
     }
 
-    pub async fn get_opted_in_preconfer_for_slot(
+    async fn get_next_opted_in_preconfer(
         &self,
-        preconfing_slot: Slot,
-        current_lookahead: Lookahead,
-        next_lookahead: Lookahead,
+        next_preconfing_slot: Slot,
+        current_lookahead_slot_index: U256,
+        current_lookahead: &Lookahead,
+        next_lookahead: &Lookahead,
     ) -> Result<(Option<Address>, U256), Error> {
-        // The current lookahead is empty, and thus, no opted in preconfer
         if current_lookahead.len() == 0 {
+            // The current lookahead is empty, and thus, there is no opted in preconfer
             return Ok((None, U256::ZERO));
         }
 
-        let current_epoch = self
+        let next_preconf_slot_timestamp = self
             .ethereum_l1
             .slot_clock
-            .get_epoch_for_timestamp(current_lookahead[0].timestamp.try_into().unwrap())?;
-        let epoch_of_preconfing_slot = self
-            .ethereum_l1
-            .slot_clock
-            .get_epoch_from_slot(preconfing_slot);
-
-        // The provided slot must be in the current epoch
-        if current_epoch != epoch_of_preconfing_slot {
-            return Err(anyhow::anyhow!(format!(
-                "Slot {:?} is not in epoch {:?}",
-                preconfing_slot, current_epoch
-            )));
-        }
-
-        let preconfing_slot_timestamp = self
-            .ethereum_l1
-            .slot_clock
-            .start_of(preconfing_slot)?
+            .start_of(next_preconfing_slot)?
             .as_secs();
-        let last_timestamp_in_current_lookahead: u64 = current_lookahead
-            [current_lookahead.len() - 1]
-            .timestamp
-            .try_into()
-            .unwrap();
 
-        if preconfing_slot_timestamp > last_timestamp_in_current_lookahead {
-            // Cross epoch preconfing
+        let index_usize: usize = current_lookahead_slot_index.try_into().unwrap();
+        let current_lookahead_slot = &current_lookahead[index_usize];
 
-            if next_lookahead.len() == 0 {
-                // Next lookahead is empty, and thus, no opted in preconfer
-                return Ok((None, U256::MAX));
-            } else {
-                // The first entry in the next lookahead preconfs in advanced
-                return Ok((Some(next_lookahead[0].committer), U256::MAX));
-            }
-        } else {
-            // Same epoch preconfing
-
-            let slot_duration = self.ethereum_l1.slot_clock.get_slot_duration().as_secs();
-            let current_epoch_timestamp = self
-                .ethereum_l1
-                .slot_clock
-                .get_epoch_begin_timestamp(current_epoch)?;
-
-            let mut preconfer = Address::default();
-            let mut lookahead_slot_index = U256::default();
-            let mut previous_lookahead_slot_timestamp = current_epoch_timestamp - slot_duration;
-
-            // Compute the lookahead index conforming to the preconfing slot
-            for (index, lookahead_slot) in current_lookahead.iter().enumerate() {
-                let lookahead_slot_timestamp = lookahead_slot.timestamp.try_into().unwrap();
-
-                if preconfing_slot_timestamp > previous_lookahead_slot_timestamp
-                    && preconfing_slot_timestamp <= lookahead_slot_timestamp
-                {
-                    preconfer = lookahead_slot.committer;
-                    lookahead_slot_index = U256::from(index);
-                    break;
+        if next_preconf_slot_timestamp > current_lookahead_slot.timestamp.try_into().unwrap() {
+            // The current lookahead slot is stale
+            if current_lookahead_slot_index == current_lookahead.len() - 1 {
+                // No more opted in preconfers remaining in the current lookahead
+                if next_lookahead.len() != 0 {
+                    // If next lookahead is not empty, the first preconfer takes over if it is active
+                    return Ok((
+                        self.map_operator_to_active_preconfer(
+                            &next_lookahead[0].registrationRoot.to_string(),
+                            next_lookahead[0].committer,
+                        )
+                        .await?,
+                        U256::MAX,
+                    ));
                 } else {
-                    previous_lookahead_slot_timestamp = lookahead_slot_timestamp;
+                    // Else, we do not have an opted in preconfer
+                    return Ok((None, U256::MAX));
                 }
+            } else {
+                // We move to the next slot in the current lookahead
+                let next_current_lookahead_slot = &current_lookahead[index_usize + 1];
+                return Ok((
+                    self.map_operator_to_active_preconfer(
+                        &next_current_lookahead_slot.registrationRoot.to_string(),
+                        next_current_lookahead_slot.committer,
+                    )
+                    .await?,
+                    U256::from(index_usize + 1),
+                ));
             }
-
-            return Ok((Some(preconfer), U256::from(lookahead_slot_index)));
         }
+
+        // The current lookahead slot is still valid
+        return Ok((
+            Some(current_lookahead_slot.committer),
+            current_lookahead_slot_index,
+        ));
     }
 
     fn pubkey_bytes_to_g1_point(pubkey_bytes: &[u8]) -> Result<G1Point, Error> {
@@ -210,6 +189,20 @@ impl LookaheadBuilder {
         })
     }
 
+    async fn map_operator_to_active_preconfer(
+        &self,
+        registration_root: &str,
+        committer: Address,
+    ) -> Result<Option<Address>, Error> {
+        let is_preconfer_active = self.is_operator_active(registration_root).await?;
+
+        if is_preconfer_active {
+            return Ok(Some(committer));
+        } else {
+            return Ok(None);
+        };
+    }
+
     async fn is_operator_valid(&self, epoch_timestamp: u64, registration_root: &str) -> bool {
         return self
             .lookahead_store_contract
@@ -220,5 +213,30 @@ impl LookaheadBuilder {
             .call()
             .await
             .unwrap_or(false);
+    }
+
+    async fn is_operator_active(&self, registration_root: &str) -> Result<bool, Error> {
+        let result = self
+            .urc_db
+            .get_opted_in_operator(registration_root, &self.preconf_slasher_address.to_string())
+            .await?;
+
+        match result {
+            None => {
+                return Err(anyhow::anyhow!(
+                    "LookaheadBuilder: operator with registration root {} has not opted into slasher {}",
+                    registration_root,
+                    self.preconf_slasher_address.to_string()
+                ));
+            }
+            Some((_, _, unregistered_at, slashed_at, _, opted_in_at, opted_out_at)) => {
+                if unregistered_at.is_some() || slashed_at.is_some() || opted_out_at >= opted_in_at
+                {
+                    return Ok(false);
+                }
+            }
+        }
+
+        return Ok(true);
     }
 }
