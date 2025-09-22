@@ -27,7 +27,7 @@ if not max_blocks_per_batch:
     raise Exception("Environment variable MAX_BLOCKS_PER_BATCH not set")
 
 preconf_heartbeat_ms = int(os.getenv("PRECONF_HEARTBEAT_MS"))
-if not max_blocks_per_batch:
+if not preconf_heartbeat_ms:
     raise Exception("Environment variable PRECONF_HEARTBEAT_MS not set")
 
 def send_forced_inclusion(nonce_delta):
@@ -62,7 +62,7 @@ def test_forced_inclusion(l2_client_node1):
         # Spam 41 transactions to L2 Node to at least one batch which will include the forced inclusion tx
         delay = get_two_l2_slots_duration_sec(preconf_heartbeat_ms)
         print("spam 41 transactions with delay", delay)
-        spam_n_txs_no_wait(l2_client_node1, l2_prefunded_priv_key, 41, delay)
+        spam_n_txs_wait_only_for_the_last(l2_client_node1, l2_prefunded_priv_key, 41, delay)
 
         assert wait_for_tx_to_be_included(l2_client_node1, forced_inclusion_tx_hash), "Forced inclusion tx should be included in L2 Node 1"
 
@@ -100,13 +100,13 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
         # send transactions to create 4 batches
         delay = get_two_l2_slots_duration_sec(preconf_heartbeat_ms)
         print("delay", delay)
-        spam_n_txs_no_wait(l2_client_node1, l2_prefunded_priv_key, max_blocks_per_batch, delay)
+        spam_n_txs_wait_only_for_the_last(l2_client_node1, l2_prefunded_priv_key, max_blocks_per_batch, delay)
         # Sleep due to a node bug: the first gas history retrieval after restart takes too long
         # https://github.com/NethermindEth/Catalyst/issues/611
         time.sleep(slot_duration_sec)
         new_fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
         assert fi_sender_nonce + 1 == new_fi_sender_nonce, "First fi transaction not included"
-        spam_n_txs_no_wait(l2_client_node1, l2_prefunded_priv_key, 3 * max_blocks_per_batch, delay)
+        spam_n_txs_wait_only_for_the_last(l2_client_node1, l2_prefunded_priv_key, 3 * max_blocks_per_batch, delay)
         # wait 2 l1 slots to include all propose batch transactions
         time.sleep(slot_duration_sec * 2)
         # verify

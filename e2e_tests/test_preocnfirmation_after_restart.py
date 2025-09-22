@@ -64,7 +64,7 @@ def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1
         # produce 1 L2 block every 2 L2 slots
         delay = get_two_l2_slots_duration_sec(preconf_heartbeat_ms)
         print("delay", delay)
-        spam_n_txs_no_wait(l2_client_node1, l2_prefunded_priv_key, 3 * max_blocks_per_batch, delay)
+        spam_n_txs_wait_only_for_the_last(l2_client_node1, l2_prefunded_priv_key, 3 * max_blocks_per_batch, delay)
         # wait for transactions to be included on L1
         time.sleep(slot_duration_sec * 3)
         # verify

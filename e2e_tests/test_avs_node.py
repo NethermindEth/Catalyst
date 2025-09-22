@@ -31,6 +31,10 @@ if preconf_min_txs is None:
     raise Exception("PRECONF_MIN_TXS is not set")
 preconf_min_txs = int(preconf_min_txs)
 
+preconf_heartbeat_ms = int(os.getenv("PRECONF_HEARTBEAT_MS"))
+if not preconf_heartbeat_ms:
+    raise Exception("Environment variable PRECONF_HEARTBEAT_MS not set")
+
 
 def test_rpcs(l1_client, l2_client_node1, l2_client_node2, beacon_client):
     """Test to verify the chain IDs of L1 and L2 networks"""
@@ -112,16 +116,7 @@ def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_clie
     current_slot = get_slot_in_epoch(beacon_client)
     print(f"Current slot: {current_slot}")
 
-    for i in range(100):
-        ## start early to be sure we finish current batch and add single block to the next batch
-        wait_for_slot_beginning(beacon_client, 5)
-        current_operator = get_current_operator(l1_client, preconf_whitelist_address)
-        next_operator = get_next_operator(l1_client, preconf_whitelist_address)
-        print(f"Current operator: {current_operator}")
-        print(f"Next operator: {next_operator}")
-        if current_operator != next_operator:
-            break
-    assert current_operator != next_operator, "Current operator should be different from next operator"
+    wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, preconf_whitelist_address, 5)
 
     node_number = get_current_operator_number(l1_client, l2_prefunded_priv_key, preconf_whitelist_address)
 
@@ -157,3 +152,10 @@ def test_verification_of_unproposed_blocks(l1_client, l2_client_node1, catalyst_
 
     wait_for_batch_proposed_event(l1_client, taiko_inbox_address, current_block)
 
+def test_end_of_sequencing(l2_client_node1, beacon_client, l1_client):
+    wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, preconf_whitelist_address, 24) # handover window
+
+    l2_block_number = l2_client_node1.eth.block_number
+    send_n_txs_without_waiting(l2_client_node1, l2_prefunded_priv_key, preconf_min_txs)
+    time.sleep(2 * preconf_heartbeat_ms / 1000)
+    assert l2_client_node1.eth.block_number == l2_block_number+1, "L2 Node 1 should have a new block after sending transactions, even in handover buffer"
