@@ -218,7 +218,7 @@ impl DataBase {
         slasher: &str,
         validator_pubkey: (String, String, String, String),
     ) -> Result<Vec<(String, u8, String)>, Error> {
-        let results = sqlx::query_as::<_, (String, i32, String)>(
+        let results = sqlx::query_as::<_, (String, i64, String)>(
             r#"
             SELECT DISTINCT 
                 sr.registration_root
@@ -243,6 +243,7 @@ impl DataBase {
         .fetch_all(&self.pool)
         .await?;
 
+        #[allow(clippy::cast_possible_truncation)]
         let operators = results
             .into_iter()
             .map(|(root, leaf_index, committer)| (root, leaf_index as u8, committer))
