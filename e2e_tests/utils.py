@@ -239,3 +239,18 @@ def get_current_operator_number(l1_client, l2_prefunded_priv_key, preconf_whitel
     account1 = l1_client.eth.account.from_key(l2_prefunded_priv_key)
     current_operator = get_current_operator(l1_client, preconf_whitelist_address)
     return 1 if current_operator == account1.address else 2
+
+def spam_n_txs_no_wait(eth_client, private_key, n, delay):
+    account = eth_client.eth.account.from_key(private_key)
+    last_tx_hash = None
+    nonce = eth_client.eth.get_transaction_count(account.address)
+    for i in range(n):
+        last_tx_hash = send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
+        time.sleep(delay)
+    wait_for_tx_to_be_included(eth_client, last_tx_hash)
+
+def get_slot_duration_sec(beacon_client):
+    return int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
+
+def get_two_l2_slots_duration_sec(preconf_heartbeat_ms):
+     return int(preconf_heartbeat_ms / 500) # preconf_heartbeat_ms / 1000 * 2
