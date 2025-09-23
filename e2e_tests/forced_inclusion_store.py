@@ -30,6 +30,11 @@ abi = [
   }
 ]
 
+def get_forced_inclusion_store_head(l1_client, forced_inclusion_address):
+    contract = l1_client.eth.contract(address=forced_inclusion_address, abi=abi)
+    head = contract.functions.head().call()
+    return int(head)
+
 def forced_inclusion_store_is_empty(l1_client, forced_inclusion_address):
     contract = l1_client.eth.contract(address=forced_inclusion_address, abi=abi)
     head = contract.functions.head().call()

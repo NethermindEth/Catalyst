@@ -47,9 +47,9 @@ def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1
         assert block_number + 3 * env_vars.max_blocks_per_batch == new_block_number, "Invalid block number"
         assert batch_id + 3 == new_batch_id, "Invalid batch ID"
     except subprocess.CalledProcessError as e:
-        print("Error running test_three_consecutive_forced_inclusion")
+        print("Error running test_preocnfirmation_after_restart")
         print(e)
         print("stdout:", e.stdout)
         print("stderr:", e.stderr)
-        assert False, "test_three_consecutive_forced_inclusion failed"
+        assert False, "test_preocnfirmation_after_restart failed"
 
