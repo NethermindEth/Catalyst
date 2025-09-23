@@ -24,51 +24,24 @@ impl ConfigTrait for Config {
     fn read_env_variables() -> Self {
         let default_empty_address = "0x0000000000000000000000000000000000000000".to_string();
 
-        const TAIKO_INBOX_ADDRESS: &str = "TAIKO_INBOX_ADDRESS";
-        let taiko_inbox = std::env::var(TAIKO_INBOX_ADDRESS).unwrap_or_else(|_| {
-            warn!(
-                "No TaikoL1 contract address found in {} env var, using default",
-                TAIKO_INBOX_ADDRESS
-            );
-            default_empty_address.clone()
-        });
-
-        const PRECONF_WHITELIST_ADDRESS: &str = "PRECONF_WHITELIST_ADDRESS";
-        let preconf_whitelist = std::env::var(PRECONF_WHITELIST_ADDRESS).unwrap_or_else(|_| {
-            warn!(
-                "No PreconfWhitelist contract address found in {} env var, using default",
-                PRECONF_WHITELIST_ADDRESS
-            );
-            default_empty_address.clone()
-        });
-
-        const PRECONF_ROUTER_ADDRESS: &str = "PRECONF_ROUTER_ADDRESS";
-        let preconf_router = std::env::var(PRECONF_ROUTER_ADDRESS).unwrap_or_else(|_| {
-            warn!(
-                "No PreconfRouter contract address found in {} env var, using default",
-                PRECONF_ROUTER_ADDRESS
-            );
-            default_empty_address.clone()
-        });
-
-        const TAIKO_WRAPPER_ADDRESS: &str = "TAIKO_WRAPPER_ADDRESS";
-        let taiko_wrapper = std::env::var(TAIKO_WRAPPER_ADDRESS).unwrap_or_else(|_| {
-            warn!(
-                "No TaikoWrapper contract address found in {} env var, using default",
-                TAIKO_WRAPPER_ADDRESS
-            );
-            default_empty_address.clone()
-        });
-
-        const FORCED_INCLUSION_STORE_ADDRESS: &str = "FORCED_INCLUSION_STORE_ADDRESS";
-        let forced_inclusion_store =
-            std::env::var(FORCED_INCLUSION_STORE_ADDRESS).unwrap_or_else(|_| {
+        // Helper function to read contract address from environment variable
+        let read_contract_address = |env_var: &str, contract_name: &str| {
+            std::env::var(env_var).unwrap_or_else(|_| {
                 warn!(
-                    "No ForcedInclusionStore contract address found in {} env var, using default",
-                    FORCED_INCLUSION_STORE_ADDRESS
+                    "No {} contract address found in {} env var, using default",
+                    contract_name, env_var
                 );
                 default_empty_address.clone()
-            });
+            })
+        };
+
+        let taiko_inbox = read_contract_address("TAIKO_INBOX_ADDRESS", "TaikoL1");
+        let preconf_whitelist =
+            read_contract_address("PRECONF_WHITELIST_ADDRESS", "PreconfWhitelist");
+        let preconf_router = read_contract_address("PRECONF_ROUTER_ADDRESS", "PreconfRouter");
+        let taiko_wrapper = read_contract_address("TAIKO_WRAPPER_ADDRESS", "TaikoWrapper");
+        let forced_inclusion_store =
+            read_contract_address("FORCED_INCLUSION_STORE_ADDRESS", "ForcedInclusionStore");
 
         let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")
             .unwrap_or("4".to_string())

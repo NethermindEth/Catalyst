@@ -5,7 +5,6 @@ on:
     workflow_run:
         workflows: ["[Nethermind] Catalyst Node - Docker build and push"]
         types: [completed]
-        branches: [master]
 
 env:
   TARGET_MACHINE_IP: 178.79.157.173
@@ -35,6 +34,7 @@ jobs:
             source venv/bin/activate
             pip install -r requirements.txt
             cp .env.example .env
+            sleep 30  # wait for nodes to warm up
             pytest -s -v
           EOF
 
