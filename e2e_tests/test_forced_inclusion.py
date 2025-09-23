@@ -183,3 +183,54 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
         print("stdout:", e.stdout)
         print("stderr:", e.stderr)
         assert False, "test_three_consecutive_forced_inclusion failed"
+
+def test_forced_inclusion_after_restart(l1_client, beacon_client, l2_client_node1, env_vars):
+    """
+    We restart the nodes and then produce 30 transactions every 2 L2 slots. We expect to receive 30 L2 blocks and 3 batches at the end
+    """
+    assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
+    assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
+    assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
+    slot_duration_sec = get_slot_duration_sec(beacon_client)
+    delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
+    # check that forced inclusion list is empty
+    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    # wait for block 30 in epoch
+    wait_for_slot_beginning(beacon_client, 1)
+    print("Slot: ", get_slot_in_epoch(beacon_client))
+    try:
+        #restart nodes
+        restart_catalyst_node(1)
+        restart_catalyst_node(2)
+        # wait for nodes warmup
+        time.sleep(slot_duration_sec * 3)
+        # get chain info
+        fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
+        print("FI sender nonce:", fi_sender_nonce)
+        # send 3 forced inclusion
+        send_forced_inclusion(0)
+        batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
+        print("Batch ID:", batch_id)
+        block_number = l2_client_node1.eth.block_number
+        print("Block number:", block_number)
+        # send transactions to create batch
+        spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
+        # wait for transactions to be included on L1
+        time.sleep(slot_duration_sec * 3)
+        # verify
+        print("Slot: ", get_slot_in_epoch(beacon_client))
+        new_fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
+        print("FI sender nonce:", new_fi_sender_nonce)
+        new_block_number = l2_client_node1.eth.block_number
+        print("New block number:", new_block_number)
+        new_batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
+        print("New batch ID:", new_batch_id)
+        assert fi_sender_nonce + 1 == new_fi_sender_nonce, "Transaction not included"
+        assert block_number + env_vars.max_blocks_per_batch == new_block_number, "Invalid block number"
+        assert batch_id + 2 == new_batch_id, "Invalid batch ID"
+    except subprocess.CalledProcessError as e:
+        print("Error running test_three_consecutive_forced_inclusion")
+        print(e)
+        print("stdout:", e.stdout)
+        print("stderr:", e.stderr)
+        assert False, "test_three_consecutive_forced_inclusion failed"

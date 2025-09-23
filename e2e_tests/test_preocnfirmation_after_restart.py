@@ -11,14 +11,6 @@ import time
 from eth_account import Account
 from taiko_inbox import get_last_batch_id
 
-def restart_container(container_name):
-    result = subprocess.run(["docker", "restart", container_name], capture_output=True, text=True, check=True)
-    print("Restarted container:", container_name)
-    print(result.stdout)
-    if result.stderr:
-        print(result.stderr)
-        assert False, "Error restarting container"
-
 def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1, env_vars):
     """
     We restart the nodes and then produce 30 transactions every 2 L2 slots. We expect to receive 30 L2 blocks and 3 batches at the end
@@ -30,8 +22,8 @@ def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1
     print("Slot: ", slot)
     try:
         #restart nodes
-        restart_container(env_vars.container_name_node1)
-        restart_container(env_vars.container_name_node2)
+        restart_catalyst_node(1)
+        restart_catalyst_node(2)
         # wait for nodes warmup
         time.sleep(slot_duration_sec * 3)
         # get chain info
