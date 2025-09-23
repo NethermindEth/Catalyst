@@ -72,7 +72,10 @@ impl Node {
             taiko.clone(),
             metrics.clone(),
             cancel_token.clone(),
-        );
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;
+
         let head_verifier = L2HeadVerifier::new();
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),

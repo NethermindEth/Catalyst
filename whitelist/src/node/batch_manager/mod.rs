@@ -37,14 +37,14 @@ pub struct BatchManager {
 }
 
 impl BatchManager {
-    pub fn new(
+    pub async fn new(
         l1_height_lag: u64,
         config: BatchBuilderConfig,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko<ExecutionLayer>>,
         metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
-    ) -> Self {
+    ) -> Result<Self, Error> {
         info!(
             "Batch builder config:\n\
              max_bytes_size_of_batch: {}\n\
@@ -58,8 +58,8 @@ impl BatchManager {
             config.max_time_shift_between_blocks_sec,
             config.max_anchor_height_offset,
         );
-        let forced_inclusion = Arc::new(ForcedInclusion::new(ethereum_l1.clone()));
-        Self {
+        let forced_inclusion = Arc::new(ForcedInclusion::new(ethereum_l1.clone()).await?);
+        Ok(Self {
             batch_builder: BatchBuilder::new(
                 config,
                 ethereum_l1.slot_clock.clone(),
@@ -71,7 +71,7 @@ impl BatchManager {
             forced_inclusion,
             metrics,
             cancel_token,
-        }
+        })
     }
 
     pub async fn is_forced_inclusion(&mut self, block_id: u64) -> Result<bool, Error> {
