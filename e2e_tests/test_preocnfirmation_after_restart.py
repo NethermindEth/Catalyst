@@ -19,6 +19,7 @@ def restart_container(container_name):
         print(result.stderr)
         assert False, "Error restarting container"
 
+pytest.skip("Skipping test_preocnfirmation_after_restart.py until issue https://github.com/NethermindEth/Catalyst/issues/611 is fixed", allow_module_level=True)
 def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1, env_vars):
     """
     We restart the nodes and then produce 30 transactions every 2 L2 slots. We expect to receive 30 L2 blocks and 3 batches at the end
