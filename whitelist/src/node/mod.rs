@@ -75,7 +75,14 @@ impl Node {
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;
-
+        // Workaround for the issue: https://github.com/NethermindEth/Catalyst/issues/611
+        // e2e-test to reproduce issue: test_preocnfirmation_after_restart
+        let start = std::time::Instant::now();
+        common::blob::build_default_kzg_settings();
+        info!(
+            "Setup build_default_kzg_settings in {} milliseconds",
+            start.elapsed().as_millis()
+        );
         let head_verifier = L2HeadVerifier::new();
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
