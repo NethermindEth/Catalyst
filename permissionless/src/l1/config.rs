@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::utils::config::{Config as utils_config, L1ContractAddresses};
 use alloy::primitives::Address;
 
