@@ -11,9 +11,10 @@ on:
       - "permissionless/**"
       - "whitelist/**"
       - "tools/p2p_node/p2p_network/**"
+      - "e2e_tests/**"
 
 env:
-  DOCKER_PUBLIC_REGISTRY: docker.io 
+  DOCKER_PUBLIC_REGISTRY: docker.io
   DOCKER_PUBLIC_REPOSITORY: nethermind/catalyst-node
   DOCKER_REGISTRY: nethermind.jfrog.io
   DOCKER_REPOSITORY_STAGING: core-oci-local-staging/catalyst-node
@@ -116,10 +117,10 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             ${{ needs.build.outputs.digest-amd64 }} \
             ${{ needs.build.outputs.digest-arm64 }}
-            
+
       - name: Setup ORAS
         uses: oras-project/setup-oras@v1
-        
+
       - name: Check ORAS version
         run: oras version
 
@@ -165,7 +166,7 @@ jobs:
             echo "Promoting ${source_image} to ${prod_image}"
             oras cp -r "${source_image}" "${prod_image}"
           done
-  
+
       - name: Summary
         run: |
           echo "## Catalyst Node Docker build Completed" >> $GITHUB_STEP_SUMMARY
