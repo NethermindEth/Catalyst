@@ -1,12 +1,13 @@
-name: "[Nethermind] Catalyst e2e Stack - Pytest"
+name: "Catalyst e2e Stack - Pytest"
 
 on:
+  workflow_dispatch:
   workflow_run:
-    workflows: ["[Nethermind] Catalyst Node - Docker build and push"]
+    workflows: ["Catalyst Node - Docker build and push"]
     types: [completed]
     branches:
-      - "**" 
-    
+      - "**"
+
 env:
   TARGET_MACHINE_IP: 178.79.157.173
 jobs:
