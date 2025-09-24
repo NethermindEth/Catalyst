@@ -1,4 +1,4 @@
-name: "[Nethermind] Catalyst Node - Docker build and push"
+name: "Catalyst Node - Docker build and push"
 
 on:
   workflow_dispatch:
