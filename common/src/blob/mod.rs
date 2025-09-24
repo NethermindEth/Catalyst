@@ -22,16 +22,12 @@ pub fn build_blob_sidecar(data: &[u8]) -> Result<BlobTransactionSidecar, Error> 
     let mut blobs: Vec<Blob> = Vec::with_capacity(chunks.len());
     let mut commitments: Vec<Bytes48> = Vec::with_capacity(chunks.len());
     let mut proofs: Vec<Bytes48> = Vec::with_capacity(chunks.len());
-    let start = std::time::Instant::now();
 
     for raw_data_blob in chunks {
-        println!("--------------");
         // Encode blob data
         let encoded_blob: Blob = BlobCoder::encode_blob(raw_data_blob)?;
-        println!("1 in {} milliseconds", start.elapsed().as_millis());
         // Compute commitment and proof
         let kzg_settings = EnvKzgSettings::Default.get();
-        println!("2 in {} milliseconds", start.elapsed().as_millis());
         let commitment = blob_to_kzg_commitment(encoded_blob, kzg_settings)?;
         let proof = compute_blob_kzg_proof(encoded_blob, &commitment, kzg_settings)?;
         // Build sidecar
