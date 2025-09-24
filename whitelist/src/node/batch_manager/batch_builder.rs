@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use super::config::{BatchesToSend, ForcedInclusionBatch};
 use crate::{
-    l1::execution_layer::ExecutionLayer,
+    l1::pacaya::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::batch_manager::{batch::Batch, config::BatchBuilderConfig},
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},

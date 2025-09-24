@@ -3,7 +3,7 @@ use common::{
     funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, metrics::Metrics, shared,
     signer, utils as common_utils,
 };
-use l1::execution_layer::ExecutionLayer;
+use l1::pacaya::execution_layer::ExecutionLayer;
 use std::sync::Arc;
 use tokio::{
     signal::unix::{SignalKind, signal},
@@ -65,7 +65,7 @@ async fn main() -> Result<(), Error> {
 
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
         common_l1::config::EthereumL1Config::new(&config, l1_signer),
-        l1::config::EthereumL1Config::try_from(config.specific_config.clone())?,
+        l1::pacaya::config::EthereumL1Config::try_from(config.specific_config.clone())?,
         transaction_error_sender,
         metrics.clone(),
     )

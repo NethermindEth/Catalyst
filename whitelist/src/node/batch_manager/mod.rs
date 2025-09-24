@@ -4,7 +4,7 @@ pub mod config;
 
 use crate::{
     forced_inclusion::ForcedInclusion,
-    l1::execution_layer::ExecutionLayer,
+    l1::pacaya::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::batch_manager::config::BatchesToSend,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},

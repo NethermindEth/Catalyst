@@ -1,5 +1,2 @@
 [files]
-extend-exclude = [
-    "node/src/l1/abi/*.json",
-    "node/src/l2/abi/*.json"
-]
+extend-exclude = ["**/*.json"]
