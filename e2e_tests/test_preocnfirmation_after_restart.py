@@ -11,15 +11,6 @@ import time
 from eth_account import Account
 from taiko_inbox import get_last_batch_id
 
-def restart_container(container_name):
-    result = subprocess.run(["docker", "restart", container_name], capture_output=True, text=True, check=True)
-    print("Restarted container:", container_name)
-    print(result.stdout)
-    if result.stderr:
-        print(result.stderr)
-        assert False, "Error restarting container"
-
-pytest.skip("Skipping test_preocnfirmation_after_restart.py until issue https://github.com/NethermindEth/Catalyst/issues/611 is fixed", allow_module_level=True)
 def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1, env_vars):
     """
     We restart the nodes and then produce 30 transactions every 2 L2 slots. We expect to receive 30 L2 blocks and 3 batches at the end
@@ -31,8 +22,8 @@ def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1
     print("Slot: ", slot)
     try:
         #restart nodes
-        restart_container(env_vars.container_name_node1)
-        restart_container(env_vars.container_name_node2)
+        restart_catalyst_node(1)
+        restart_catalyst_node(2)
         # wait for nodes warmup
         time.sleep(slot_duration_sec * 3)
         # get chain info
@@ -56,9 +47,9 @@ def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1
         assert block_number + 3 * env_vars.max_blocks_per_batch == new_block_number, "Invalid block number"
         assert batch_id + 3 == new_batch_id, "Invalid batch ID"
     except subprocess.CalledProcessError as e:
-        print("Error running test_three_consecutive_forced_inclusion")
+        print("Error running test_preocnfirmation_after_restart")
         print(e)
         print("stdout:", e.stdout)
         print("stderr:", e.stderr)
-        assert False, "test_three_consecutive_forced_inclusion failed"
+        assert False, "test_preocnfirmation_after_restart failed"
 

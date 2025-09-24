@@ -223,6 +223,14 @@ def start_catalyst_node(node_number):
     if result.stderr:
         print(result.stderr)
 
+def restart_catalyst_node(node_number):
+    container_name = choose_catalyst_node(node_number)
+
+    result = subprocess.run(["docker", "restart", container_name], capture_output=True, text=True, check=True)
+    print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
+
 def choose_catalyst_node(node_number):
     container_name = "catalyst-node-1" if node_number == 1 else "catalyst-node-2" if node_number == 2 else None
     if container_name is None:

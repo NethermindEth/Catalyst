@@ -19,11 +19,15 @@ pub struct ForcedInclusion {
 }
 
 impl ForcedInclusion {
-    pub fn new(ethereum_l1: Arc<EthereumL1<ExecutionLayer>>) -> Self {
-        Self {
+    pub async fn new(ethereum_l1: Arc<EthereumL1<ExecutionLayer>>) -> Result<Self, Error> {
+        let head = ethereum_l1
+            .execution_layer
+            .get_forced_inclusion_head()
+            .await?;
+        Ok(Self {
             ethereum_l1,
-            index: AtomicU64::new(0),
-        }
+            index: AtomicU64::new(head),
+        })
     }
 
     pub async fn sync_queue_index_with_head(&self) -> Result<u64, Error> {

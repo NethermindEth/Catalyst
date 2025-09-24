@@ -11,6 +11,10 @@ use blob_coder::BlobCoder;
 use blob_decoder::BlobDecoder;
 use constants::MAX_BLOB_DATA_SIZE;
 
+pub fn build_default_kzg_settings() {
+    EnvKzgSettings::Default.get();
+}
+
 pub fn build_blob_sidecar(data: &[u8]) -> Result<BlobTransactionSidecar, Error> {
     // Split to blob chunks
     let chunks: Vec<&[u8]> = data.chunks(MAX_BLOB_DATA_SIZE).collect();
@@ -50,6 +54,7 @@ mod tests {
 
     #[test]
     fn test_build_blob_sidecar() {
+        build_default_kzg_settings();
         let data = vec![3u8; 400];
         let sidecar = build_blob_sidecar(&data).expect("assert: can build taiko blob sidecar");
         for s in sidecar.into_iter() {

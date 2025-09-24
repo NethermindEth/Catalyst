@@ -104,6 +104,12 @@ impl BatchBuilder {
         self.current_forced_inclusion.is_some()
     }
 
+    pub fn current_batch_is_empty(&self) -> bool {
+        self.current_batch
+            .as_ref()
+            .is_none_or(|b| b.l2_blocks.is_empty())
+    }
+
     pub fn try_finalize_current_batch(&mut self) -> Result<(), Error> {
         let is_empty = self
             .current_batch
@@ -137,6 +143,7 @@ impl BatchBuilder {
     }
 
     pub fn create_new_batch(&mut self, anchor_block_id: u64, anchor_block_timestamp_sec: u64) {
+        // TODO replace with try_finalize_current_batch
         self.finalize_current_batch();
         self.current_batch = Some(Batch {
             total_bytes: 0,

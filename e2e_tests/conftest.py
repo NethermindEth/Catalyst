@@ -16,12 +16,11 @@ class EnvVars:
     l2_prefunded_priv_key_2: str
     taiko_inbox_address: str
     preconf_whitelist_address: str
+    forced_inclusion_store_address: str
     preconf_min_txs: int
     preconf_heartbeat_ms: int
     l2_private_key: str
     max_blocks_per_batch: int
-    container_name_node1: str
-    container_name_node2: str
 
     @classmethod
     def from_env(cls):
@@ -42,6 +41,10 @@ class EnvVars:
         if not preconf_whitelist_address:
             raise Exception("Environment variable PRECONF_WHITELIST_ADDRESS not set")
 
+        forced_inclusion_store_address = os.getenv("FORCED_INCLUSION_STORE_ADDRESS")
+        if not forced_inclusion_store_address:
+            raise Exception("Environment variable FORCED_INCLUSION_STORE_ADDRESS not set")
+
         preconf_min_txs = os.getenv("PRECONF_MIN_TXS")
         if preconf_min_txs is None:
             raise Exception("PRECONF_MIN_TXS is not set")
@@ -59,25 +62,16 @@ class EnvVars:
         if not max_blocks_per_batch:
             raise Exception("Environment variable MAX_BLOCKS_PER_BATCH not set")
 
-        container_name_node1 = os.getenv("CONTAINER_NAME_NODE1")
-        if not container_name_node1:
-            raise Exception("Environment variable CONTAINER_NAME_NODE1 not set")
-
-        container_name_node2 = os.getenv("CONTAINER_NAME_NODE2")
-        if not container_name_node2:
-            raise Exception("Environment variable CONTAINER_NAME_NODE2 not set")
-
         return cls(
             l2_prefunded_priv_key=l2_prefunded_priv_key,
             l2_prefunded_priv_key_2=l2_prefunded_priv_key_2,
             taiko_inbox_address=taiko_inbox_address,
             preconf_whitelist_address=preconf_whitelist_address,
+            forced_inclusion_store_address=forced_inclusion_store_address,
             preconf_min_txs=preconf_min_txs,
             preconf_heartbeat_ms=preconf_heartbeat_ms,
             l2_private_key=l2_private_key,
             max_blocks_per_batch=max_blocks_per_batch,
-            container_name_node1=container_name_node1,
-            container_name_node2=container_name_node2
         )
 
 @pytest.fixture(scope="session")
