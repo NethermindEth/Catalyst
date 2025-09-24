@@ -1,5 +1,5 @@
 use super::{
-bindings::{
+    bindings::{
         BatchParams, BlockParams, PreconfWhitelist,
         forced_inclusion_store::{IForcedInclusionStore, IForcedInclusionStore::ForcedInclusion},
         preconf_router::IPreconfRouter,

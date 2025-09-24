@@ -4,7 +4,7 @@ pub mod iinbox {
     use super::*;
 
     sol!(
-        
+
     library LibBlobs {
         // ---------------------------------------------------------------
         // Constants
