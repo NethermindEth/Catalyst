@@ -73,7 +73,7 @@ impl LookaheadBuilder {
         Ok(builder)
     }
 
-    async fn next_preconfer(&mut self) -> Result<ProposerContext, Error> {
+    pub async fn next_preconfer(&mut self) -> Result<ProposerContext, Error> {
         let current_slot = self.ethereum_l1.slot_clock.get_current_slot()?;
         let next_slot_timestamp = U256::from(
             self.ethereum_l1
