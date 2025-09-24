@@ -253,34 +253,4 @@ impl DataBase {
 
         Ok(operators)
     }
-
-    pub async fn get_opted_in_operator(
-        &self,
-        registration_root: &str,
-        slasher: &str,
-    ) -> Result<Option<(String, u64, Option<u64>, Option<u64>, String, u64, u64)>, Error> {
-        let row = sqlx::query_as::<_, (String, u64, Option<u64>, Option<u64>, String, u64, u64)>(
-            r#"
-            SELECT 
-                o.owner,
-                o.registered_at,
-                o.unregistered_at,
-                o.slashed_at,
-                p.committer,
-                p.opted_in_at,
-                p.opted_out_at
-            FROM operators o
-            INNER JOIN protocols p ON p.registration_root = o.registration_root
-            WHERE o.registration_root = ?
-              AND p.slasher = ?
-            LIMIT 1
-            "#,
-        )
-        .bind(registration_root)
-        .bind(slasher)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row)
-    }
 }
