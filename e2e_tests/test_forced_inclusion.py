@@ -10,7 +10,7 @@ import time
 from eth_account import Account
 from taiko_inbox import get_last_batch_id
 from forced_inclusion_store import forced_inclusion_store_is_empty, get_forced_inclusion_store_head
-
+from chain_info import ChainInfo
 
 def send_forced_inclusion(nonce_delta):
     cmd = [
@@ -64,47 +64,35 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
     assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
     slot_duration_sec = get_slot_duration_sec(beacon_client)
+    delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
+    # check that forced inclusion list is empty
+    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    fi_account = Account.from_key(env_vars.l2_private_key)
+    # Restart nodes for clean start
+    restart_catalyst_node(1)
+    restart_catalyst_node(2)
     # wait for block 30 in epoch
     wait_for_slot_beginning(beacon_client, 30)
     slot = get_slot_in_epoch(beacon_client)
     print("Slot: ", slot)
     try:
-        # get current nonce of FI sender
-        fi_account = Account.from_key(env_vars.l2_private_key)
-        fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("FI sender nonce:", fi_sender_nonce)
+         # get chain info
+        chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
         # send 3 forced inclusion
         send_forced_inclusion(0)
         send_forced_inclusion(1)
         send_forced_inclusion(2)
-        # get chain info
-        block_number = l2_client_node1.eth.block_number
-        print("Block number:", block_number)
-        batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
-        # send transactions to create 4 batches
-        delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
-        print("delay", delay)
-        spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
-        # Sleep due to a node bug: the first gas history retrieval after restart takes too long
-        # https://github.com/NethermindEth/Catalyst/issues/611
-        time.sleep(slot_duration_sec)
-        new_fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        assert fi_sender_nonce + 1 == new_fi_sender_nonce, "First fi transaction not included"
-        spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 3 * env_vars.max_blocks_per_batch, delay)
+        # spam transactoins
+        spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 4 * env_vars.max_blocks_per_batch, delay)
         # wait 2 l1 slots to include all propose batch transactions
         time.sleep(slot_duration_sec * 2)
         # verify
-        slot = get_slot_in_epoch(beacon_client)
-        print("Slot: ", slot)
-        new_block_number = l2_client_node1.eth.block_number
-        print("New block number:", new_block_number)
-        new_batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
-        new_fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("New FI sender nonce:", new_fi_sender_nonce)
-        assert block_number + 4 * env_vars.max_blocks_per_batch + 3 == new_block_number, "Invalid block number"
-        assert fi_sender_nonce + 3 == new_fi_sender_nonce, "Transaction not included"
+        new_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+
+        assert chain_info.block_number + 4 * env_vars.max_blocks_per_batch + 3 == new_chain_info.block_number, "Invalid block number"
+        assert chain_info.fi_sender_nonce + 3 == new_chain_info.fi_sender_nonce, "Transaction not included"
         # 4 batches for blocks and 3 batches for forced inclusion
-        assert batch_id + 7 == new_batch_id, "Invalid batch ID"
+        assert chain_info.batch_id + 7 == new_chain_info.batch_id, "Invalid batch ID"
     except subprocess.CalledProcessError as e:
         print("Error running test_three_consecutive_forced_inclusion")
         print(e)
@@ -123,60 +111,48 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
     # check that forced inclusion list is empty
     forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    fi_account = Account.from_key(env_vars.l2_private_key)
     # wait for slot
     wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, env_vars.preconf_whitelist_address, 19)
     try:
-        # get current nonce of FI sender
-        fi_account = Account.from_key(env_vars.l2_private_key)
-        fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("FI sender nonce:", fi_sender_nonce)
+        # get chain info
+        chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
         # send 1 forced inclusion
         send_forced_inclusion(0)
-        # get chain info
-        block_number = l2_client_node1.eth.block_number
-        print("Block number:", block_number)
-        batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
         # wait for handower window
         wait_for_slot_beginning(beacon_client, 29)
         in_handover_block_number = l2_client_node1.eth.block_number
         print("In handover block number:", in_handover_block_number)
-        assert block_number + 1 == in_handover_block_number, "Invalid block number in handover"
+        # end_of_sequencing block added
+        assert chain_info.block_number + 1 == in_handover_block_number, "Invalid block number in handover"
         # send transactions to create batch
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
+        after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
         # wait for transactions to be included on L1
         wait_for_slot_beginning(beacon_client, 3)
+        # Verify reorg after L1 inclusion
+        after_spam_chain_info.check_reorg(l2_client_node1)
         # check chain info
-        slot = get_slot_in_epoch(beacon_client)
-        print("Slot: ", slot)
-        after_handover_block_number = l2_client_node1.eth.block_number
-        print("After handover block number:", after_handover_block_number)
-        after_handover_batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
-        print("After handover batch ID:", after_handover_batch_id)
-        after_handover_fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("After handover FI sender nonce:", after_handover_fi_sender_nonce)
-        assert in_handover_block_number + env_vars.max_blocks_per_batch == after_handover_block_number, "Invalid block number after handover"
+        after_handover_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+        assert in_handover_block_number + env_vars.max_blocks_per_batch == after_handover_chain_info.block_number, "Invalid block number after handover"
         # we should not have forced inclusions after handover
-        assert fi_sender_nonce == after_handover_fi_sender_nonce, "Transaction not included after handover"
-        assert batch_id + 2 == after_handover_batch_id, "Invalid batch ID after handover"
+        assert chain_info.fi_sender_nonce == after_handover_chain_info.fi_sender_nonce, "Transaction not included after handover"
+        assert chain_info.batch_id + 2 == after_handover_chain_info.batch_id, "Invalid batch ID after handover"
         # create new batch and forced inclusion
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
+        after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
         # wait for transactions to be included on L1
         time.sleep(slot_duration_sec * 3)
+        # Verify reorg after L1 inclusion
+        after_spam_chain_info.check_reorg(l2_client_node1)
         # check chain info
-        slot = get_slot_in_epoch(beacon_client)
-        print("Slot: ", slot)
-        new_block_number = l2_client_node1.eth.block_number
-        print("New block number:", new_block_number)
-        new_batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
-        print("New batch ID:", new_batch_id)
-        new_fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("New FI sender nonce:", new_fi_sender_nonce)
+        new_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
         # max_blocks_per_batch + forced inclusion block
-        assert after_handover_block_number + env_vars.max_blocks_per_batch + 1 == new_block_number, "Invalid block number"
+        assert after_handover_chain_info.block_number + env_vars.max_blocks_per_batch + 1 == new_chain_info.block_number, "Invalid block number"
         # we should have forced inclusion
-        assert fi_sender_nonce + 1 == new_fi_sender_nonce, "Transaction not included"
+        assert after_handover_chain_info.fi_sender_nonce + 1 == new_chain_info.fi_sender_nonce, "Transaction not included"
         # add 1 new batch with forced inclusion
-        assert after_handover_batch_id + 2 == new_batch_id, "Invalid batch ID"
+        assert after_handover_chain_info.batch_id + 2 == new_chain_info.batch_id, "Invalid batch ID"
     except subprocess.CalledProcessError as e:
         print("Error running test_three_consecutive_forced_inclusion")
         print(e)
@@ -198,6 +174,7 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
 
     # Check that forced inclusion list is empty
     forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    fi_account = Account.from_key(env_vars.l2_private_key)
 
     # Wait for block 30 in epoch
     wait_for_slot_beginning(beacon_client, 1)
@@ -211,14 +188,7 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
         time.sleep(slot_duration_sec * 3)
 
         # Validate chain info
-        print("Slot:", get_slot_in_epoch(beacon_client))
-        fi_account = Account.from_key(env_vars.l2_private_key)
-        fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("FI sender nonce:", fi_sender_nonce)
-        batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
-        print("Batch ID:", batch_id)
-        block_number = l2_client_node1.eth.block_number
-        print("Block number:", block_number)
+        chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
 
         # Send forced inclusion
         send_forced_inclusion(0)
@@ -231,21 +201,23 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
             delay,
         )
 
+        # Get chain info
+        before_l1_inclusion_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+        assert chain_info.fi_sender_nonce + 1 == before_l1_inclusion_chain_info.fi_sender_nonce, "FI transaction not included"
+        assert chain_info.block_number + env_vars.max_blocks_per_batch + 1 == before_l1_inclusion_chain_info.block_number, "Invalid block number"
+        assert chain_info.batch_id == before_l1_inclusion_chain_info.batch_id, "Invalid batch ID"
+
         # Wait for transactions to be included on L1
         time.sleep(slot_duration_sec * 3)
 
-        # Verify results
-        print("Slot:", get_slot_in_epoch(beacon_client))
-        new_fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("New FI sender nonce:", new_fi_sender_nonce)
-        new_block_number = l2_client_node1.eth.block_number
-        print("New block number:", new_block_number)
-        new_batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
-        print("New batch ID:", new_batch_id)
+        # Verify reorg after L1 inclusion
+        before_l1_inclusion_chain_info.check_reorg(l2_client_node1)
 
-        assert fi_sender_nonce + 1 == new_fi_sender_nonce, "FI transaction not included"
-        assert block_number + env_vars.max_blocks_per_batch + 1 == new_block_number, "Invalid block number"
-        assert batch_id + 2 == new_batch_id, "Invalid batch ID"
+        # Verify results
+        new_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+        assert chain_info.fi_sender_nonce + 1 == new_chain_info.fi_sender_nonce, "FI transaction not included"
+        assert chain_info.block_number + env_vars.max_blocks_per_batch + 1 == new_chain_info.block_number, "Invalid block number"
+        assert chain_info.batch_id + 2 == new_chain_info.batch_id, "Invalid batch ID"
     except subprocess.CalledProcessError as e:
         print("Error running test_preconf_forced_inclusion_after_restart")
         print(e)
@@ -262,6 +234,7 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
     # Check that forced inclusion list is empty
     forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    fi_account = Account.from_key(env_vars.l2_private_key)
 
     slot_duration_sec = get_slot_duration_sec(beacon_client)
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
@@ -275,14 +248,7 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
 
     try:
         # Validate chain info
-        print("Slot:", get_slot_in_epoch(beacon_client))
-        fi_account = Account.from_key(env_vars.l2_private_key)
-        start_fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("FI sender nonce:", start_fi_sender_nonce)
-        start_batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
-        print("Batch ID:", start_batch_id)
-        start_block_number = l2_client_node1.eth.block_number
-        print("Block number:", start_block_number)
+        start_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
 
         # Send forced inclusion
         send_forced_inclusion(0)
@@ -291,19 +257,11 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch-1, delay)
 
         # Validate chain info
-        print("Slot:", get_slot_in_epoch(beacon_client))
-        fi_account = Account.from_key(env_vars.l2_private_key)
-        fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("FI sender nonce:", fi_sender_nonce)
-        batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
-        print("Batch ID:", batch_id)
-        block_number = l2_client_node1.eth.block_number
-        print("Block number:", block_number)
-        block_hash = l2_client_node1.eth.get_block(block_number).hash
-        print("Block hash:", block_hash.hex())
-        assert start_fi_sender_nonce + 1 == fi_sender_nonce, "FI transaction not included"
-        assert start_block_number + (env_vars.max_blocks_per_batch - 1) + 1 == block_number, "Invalid block number"
-        assert start_batch_id == batch_id, "Invalid batch ID"
+        chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+        assert start_chain_info.fi_sender_nonce + 1 == chain_info.fi_sender_nonce, "FI transaction not included"
+        assert start_chain_info.block_number + (env_vars.max_blocks_per_batch - 1) + 1 == chain_info.block_number, "Invalid block number"
+        assert start_chain_info.batch_id == chain_info.batch_id, "Invalid batch ID"
+
         # Restart nodes
         restart_catalyst_node(1)
         restart_catalyst_node(2)
@@ -312,20 +270,11 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
         time.sleep(slot_duration_sec * 5)
 
         # Validate chain info
-        print("Slot:", get_slot_in_epoch(beacon_client))
-        fi_account = Account.from_key(env_vars.l2_private_key)
-        fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
-        print("FI sender nonce:", fi_sender_nonce)
-        batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
-        print("Batch ID:", batch_id)
-        block_number = l2_client_node1.eth.block_number
-        print("Block number:", block_number)
-        block_hash_after = l2_client_node1.eth.get_block(block_number).hash
-        print("Block hash:", block_hash_after.hex())
-        assert start_fi_sender_nonce + 1 == fi_sender_nonce, "FI transaction not included after restart"
-        assert start_block_number + (env_vars.max_blocks_per_batch - 1) + 1 == block_number, "Invalid block number after restart"
-        assert start_batch_id + 2 == batch_id, "Invalid batch ID after restart"
-        assert block_hash_after == block_hash, "Reorg happened: Invalid block hash after restart"
+        chain_info.check_reorg(l2_client_node1)
+        chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+        assert start_chain_info.fi_sender_nonce + 1 == chain_info.fi_sender_nonce, "FI transaction not included after restart"
+        assert start_chain_info.block_number + (env_vars.max_blocks_per_batch - 1) + 1 == chain_info.block_number, "Invalid block number after restart"
+        assert start_chain_info.batch_id + 2 == chain_info.batch_id, "Invalid batch ID after restart"
 
     except subprocess.CalledProcessError as e:
         print("Error running test_preconf_forced_inclusion_after_restart")
