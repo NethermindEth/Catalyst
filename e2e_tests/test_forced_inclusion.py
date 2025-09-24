@@ -252,3 +252,84 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
         print("stdout:", e.stdout)
         print("stderr:", e.stderr)
         assert False, "test_preconf_forced_inclusion_after_restart failed"
+
+def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_client_node1, env_vars):
+    """
+    Test forced inclusion recovery after node restart
+    """
+    assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
+    assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
+    assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
+    # Check that forced inclusion list is empty
+    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+
+    slot_duration_sec = get_slot_duration_sec(beacon_client)
+    delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
+
+    # Restart nodes
+    restart_catalyst_node(1)
+    restart_catalyst_node(2)
+
+    # Wait for block 1 in epoch
+    wait_for_slot_beginning(beacon_client, 1)
+
+    try:
+        # Validate chain info
+        print("Slot:", get_slot_in_epoch(beacon_client))
+        fi_account = Account.from_key(env_vars.l2_private_key)
+        start_fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
+        print("FI sender nonce:", start_fi_sender_nonce)
+        start_batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
+        print("Batch ID:", start_batch_id)
+        start_block_number = l2_client_node1.eth.block_number
+        print("Block number:", start_block_number)
+
+        # Send forced inclusion
+        send_forced_inclusion(0)
+
+        # send transactions but don't create batch
+        spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch-1, delay)
+
+        # Validate chain info
+        print("Slot:", get_slot_in_epoch(beacon_client))
+        fi_account = Account.from_key(env_vars.l2_private_key)
+        fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
+        print("FI sender nonce:", fi_sender_nonce)
+        batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
+        print("Batch ID:", batch_id)
+        block_number = l2_client_node1.eth.block_number
+        print("Block number:", block_number)
+        block_hash = l2_client_node1.eth.get_block(block_number).hash
+        print("Block hash:", block_hash.hex())
+        assert start_fi_sender_nonce + 1 == fi_sender_nonce, "FI transaction not included"
+        assert start_block_number + (env_vars.max_blocks_per_batch - 1) + 1 == block_number, "Invalid block number"
+        assert start_batch_id == batch_id, "Invalid batch ID"
+        # Restart nodes
+        restart_catalyst_node(1)
+        restart_catalyst_node(2)
+
+        # Wait for nodes to warm up
+        time.sleep(slot_duration_sec * 5)
+
+        # Validate chain info
+        print("Slot:", get_slot_in_epoch(beacon_client))
+        fi_account = Account.from_key(env_vars.l2_private_key)
+        fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account.address)
+        print("FI sender nonce:", fi_sender_nonce)
+        batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
+        print("Batch ID:", batch_id)
+        block_number = l2_client_node1.eth.block_number
+        print("Block number:", block_number)
+        block_hash_after = l2_client_node1.eth.get_block(block_number).hash
+        print("Block hash:", block_hash_after.hex())
+        assert start_fi_sender_nonce + 1 == fi_sender_nonce, "FI transaction not included after restart"
+        assert start_block_number + (env_vars.max_blocks_per_batch - 1) + 1 == block_number, "Invalid block number after restart"
+        assert start_batch_id + 2 == batch_id, "Invalid batch ID after restart"
+        assert block_hash_after == block_hash, "Reorg happened: Invalid block hash after restart"
+
+    except subprocess.CalledProcessError as e:
+        print("Error running test_preconf_forced_inclusion_after_restart")
+        print(e)
+        print("stdout:", e.stdout)
+        print("stderr:", e.stderr)
+        assert False, "test_preconf_forced_inclusion_after_restart failed"
