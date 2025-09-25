@@ -28,7 +28,7 @@ jobs:
             cd ~/e2e_catalyst_tests/simple_taiko_node
             git pull
             cp .env.example .env
-            docker compose down -v --remove-orphans
+            docker compose down
             docker compose up -d
             cd ~/e2e_catalyst_tests/catalyst/e2e_tests
             git pull
