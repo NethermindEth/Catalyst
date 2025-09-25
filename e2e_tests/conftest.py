@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from utils import ensure_catalyst_node_running
 from dataclasses import dataclass
+from taiko_inbox import get_last_block_id
 
 load_dotenv()
 
@@ -109,3 +110,26 @@ def catalyst_node_teardown():
     print("Test teardown: ensuring both catalyst nodes are running")
     ensure_catalyst_node_running(1)
     ensure_catalyst_node_running(2)
+
+@pytest.fixture(scope="session", autouse=True)
+def global_setup(l1_client, l2_client_node1, l2_client_node2, env_vars):
+    """Run once before all tests"""
+    print("Wait for Geth sync with TaikoInbox")
+    block_number_contract = get_last_block_id(l1_client, env_vars.taiko_inbox_address)
+
+    while True:
+        block_number_node1 = l2_client_node1.eth.block_number
+        block_number_node2 = l2_client_node2.eth.block_number
+        if block_number_contract <= block_number_node1 and block_number_contract <= block_number_node2:
+            break
+
+        print(
+            f"Block Number Contract: {block_number_contract}, "
+            f"Node1: {block_number_node1}, "
+            f"Node2: {block_number_node2}"
+        )
+        print("Sleeping 10 sec to sync...")
+        time.sleep(10)
+
+    yield
+    print("Global teardown after all tests")

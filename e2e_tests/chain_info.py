@@ -21,6 +21,7 @@ class ChainInfo:
         block_hash = l2_client_node1.eth.get_block(block_number).hash
 
         if verbose:
+            print("----------------")
             print("Slot in epoch:", get_slot_in_epoch(beacon_client))
             print("FI sender nonce:", fi_sender_nonce)
             print("Batch ID:", batch_id)
