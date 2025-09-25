@@ -37,6 +37,8 @@ def test_forced_inclusion(l2_client_node1, env_vars):
     This test runs the forced inclusion toolbox docker command and prints its output.
     """
     try:
+        forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+        fi_account = Account.from_key(env_vars.l2_private_key)
         # print chain info
         ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
 
@@ -50,6 +52,7 @@ def test_forced_inclusion(l2_client_node1, env_vars):
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 41, delay)
 
         assert wait_for_tx_to_be_included(l2_client_node1, forced_inclusion_tx_hash), "Forced inclusion tx should be included in L2 Node 1"
+        forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
 
     except subprocess.CalledProcessError as e:
         print("Error running forced inclusion toolbox docker command:")
