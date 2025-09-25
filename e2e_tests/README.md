@@ -6,11 +6,12 @@ It requires full stack to be up and running. Usually by running
 ```
 kurtosis run --enclave taiko-preconf-devnet . --args-file network_params.yaml
 ```
-from the main branch of https://github.com/NethermindEth/preconfirm-devnet-package.
+from the https://github.com/NethermindEth/preconfirm-devnet-package/tree/ms/only_l1_deployment. This is the L1 deployment part.
+For L2 we need a modified version of simple-taiko-node: https://github.com/NethermindEth/simple-taiko-node-nethermind/tree/kurtosis. After cloning it, an .env file can be created by copying .env.example and filling in the required values.
 
-It also requires a `.env` file to be present in the root directory. You can copy `.env.example` file into `.env` and fill in the required values.
+The same can be done for the .env file in the e2e tests directory.
 
-Create venv:
+Now to run tests, create venv:
 ```
 python3 -m venv venv
 source venv/bin/activate
