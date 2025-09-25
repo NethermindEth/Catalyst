@@ -37,6 +37,9 @@ def test_forced_inclusion(l2_client_node1, env_vars):
     This test runs the forced inclusion toolbox docker command and prints its output.
     """
     try:
+        # print chain info
+        ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+
         #send forced inclusion
         forced_inclusion_tx_hash = send_forced_inclusion(0)
         print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
