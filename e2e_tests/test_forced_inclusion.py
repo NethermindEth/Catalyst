@@ -32,7 +32,7 @@ def send_forced_inclusion(nonce_delta):
     print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
     return forced_inclusion_tx_hash
 
-def test_forced_inclusion(l2_client_node1, env_vars):
+def test_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars):
     """
     This test runs the forced inclusion toolbox docker command and prints its output.
     """
