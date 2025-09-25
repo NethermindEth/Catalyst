@@ -1,1 +1,2 @@
 mod bindings;
+mod proposal;
