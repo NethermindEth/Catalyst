@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from utils import ensure_catalyst_node_running
 from dataclasses import dataclass
+from taiko_inbox import get_last_block_id
 
 load_dotenv()
 
