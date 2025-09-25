@@ -85,8 +85,7 @@ impl LookaheadBuilder {
         let current_epoch_timestamp = U256::from(
             self.ethereum_l1
                 .slot_clock
-                .get_epoch_begin_timestamp(current_epoch)?
-                - self.ethereum_l1.slot_clock.get_slot_duration().as_secs(),
+                .get_epoch_begin_timestamp(current_epoch)?,
         );
 
         // Update the lookaheads if required
@@ -113,7 +112,9 @@ impl LookaheadBuilder {
                 } else {
                     // We are still in the current lookahead
                     let mut prev_lookahead_slot_timestamp = if slot_index == 0 {
-                        current_epoch_timestamp
+                        let slot_duration =
+                            U256::from(self.ethereum_l1.slot_clock.get_slot_duration().as_secs());
+                        current_epoch_timestamp - slot_duration
                     } else {
                         lookahead_slot_timestamp
                     };
