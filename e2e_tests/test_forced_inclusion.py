@@ -287,6 +287,9 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
     """
     Test forced inclusion after previous operator stop
     """
+    # Start all nodes after test
+    catalyst_node_teardown
+
     assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
     assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
@@ -378,9 +381,6 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
         assert after_spam_chain_info.block_number == chain_info.block_number, "Invalid block number"
         assert after_spam_chain_info.fi_sender_nonce == chain_info.fi_sender_nonce, "FI transaction not included"
         assert after_spam_chain_info.batch_id + 2 == chain_info.batch_id, "Invalid batch ID"
-
-        # Star stopped operator
-        start_catalyst_node(node_number)
 
     except subprocess.CalledProcessError as e:
         print("Error running test_verify_forced_inclusion_after_previous_operator_stop")
