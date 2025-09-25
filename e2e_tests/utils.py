@@ -211,7 +211,7 @@ def stop_catalyst_node(node_number):
     container_name = choose_catalyst_node(node_number)
 
     result = subprocess.run(["docker", "stop", container_name], capture_output=True, text=True, check=True)
-    print(result.stdout)
+    print(f"Stop {result.stdout}")
     if result.stderr:
         print(result.stderr)
 
@@ -219,7 +219,7 @@ def start_catalyst_node(node_number):
     container_name = choose_catalyst_node(node_number)
 
     result = subprocess.run(["docker", "start", container_name], capture_output=True, text=True, check=True)
-    print(result.stdout)
+    print(f"Start {result.stdout}")
     if result.stderr:
         print(result.stderr)
 
@@ -227,7 +227,7 @@ def restart_catalyst_node(node_number):
     container_name = choose_catalyst_node(node_number)
 
     result = subprocess.run(["docker", "restart", container_name], capture_output=True, text=True, check=True)
-    print(result.stdout)
+    print(f"Restart {result.stdout}")
     if result.stderr:
         print(result.stderr)
 
