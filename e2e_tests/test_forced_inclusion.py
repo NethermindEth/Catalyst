@@ -289,7 +289,7 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
         print("stderr:", e.stderr)
         assert False, "test_recover_forced_inclusion_after_restart failed"
 
-def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_client, l2_client_node1, env_vars):
+def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_client, l2_client_node1, env_vars, catalyst_node_teardown):
     """
     Test forced inclusion after previous operator stop
     """
