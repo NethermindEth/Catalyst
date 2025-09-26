@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::Error;
 use sqlx::{
     SqlitePool,
@@ -211,5 +213,44 @@ impl DataBase {
         .await?;
 
         Ok(())
+    }
+
+    pub async fn get_operators_by_pubkey(
+        &self,
+        slasher: &str,
+        validator_pubkey: (String, String, String, String),
+    ) -> Result<Vec<(String, u8, String)>, Error> {
+        let results = sqlx::query_as::<_, (String, u64, String)>(
+            r#"
+            SELECT DISTINCT 
+                sr.registration_root
+                sr.idx
+                p.committer
+            FROM signed_registrations sr
+            INNER JOIN protocols p ON sr.registration_root = p.registration_root
+            WHERE p.slasher = ?
+            AND (
+                sr.pubkeyXA = ? AND 
+                sr.pubkeyXB = ? AND 
+                sr.pubkeyYA = ? AND 
+                sr.pubkeyYB = ?
+            )
+            "#,
+        )
+        .bind(slasher)
+        .bind(validator_pubkey.0)
+        .bind(validator_pubkey.1)
+        .bind(validator_pubkey.2)
+        .bind(validator_pubkey.3)
+        .fetch_all(&self.pool)
+        .await?;
+
+        #[allow(clippy::cast_possible_truncation)]
+        let operators = results
+            .into_iter()
+            .map(|(root, leaf_index, committer)| (root, leaf_index as u8, committer))
+            .collect();
+
+        Ok(operators)
     }
 }

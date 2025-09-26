@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 pub mod config;
+pub mod lookahead;
 
 pub struct Node {
     cancel_token: CancellationToken,

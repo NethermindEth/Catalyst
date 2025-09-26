@@ -59,6 +59,40 @@ impl ConsensusLayer {
         Ok(slot)
     }
 
+    pub async fn get_validators_for_epoch(&self, epoch: u64) -> Result<Vec<String>, Error> {
+        let response = self
+            .get(format!("/eth/v1/validator/duties/proposer/{epoch}").as_str())
+            .await?;
+
+        let validators_response = response
+            .get("data")
+            .ok_or(anyhow::anyhow!(
+                "get_validators_for_epoch invalid response body: {}",
+                "`data` not found"
+            ))?
+            .as_array()
+            .ok_or(anyhow::anyhow!(
+                "get_validators_for_epoch invalid response body: {}",
+                "`data` is not an array"
+            ))?;
+
+        let mut validators = Vec::with_capacity(32);
+        for validator_response in validators_response {
+            // This public key is received in the compressed form
+            let pubkey = validator_response
+                .get("pubkey")
+                .and_then(|pubkey| pubkey.as_str())
+                .ok_or(anyhow::anyhow!(
+                    "get_validators_for_epoch invalid response body: {}",
+                    "array element does not contain `pubkey`"
+                ))?;
+
+            validators.push(pubkey.to_string());
+        }
+
+        Ok(validators)
+    }
+
     async fn get(&self, path: &str) -> Result<serde_json::Value, Error> {
         let response = self
             .client
