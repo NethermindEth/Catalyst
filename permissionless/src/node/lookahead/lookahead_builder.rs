@@ -30,8 +30,10 @@ use super::types::Lookahead;
 // when proposing a new batch.
 #[derive(Clone)]
 pub struct Context {
-    // Last epoch when `current_lookahead` was updated
-    last_synced_epoch: Epoch,
+    // Last slot at which the context was updated
+    context_updated_at_slot: Slot,
+    // Last epoch when the lookaheads were updated
+    lookahead_updated_at_slot: Epoch,
     current_lookahead: Lookahead,
     // Position of the lookahead of slot of the next preconfer
     current_lookahead_slot_index: U256,
@@ -64,7 +66,8 @@ impl LookaheadBuilder {
             lookahead_store_contract,
             preconf_slasher_address,
             context: Context {
-                last_synced_epoch: 0,
+                context_updated_at_slot: 0,
+                lookahead_updated_at_slot: 0,
                 current_lookahead: vec![],
                 current_lookahead_slot_index: U256::ZERO,
                 next_lookahead: vec![],
@@ -74,7 +77,7 @@ impl LookaheadBuilder {
         let current_epoch = builder.ethereum_l1.slot_clock.get_current_epoch()?;
         builder.context.current_lookahead = builder.build(current_epoch).await?;
         builder.context.next_lookahead = builder.build(current_epoch + 1).await?;
-        builder.context.last_synced_epoch = current_epoch;
+        builder.context.lookahead_updated_at_slot = current_epoch;
 
         Ok(builder)
     }
@@ -124,16 +127,22 @@ impl LookaheadBuilder {
         let current_epoch = self.ethereum_l1.slot_clock.get_current_epoch()?;
         let next_slot = self.ethereum_l1.slot_clock.get_current_slot()? + 1;
 
+        if self.context.context_updated_at_slot == next_slot {
+            return Ok(next_slot);
+        } else {
+            self.context.context_updated_at_slot = next_slot;
+        }
+
         // Update the lookaheads if we have moved into a new epoch
-        if current_epoch > self.context.last_synced_epoch {
-            if current_epoch == self.context.last_synced_epoch + 1 {
+        if current_epoch > self.context.lookahead_updated_at_slot {
+            if current_epoch == self.context.lookahead_updated_at_slot + 1 {
                 self.context.current_lookahead = self.context.next_lookahead.clone();
             } else {
                 self.context.current_lookahead = self.build(current_epoch).await?;
             }
             self.context.next_lookahead = self.build(current_epoch + 1).await?;
             self.context.current_lookahead_slot_index = U256::ZERO;
-            self.context.last_synced_epoch = current_epoch;
+            self.context.lookahead_updated_at_slot = current_epoch;
         }
 
         if self.ethereum_l1.slot_clock.get_epoch_from_slot(next_slot) == current_epoch + 1 {
