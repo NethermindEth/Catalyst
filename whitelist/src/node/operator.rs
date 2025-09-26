@@ -1,4 +1,4 @@
-use crate::l1::execution_layer::{ExecutionLayer, PreconfOperator};
+use crate::l1::pacaya::execution_layer::{ExecutionLayer, PreconfOperator};
 use anyhow::Error;
 use common::{
     l1::{
@@ -408,7 +408,7 @@ impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::l1::bindings::preconf_router::IPreconfRouter;
+    use crate::l1::pacaya::bindings::preconf_router::IPreconfRouter;
     use alloy::primitives::B256;
     use alloy::primitives::U256;
     use chrono::DateTime;

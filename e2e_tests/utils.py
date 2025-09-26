@@ -123,7 +123,7 @@ def send_n_txs_without_waiting(eth_client, private_key, n):
         send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
 
 def wait_for_batch_proposed_event(eth_client, taiko_inbox_address, from_block):
-    with open("../whitelist/src/l1/abi/ITaikoInbox.json") as f:
+    with open("../whitelist/src/l1/pacaya/abi/ITaikoInbox.json") as f:
         abi = json.load(f)
 
     contract = eth_client.eth.contract(address=taiko_inbox_address, abi=abi)
@@ -159,7 +159,7 @@ def print_batch_info(event):
     print("---")
 
 def get_current_operator(eth_client, l1_contract_address):
-    with open("../whitelist/src/l1/abi/PreconfWhitelist.json") as f:
+    with open("../whitelist/src/l1/pacaya/abi/PreconfWhitelist.json") as f:
         abi = json.load(f)
 
     contract = eth_client.eth.contract(address=l1_contract_address, abi=abi)
@@ -167,7 +167,7 @@ def get_current_operator(eth_client, l1_contract_address):
 
 def get_next_operator(eth_client, l1_contract_address):
     import json
-    with open("../whitelist/src/l1/abi/PreconfWhitelist.json") as f:
+    with open("../whitelist/src/l1/pacaya/abi/PreconfWhitelist.json") as f:
         abi = json.load(f)
 
     contract = eth_client.eth.contract(address=l1_contract_address, abi=abi)
@@ -193,7 +193,7 @@ def wait_till_next_l1_slot(beacon_client):
     time.sleep(l1_slot_duration - current_time)
 
 def get_last_batch_proposed_event(eth_client, taiko_inbox_address, from_block):
-    with open("../whitelist/src/l1/abi/ITaikoInbox.json") as f:
+    with open("../whitelist/src/l1/pacaya/abi/ITaikoInbox.json") as f:
         abi = json.load(f)
 
     contract = eth_client.eth.contract(address=taiko_inbox_address, abi=abi)
