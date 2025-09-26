@@ -79,16 +79,8 @@ impl LookaheadBuilder {
         Ok(builder)
     }
 
-    pub async fn next_preconfer(&mut self) -> Result<ProposerContext, Error> {
-        let next_slot = self.update_context().await?;
-
-        let lookahead_data = LookaheadData {
-            slotIndex: self.context.current_lookahead_slot_index,
-            registrationRoot: FixedBytes::from([0_u8; 32]),
-            currLookahead: self.context.current_lookahead.clone(),
-            nextLookahead: self.context.next_lookahead.clone(),
-            commitmentSignature: Bytes::new(),
-        };
+    pub async fn get_next_preconfer(&mut self) -> Result<ProposerContext, Error> {
+        let (next_slot, lookahead_data) = self.get_lookahead_data().await?;
 
         // The epoch timestamp expected by the `getProposerContext(..)` function in the contract.
         // When we are at the boundary of an epoch, this is the starting timestamp of the next epoch.
@@ -115,9 +107,17 @@ impl LookaheadBuilder {
         Ok(proposer_context)
     }
 
-    pub async fn get_updated_context(&mut self) -> Result<Context, Error> {
-        self.update_context().await?;
-        Ok(self.context.clone())
+    pub async fn get_lookahead_data(&mut self) -> Result<(Slot, LookaheadData), Error> {
+        let next_slot = self.update_context().await?;
+        let lookahead_data = LookaheadData {
+            slotIndex: self.context.current_lookahead_slot_index,
+            registrationRoot: FixedBytes::from([0_u8; 32]),
+            currLookahead: self.context.current_lookahead.clone(),
+            nextLookahead: self.context.next_lookahead.clone(),
+            commitmentSignature: Bytes::new(),
+        };
+
+        Ok((next_slot, lookahead_data))
     }
 
     async fn update_context(&mut self) -> Result<Slot, Error> {
