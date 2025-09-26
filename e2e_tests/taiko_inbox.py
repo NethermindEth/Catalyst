@@ -8,5 +8,11 @@ def get_last_batch_id(l1_client, taiko_inbox_address):
     contract = l1_client.eth.contract(address=taiko_inbox_address, abi=abi)
     result = contract.functions.getStats2().call()
     last_batch_id = result[0]
-    print("last_batch_id:", last_batch_id)
     return last_batch_id
+
+def get_last_block_id(l1_client, taiko_inbox_address):
+    batch_id = int(get_last_batch_id(l1_client, taiko_inbox_address)) - 1
+    contract = l1_client.eth.contract(address=taiko_inbox_address, abi=abi)
+    result = contract.functions.getBatch(batch_id).call()
+    last_block_id = result[1]
+    return last_block_id
