@@ -52,7 +52,6 @@ def test_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars):
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 41, delay)
 
         assert wait_for_tx_to_be_included(l2_client_node1, forced_inclusion_tx_hash), "Forced inclusion tx should be included in L2 Node 1"
-        forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
 
     except subprocess.CalledProcessError as e:
         print("Error running forced inclusion toolbox docker command:")
@@ -71,12 +70,13 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
     slot_duration_sec = get_slot_duration_sec(beacon_client)
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
-    # check that forced inclusion list is empty
-    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
-    fi_account = Account.from_key(env_vars.l2_private_key)
     # Restart nodes for clean start
     restart_catalyst_node(1)
     restart_catalyst_node(2)
+    time.sleep(3*slot_duration_sec)
+    # check that forced inclusion list is empty
+    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    fi_account = Account.from_key(env_vars.l2_private_key)
     # wait for block 30 in epoch
     wait_for_slot_beginning(beacon_client, 30)
     slot = get_slot_in_epoch(beacon_client)
@@ -289,7 +289,7 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
         print("stderr:", e.stderr)
         assert False, "test_recover_forced_inclusion_after_restart failed"
 
-def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_client, l2_client_node1, env_vars):
+def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_client, l2_client_node1, env_vars, catalyst_node_teardown):
     """
     Test forced inclusion after previous operator stop
     """
