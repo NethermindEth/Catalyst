@@ -9,7 +9,7 @@ use anyhow::{Error, anyhow};
 use blst::min_pk::PublicKey;
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
-    utils::types::Epoch,
+    utils::types::{Epoch, Slot},
 };
 use std::{str::FromStr, sync::Arc};
 use tracing::info;
@@ -25,10 +25,16 @@ use crate::l1::execution_layer::ExecutionLayer;
 
 use super::types::Lookahead;
 
-struct Context {
-    epoch: Epoch,
-    slot_index: U256,
+// Contains data that would be required to build the `LookaheadData` struct expected by the
+// `getProposerContext(..)` view when fetching the next preconfer, or the `propose(..)` function
+// when proposing a new batch.
+#[derive(Clone)]
+pub struct Context {
+    // Last epoch when `current_lookahead` was updated
+    last_synced_epoch: Epoch,
     current_lookahead: Lookahead,
+    // Position of the lookahead of slot of the next preconfer
+    current_lookahead_slot_index: U256,
     next_lookahead: Lookahead,
 }
 
@@ -58,9 +64,9 @@ impl LookaheadBuilder {
             lookahead_store_contract,
             preconf_slasher_address,
             context: Context {
-                epoch: 0,
-                slot_index: U256::ZERO,
+                last_synced_epoch: 0,
                 current_lookahead: vec![],
+                current_lookahead_slot_index: U256::ZERO,
                 next_lookahead: vec![],
             },
         };
@@ -68,50 +74,93 @@ impl LookaheadBuilder {
         let current_epoch = builder.ethereum_l1.slot_clock.get_current_epoch()?;
         builder.context.current_lookahead = builder.build(current_epoch).await?;
         builder.context.next_lookahead = builder.build(current_epoch + 1).await?;
-        builder.context.epoch = current_epoch;
+        builder.context.last_synced_epoch = current_epoch;
 
         Ok(builder)
     }
 
     pub async fn next_preconfer(&mut self) -> Result<ProposerContext, Error> {
-        let current_slot = self.ethereum_l1.slot_clock.get_current_slot()?;
-        let next_slot_timestamp = U256::from(
+        let next_slot = self.update_context().await?;
+
+        let lookahead_data = LookaheadData {
+            slotIndex: self.context.current_lookahead_slot_index,
+            registrationRoot: FixedBytes::from([0_u8; 32]),
+            currLookahead: self.context.current_lookahead.clone(),
+            nextLookahead: self.context.next_lookahead.clone(),
+            commitmentSignature: Bytes::new(),
+        };
+
+        // The epoch timestamp expected by the `getProposerContext(..)` function in the contract.
+        // When we are at the boundary of an epoch, this is the starting timestamp of the next epoch.
+        // Otherwise, it is the starting timestamp of the current epoch.
+        let epoch = self.ethereum_l1.slot_clock.get_epoch_from_slot(next_slot);
+        let epoch_timestamp = U256::from(
             self.ethereum_l1
                 .slot_clock
-                .start_of(current_slot + 1)?
-                .as_secs(),
-        );
-        let current_epoch = self.ethereum_l1.slot_clock.get_current_epoch()?;
-        let current_epoch_timestamp = U256::from(
-            self.ethereum_l1
-                .slot_clock
-                .get_epoch_begin_timestamp(current_epoch)?,
+                .get_epoch_begin_timestamp(epoch)?,
         );
 
-        // Update the lookaheads if required
-        if current_epoch > self.context.epoch {
-            if current_epoch == self.context.epoch + 1 {
+        let proposer_context = self
+            .lookahead_store_contract
+            .getProposerContext(lookahead_data, epoch_timestamp)
+            .call()
+            .await
+            .map_err(|err| {
+                anyhow!(
+                    "Call to `LookaheadStore.getProposerContext failed: {}`",
+                    err
+                )
+            })?;
+
+        Ok(proposer_context)
+    }
+
+    pub async fn get_updated_context(&mut self) -> Result<Context, Error> {
+        self.update_context().await?;
+        Ok(self.context.clone())
+    }
+
+    async fn update_context(&mut self) -> Result<Slot, Error> {
+        let current_epoch = self.ethereum_l1.slot_clock.get_current_epoch()?;
+        let next_slot = self.ethereum_l1.slot_clock.get_current_slot()? + 1;
+
+        // Update the lookaheads if we have moved into a new epoch
+        if current_epoch > self.context.last_synced_epoch {
+            if current_epoch == self.context.last_synced_epoch + 1 {
                 self.context.current_lookahead = self.context.next_lookahead.clone();
             } else {
                 self.context.current_lookahead = self.build(current_epoch).await?;
             }
             self.context.next_lookahead = self.build(current_epoch + 1).await?;
-            self.context.slot_index = U256::ZERO;
+            self.context.current_lookahead_slot_index = U256::ZERO;
+            self.context.last_synced_epoch = current_epoch;
         }
 
-        // Update `context.slot_index` depending upon which lookahead slot covers the current
-        // preconfing period
-        if !self.context.current_lookahead.is_empty() {
-            let mut slot_index: usize = self.context.slot_index.try_into()?;
+        if self.ethereum_l1.slot_clock.get_epoch_from_slot(next_slot) == current_epoch + 1 {
+            // If we are the boundary of the current epoch, adjust the context to use
+            // the preconfer of the first slot of the next epoch
+            self.context.current_lookahead = self.context.next_lookahead.clone();
+            self.context.next_lookahead = Vec::new();
+            self.context.current_lookahead_slot_index = U256::ZERO;
+        } else if self.context.current_lookahead.len() != 0 {
+            // Use the next preconfer from the current epoch
+            let mut slot_index: usize = self.context.current_lookahead_slot_index.try_into()?;
             let lookahead_slot_timestamp = self.context.current_lookahead[slot_index].timestamp;
+            let next_slot_timestamp =
+                U256::from(self.ethereum_l1.slot_clock.start_of(next_slot)?.as_secs());
 
+            // If the timestamp range of the last used lookahead slot no longer covers the next
+            // slot, we update `current_lookahead_slot_index`
             if next_slot_timestamp > lookahead_slot_timestamp {
                 if slot_index == self.context.current_lookahead.len() - 1 {
-                    // We have reached the end of the current lookahead
-                    self.context.slot_index = U256::MAX;
+                    self.context.current_lookahead_slot_index = U256::MAX;
                 } else {
-                    // We are still in the current lookahead
                     let mut prev_lookahead_slot_timestamp = if slot_index == 0 {
+                        let current_epoch_timestamp = U256::from(
+                            self.ethereum_l1
+                                .slot_clock
+                                .get_epoch_begin_timestamp(current_epoch)?,
+                        );
                         let slot_duration =
                             U256::from(self.ethereum_l1.slot_clock.get_slot_duration().as_secs());
                         current_epoch_timestamp - slot_duration
@@ -136,32 +185,12 @@ impl LookaheadBuilder {
                         }
                     }
 
-                    self.context.slot_index = U256::from(slot_index);
+                    self.context.current_lookahead_slot_index = U256::from(slot_index);
                 }
             }
         }
 
-        let lookahead_data = LookaheadData {
-            slotIndex: self.context.slot_index,
-            registrationRoot: FixedBytes::from([0_u8; 32]),
-            currLookahead: self.context.current_lookahead.clone(),
-            nextLookahead: self.context.next_lookahead.clone(),
-            commitmentSignature: Bytes::new(),
-        };
-
-        let proposer_context = self
-            .lookahead_store_contract
-            .getProposerContext(lookahead_data, current_epoch_timestamp)
-            .call()
-            .await
-            .map_err(|err| {
-                anyhow!(
-                    "Call to `LookaheadStore.getProposerContext failed: {}`",
-                    err
-                )
-            })?;
-
-        Ok(proposer_context)
+        Ok(next_slot)
     }
 
     async fn build(&self, epoch: u64) -> Result<Lookahead, Error> {
