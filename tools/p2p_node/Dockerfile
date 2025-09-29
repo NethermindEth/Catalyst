@@ -1,4 +1,4 @@
-FROM rust:1.89 AS builder
+FROM rust:1.90 AS builder
 
 # Set the working directory inside the container
 WORKDIR /usr/src/build
