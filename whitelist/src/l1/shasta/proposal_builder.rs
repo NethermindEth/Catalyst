@@ -21,7 +21,6 @@ pub async fn build_proposal_tx(
     current_l1_slot_timestamp: u64,
     // forced_inclusion: Option<BatchParams>,
 ) -> Result<TransactionRequest, Error> {
-
     let mut bytes = Bytes::new();
 
     let mut blocks = Vec::with_capacity(l2_blocks.len());
@@ -60,6 +59,20 @@ pub async fn build_proposal_tx(
         });
 
     Ok(tx)
+}
+
+const BLOCK_GAS_LIMIT_MAX_CHANGE : u64 = 10;
+const MIN_BLOCK_GAS_LIMIT:u64 = 15_000_000;
+
+fn calculate_block_gas_limit() -> u64 {
+    let parent_gas_limit = 0; // TODO take it from parent.metadata.gas_limit
+    let lower_bound = std::cmp::max(
+        parent_gas_limit * (10000 - BLOCK_GAS_LIMIT_MAX_CHANGE) / 10000,
+        MIN_BLOCK_GAS_LIMIT,
+    );
+    let  upperBound = parent_gas_limit * (10000 + BLOCK_GAS_LIMIT_MAX_CHANGE) / 10000;
+
+    0
 }
 
 fn create_signed_transaction(
