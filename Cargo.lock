@@ -6804,7 +6804,6 @@ version = "1.10.1"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
- "alloy-rlp",
  "anyhow",
  "blst",
  "clap",

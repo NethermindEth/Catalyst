@@ -394,11 +394,14 @@ pub mod iinbox {
 
 pub mod lib_manifest {
     use super::*;
+    use alloy_rlp::{RlpDecodable, RlpEncodable};
 
-    sol!(
+    sol!{
 
         /// @notice Represents a signed Ethereum transaction
         /// @dev Follows EIP-2718 typed transaction format with EIP-1559 support
+        ///
+        #[derive(Debug, RlpEncodable, RlpDecodable, PartialEq)]
         struct SignedTransaction {
             uint8 txType;
             uint64 chainId;
@@ -416,6 +419,7 @@ pub mod lib_manifest {
         }
 
         /// @notice Represents a block manifest
+        #[derive(Debug, RlpEncodable, RlpDecodable, PartialEq)]
         struct BlockManifest {
             /// @notice The timestamp of the block.
             uint48 timestamp;
@@ -431,9 +435,10 @@ pub mod lib_manifest {
         }
 
         /// @notice Represents a proposal manifest
+        #[derive(Debug, RlpEncodable, RlpDecodable, PartialEq)]
         struct ProposalManifest {
             bytes proverAuthBytes;
             BlockManifest[] blocks;
         }
-    );
+    }
 }

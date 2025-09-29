@@ -17,7 +17,6 @@ path = "src/monitor/main.rs"
 [dependencies]
 alloy = { workspace = true }
 alloy-json-rpc = { workspace = true }
-alloy-rlp = { workspace = true }
 anyhow = { workspace = true }
 blst = { workspace = true }
 clap = { workspace = true }
