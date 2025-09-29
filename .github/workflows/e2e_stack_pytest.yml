@@ -33,7 +33,8 @@ jobs:
             cd ~/e2e_catalyst_tests/simple_taiko_node
             git pull
             cp .env.example .env
-            docker compose down
+            docker compose stop catalyst-node-1
+            docker compose stop catalyst-node-2
             docker compose up -d
             cd ~/e2e_catalyst_tests/catalyst/e2e_tests
             git pull
