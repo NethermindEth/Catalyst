@@ -92,11 +92,11 @@ impl BatchBuilder {
     }
 
     pub fn finalize_current_batch(&mut self) {
-        if let Some(batch) = self.current_batch.take() {
-            if !batch.l2_blocks.is_empty() {
-                self.batches_to_send
-                    .push_back((self.current_forced_inclusion.take(), batch));
-            }
+        if let Some(batch) = self.current_batch.take()
+            && !batch.l2_blocks.is_empty()
+        {
+            self.batches_to_send
+                .push_back((self.current_forced_inclusion.take(), batch));
         }
     }
 
@@ -336,11 +336,11 @@ impl BatchBuilder {
                 )
                 .await
             {
-                if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
-                    if !matches!(transaction_error, TransactionError::EstimationTooEarly) {
-                        debug!("BatchBuilder: Transaction error, removing all batches");
-                        self.batches_to_send.clear();
-                    }
+                if let Some(transaction_error) = err.downcast_ref::<TransactionError>()
+                    && !matches!(transaction_error, TransactionError::EstimationTooEarly)
+                {
+                    debug!("BatchBuilder: Transaction error, removing all batches");
+                    self.batches_to_send.clear();
                 }
                 return Err(err);
             }
@@ -352,11 +352,11 @@ impl BatchBuilder {
     }
 
     pub fn is_time_shift_expired(&self, current_l2_slot_timestamp: u64) -> bool {
-        if let Some(current_batch) = self.current_batch.as_ref() {
-            if let Some(last_block) = current_batch.l2_blocks.last() {
-                return current_l2_slot_timestamp - last_block.timestamp_sec
-                    > self.config.max_time_shift_between_blocks_sec;
-            }
+        if let Some(current_batch) = self.current_batch.as_ref()
+            && let Some(last_block) = current_batch.l2_blocks.last()
+        {
+            return current_l2_slot_timestamp - last_block.timestamp_sec
+                > self.config.max_time_shift_between_blocks_sec;
         }
         false
     }
