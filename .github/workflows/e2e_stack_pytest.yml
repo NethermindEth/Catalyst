@@ -8,12 +8,17 @@ on:
     branches:
       - "**"
 
+concurrency:
+  group: catalyst-e2e-pytest
+  cancel-in-progress: false
+
 env:
   TARGET_MACHINE_IP: 178.79.157.173
 jobs:
   build:
     name: Set and run pytest
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Setup SSH Key
         run: |
