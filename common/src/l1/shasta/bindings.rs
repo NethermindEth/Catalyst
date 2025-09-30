@@ -389,6 +389,15 @@ pub mod iinbox {
         /// @return config_ The configuration struct containing all immutable parameters
         function getConfig() external view returns (Config memory config_);
     }
+
+    #[sol(rpc)]
+    interface ICodec {
+        function encodeProposeInput(IInbox.ProposeInput calldata _input)
+        external
+        pure
+        returns (bytes memory encoded_);
+    }
+
     );
 }
 
@@ -396,7 +405,7 @@ pub mod lib_manifest {
     use super::*;
     use alloy_rlp::{RlpDecodable, RlpEncodable};
 
-    sol!{
+    sol! {
 
         /// @notice Represents a signed Ethereum transaction
         /// @dev Follows EIP-2718 typed transaction format with EIP-1559 support

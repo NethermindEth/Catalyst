@@ -1,6 +1,6 @@
 use super::bindings::iinbox;
 use super::bindings::lib_manifest;
-use crate::shared::l2_block::L2Block;
+use crate::{blob::constants::MAX_BLOB_DATA_SIZE, shared::l2_block::L2Block};
 use alloy::{
     consensus::Transaction,
     eips::Typed2718,
@@ -11,16 +11,27 @@ use anyhow::Error;
 use flate2::{Compression, write::ZlibEncoder};
 use std::io::Write;
 
-pub struct Proposal {}
+pub struct Proposal {
+    pub blob_data: Vec<u8>,
+    pub propose_input: iinbox::IInbox::ProposeInput,
+}
 
 impl Proposal {
-    pub fn new() -> Self {
-        Self {}
+    pub fn build(
+        l2_blocks: Vec<L2Block>,
+        last_anchor_origin_height: u64,
+        coinbase: Address,
+    ) -> Result<Self, Error> {
+        let blob_data = Self::build_blob_data(l2_blocks, last_anchor_origin_height, coinbase)?;
+        let num_blobs = u16::try_from(blob_data.len() / MAX_BLOB_DATA_SIZE)?;
+        let propose_input = Self::construct_propose_input(num_blobs)?;
+        Ok(Self {
+            blob_data,
+            propose_input,
+        })
     }
 
-    pub fn build() {}
-
-    fn construct_propose_input() {
+    fn construct_propose_input(num_blobs: u16) -> Result<iinbox::IInbox::ProposeInput, Error> {
         let core_state = iinbox::IInbox::CoreState {
             nextProposalId: Uint::<48, 1>::from(0),
             nextProposalBlockId: Uint::<48, 1>::from(0),
@@ -29,9 +40,10 @@ impl Proposal {
             bondInstructionsHash: FixedBytes::from([0u8; 32]),
         };
 
+        // starting from first blob, don't need additional offset before actual data
         let blob_reference = iinbox::LibBlobs::BlobReference {
             blobStartIndex: 0u16,
-            numBlobs: 0u16,
+            numBlobs: num_blobs,
             offset: Uint::<24, 1>::from(0),
         };
 
@@ -50,28 +62,27 @@ impl Proposal {
             checkpoint,
             numForcedInclusions: 0,
         };
+
+        Ok(propose_input)
     }
 
     pub fn build_blob_data(
-        &self,
         l2_blocks: Vec<L2Block>,
         last_anchor_origin_height: u64,
         coinbase: Address,
     ) -> Result<Vec<u8>, Error> {
-        let mut bytes = Bytes::new();
-
         let mut blocks = Vec::with_capacity(l2_blocks.len());
         for l2_block in l2_blocks {
             let block_manifest = lib_manifest::BlockManifest {
                 timestamp: Uint::<48, 1>::from(l2_block.timestamp_sec),
-                coinbase: coinbase,
+                coinbase,
                 anchorBlockNumber: Uint::<48, 1>::from(last_anchor_origin_height),
                 gasLimit: Uint::<48, 1>::from(Self::calculate_block_gas_limit()),
                 transactions: l2_block
                     .prebuilt_tx_list
                     .tx_list
                     .iter()
-                    .map(|tx| Self::create_signed_transaction(tx))
+                    .map(Self::create_signed_transaction)
                     .collect::<Result<Vec<_>, Error>>()?,
             };
 
@@ -79,7 +90,7 @@ impl Proposal {
         }
 
         let proposal_manifest = lib_manifest::ProposalManifest {
-            proverAuthBytes: bytes,
+            proverAuthBytes: Bytes::new(), // Optional, left empty, not choosing specific prover
             blocks,
         };
 
@@ -174,4 +185,81 @@ impl Proposal {
     }
 
     pub fn send() {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::shared::l2_block::L2Block;
+    use crate::shared::l2_tx_lists::PreBuiltTxList;
+    use alloy::primitives::{Address, Uint};
+
+    // Helper function to create a test L2 block with empty transactions
+    fn create_test_l2_block(timestamp_sec: u64, num_transactions: usize) -> L2Block {
+        let prebuilt_tx_list = PreBuiltTxList {
+            tx_list: vec![], // Empty transaction list for simplicity
+            estimated_gas_used: 21000 * num_transactions as u64,
+            bytes_length: 100 * num_transactions as u64, // Approximate
+        };
+
+        L2Block::new_from(prebuilt_tx_list, timestamp_sec)
+    }
+
+    #[test]
+    fn test_proposal_build_happy_path() {
+        // Test the main happy path: building a proposal with multiple L2 blocks
+        let l2_blocks = vec![
+            create_test_l2_block(1234567890, 1),
+            create_test_l2_block(1234567891, 2),
+            create_test_l2_block(1234567892, 0),
+        ];
+        let last_anchor_origin_height = 1000;
+        let coinbase = Address::from([1u8; 20]);
+
+        let result = Proposal::build(l2_blocks, last_anchor_origin_height, coinbase);
+        assert!(result.is_ok(), "Proposal build should succeed");
+
+        let proposal = result.unwrap();
+
+        // Verify blob data structure
+        assert!(
+            !proposal.blob_data.is_empty(),
+            "Blob data should not be empty"
+        );
+        assert!(
+            proposal.blob_data.len() >= 8,
+            "Blob data should have at least version + length header"
+        );
+
+        // Check version and length header
+        let version = u32::from_be_bytes([
+            proposal.blob_data[0],
+            proposal.blob_data[1],
+            proposal.blob_data[2],
+            proposal.blob_data[3],
+        ]);
+        assert_eq!(
+            version, 0x01,
+            "Version should be DEFAULT_SHASTA_VERSION (0x01)"
+        );
+
+        let manifest_len = u32::from_be_bytes([
+            proposal.blob_data[4],
+            proposal.blob_data[5],
+            proposal.blob_data[6],
+            proposal.blob_data[7],
+        ]);
+        assert!(manifest_len > 0, "Manifest length should be greater than 0");
+
+        // Verify propose input structure
+        assert_eq!(
+            proposal.propose_input.blobReference.blobStartIndex, 0,
+            "Blob start index should be 0"
+        );
+        assert_eq!(
+            proposal.propose_input.blobReference.offset,
+            Uint::<24, 1>::from(0),
+            "Blob offset should be 0"
+        );
+    }
 }

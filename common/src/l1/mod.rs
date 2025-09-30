@@ -6,7 +6,7 @@ pub mod ethereum_l1;
 pub mod execution_layer;
 pub mod fees_per_gas;
 mod monitor_transaction;
+pub mod shasta;
 pub mod slot_clock;
 pub mod tools;
 pub mod transaction_error;
-pub mod shasta;
