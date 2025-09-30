@@ -126,7 +126,7 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
         # send 1 forced inclusion
         send_forced_inclusion(0)
         # wait for handower window
-        wait_for_slot_beginning(beacon_client, 29)
+        wait_for_slot_beginning(beacon_client, 24)
         in_handover_block_number = l2_client_node1.eth.block_number
         print("In handover block number:", in_handover_block_number)
         # end_of_sequencing block added
@@ -335,7 +335,7 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
         stop_catalyst_node(node_number)
 
         # wait for handower window
-        wait_for_slot_beginning(beacon_client, 28)
+        wait_for_slot_beginning(beacon_client, 24)
         in_handover_block_number = l2_client_node1.eth.block_number
         print("In handover block number:", in_handover_block_number)
 
