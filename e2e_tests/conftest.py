@@ -4,7 +4,8 @@ from web3.beacon import Beacon
 from eth_account import Account
 import os
 from dotenv import load_dotenv
-from utils import ensure_catalyst_node_running
+from utils import ensure_catalyst_node_running, spam_n_blocks
+from forced_inclusion_store import forced_inclusion_store_is_empty
 from dataclasses import dataclass
 from taiko_inbox import get_last_block_id
 
@@ -110,6 +111,15 @@ def catalyst_node_teardown():
     print("Test teardown: ensuring both catalyst nodes are running")
     ensure_catalyst_node_running(1)
     ensure_catalyst_node_running(2)
+
+@pytest.fixture
+def forced_inclusion_teardown(l1_client, l2_client_node1, env_vars):
+    """Fixture to ensure forced inclusion store is empty after test"""
+    yield None
+    print("Test teardown: ensuring forced inclusion store is empty")
+    if not forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address):
+        print("Spamming blocks to ensure forced inclusion store is empty")
+        spam_n_blocks(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, env_vars.preconf_min_txs)
 
 @pytest.fixture(scope="session", autouse=True)
 def global_setup(l1_client, l2_client_node1, l2_client_node2, env_vars):
