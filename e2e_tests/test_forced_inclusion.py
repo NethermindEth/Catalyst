@@ -32,12 +32,13 @@ def send_forced_inclusion(nonce_delta):
     print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
     return forced_inclusion_tx_hash
 
-def test_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars):
+def test_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars, forced_inclusion_teardown):
     """
     This test runs the forced inclusion toolbox docker command and prints its output.
     """
+    forced_inclusion_teardown
     try:
-        forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+        assert forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address), "Forced inclusion store should be empty"
         fi_account = Account.from_key(env_vars.l2_private_key)
         # print chain info
         ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
@@ -61,10 +62,12 @@ def test_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars):
         assert False, "Forced inclusion toolbox docker command failed"
 
 
-def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars):
+def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars, forced_inclusion_teardown):
     """
     Send three consecutive forced inclusions. And include them in the chain
     """
+    forced_inclusion_teardown
+
     assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
     assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
@@ -75,7 +78,7 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
     restart_catalyst_node(2)
     time.sleep(3*slot_duration_sec)
     # check that forced inclusion list is empty
-    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    assert forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address), "Forced inclusion store should be empty"
     fi_account = Account.from_key(env_vars.l2_private_key)
     # wait for block 30 in epoch
     wait_for_slot_beginning(beacon_client, 30)
@@ -106,17 +109,19 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
         print("stderr:", e.stderr)
         assert False, "test_three_consecutive_forced_inclusion failed"
 
-def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars):
+def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars, forced_inclusion_teardown):
     """
     Send forced inclusions before end of sequencing and include it int the chain after handover window
     """
+    forced_inclusion_teardown
+
     assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
     assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
     slot_duration_sec = get_slot_duration_sec(beacon_client)
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
     # check that forced inclusion list is empty
-    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    assert forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address), "Forced inclusion store should be empty"
     fi_account = Account.from_key(env_vars.l2_private_key)
     # wait for slot
     wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, env_vars.preconf_whitelist_address, 19)
@@ -126,7 +131,7 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
         # send 1 forced inclusion
         send_forced_inclusion(0)
         # wait for handower window
-        wait_for_slot_beginning(beacon_client, 24)
+        wait_for_slot_beginning(beacon_client, 25)
         in_handover_block_number = l2_client_node1.eth.block_number
         print("In handover block number:", in_handover_block_number)
         # end_of_sequencing block added
@@ -166,10 +171,12 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
         print("stderr:", e.stderr)
         assert False, "test_three_consecutive_forced_inclusion failed"
 
-def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_client_node1, env_vars):
+def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_client_node1, env_vars, forced_inclusion_teardown):
     """
     Restart the nodes, then add FI and produce transactions every 2 L2 slots to build batch.
     """
+    forced_inclusion_teardown
+
     assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
     assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
@@ -179,7 +186,7 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
 
     # Check that forced inclusion list is empty
-    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    assert forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address), "Forced inclusion store should be empty"
     fi_account = Account.from_key(env_vars.l2_private_key)
 
     # Wait for block 30 in epoch
@@ -231,15 +238,17 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
         print("stderr:", e.stderr)
         assert False, "test_preconf_forced_inclusion_after_restart failed"
 
-def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_client_node1, env_vars):
+def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_client_node1, env_vars, forced_inclusion_teardown):
     """
     Test forced inclusion recovery after node restart
     """
+    forced_inclusion_teardown
+
     assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
     assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
     # Check that forced inclusion list is empty
-    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    assert forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address), "Forced inclusion store should be empty"
     fi_account = Account.from_key(env_vars.l2_private_key)
 
     slot_duration_sec = get_slot_duration_sec(beacon_client)
@@ -289,18 +298,19 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
         print("stderr:", e.stderr)
         assert False, "test_recover_forced_inclusion_after_restart failed"
 
-def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_client, l2_client_node1, env_vars, catalyst_node_teardown):
+def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_client, l2_client_node1, env_vars, catalyst_node_teardown, forced_inclusion_teardown):
     """
     Test forced inclusion after previous operator stop
     """
     # Start all nodes after test
     catalyst_node_teardown
+    forced_inclusion_teardown
 
     assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
     assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
     # Check that forced inclusion list is empty
-    forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address)
+    assert forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address), "Forced inclusion store should be empty"
     fi_account = Account.from_key(env_vars.l2_private_key)
 
     slot_duration_sec = get_slot_duration_sec(beacon_client)
