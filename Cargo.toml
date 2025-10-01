@@ -98,8 +98,8 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",
     "env-filter",
 ] }
-warp = { version = "0.3", default-features = false }
 urc = { path = "urc" }
+warp = { version = "0.3", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -136,7 +136,7 @@ impl LookaheadBuilder {
         // Update the lookaheads if we have moved into a new epoch
         if current_epoch > self.context.lookahead_updated_at_slot {
             if current_epoch == self.context.lookahead_updated_at_slot + 1 {
-                self.context.current_lookahead = self.context.next_lookahead.clone();
+                self.context.current_lookahead = std::mem::take(&mut self.context.next_lookahead);
             } else {
                 self.context.current_lookahead = self.build(current_epoch).await?;
             }
@@ -148,8 +148,7 @@ impl LookaheadBuilder {
         if self.ethereum_l1.slot_clock.get_epoch_from_slot(next_slot) == current_epoch + 1 {
             // If we are the boundary of the current epoch, adjust the context to use
             // the preconfer of the first slot of the next epoch
-            self.context.current_lookahead = self.context.next_lookahead.clone();
-            self.context.next_lookahead = Vec::new();
+            self.context.current_lookahead = std::mem::take(&mut self.context.next_lookahead);
             self.context.current_lookahead_slot_index = U256::ZERO;
         } else if self.context.current_lookahead.len() != 0 {
             // Use the next preconfer from the current epoch
