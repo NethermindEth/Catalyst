@@ -1,4 +1,4 @@
-use crate::l1::bindings::taiko_inbox::ITaikoInbox;
+use crate::l1::pacaya::bindings::taiko_inbox::ITaikoInbox;
 use alloy::primitives::{Address, B256};
 use anyhow::{Error, anyhow};
 use batch_proposed_receiver::BatchProposedEventReceiver;

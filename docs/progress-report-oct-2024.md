@@ -1,6 +1,6 @@
 # (Oct 2024) Taiko Preconf PoC Progress Report
 
-In this doc, we will go through what we have implemented for the PoC, and what needs to be further researched and implemented for mainnet release. 
+In this doc, we will go through what we have implemented for the PoC, and what needs to be further researched and implemented for mainnet release.
 
 # Slides
 
@@ -67,7 +67,7 @@ We will outline the required features to be incorporated into the PoC to make it
 
 **Problem:**
 
-A recent fork of Taiko's contracts added support for including multiple L2 blocks within a single blob. However, our PoC implementation relies on an earlier version before this multi-block support (i.e., we use [BlockParams](https://github.com/NethermindEth/taiko-mono/blob/c2f59c30c085f19c5fed64e07c7961009060c428/packages/protocol/contracts/layer1/based/TaikoData.sol#L64) instead of [BlockParamsV2](https://github.com/NethermindEth/taiko-mono/blob/c2f59c30c085f19c5fed64e07c7961009060c428/packages/protocol/contracts/layer1/based/TaikoData.sol#L73)). 
+A recent fork of Taiko's contracts added support for including multiple L2 blocks within a single blob. However, our PoC implementation relies on an earlier version before this multi-block support (i.e., we use [BlockParams](https://github.com/NethermindEth/taiko-mono/blob/c2f59c30c085f19c5fed64e07c7961009060c428/packages/protocol/contracts/layer1/based/TaikoData.sol#L64) instead of [BlockParamsV2](https://github.com/NethermindEth/taiko-mono/blob/c2f59c30c085f19c5fed64e07c7961009060c428/packages/protocol/contracts/layer1/based/TaikoData.sol#L73)).
 
 Supporting multi-block would require reconsideration of design, most notably around preconfirmation slashing. As outlined in [our design doc](https://github.com/NethermindEth/Taiko-Preconf-AVS/blob/master/docs/design-doc.md#incorrect-preconfirmation-slashing), our current slashing logic ([code](https://github.com/NethermindEth/Taiko-Preconf-AVS/blob/ca2ce61682ff58a5b105ec8e5626112cf45a1094/SmartContracts/src/avs/PreconfTaskManager.sol#L122)) works by comparing the `txListHash` of the preconfirmed block with that of the proposed block. However, with the introduction of multi-block support, the hash of individual proposed blocks is no longer easily accessible on-chain. This is because the Taiko inbox now stores only the blob hash of the entire blob—which contains multiple blocks—along with offset information to introspect the blob.
 
@@ -96,12 +96,12 @@ In the latest version of the Taiko inbox, the assigned prover is hard-coded to b
 
 **Problem:**
 
-Currently, nothing incentivizes nor enforces the preconfer to release preconfirmations in a timely manner.  
+Currently, nothing incentivizes nor enforces the preconfer to release preconfirmations in a timely manner.
 
 **Potential Solution(s):**
 
 - Combine a transaction expiry mechanism that allows users to specify by when they want their transaction to be preconfirmed (e.g., “by 2nd sub-slot of slot X”), together with an end-user monitoring functionality where wallets or Taiko full nodes in which the user is connected to stops sending order flow to the mempool once they detect preconf withholding. Refer to the [multi-round MEV-Boost post](https://ethresear.ch/t/based-preconfirmations-with-multi-round-mev-boost/20091#protocol-description-5) for more details on this approach.
-- Require the preconf software to run in a TEE that enfoces the timely releases.
+- Require the preconf software to run in a TEE that enforces the timely releases.
 - [Introduce VDSs](https://research.chainbound.io/exploring-verifiable-continuous-sequencing-with-delay-functions)
 - Have some committee monitor the timely releases of the preconfirmations, and let them kick out (or even slash) preconfers that are withholding preconfs. At the initial bootstrapping phase, the “committee” can potentially be a set of whitelisted guardians. Then we can eventually decentralize or move to a different solution.
 
@@ -150,7 +150,7 @@ invalid                    lookahead with                             has EITHER
 lookahead                  C*X stake                                  C*X^N stake
 for next epoch             OR                                         backing it
 with C stake               "Attest" to the                            where N is num
-                           previously submitted                       of preconfer in 
+                           previously submitted                       of preconfer in
                            lookahead and be exposed to                current epoch
                            slashing of C stake.                       OR
                                                                       N preconfers
@@ -179,7 +179,7 @@ There are several other issues we would want to consider for the mainnet release
 
 ## Release Plan
 
-This section outlines potential paths for integrating with actual mainnet actors for release. 
+This section outlines potential paths for integrating with actual mainnet actors for release.
 
 An example iterative release plan can be:
 

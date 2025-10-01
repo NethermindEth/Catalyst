@@ -1,4 +1,4 @@
-use crate::l1::execution_layer::ExecutionLayer;
+use crate::l1::pacaya::execution_layer::ExecutionLayer;
 use anyhow::Error;
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},

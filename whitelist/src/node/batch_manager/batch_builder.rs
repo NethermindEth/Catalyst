@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use super::config::{BatchesToSend, ForcedInclusionBatch};
 use crate::{
-    l1::execution_layer::ExecutionLayer,
+    l1::pacaya::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::batch_manager::{batch::Batch, config::BatchBuilderConfig},
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
@@ -92,16 +92,22 @@ impl BatchBuilder {
     }
 
     pub fn finalize_current_batch(&mut self) {
-        if let Some(batch) = self.current_batch.take() {
-            if !batch.l2_blocks.is_empty() {
-                self.batches_to_send
-                    .push_back((self.current_forced_inclusion.take(), batch));
-            }
+        if let Some(batch) = self.current_batch.take()
+            && !batch.l2_blocks.is_empty()
+        {
+            self.batches_to_send
+                .push_back((self.current_forced_inclusion.take(), batch));
         }
     }
 
     pub fn has_current_forced_inclusion(&self) -> bool {
         self.current_forced_inclusion.is_some()
+    }
+
+    pub fn current_batch_is_empty(&self) -> bool {
+        self.current_batch
+            .as_ref()
+            .is_none_or(|b| b.l2_blocks.is_empty())
     }
 
     pub fn try_finalize_current_batch(&mut self) -> Result<(), Error> {
@@ -137,6 +143,7 @@ impl BatchBuilder {
     }
 
     pub fn create_new_batch(&mut self, anchor_block_id: u64, anchor_block_timestamp_sec: u64) {
+        // TODO replace with try_finalize_current_batch
         self.finalize_current_batch();
         self.current_batch = Some(Batch {
             total_bytes: 0,
@@ -329,11 +336,11 @@ impl BatchBuilder {
                 )
                 .await
             {
-                if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
-                    if !matches!(transaction_error, TransactionError::EstimationTooEarly) {
-                        debug!("BatchBuilder: Transaction error, removing all batches");
-                        self.batches_to_send.clear();
-                    }
+                if let Some(transaction_error) = err.downcast_ref::<TransactionError>()
+                    && !matches!(transaction_error, TransactionError::EstimationTooEarly)
+                {
+                    debug!("BatchBuilder: Transaction error, removing all batches");
+                    self.batches_to_send.clear();
                 }
                 return Err(err);
             }
@@ -345,11 +352,11 @@ impl BatchBuilder {
     }
 
     pub fn is_time_shift_expired(&self, current_l2_slot_timestamp: u64) -> bool {
-        if let Some(current_batch) = self.current_batch.as_ref() {
-            if let Some(last_block) = current_batch.l2_blocks.last() {
-                return current_l2_slot_timestamp - last_block.timestamp_sec
-                    > self.config.max_time_shift_between_blocks_sec;
-            }
+        if let Some(current_batch) = self.current_batch.as_ref()
+            && let Some(last_block) = current_batch.l2_blocks.last()
+        {
+            return current_l2_slot_timestamp - last_block.timestamp_sec
+                > self.config.max_time_shift_between_blocks_sec;
         }
         false
     }

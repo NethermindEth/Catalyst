@@ -1,5 +1,5 @@
 use super::batch::Batch;
-use crate::l1::bindings::BatchParams;
+use crate::l1::pacaya::bindings::BatchParams;
 use alloy::primitives::Address;
 use std::collections::VecDeque;
 

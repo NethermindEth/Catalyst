@@ -1,4 +1,4 @@
-name: "[Nethermind] Catalyst Node - Docker build and push"
+name: "Catalyst Node - Docker build and push"
 
 on:
   workflow_dispatch:
@@ -11,13 +11,13 @@ on:
       - "permissionless/**"
       - "whitelist/**"
       - "tools/p2p_node/p2p_network/**"
+      - "e2e_tests/**"
 
 env:
-  DOCKER_PUBLIC_REGISTRY: docker.io 
+  DOCKER_PUBLIC_REGISTRY: docker.io
   DOCKER_PUBLIC_REPOSITORY: nethermind/catalyst-node
   DOCKER_REGISTRY: nethermind.jfrog.io
   DOCKER_REPOSITORY_STAGING: core-oci-local-staging/catalyst-node
-  DOCKER_REPOSITORY_PROD: core-oci-local-prod/catalyst-node
 
 jobs:
   build:
@@ -116,18 +116,12 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             ${{ needs.build.outputs.digest-amd64 }} \
             ${{ needs.build.outputs.digest-arm64 }}
-            
+
       - name: Setup ORAS
         uses: oras-project/setup-oras@v1
-        
+
       - name: Check ORAS version
         run: oras version
-
-      - name: Login to registry with ORAS
-        run: |
-          oras login ${{ env.DOCKER_REGISTRY }} \
-            -u ${{ secrets.ARTIFACTORY_CORE_USERNAME }} \
-            -p ${{ secrets.ARTIFACTORY_CORE_TOKEN_DEVELOPER }}
 
       - name: Determine tags to promote
         id: promote-tags
@@ -139,17 +133,7 @@ jobs:
           else
             echo "TAGS=latest" >> $GITHUB_ENV
           fi
-
-      - name: Promote to Jfrog Production
-        run: |
-          for tag in $TAGS; do
-            echo "Current tag: $tag"
-            source_image="${DOCKER_REGISTRY}/${DOCKER_REPOSITORY_STAGING}:${tag}"
-            prod_image="${DOCKER_REGISTRY}/${DOCKER_REPOSITORY_PROD}:${tag}"
-            echo "Promoting ${source_image} to ${prod_image}"
-            oras cp -r "${source_image}" "${prod_image}"
-          done
-
+          
       - name: Login to Dockerhub registry with ORAS
         run: |
           oras login ${{ env.DOCKER_PUBLIC_REGISTRY }} \
@@ -165,7 +149,7 @@ jobs:
             echo "Promoting ${source_image} to ${prod_image}"
             oras cp -r "${source_image}" "${prod_image}"
           done
-  
+
       - name: Summary
         run: |
           echo "## Catalyst Node Docker build Completed" >> $GITHUB_STEP_SUMMARY
@@ -176,7 +160,7 @@ jobs:
           echo "### Notes" >> $GITHUB_STEP_SUMMARY
           echo "- The images have been pushed to ${DOCKER_REPOSITORY_STAGING} repo" >> $GITHUB_STEP_SUMMARY
           echo "- **STAGING Repository**: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **PROD Repository**: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PROD Repository**: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_PUBLIC_REGISTRY }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
 
