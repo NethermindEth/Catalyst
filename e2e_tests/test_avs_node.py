@@ -126,7 +126,7 @@ def test_verification_after_node_restart(l1_client, l2_client_node1, catalyst_no
     wait_for_batch_proposed_event(l1_client, env_vars.taiko_inbox_address, current_block)
 
 def test_end_of_sequencing(l2_client_node1, beacon_client, l1_client, env_vars):
-    wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, env_vars.preconf_whitelist_address, 24) # handover window
+    wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, env_vars.preconf_whitelist_address, 25) # handover window
 
     l2_block_number = l2_client_node1.eth.block_number
     send_n_txs_without_waiting(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.preconf_min_txs)
