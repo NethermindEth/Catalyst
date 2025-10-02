@@ -10,7 +10,7 @@ members = [
     "whitelist",
 ]
 resolver = "2"
-default-members = ["whitelist"]
+default-members = ["whitelist", "urc"]
 
 [workspace.package]
 version = "1.11.0"
@@ -98,6 +98,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",
     "env-filter",
 ] }
+urc = { path = "urc" }
 warp = { version = "0.3", default-features = false }
 
 [workspace.lints.rust]

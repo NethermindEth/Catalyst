@@ -13,10 +13,12 @@ path = "src/main.rs"
 [dependencies]
 alloy = { workspace = true }
 anyhow = { workspace = true }
+blst = { workspace = true }
 common = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
+urc = { workspace = true }
 
 [lints]
 workspace = true

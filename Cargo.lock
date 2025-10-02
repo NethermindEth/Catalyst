@@ -4706,10 +4706,12 @@ version = "1.11.0"
 dependencies = [
  "alloy",
  "anyhow",
+ "blst",
  "common",
  "tokio",
  "tokio-util",
  "tracing",
+ "urc",
 ]
 
 [[package]]
