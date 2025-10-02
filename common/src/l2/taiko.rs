@@ -272,12 +272,14 @@ impl<ELE: ELTrait> Taiko<ELE> {
         let anchor_tx = self
             .l2_execution_layer
             .construct_anchor_tx(
-                *l2_slot_info.parent_hash(),
+                self.ethereum_l1
+                    .execution_layer
+                    .common()
+                    .get_preconfer_alloy_address(),
+                l2_slot_info,
                 anchor_origin_height,
                 anchor_block_state_root,
-                l2_slot_info.parent_gas_used(),
                 base_fee_config.clone(),
-                l2_slot_info.base_fee(),
             )
             .await?;
         let tx_list = std::iter::once(anchor_tx)

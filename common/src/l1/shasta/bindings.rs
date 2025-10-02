@@ -49,22 +49,7 @@ pub mod iinbox {
         function validateBlobReference(BlobReference memory _blobReference)
             internal
             view
-            returns (BlobSlice memory)
-        {
-            require(_blobReference.numBlobs > 0, NoBlobs());
-
-            bytes32[] memory blobHashes = new bytes32[](_blobReference.numBlobs);
-            for (uint256 i; i < _blobReference.numBlobs; ++i) {
-                blobHashes[i] = blobhash(_blobReference.blobStartIndex + i);
-                require(blobHashes[i] != 0, BlobNotFound());
-            }
-
-            return BlobSlice({
-                blobHashes: blobHashes,
-                offset: _blobReference.offset,
-                timestamp: uint48(block.timestamp)
-            });
-        }
+            returns (BlobSlice memory);
 
         // ---------------------------------------------------------------
         // Errors
@@ -74,21 +59,12 @@ pub mod iinbox {
         error NoBlobs();
     }
 
-
     library LibBonds {
-        // ---------------------------------------------------------------
-        // Enums
-        // ---------------------------------------------------------------
-
         enum BondType {
             NONE,
             PROVABILITY,
             LIVENESS
         }
-
-        // ---------------------------------------------------------------
-        // Structs
-        // ---------------------------------------------------------------
 
         struct BondInstruction {
             uint48 proposalId;
@@ -96,25 +72,14 @@ pub mod iinbox {
             address payer;
             address payee;
         }
-
-        // ---------------------------------------------------------------
-        // Internal Functions
-        // ---------------------------------------------------------------
-
         function aggregateBondInstruction(
             bytes32 _bondInstructionsHash,
             BondInstruction memory _bondInstruction
         )
             internal
             pure
-            returns (bytes32)
-        {
-            return _bondInstruction.proposalId == 0 || _bondInstruction.bondType == BondType.NONE
-                ? _bondInstructionsHash
-                : keccak256(abi.encode(_bondInstructionsHash, _bondInstruction));
-        }
+            returns (bytes32);
     }
-
 
     interface ICheckpointStore {
         // ---------------------------------------------------------------

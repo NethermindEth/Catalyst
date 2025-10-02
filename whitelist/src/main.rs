@@ -112,6 +112,7 @@ async fn main() -> Result<(), Error> {
                 config.rpc_driver_preconf_timeout,
                 config.rpc_driver_status_timeout,
                 l2_signer,
+                config.specific_config.fork,
             )?,
         )
         .await
