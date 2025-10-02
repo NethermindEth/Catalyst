@@ -1,8 +1,8 @@
-use super::super::config::GOLDEN_TOUCH_ADDRESS;
-use super::bindings::ShastaAnchor;
+use super::super::bindings::{LibSharedData, TaikoAnchor};
+use super::super::config::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
 use alloy::{
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
-    primitives::{Address, B256, Bytes, FixedBytes, Uint},
+    primitives::{Address, B256},
     providers::{DynProvider, Provider},
     rpc::types::Transaction,
     signers::Signature,
@@ -12,50 +12,45 @@ use tracing::debug;
 
 pub struct ExecutionLayer {
     provider: DynProvider,
-    shasta_anchor: ShastaAnchor::ShastaAnchorInstance<DynProvider>,
+    taiko_anchor: TaikoAnchor::TaikoAnchorInstance<DynProvider>,
     chain_id: u64,
 }
 
 impl ExecutionLayer {
-    pub fn new(provider: DynProvider, shasta_anchor_address: Address, chain_id: u64) -> Self {
-        let shasta_anchor = ShastaAnchor::new(shasta_anchor_address, provider.clone());
+    pub fn new(provider: DynProvider, taiko_anchor_address: Address, chain_id: u64) -> Self {
+        let taiko_anchor = TaikoAnchor::new(taiko_anchor_address, provider.clone());
+
         Self {
             provider,
-            shasta_anchor,
+            taiko_anchor,
             chain_id,
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn construct_anchor_tx(
         &self,
-        // proposal_id: u64,    // TODO: implement
-        // proposer: Address,
-        // l2_block_number: u16,
         parent_hash: B256,
         anchor_block_id: u64,
-        // anchor_block_hash: B256,
         anchor_state_root: B256,
+        parent_gas_used: u32,
+        base_fee_config: LibSharedData::BaseFeeConfig,
         base_fee: u64,
     ) -> Result<Transaction, Error> {
+        // Create the contract call
         let nonce = self
             .provider
             .get_transaction_count(GOLDEN_TOUCH_ADDRESS)
             .block_id(parent_hash.into())
-            .await?;
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get nonce: {}", e))?;
         let call_builder = self
-            .shasta_anchor
-            .updateState(
-                Uint::<48, 1>::from(0),      // proposal_id
-                Address::ZERO,               // proposer
-                Bytes::new(),                // no prover designation
-                FixedBytes::from([0u8; 32]), // bond_instructions_hash, take them from the indexer
-                vec![],
-                0, // l2_block_number,
-                Uint::<48, 1>::from(anchor_block_id),
-                B256::ZERO, // anchor_block_hash,
+            .taiko_anchor
+            .anchorV3(
+                anchor_block_id,
                 anchor_state_root,
-                Uint::<48, 1>::from(0), // 0 for whitelist
+                parent_gas_used,
+                base_fee_config,
+                vec![],
             )
             .gas(1_000_000) // value expected by Taiko
             .max_fee_per_gas(u128::from(base_fee)) // value expected by Taiko
@@ -79,8 +74,6 @@ impl ExecutionLayer {
 
         debug!("AnchorTX transaction hash: {}", tx_envelope.tx_hash());
 
-        // Transaction::from
-
         let tx = Transaction {
             inner: Recovered::new_unchecked(tx_envelope, GOLDEN_TOUCH_ADDRESS),
             block_hash: None,
@@ -92,9 +85,6 @@ impl ExecutionLayer {
     }
 
     fn sign_hash_deterministic(&self, hash: B256) -> Result<Signature, Error> {
-        crate::crypto::fixed_k_signer::sign_hash_deterministic(
-            super::super::config::GOLDEN_TOUCH_PRIVATE_KEY,
-            hash,
-        )
+        crate::crypto::fixed_k_signer::sign_hash_deterministic(GOLDEN_TOUCH_PRIVATE_KEY, hash)
     }
 }
