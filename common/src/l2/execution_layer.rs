@@ -325,6 +325,7 @@ impl L2ExecutionLayer {
 
     pub async fn construct_anchor_tx(
         &self,
+        preconfer_address: Address,
         l2_slot_info: &L2SlotInfo,
         anchor_block_id: u64,
         anchor_state_root: B256,
@@ -348,7 +349,7 @@ impl L2ExecutionLayer {
                 shasta_execution_layer
                     .construct_anchor_tx(
                         // proposal_id,
-                        // proposer,
+                        preconfer_address,
                         u16::try_from(l2_slot_info.parent_id()).map_err(|e| {
                             anyhow::anyhow!("Failed to convert parent id to u16: {}", e)
                         })?,

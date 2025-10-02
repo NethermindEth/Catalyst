@@ -30,7 +30,7 @@ impl ExecutionLayer {
     pub async fn construct_anchor_tx(
         &self,
         // proposal_id: u64,    // TODO: implement
-        // proposer: Address,
+        proposer: Address,
         l2_block_number: u16,
         parent_hash: B256,
         anchor_block_id: u64,
@@ -46,8 +46,8 @@ impl ExecutionLayer {
         let call_builder = self
             .shasta_anchor
             .updateState(
-                Uint::<48, 1>::from(0),      // proposal_id
-                Address::ZERO,               // proposer
+                Uint::<48, 1>::from(0), // proposal_id
+                proposer,
                 Bytes::new(),                // no prover designation
                 FixedBytes::from([0u8; 32]), // bond_instructions_hash, take them from the indexer
                 vec![],
