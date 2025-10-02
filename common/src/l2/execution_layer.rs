@@ -4,7 +4,7 @@ use super::{
     pacaya::execution_layer::ExecutionLayer as PacayaExecutionLayer,
     shasta::execution_layer::ExecutionLayer as ShastaExecutionLayer,
 };
-use crate::shared::{alloy_tools, fork::Fork};
+use crate::shared::{alloy_tools, fork::Fork, l2_slot_info::L2SlotInfo};
 use alloy::{
     consensus::Transaction as AnchorTransaction,
     eips::BlockNumberOrTag,
@@ -325,23 +325,21 @@ impl L2ExecutionLayer {
 
     pub async fn construct_anchor_tx(
         &self,
-        parent_hash: B256,
+        l2_slot_info: &L2SlotInfo,
         anchor_block_id: u64,
         anchor_state_root: B256,
-        parent_gas_used: u32,
         base_fee_config: LibSharedData::BaseFeeConfig,
-        base_fee: u64,
     ) -> Result<Transaction, Error> {
         match &self.l2_fork {
             L2ForkExecutionLayer::Pacaya(pacaya_execution_layer) => {
                 pacaya_execution_layer
                     .construct_anchor_tx(
-                        parent_hash,
+                        *l2_slot_info.parent_hash(),
                         anchor_block_id,
                         anchor_state_root,
-                        parent_gas_used,
+                        l2_slot_info.parent_gas_used(),
                         base_fee_config,
-                        base_fee,
+                        l2_slot_info.base_fee(),
                     )
                     .await
             }
@@ -351,11 +349,13 @@ impl L2ExecutionLayer {
                     .construct_anchor_tx(
                         // proposal_id,
                         // proposer,
-                        // l2_block_number,
-                        parent_hash,
+                        u16::try_from(l2_slot_info.parent_id()).map_err(|e| {
+                            anyhow::anyhow!("Failed to convert parent id to u16: {}", e)
+                        })?,
+                        *l2_slot_info.parent_hash(),
                         anchor_block_id,
                         anchor_state_root,
-                        base_fee,
+                        l2_slot_info.base_fee(),
                     )
                     .await
             }

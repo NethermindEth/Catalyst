@@ -31,7 +31,7 @@ impl ExecutionLayer {
         &self,
         // proposal_id: u64,    // TODO: implement
         // proposer: Address,
-        // l2_block_number: u16,
+        l2_block_number: u16,
         parent_hash: B256,
         anchor_block_id: u64,
         // anchor_block_hash: B256,
@@ -51,7 +51,7 @@ impl ExecutionLayer {
                 Bytes::new(),                // no prover designation
                 FixedBytes::from([0u8; 32]), // bond_instructions_hash, take them from the indexer
                 vec![],
-                0, // l2_block_number,
+                l2_block_number,
                 Uint::<48, 1>::from(anchor_block_id),
                 B256::ZERO, // anchor_block_hash,
                 anchor_state_root,
