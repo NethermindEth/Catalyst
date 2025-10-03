@@ -21,7 +21,11 @@ def send_transaction(nonce : int, account, amount, eth_client, private_key):
         'type': 2  # EIP-1559 transaction type
     }
 
-    print(f'RPC URL: {eth_client.provider.endpoint_uri}, Sending from: {account.address}, nonce: {nonce}')
+    # Get current UTC time with microseconds
+    now = time.gmtime()
+    current_time = time.strftime("%H:%M:%S", now) + f".{int(time.time()*1e6)%1000000:06d}Z"
+
+    print(f'RPC URL: {eth_client.provider.endpoint_uri}, Sending from: {account.address}, nonce: {nonce}, time: {current_time}')
     signed_tx = eth_client.eth.account.sign_transaction(tx, private_key)
     tx_hash = eth_client.eth.send_raw_transaction(signed_tx.raw_transaction)
     print(f'Transaction sent: {tx_hash.hex()}')
@@ -69,6 +73,10 @@ def wait_for_handover_window(beacon_client):
     seconds_to_handover_window = get_seconds_to_handover_window(beacon_client)
     print(f"Seconds to handover window: {seconds_to_handover_window}")
     wait_for_secs(seconds_to_handover_window)
+
+def wait_for_next_slot(beacon_client):
+    slot_in_epoch = get_slot_in_epoch(beacon_client)
+    wait_for_slot_beginning(beacon_client,slot_in_epoch+1)
 
 def wait_for_slot_beginning(beacon_client, desired_slot):
     slot_in_epoch = get_slot_in_epoch(beacon_client)
