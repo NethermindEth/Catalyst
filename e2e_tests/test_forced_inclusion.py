@@ -91,6 +91,8 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
         send_forced_inclusion(0)
         send_forced_inclusion(1)
         send_forced_inclusion(2)
+        # Synchronize transaction sending with slot time
+        wait_for_next_slot(beacon_client)
         # spam transactions
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 4 * env_vars.max_blocks_per_batch, delay)
         # wait 2 l1 slots to include all propose batch transactions
