@@ -1,3 +1,4 @@
+use common::shared::fork::Fork;
 use common::utils::config_trait::ConfigTrait;
 use tracing::warn;
 
@@ -18,6 +19,7 @@ pub struct Config {
     pub l1_height_lag: u64,
     pub propose_forced_inclusion: bool,
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
+    pub fork: Fork,
 }
 
 impl ConfigTrait for Config {
@@ -69,6 +71,11 @@ impl ConfigTrait for Config {
                 .parse::<bool>()
                 .expect("SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH must be a boolean");
 
+        let fork = std::env::var("FORK")
+            .unwrap_or("pacaya".to_string())
+            .parse::<Fork>()
+            .expect("FORK must be a valid fork");
+
         Config {
             contract_addresses: L1ContractAddresses {
                 taiko_inbox,
@@ -82,6 +89,7 @@ impl ConfigTrait for Config {
             l1_height_lag,
             propose_forced_inclusion,
             simulate_not_submitting_at_the_end_of_epoch,
+            fork,
         }
     }
 }
@@ -107,7 +115,7 @@ impl fmt::Display for Config {
             "simulate not submitting at the end of epoch: {}",
             self.simulate_not_submitting_at_the_end_of_epoch
         )?;
-
+        writeln!(f, "fork: {}", self.fork)?;
         Ok(())
     }
 }
