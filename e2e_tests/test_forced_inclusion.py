@@ -151,6 +151,8 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
         # we should not have forced inclusions after handover
         assert chain_info.fi_sender_nonce == after_handover_chain_info.fi_sender_nonce, "Transaction not included after handover"
         assert chain_info.batch_id + 2 == after_handover_chain_info.batch_id, "Invalid batch ID after handover"
+        # Synchronize transaction sending with L1 slot time
+        wait_for_next_slot(beacon_client)
         # create new batch and forced inclusion
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
         after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
