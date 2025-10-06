@@ -49,7 +49,7 @@ impl TaikoConfig {
         rpc_driver_preconf_timeout: Duration,
         rpc_driver_status_timeout: Duration,
         singer: Arc<Signer>,
-        protocol: Fork,
+        fork: Fork,
     ) -> Result<Self, Error> {
         Ok(Self {
             taiko_geth_url: taiko_geth_ws_url,
@@ -65,7 +65,7 @@ impl TaikoConfig {
             rpc_driver_preconf_timeout,
             rpc_driver_status_timeout,
             signer: singer,
-            fork: protocol,
+            fork,
         })
     }
 }

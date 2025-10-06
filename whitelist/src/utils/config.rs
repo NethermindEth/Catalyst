@@ -115,7 +115,7 @@ impl fmt::Display for Config {
             "simulate not submitting at the end of epoch: {}",
             self.simulate_not_submitting_at_the_end_of_epoch
         )?;
-        writeln!(f, "protocol: {}", self.fork)?;
+        writeln!(f, "fork: {}", self.fork)?;
         Ok(())
     }
 }

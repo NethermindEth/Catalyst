@@ -79,8 +79,6 @@ impl ExecutionLayer {
 
         debug!("AnchorTX transaction hash: {}", tx_envelope.tx_hash());
 
-        // Transaction::from
-
         let tx = Transaction {
             inner: Recovered::new_unchecked(tx_envelope, GOLDEN_TOUCH_ADDRESS),
             block_hash: None,
