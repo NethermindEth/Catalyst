@@ -29,12 +29,43 @@ struct Args {
     test_gas: Option<u32>,
 }
 
+enum ExecutionStopped {
+    CloseApp,
+    RecreateNode,
+    SwitchConfig,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     common_utils::logging::init_logging();
 
     info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
 
+    loop {
+        match run_node().await {
+            Ok(ExecutionStopped::CloseApp) => {
+                info!("ExecutionStopped::CloseApp, shutting down...");
+                break;
+            }
+            Ok(ExecutionStopped::RecreateNode) => {
+                info!("ExecutionStopped::RecreateNode, recreating node...");
+                continue;
+            }
+            Ok(ExecutionStopped::SwitchConfig) => {
+                info!("ExecutionStopped::SwitchConfig, switching config...");
+                break;
+            }
+            Err(e) => {
+                error!("Failed to run node: {}", e);
+                return Err(e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_node() -> Result<ExecutionStopped, Error> {
     let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
     let cancel_token = CancellationToken::new();
 
@@ -235,9 +266,7 @@ async fn main() -> Result<(), Error> {
 
     metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());
 
-    wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await;
-
-    Ok(())
+    Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
 }
 
 async fn get_handover_window_slots(execution_layer: &ExecutionLayer) -> Result<u64, Error> {
@@ -256,7 +285,10 @@ async fn get_handover_window_slots(execution_layer: &ExecutionLayer) -> Result<u
     handover_window_slots
 }
 
-async fn wait_for_the_termination(cancel_token: CancellationToken, shutdown_delay_secs: u64) {
+async fn wait_for_the_termination(
+    cancel_token: CancellationToken,
+    shutdown_delay_secs: u64,
+) -> ExecutionStopped {
     info!("Starting signal handler...");
     let mut sigterm = signal(SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
     tokio::select! {
@@ -266,14 +298,17 @@ async fn wait_for_the_termination(cancel_token: CancellationToken, shutdown_dela
             // Give tasks a little time to finish
             info!("Waiting for {}s", shutdown_delay_secs);
             tokio::time::sleep(tokio::time::Duration::from_secs(shutdown_delay_secs)).await;
+            ExecutionStopped::CloseApp
         }
         _ = tokio::signal::ctrl_c() => {
             info!("Received Ctrl+C, shutting down...");
             cancel_token.cancel();
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            ExecutionStopped::CloseApp
         }
         _ = cancel_token.cancelled() => {
             info!("Shutdown signal received, exiting Catalyst node...");
+            ExecutionStopped::RecreateNode
         }
     }
 }
