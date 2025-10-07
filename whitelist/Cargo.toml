@@ -10,19 +10,16 @@ publish = false
 name = "catalyst_whitelist"
 path = "src/main.rs"
 
-[features]
-# A testing feature that allows the node to send only
-# a proposeBatch transaction and then stop.
-# Useful for validating transaction sending logic
-# without running the full flow
-test-gas = ["clap"]
+[[bin]]
+name = "test_gas"
+path = "src/test_gas.rs"
 
 [dependencies]
 alloy = { workspace = true }
 alloy-json-rpc = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
-clap = { workspace = true, optional = true }
+clap = { workspace = true }
 common = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
