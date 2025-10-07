@@ -2,6 +2,7 @@ use common::shared::fork::Fork;
 use common::utils::config_trait::ConfigTrait;
 use tracing::warn;
 
+#[allow(dead_code)] // TODO: remove this once we have a used shasta contract_addresses field
 #[derive(Debug, Clone)]
 pub struct L1ContractAddresses {
     pub taiko_inbox: String,
