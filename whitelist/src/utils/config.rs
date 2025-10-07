@@ -9,6 +9,9 @@ pub struct L1ContractAddresses {
     pub preconf_router: String,
     pub taiko_wrapper: String,
     pub forced_inclusion_store: String,
+    pub shasta_inbox: String,
+    pub codec_address: String,
+    pub anchor_address: String,
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +23,7 @@ pub struct Config {
     pub propose_forced_inclusion: bool,
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
     pub fork: Fork,
+    pub fork_timestamp: u64,
 }
 
 impl ConfigTrait for Config {
@@ -37,6 +41,17 @@ impl ConfigTrait for Config {
             })
         };
 
+        let fork = std::env::var("FORK")
+            .unwrap_or("pacaya".to_string())
+            .parse::<Fork>()
+            .expect("FORK must be a valid fork");
+
+        // 0 means no fork timestamp
+        let fork_timestamp = std::env::var("FORK_TIMESTAMP")
+            .unwrap_or("0".to_string())
+            .parse::<u64>()
+            .expect("FORK_TIMESTAMP must be a number");
+
         let taiko_inbox = read_contract_address("TAIKO_INBOX_ADDRESS", "TaikoL1");
         let preconf_whitelist =
             read_contract_address("PRECONF_WHITELIST_ADDRESS", "PreconfWhitelist");
@@ -44,6 +59,19 @@ impl ConfigTrait for Config {
         let taiko_wrapper = read_contract_address("TAIKO_WRAPPER_ADDRESS", "TaikoWrapper");
         let forced_inclusion_store =
             read_contract_address("FORCED_INCLUSION_STORE_ADDRESS", "ForcedInclusionStore");
+        let codec_address = read_contract_address("CODEC_ADDRESS", "Codec");
+        let anchor_address = read_contract_address("ANCHOR_ADDRESS", "Anchor");
+        let shasta_inbox = read_contract_address("SHASTA_INBOX_ADDRESS", "TaikoL1");
+        let contract_addresses = L1ContractAddresses {
+            taiko_inbox,
+            preconf_whitelist,
+            preconf_router,
+            taiko_wrapper,
+            forced_inclusion_store,
+            shasta_inbox,
+            codec_address,
+            anchor_address,
+        };
 
         let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")
             .unwrap_or("4".to_string())
@@ -71,25 +99,15 @@ impl ConfigTrait for Config {
                 .parse::<bool>()
                 .expect("SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH must be a boolean");
 
-        let fork = std::env::var("FORK")
-            .unwrap_or("pacaya".to_string())
-            .parse::<Fork>()
-            .expect("FORK must be a valid fork");
-
         Config {
-            contract_addresses: L1ContractAddresses {
-                taiko_inbox,
-                preconf_whitelist,
-                preconf_router,
-                taiko_wrapper,
-                forced_inclusion_store,
-            },
+            contract_addresses,
             handover_window_slots,
             handover_start_buffer_ms,
             l1_height_lag,
             propose_forced_inclusion,
             simulate_not_submitting_at_the_end_of_epoch,
             fork,
+            fork_timestamp,
         }
     }
 }

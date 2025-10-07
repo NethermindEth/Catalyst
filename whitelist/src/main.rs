@@ -1,7 +1,7 @@
 use anyhow::Error;
 use common::{
     funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, metrics::Metrics, shared,
-    signer, utils as common_utils,
+    shared::fork::Fork, signer, utils as common_utils,
 };
 use l1::pacaya::execution_layer::ExecutionLayer;
 use std::sync::Arc;
@@ -40,8 +40,10 @@ async fn main() -> Result<(), Error> {
 
     info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
 
+    let mut iteration = 0;
     loop {
-        match run_node().await {
+        iteration += 1;
+        match run_node(iteration).await {
             Ok(ExecutionStopped::CloseApp) => {
                 info!("👋 ExecutionStopped::CloseApp , shutting down...");
                 break;
@@ -60,8 +62,22 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
-async fn run_node() -> Result<ExecutionStopped, Error> {
+async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
+    info!("Running node iteration: {iteration}");
+
     let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+
+    let _fork = if utils::fork::is_next_fork_active(
+        config.specific_config.fork_timestamp,
+        config.specific_config.handover_window_slots,
+        config.l1_slot_duration_sec,
+    ) || matches!(config.specific_config.fork, Fork::Shasta)
+    {
+        Fork::Shasta
+    } else {
+        Fork::Pacaya
+    };
+
     let cancel_token = CancellationToken::new();
 
     let metrics = Arc::new(Metrics::new());
