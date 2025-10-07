@@ -67,7 +67,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
 
     let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
 
-    let _fork = if utils::fork::is_next_fork_active(
+    let fork = if utils::fork::is_next_fork_active(
         config.specific_config.fork_timestamp,
         config.specific_config.handover_window_slots,
         config.l1_slot_duration_sec,
@@ -224,6 +224,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
 
     let node = node::Node::new(
         cancel_token.clone(),
+        fork,
         taiko.clone(),
         ethereum_l1.clone(),
         chain_monitor.clone(),
@@ -238,6 +239,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
             simulate_not_submitting_at_the_end_of_epoch: config
                 .specific_config
                 .simulate_not_submitting_at_the_end_of_epoch,
+            fork_timestamp: config.specific_config.fork_timestamp,
         },
         node::batch_manager::config::BatchBuilderConfig {
             max_bytes_size_of_batch: config.max_bytes_size_of_batch,

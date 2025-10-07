@@ -16,6 +16,7 @@ use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::{operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
+    shared::fork::Fork,
     utils as common_utils,
 };
 use config::NodeConfig;
@@ -42,12 +43,14 @@ pub struct Node {
     watchdog: common_utils::watchdog::Watchdog,
     head_verifier: L2HeadVerifier,
     config: NodeConfig,
+    fork: Fork,
 }
 
 impl Node {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         cancel_token: CancellationToken,
+        fork: Fork,
         taiko: Arc<Taiko<ExecutionLayer>>,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         chain_monitor: Arc<ChainMonitor>,
@@ -101,6 +104,7 @@ impl Node {
             watchdog,
             head_verifier,
             config,
+            fork,
         })
     }
 
@@ -191,13 +195,13 @@ impl Node {
         debug!("Main perconfirmation loop started");
         common_utils::synchronization::synchronize_with_l1_slot_start(&self.ethereum_l1).await;
 
-        // start preconfirmation loop
         let mut interval =
             tokio::time::interval(Duration::from_millis(self.config.preconf_heartbeat_ms));
         // fix for handover buffer longer than l2 heart beat, keeps the loop synced
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
+
             if self.cancel_token.is_cancelled() {
                 info!("Shutdown signal received, exiting main loop...");
                 return;
@@ -209,6 +213,39 @@ impl Node {
             } else {
                 self.watchdog.reset();
             }
+
+            //
+            self.recreate_node_when_next_fork_became_active().await;
+        }
+    }
+
+    async fn recreate_node_when_next_fork_became_active(&mut self) {
+        if matches!(self.fork, Fork::Pacaya)
+            && crate::utils::fork::is_next_fork_active(
+                self.config.fork_timestamp,
+                self.config.handover_window_slots,
+                self.ethereum_l1.slot_clock.get_slot_duration().as_secs(),
+            )
+        {
+            // try submitting left batches for half of the handover window
+            for _ in 0..self.config.handover_window_slots
+                * self.ethereum_l1.slot_clock.get_slot_duration().as_secs()
+                / 2
+            {
+                if self.batch_manager.has_batches() {
+                    if let Err(err) = self.batch_manager.try_submit_oldest_batch(false).await {
+                        error!(
+                            "Failed to submit oldest batch before recreating node: {}",
+                            err
+                        );
+                        sleep(Duration::from_secs(1)).await;
+                    }
+                } else {
+                    break;
+                }
+            }
+            debug!("Next fork became active, recreating node...");
+            self.cancel_token.cancel();
         }
     }
 

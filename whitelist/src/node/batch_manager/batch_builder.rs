@@ -312,7 +312,9 @@ impl BatchBuilder {
                     current_batch = %self.current_batch.is_some(),
                     "Cannot submit batch, transaction is in progress.",
                 );
-                return Ok(());
+                return Err(anyhow::anyhow!(
+                    "Cannot submit batch, transaction is in progress."
+                ));
             }
 
             debug!(

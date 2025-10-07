@@ -9,6 +9,7 @@ pub struct NodeConfig {
     pub l1_height_lag: u64,
     pub propose_forced_inclusion: bool,
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
+    pub fork_timestamp: u64,
 }
 
 impl From<common_utils::config::Config<utils::config::Config>> for NodeConfig {
@@ -22,6 +23,7 @@ impl From<common_utils::config::Config<utils::config::Config>> for NodeConfig {
             simulate_not_submitting_at_the_end_of_epoch: config
                 .specific_config
                 .simulate_not_submitting_at_the_end_of_epoch,
+            fork_timestamp: config.specific_config.fork_timestamp,
         }
     }
 }
