@@ -20,20 +20,13 @@ mod utils;
 
 #[cfg(feature = "test-gas")]
 mod test_gas;
-#[cfg(feature = "test-gas")]
-use clap::Parser;
-#[cfg(feature = "test-gas")]
-#[derive(Parser, Debug)]
-struct Args {
-    #[arg(long = "test-gas", value_name = "BLOCK_COUNT")]
-    test_gas: Option<u32>,
-}
 
 enum ExecutionStopped {
     CloseApp,
     RecreateNode,
 }
 
+#[cfg(not(feature = "test-gas"))]
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     common_utils::logging::init_logging();
@@ -115,24 +108,6 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?;
 
     let ethereum_l1 = Arc::new(ethereum_l1);
-
-    #[cfg(feature = "test-gas")]
-    let args = Args::parse();
-    #[cfg(feature = "test-gas")]
-    if let Some(gas) = args.test_gas {
-        info!("Test gas block count: {}", gas);
-        test_gas::test_gas_params(
-            ethereum_l1.clone(),
-            gas,
-            config.specific_config.l1_height_lag,
-            config.max_bytes_size_of_batch,
-            transaction_error_receiver,
-        )
-        .await?;
-        return Ok(());
-    } else {
-        tracing::error!("No test gas block count provided.");
-    }
 
     let jwt_secret_bytes =
         common_utils::file_operations::read_jwt_secret(&config.jwt_secret_file_path)?;
@@ -323,5 +298,56 @@ async fn wait_for_the_termination(
             info!("Shutdown signal received, exiting Catalyst node...");
             ExecutionStopped::RecreateNode
         }
+    }
+}
+
+#[cfg(feature = "test-gas")]
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    use clap::Parser;
+    #[derive(Parser, Debug)]
+    struct Args {
+        #[arg(long = "test-gas", value_name = "BLOCK_COUNT")]
+        test_gas: Option<u32>,
+    }
+
+    let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+    let metrics = Arc::new(Metrics::new());
+
+    let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
+
+    let l1_signer = signer::create_signer(
+        config.web3signer_l1_url.clone(),
+        config.catalyst_node_ecdsa_private_key.clone(),
+        config.preconfer_address.clone(),
+    )
+    .await?;
+
+    let ethereum_l1 = Arc::new(
+        common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
+            common_l1::config::EthereumL1Config::new(&config, l1_signer),
+            l1::pacaya::config::EthereumL1Config::try_from(config.specific_config.clone())?,
+            transaction_error_sender,
+            metrics.clone(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?,
+    );
+
+    let args = Args::parse();
+    if let Some(gas) = args.test_gas {
+        info!("Test gas block count: {}", gas);
+        test_gas::test_gas_params(
+            ethereum_l1,
+            gas,
+            config.specific_config.l1_height_lag,
+            config.max_bytes_size_of_batch,
+            transaction_error_receiver,
+        )
+        .await?;
+        return Ok(());
+    } else {
+        tracing::error!("No test gas block count provided.");
+        return Err(anyhow::anyhow!("No test gas block count provided."));
     }
 }
