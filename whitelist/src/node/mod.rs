@@ -214,7 +214,6 @@ impl Node {
                 self.watchdog.reset();
             }
 
-            //
             self.recreate_node_when_next_fork_became_active().await;
         }
     }
