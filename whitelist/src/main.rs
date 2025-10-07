@@ -32,7 +32,6 @@ struct Args {
 enum ExecutionStopped {
     CloseApp,
     RecreateNode,
-    SwitchConfig,
 }
 
 #[tokio::main]
@@ -44,16 +43,12 @@ async fn main() -> Result<(), Error> {
     loop {
         match run_node().await {
             Ok(ExecutionStopped::CloseApp) => {
-                info!("ExecutionStopped::CloseApp, shutting down...");
+                info!("👋 ExecutionStopped::CloseApp , shutting down...");
                 break;
             }
             Ok(ExecutionStopped::RecreateNode) => {
-                info!("ExecutionStopped::RecreateNode, recreating node...");
+                info!("🔄 ExecutionStopped::RecreateNode, recreating node...");
                 continue;
-            }
-            Ok(ExecutionStopped::SwitchConfig) => {
-                info!("ExecutionStopped::SwitchConfig, switching config...");
-                break;
             }
             Err(e) => {
                 error!("Failed to run node: {}", e);
