@@ -201,6 +201,7 @@ impl Node {
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
+            self.recreate_node_when_next_fork_became_active().await;
 
             if self.cancel_token.is_cancelled() {
                 info!("Shutdown signal received, exiting main loop...");
@@ -213,8 +214,6 @@ impl Node {
             } else {
                 self.watchdog.reset();
             }
-
-            self.recreate_node_when_next_fork_became_active().await;
         }
     }
 
