@@ -219,29 +219,9 @@ impl Node {
 
     async fn recreate_node_when_next_fork_became_active(&mut self) {
         if matches!(self.fork, Fork::Pacaya)
-            && crate::utils::fork::is_next_fork_active(
-                self.config.fork_timestamp,
-                self.config.handover_window_slots,
-                self.ethereum_l1.slot_clock.get_slot_duration().as_secs(),
-            )
+            && crate::utils::fork::is_next_fork_active(self.config.fork_timestamp)
         {
-            // try submitting left batches for half of the handover window
-            for _ in 0..self.config.handover_window_slots
-                * self.ethereum_l1.slot_clock.get_slot_duration().as_secs()
-                / 2
-            {
-                if self.batch_manager.has_batches() {
-                    if let Err(err) = self.batch_manager.try_submit_oldest_batch(false).await {
-                        error!(
-                            "Failed to submit oldest batch before recreating node: {}",
-                            err
-                        );
-                        sleep(Duration::from_secs(1)).await;
-                    }
-                } else {
-                    break;
-                }
-            }
+            // TODO: submit left batches before recreating node
             debug!("Next fork became active, recreating node...");
             self.cancel_token.cancel();
         }
