@@ -1,7 +1,7 @@
 use anyhow::Error;
 use common::{
     funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, metrics::Metrics, shared,
-    shared::fork::Fork, signer, utils as common_utils,
+    fork_info::{Fork,ForkInfo}, signer, utils as common_utils,
 };
 use l1::pacaya::execution_layer::ExecutionLayer;
 use std::sync::Arc;
@@ -11,6 +11,7 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
+
 
 mod chain_monitor;
 mod forced_inclusion;
@@ -54,15 +55,28 @@ async fn main() -> Result<(), Error> {
 async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     info!("Running node iteration: {iteration}");
 
-    let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+    let fork_info = ForkInfo::from_env()?;
 
+    match fork_info.fork {
+        Fork::Pacaya => {
+            info!("Current fork: Pacaya");
+            todo!("Launch Pacaya-node");
+        },
+        Fork::Shasta => {
+            info!("Current fork: Shasta");
+            todo!("Launch Shasta-node");
+        },
+    }
+
+    let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+/*
     let fork = if utils::fork::is_next_fork_active(config.specific_config.fork_switch_timestamp)
         || matches!(config.specific_config.current_fork, Fork::Shasta)
     {
         Fork::Shasta
     } else {
         Fork::Pacaya
-    };
+    };*/
 
     let cancel_token = CancellationToken::new();
 
@@ -122,7 +136,6 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
                 config.rpc_driver_preconf_timeout,
                 config.rpc_driver_status_timeout,
                 l2_signer,
-                config.specific_config.current_fork,
             )?,
         )
         .await

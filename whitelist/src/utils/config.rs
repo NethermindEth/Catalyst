@@ -1,4 +1,3 @@
-use common::shared::fork::Fork;
 use common::utils::config_trait::ConfigTrait;
 use tracing::warn;
 
@@ -23,8 +22,6 @@ pub struct Config {
     pub l1_height_lag: u64,
     pub propose_forced_inclusion: bool,
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
-    pub current_fork: Fork,
-    pub fork_switch_timestamp: u64,
 }
 
 impl ConfigTrait for Config {
@@ -41,17 +38,6 @@ impl ConfigTrait for Config {
                 default_empty_address.clone()
             })
         };
-
-        let current_fork = std::env::var("CURRENT_FORK")
-            .unwrap_or("pacaya".to_string())
-            .parse::<Fork>()
-            .expect("CURRENT_FORK must be a valid fork");
-
-        // 0 means no fork timestamp
-        let fork_switch_timestamp = std::env::var("FORK_SWITCH_TIMESTAMP")
-            .unwrap_or("0".to_string())
-            .parse::<u64>()
-            .expect("FORK_SWITCH_TIMESTAMP must be a number");
 
         let taiko_inbox = read_contract_address("TAIKO_INBOX_ADDRESS", "TaikoL1");
         let preconf_whitelist =
@@ -107,8 +93,6 @@ impl ConfigTrait for Config {
             l1_height_lag,
             propose_forced_inclusion,
             simulate_not_submitting_at_the_end_of_epoch,
-            current_fork,
-            fork_switch_timestamp,
         }
     }
 }
@@ -134,7 +118,6 @@ impl fmt::Display for Config {
             "simulate not submitting at the end of epoch: {}",
             self.simulate_not_submitting_at_the_end_of_epoch
         )?;
-        writeln!(f, "fork: {}", self.current_fork)?;
         Ok(())
     }
 }

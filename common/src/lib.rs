@@ -2,6 +2,7 @@
 pub mod blob;
 pub mod chain_monitor;
 pub mod crypto;
+pub mod fork_info;
 pub mod funds_monitor;
 pub mod l1;
 pub mod l2;
