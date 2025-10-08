@@ -1,7 +1,7 @@
 use anyhow::Error;
 use common::{
     funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, metrics::Metrics, shared,
-    signer, utils as common_utils,
+    shared::fork::Fork, signer, utils as common_utils,
 };
 use l1::pacaya::execution_layer::ExecutionLayer;
 use std::sync::Arc;
@@ -18,15 +18,9 @@ mod l1;
 mod node;
 mod utils;
 
-#[cfg(feature = "test-gas")]
-mod test_gas;
-#[cfg(feature = "test-gas")]
-use clap::Parser;
-#[cfg(feature = "test-gas")]
-#[derive(Parser, Debug)]
-struct Args {
-    #[arg(long = "test-gas", value_name = "BLOCK_COUNT")]
-    test_gas: Option<u32>,
+enum ExecutionStopped {
+    CloseApp,
+    RecreateNode,
 }
 
 #[tokio::main]
@@ -35,7 +29,41 @@ async fn main() -> Result<(), Error> {
 
     info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
 
+    let mut iteration = 0;
+    loop {
+        iteration += 1;
+        match run_node(iteration).await {
+            Ok(ExecutionStopped::CloseApp) => {
+                info!("👋 ExecutionStopped::CloseApp , shutting down...");
+                break;
+            }
+            Ok(ExecutionStopped::RecreateNode) => {
+                info!("🔄 ExecutionStopped::RecreateNode, recreating node...");
+                continue;
+            }
+            Err(e) => {
+                error!("Failed to run node: {}", e);
+                return Err(e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
+    info!("Running node iteration: {iteration}");
+
     let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+
+    let fork = if utils::fork::is_next_fork_active(config.specific_config.fork_switch_timestamp)
+        || matches!(config.specific_config.current_fork, Fork::Shasta)
+    {
+        Fork::Shasta
+    } else {
+        Fork::Pacaya
+    };
+
     let cancel_token = CancellationToken::new();
 
     let metrics = Arc::new(Metrics::new());
@@ -74,24 +102,6 @@ async fn main() -> Result<(), Error> {
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
-    #[cfg(feature = "test-gas")]
-    let args = Args::parse();
-    #[cfg(feature = "test-gas")]
-    if let Some(gas) = args.test_gas {
-        info!("Test gas block count: {}", gas);
-        test_gas::test_gas_params(
-            ethereum_l1.clone(),
-            gas,
-            config.specific_config.l1_height_lag,
-            config.max_bytes_size_of_batch,
-            transaction_error_receiver,
-        )
-        .await?;
-        return Ok(());
-    } else {
-        tracing::error!("No test gas block count provided.");
-    }
-
     let jwt_secret_bytes =
         common_utils::file_operations::read_jwt_secret(&config.jwt_secret_file_path)?;
     let taiko = Arc::new(
@@ -112,7 +122,7 @@ async fn main() -> Result<(), Error> {
                 config.rpc_driver_preconf_timeout,
                 config.rpc_driver_status_timeout,
                 l2_signer,
-                config.specific_config.fork,
+                config.specific_config.current_fork,
             )?,
         )
         .await
@@ -182,6 +192,7 @@ async fn main() -> Result<(), Error> {
 
     let node = node::Node::new(
         cancel_token.clone(),
+        fork,
         taiko.clone(),
         ethereum_l1.clone(),
         chain_monitor.clone(),
@@ -196,6 +207,7 @@ async fn main() -> Result<(), Error> {
             simulate_not_submitting_at_the_end_of_epoch: config
                 .specific_config
                 .simulate_not_submitting_at_the_end_of_epoch,
+            fork_timestamp: config.specific_config.fork_switch_timestamp,
         },
         node::batch_manager::config::BatchBuilderConfig {
             max_bytes_size_of_batch: config.max_bytes_size_of_batch,
@@ -235,9 +247,7 @@ async fn main() -> Result<(), Error> {
 
     metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());
 
-    wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await;
-
-    Ok(())
+    Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
 }
 
 async fn get_handover_window_slots(execution_layer: &ExecutionLayer) -> Result<u64, Error> {
@@ -256,7 +266,10 @@ async fn get_handover_window_slots(execution_layer: &ExecutionLayer) -> Result<u
     handover_window_slots
 }
 
-async fn wait_for_the_termination(cancel_token: CancellationToken, shutdown_delay_secs: u64) {
+async fn wait_for_the_termination(
+    cancel_token: CancellationToken,
+    shutdown_delay_secs: u64,
+) -> ExecutionStopped {
     info!("Starting signal handler...");
     let mut sigterm = signal(SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
     tokio::select! {
@@ -266,14 +279,17 @@ async fn wait_for_the_termination(cancel_token: CancellationToken, shutdown_dela
             // Give tasks a little time to finish
             info!("Waiting for {}s", shutdown_delay_secs);
             tokio::time::sleep(tokio::time::Duration::from_secs(shutdown_delay_secs)).await;
+            ExecutionStopped::CloseApp
         }
         _ = tokio::signal::ctrl_c() => {
             info!("Received Ctrl+C, shutting down...");
             cancel_token.cancel();
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            ExecutionStopped::CloseApp
         }
         _ = cancel_token.cancelled() => {
             info!("Shutdown signal received, exiting Catalyst node...");
+            ExecutionStopped::RecreateNode
         }
     }
 }
