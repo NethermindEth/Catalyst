@@ -5,6 +5,10 @@ use common::{
 };
 use l1::pacaya::execution_layer::ExecutionLayer;
 use std::sync::Arc;
+use taiko_mono::{
+    indexer::{ShastaEventIndexer, ShastaEventIndexerConfig},
+    interface::ShastaProposeInputReader,
+};
 use tokio::{
     signal::unix::{SignalKind, signal},
     sync::mpsc,

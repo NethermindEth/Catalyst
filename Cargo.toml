@@ -100,6 +100,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 urc = { path = "urc" }
 warp = { version = "0.3", default-features = false }
+taiko-mono = { git = "https://github.com/taikoxyz/taiko-mono.git", branch = "main", package = "event-indexer" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
