@@ -56,11 +56,8 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
 
     let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
 
-    let fork = if utils::fork::is_next_fork_active(
-        config.specific_config.fork_timestamp,
-        config.specific_config.handover_window_slots,
-        config.l1_slot_duration_sec,
-    ) || matches!(config.specific_config.fork, Fork::Shasta)
+    let fork = if utils::fork::is_next_fork_active(config.specific_config.fork_switch_timestamp)
+        || matches!(config.specific_config.current_fork, Fork::Shasta)
     {
         Fork::Shasta
     } else {
@@ -125,7 +122,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
                 config.rpc_driver_preconf_timeout,
                 config.rpc_driver_status_timeout,
                 l2_signer,
-                config.specific_config.fork,
+                config.specific_config.current_fork,
             )?,
         )
         .await
@@ -210,7 +207,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
             simulate_not_submitting_at_the_end_of_epoch: config
                 .specific_config
                 .simulate_not_submitting_at_the_end_of_epoch,
-            fork_timestamp: config.specific_config.fork_timestamp,
+            fork_timestamp: config.specific_config.fork_switch_timestamp,
         },
         node::batch_manager::config::BatchBuilderConfig {
             max_bytes_size_of_batch: config.max_bytes_size_of_batch,
