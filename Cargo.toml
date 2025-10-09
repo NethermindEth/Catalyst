@@ -98,7 +98,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 urc = { path = "urc" }
 warp = { version = "0.3", default-features = false }
 
-taiko-mono = { git = "https://github.com/taikoxyz/taiko-mono.git", branch = "make-ejector-single-crate", package = "event-indexer", version = "2.0.0" }
+taiko-mono = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "c0553f2ff977f3512f642230ee685c38f2b9cdfc", package = "event-indexer", version = "2.0.0" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
