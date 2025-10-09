@@ -1,11 +1,47 @@
-#![allow(clippy::too_many_arguments)]
 use alloy::sol;
 
 sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
-    TaikoAnchor,
-    "src/l2/abi/TaikoAnchor.json"
+    contract TaikoAnchor {
+
+        /// @notice The last synced L1 block height.
+        uint64 public lastSyncedBlock;
+
+        /// @notice The last synced L1 block height.
+        uint64 public lastCheckpoint;
+
+        /// @dev Struct that represents L2 basefee configurations
+        struct BaseFeeConfig {
+            // This is the base fee change denominator per 12 second window.
+            uint8 adjustmentQuotient;
+            uint8 sharingPctg;
+            uint32 gasIssuancePerSecond;
+            uint64 minGasExcess;
+            uint32 maxGasIssuancePerBlock;
+        }
+
+        /// @notice Anchors the latest L1 block details to L2 for cross-layer
+        /// message verification.
+        function anchorV3(
+            uint64 _anchorBlockId,
+            bytes32 _anchorStateRoot,
+            uint32 _parentGasUsed,
+            BaseFeeConfig calldata _baseFeeConfig,
+            bytes32[] calldata _signalSlots
+        ) external;
+
+        /// @notice Calculates the base fee and gas excess using EIP-1559 configuration for the given
+        /// parameters.
+        function getBasefeeV2(
+            uint32 _parentGasUsed,
+            uint64 _blockTimestamp,
+            BaseFeeConfig calldata _baseFeeConfig
+        )
+            public
+            view
+            returns (uint256 basefee_, uint64 newGasTarget_, uint64 newGasExcess_);
+    }
 );
 
 sol! {

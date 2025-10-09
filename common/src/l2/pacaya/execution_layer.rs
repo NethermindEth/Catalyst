@@ -1,4 +1,4 @@
-use super::super::bindings::{OntakeAnchor::BaseFeeConfig, TaikoAnchor};
+use super::super::bindings::{TaikoAnchor, TaikoAnchor::BaseFeeConfig};
 use super::super::config::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
 use alloy::{
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
