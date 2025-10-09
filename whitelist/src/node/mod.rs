@@ -16,7 +16,7 @@ use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::{operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
-    utils as common_utils,
+    utils as common_utils, fork_info::ForkInfo,
 };
 use config::NodeConfig;
 use operator::{Operator, Status as OperatorStatus};
@@ -222,15 +222,9 @@ impl Node {
     }
 
     async fn recreate_node_when_next_fork_became_active(&self) -> Result<(), Error> {
-        if let Some(fork_time) = self.fork_active_until {
-            let current_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(|e| anyhow::anyhow!("Failed to get current time: {}", e))?
-                .as_secs();
-            if fork_time <= current_time {
-                debug!("Next fork became active, recreating node...");
-                self.cancel_token.cancel();
-            }
+        if ForkInfo::is_next_fork_active(self.fork_active_until)? {
+            debug!("Next fork became active, recreating node...");
+            self.cancel_token.cancel();
         }
 
         Ok(())

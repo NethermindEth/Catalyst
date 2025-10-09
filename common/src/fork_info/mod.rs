@@ -13,24 +13,29 @@ impl ForkInfo {
         let current_fork = Self::parse_current_fork()?;
         let fork_switch_timestamp = Self::parse_fork_switch_timestamp()?;
 
-        if let Some(timestamp) = fork_switch_timestamp {
-            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-            if timestamp > now {
-                let next_fork = current_fork.next().ok_or_else(|| {
-                    anyhow::anyhow!("FORK_SWITCH_TIMESTAMP is set but there is no next fork")
-                })?;
+        if Self::is_next_fork_active(fork_switch_timestamp)? {
+            let next_fork = current_fork.next().ok_or_else(|| {
+                anyhow::anyhow!("FORK_SWITCH_TIMESTAMP is set but there is no next fork")
+            })?;
 
-                return Ok(Self {
-                    fork: next_fork,
-                    switch_timestamp: None,
-                });
-            }
+            Ok(Self {
+                fork: next_fork,
+                switch_timestamp: None,
+            })
+        } else {
+            Ok(Self {
+                fork: current_fork,
+                switch_timestamp: fork_switch_timestamp,
+            })
         }
+    }
 
-        Ok(Self {
-            fork: current_fork,
-            switch_timestamp: fork_switch_timestamp,
-        })
+    pub fn is_next_fork_active(next_fork_timestamp: Option<u64>) -> Result<bool, Error> {
+        if let Some(fork_timestamp) = next_fork_timestamp {
+            let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+            return Ok(current_timestamp >= fork_timestamp);
+        }
+        Ok(false)
     }
 
     fn parse_current_fork() -> Result<Fork, Error> {
