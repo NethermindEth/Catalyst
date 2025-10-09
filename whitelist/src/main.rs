@@ -90,7 +90,10 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
 
     match fork_info.fork {
         Fork::Pacaya => {
-            info!("Current fork: Pacaya, switch_timestamp: {:?}", fork_info.switch_timestamp);
+            info!(
+                "Current fork: Pacaya, switch_timestamp: {:?}",
+                fork_info.switch_timestamp
+            );
             create_pacaya_node(
                 config.clone(),
                 l1_signer,
