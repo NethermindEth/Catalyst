@@ -1,6 +1,6 @@
 mod fork;
-pub use fork::Fork;
 use anyhow::Error;
+pub use fork::Fork;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct ForkInfo {
@@ -16,8 +16,9 @@ impl ForkInfo {
         if let Some(timestamp) = fork_switch_timestamp {
             let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
             if timestamp > now {
-                let next_fork = current_fork.next()
-                    .ok_or_else(|| anyhow::anyhow!("FORK_SWITCH_TIMESTAMP is set but there is no next fork"))?;
+                let next_fork = current_fork.next().ok_or_else(|| {
+                    anyhow::anyhow!("FORK_SWITCH_TIMESTAMP is set but there is no next fork")
+                })?;
 
                 return Ok(Self {
                     fork: next_fork,
@@ -42,11 +43,12 @@ impl ForkInfo {
     fn parse_fork_switch_timestamp() -> Result<Option<u64>, Error> {
         match std::env::var("FORK_SWITCH_TIMESTAMP") {
             Err(_) => Ok(None),
-            Ok(timestamp) =>  {
-                let v = timestamp.parse::<u64>()
+            Ok(timestamp) => {
+                let v = timestamp
+                    .parse::<u64>()
                     .map_err(|_| anyhow::anyhow!("FORK_SWITCH_TIMESTAMP must be a number"))?;
                 Ok(Some(v))
-            },
+            }
         }
     }
 }

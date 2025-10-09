@@ -16,7 +16,6 @@ use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::{operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
-    shared::fork::Fork,
     utils as common_utils,
 };
 use config::NodeConfig;
@@ -43,14 +42,14 @@ pub struct Node {
     watchdog: common_utils::watchdog::Watchdog,
     head_verifier: L2HeadVerifier,
     config: NodeConfig,
-    fork: Fork,
+    // TODO rename
+    fork_active_until: Option<u64>,
 }
 
 impl Node {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         cancel_token: CancellationToken,
-        fork: Fork,
         taiko: Arc<Taiko<ExecutionLayer>>,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         chain_monitor: Arc<ChainMonitor>,
@@ -58,6 +57,7 @@ impl Node {
         metrics: Arc<Metrics>,
         config: NodeConfig,
         batch_builder_config: BatchBuilderConfig,
+        fork_active_until: Option<u64>,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             &ethereum_l1,
@@ -104,7 +104,7 @@ impl Node {
             watchdog,
             head_verifier,
             config,
-            fork,
+            fork_active_until,
         })
     }
 
@@ -201,7 +201,11 @@ impl Node {
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            self.recreate_node_when_next_fork_became_active().await;
+            while let Err(e) = self.recreate_node_when_next_fork_became_active().await {
+                error!("Failed to check if next fork became active: {}", e);
+                self.watchdog.increment();
+                sleep(Duration::from_millis(10)).await;
+            }
 
             if self.cancel_token.is_cancelled() {
                 info!("Shutdown signal received, exiting main loop...");
@@ -217,14 +221,19 @@ impl Node {
         }
     }
 
-    async fn recreate_node_when_next_fork_became_active(&mut self) {
-        if matches!(self.fork, Fork::Pacaya)
-            && crate::utils::fork::is_next_fork_active(self.config.fork_timestamp)
-        {
-            // TODO: submit left batches before recreating node
-            debug!("Next fork became active, recreating node...");
-            self.cancel_token.cancel();
+    async fn recreate_node_when_next_fork_became_active(&self) -> Result<(), Error> {
+        if let Some(fork_time) = self.fork_active_until {
+            let current_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| anyhow::anyhow!("Failed to get current time: {}", e))?
+                .as_secs();
+            if fork_time <= current_time {
+                debug!("Next fork became active, recreating node...");
+                self.cancel_token.cancel();
+            }
         }
+
+        Ok(())
     }
 
     async fn check_for_missing_proposed_batches(&mut self) -> Result<(), Error> {

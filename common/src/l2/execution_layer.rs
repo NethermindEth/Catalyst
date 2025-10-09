@@ -2,9 +2,8 @@ use super::{
     bindings::{Bridge, LibSharedData, TaikoAnchor},
     config::TaikoConfig,
     pacaya::execution_layer::ExecutionLayer as PacayaExecutionLayer,
-    shasta::execution_layer::ExecutionLayer as ShastaExecutionLayer,
 };
-use crate::{l2::pacaya, shared::{alloy_tools, l2_slot_info::L2SlotInfo}};
+use crate::shared::{alloy_tools, l2_slot_info::L2SlotInfo};
 use alloy::{
     consensus::Transaction as AnchorTransaction,
     eips::BlockNumberOrTag,
@@ -39,12 +38,11 @@ impl L2ExecutionLayer {
 
         let taiko_anchor = TaikoAnchor::new(taiko_config.taiko_anchor_address, provider.clone());
 
-
         let pacaya_el = PacayaExecutionLayer::new(
-                provider.clone(),
-                taiko_config.taiko_anchor_address,
-                chain_id,
-            );
+            provider.clone(),
+            taiko_config.taiko_anchor_address,
+            chain_id,
+        );
 
         Ok(Self {
             provider,
@@ -314,20 +312,21 @@ impl L2ExecutionLayer {
 
     pub async fn construct_anchor_tx(
         &self,
-        preconfer_address: Address,
         l2_slot_info: &L2SlotInfo,
         anchor_block_id: u64,
         anchor_state_root: B256,
         base_fee_config: LibSharedData::BaseFeeConfig,
     ) -> Result<Transaction, Error> {
-        self.pacaya_el.construct_anchor_tx(
-            *l2_slot_info.parent_hash(),
-            anchor_block_id,
-            anchor_state_root,
-            l2_slot_info.parent_gas_used(),
-            base_fee_config,
-            l2_slot_info.base_fee(),
-        ).await
+        self.pacaya_el
+            .construct_anchor_tx(
+                *l2_slot_info.parent_hash(),
+                anchor_block_id,
+                anchor_state_root,
+                l2_slot_info.parent_gas_used(),
+                base_fee_config,
+                l2_slot_info.base_fee(),
+            )
+            .await
         /*match &self.l2_fork {
             L2ForkExecutionLayer::Pacaya(pacaya_execution_layer) => {
                 pacaya_execution_layer
