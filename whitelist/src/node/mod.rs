@@ -14,9 +14,10 @@ use crate::{
 use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
+    fork_info::ForkInfo,
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::{operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
-    utils as common_utils, fork_info::ForkInfo,
+    utils as common_utils,
 };
 use config::NodeConfig;
 use operator::{Operator, Status as OperatorStatus};
