@@ -272,10 +272,6 @@ impl<ELE: ELTrait> Taiko<ELE> {
         let anchor_tx = self
             .l2_execution_layer
             .construct_anchor_tx(
-                self.ethereum_l1
-                    .execution_layer
-                    .common()
-                    .get_preconfer_alloy_address(),
                 l2_slot_info,
                 anchor_origin_height,
                 anchor_block_state_root,

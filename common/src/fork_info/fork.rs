@@ -10,6 +10,15 @@ pub enum Fork {
     Shasta,
 }
 
+impl Fork {
+    pub fn next(&self) -> Option<Self> {
+        match self {
+            Fork::Pacaya => Some(Fork::Shasta),
+            Fork::Shasta => None,
+        }
+    }
+}
+
 impl Display for Fork {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         write!(f, "{:?}", self)

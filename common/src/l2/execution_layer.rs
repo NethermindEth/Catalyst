@@ -2,9 +2,8 @@ use super::{
     bindings::{Bridge, LibSharedData, TaikoAnchor},
     config::TaikoConfig,
     pacaya::execution_layer::ExecutionLayer as PacayaExecutionLayer,
-    shasta::execution_layer::ExecutionLayer as ShastaExecutionLayer,
 };
-use crate::shared::{alloy_tools, fork::Fork, l2_slot_info::L2SlotInfo};
+use crate::shared::{alloy_tools, l2_slot_info::L2SlotInfo};
 use alloy::{
     consensus::Transaction as AnchorTransaction,
     eips::BlockNumberOrTag,
@@ -18,17 +17,12 @@ use serde_json::Value;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
-enum L2ForkExecutionLayer {
-    Pacaya(PacayaExecutionLayer),
-    Shasta(ShastaExecutionLayer),
-}
-
 pub struct L2ExecutionLayer {
     provider: DynProvider,
     taiko_anchor: TaikoAnchor::TaikoAnchorInstance<DynProvider>,
     chain_id: u64,
     config: TaikoConfig,
-    l2_fork: L2ForkExecutionLayer,
+    pacaya_el: PacayaExecutionLayer,
 }
 
 impl L2ExecutionLayer {
@@ -44,25 +38,18 @@ impl L2ExecutionLayer {
 
         let taiko_anchor = TaikoAnchor::new(taiko_config.taiko_anchor_address, provider.clone());
 
-        let l2_fork = match taiko_config.fork {
-            Fork::Pacaya => L2ForkExecutionLayer::Pacaya(PacayaExecutionLayer::new(
-                provider.clone(),
-                taiko_config.taiko_anchor_address,
-                chain_id,
-            )),
-            Fork::Shasta => L2ForkExecutionLayer::Shasta(ShastaExecutionLayer::new(
-                provider.clone(),
-                taiko_config.taiko_anchor_address,
-                chain_id,
-            )),
-        };
+        let pacaya_el = PacayaExecutionLayer::new(
+            provider.clone(),
+            taiko_config.taiko_anchor_address,
+            chain_id,
+        );
 
         Ok(Self {
             provider,
             taiko_anchor,
             chain_id,
             config: taiko_config,
-            l2_fork,
+            pacaya_el,
         })
     }
 
@@ -325,13 +312,22 @@ impl L2ExecutionLayer {
 
     pub async fn construct_anchor_tx(
         &self,
-        preconfer_address: Address,
         l2_slot_info: &L2SlotInfo,
         anchor_block_id: u64,
         anchor_state_root: B256,
         base_fee_config: LibSharedData::BaseFeeConfig,
     ) -> Result<Transaction, Error> {
-        match &self.l2_fork {
+        self.pacaya_el
+            .construct_anchor_tx(
+                *l2_slot_info.parent_hash(),
+                anchor_block_id,
+                anchor_state_root,
+                l2_slot_info.parent_gas_used(),
+                base_fee_config,
+                l2_slot_info.base_fee(),
+            )
+            .await
+        /*match &self.l2_fork {
             L2ForkExecutionLayer::Pacaya(pacaya_execution_layer) => {
                 pacaya_execution_layer
                     .construct_anchor_tx(
@@ -360,6 +356,6 @@ impl L2ExecutionLayer {
                     )
                     .await
             }
-        }
+        }*/
     }
 }

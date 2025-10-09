@@ -1,7 +1,12 @@
+use crate::signer::Signer;
 use anyhow::Error;
 use common::{
-    funds_monitor, l1 as common_l1, l1::el_trait::ELTrait, l2, metrics, metrics::Metrics, shared,
-    shared::fork::Fork, signer, utils as common_utils,
+    fork_info::{Fork, ForkInfo},
+    funds_monitor,
+    l1::{self as common_l1, el_trait::ELTrait},
+    l2,
+    metrics::{self, Metrics},
+    shared, signer, utils as common_utils,
 };
 use l1::pacaya::execution_layer::ExecutionLayer;
 use std::sync::Arc;
@@ -54,15 +59,9 @@ async fn main() -> Result<(), Error> {
 async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     info!("Running node iteration: {iteration}");
 
-    let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+    let fork_info = ForkInfo::from_env()?;
 
-    let fork = if utils::fork::is_next_fork_active(config.specific_config.fork_switch_timestamp)
-        || matches!(config.specific_config.current_fork, Fork::Shasta)
-    {
-        Fork::Shasta
-    } else {
-        Fork::Pacaya
-    };
+    let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
 
     let cancel_token = CancellationToken::new();
 
@@ -75,8 +74,6 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
         panic_cancel_token.cancel();
         info!("Cancellation token triggered, initiating shutdown...");
     }));
-
-    let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
 
     let l1_signer = signer::create_signer(
         config.web3signer_l1_url.clone(),
@@ -91,6 +88,42 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     )
     .await?;
 
+    match fork_info.fork {
+        Fork::Pacaya => {
+            info!(
+                "Current fork: Pacaya, switch_timestamp: {:?}",
+                fork_info.switch_timestamp
+            );
+            create_pacaya_node(
+                config.clone(),
+                l1_signer,
+                l2_signer,
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info.switch_timestamp,
+            )
+            .await?;
+        }
+        Fork::Shasta => {
+            info!("Current fork: Shasta");
+            unimplemented!("Shasta fork is not yet implemented");
+        }
+    }
+
+    metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());
+
+    Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
+}
+
+async fn create_pacaya_node(
+    config: common_utils::config::Config<utils::config::Config>,
+    l1_signer: Arc<Signer>,
+    l2_signer: Arc<Signer>,
+    metrics: Arc<Metrics>,
+    cancel_token: CancellationToken,
+    switch_timestamp: Option<u64>,
+) -> Result<(), Error> {
+    let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
         common_l1::config::EthereumL1Config::new(&config, l1_signer),
         l1::pacaya::config::EthereumL1Config::try_from(config.specific_config.clone())?,
@@ -122,7 +155,6 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
                 config.rpc_driver_preconf_timeout,
                 config.rpc_driver_status_timeout,
                 l2_signer,
-                config.specific_config.current_fork,
             )?,
         )
         .await
@@ -192,7 +224,6 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
 
     let node = node::Node::new(
         cancel_token.clone(),
-        fork,
         taiko.clone(),
         ethereum_l1.clone(),
         chain_monitor.clone(),
@@ -207,7 +238,6 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
             simulate_not_submitting_at_the_end_of_epoch: config
                 .specific_config
                 .simulate_not_submitting_at_the_end_of_epoch,
-            fork_timestamp: config.specific_config.fork_switch_timestamp,
         },
         node::batch_manager::config::BatchBuilderConfig {
             max_bytes_size_of_batch: config.max_bytes_size_of_batch,
@@ -223,6 +253,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
             preconf_min_txs: config.preconf_min_txs,
             preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
         },
+        switch_timestamp,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
@@ -245,9 +276,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     );
     funds_monitor.run();
 
-    metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());
-
-    Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
+    Ok(())
 }
 
 async fn get_handover_window_slots(execution_layer: &ExecutionLayer) -> Result<u64, Error> {
