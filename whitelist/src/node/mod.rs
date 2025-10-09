@@ -201,10 +201,10 @@ impl Node {
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            while let Err(e) = self.recreate_node_when_next_fork_became_active().await {
+            if let Err(e) = self.recreate_node_when_next_fork_became_active().await {
                 error!("Failed to check if next fork became active: {}", e);
                 self.watchdog.increment();
-                sleep(Duration::from_millis(10)).await;
+                continue;
             }
 
             if self.cancel_token.is_cancelled() {
