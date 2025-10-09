@@ -21,8 +21,8 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 common = { workspace = true }
-taiko-mono = { workspace = true }
 serde_json = { workspace = true }
+taiko-mono = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
