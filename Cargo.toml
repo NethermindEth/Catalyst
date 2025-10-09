@@ -13,7 +13,7 @@ resolver = "2"
 default-members = ["whitelist", "urc"]
 
 [workspace.package]
-version = "1.14.0"
+version = "1.15.0"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"

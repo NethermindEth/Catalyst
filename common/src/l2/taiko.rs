@@ -1,5 +1,5 @@
 use super::{
-    bindings::LibSharedData,
+    bindings::OntakeAnchor::BaseFeeConfig,
     config::TaikoConfig,
     execution_layer::L2ExecutionLayer,
     operation_type::OperationType,
@@ -399,13 +399,13 @@ impl<ELE: ELTrait> Taiko<ELE> {
         }
     }
 
-    fn get_base_fee_config(&self) -> LibSharedData::BaseFeeConfig {
+    fn get_base_fee_config(&self) -> BaseFeeConfig {
         let config = self
             .ethereum_l1
             .execution_layer
             .common()
             .get_protocol_config();
-        LibSharedData::BaseFeeConfig {
+        BaseFeeConfig {
             adjustmentQuotient: config.base_fee_config.adjustment_quotient,
             sharingPctg: config.base_fee_config.sharing_pctg,
             gasIssuancePerSecond: config.base_fee_config.gas_issuance_per_second,
@@ -418,7 +418,7 @@ impl<ELE: ELTrait> Taiko<ELE> {
         &self,
         parent_hash: B256,
         parent_gas_used: u32,
-        base_fee_config: LibSharedData::BaseFeeConfig,
+        base_fee_config: BaseFeeConfig,
         l2_slot_timestamp: u64,
     ) -> Result<u64, Error> {
         self.l2_execution_layer

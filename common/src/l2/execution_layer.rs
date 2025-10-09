@@ -1,5 +1,5 @@
 use super::{
-    bindings::{Bridge, LibSharedData, TaikoAnchor},
+    bindings::{Bridge, OntakeAnchor::BaseFeeConfig, TaikoAnchor},
     config::TaikoConfig,
     pacaya::execution_layer::ExecutionLayer as PacayaExecutionLayer,
 };
@@ -143,7 +143,7 @@ impl L2ExecutionLayer {
         &self,
         parent_hash: B256,
         parent_gas_used: u32,
-        base_fee_config: LibSharedData::BaseFeeConfig,
+        base_fee_config: BaseFeeConfig,
         l2_slot_timestamp: u64,
     ) -> Result<u64, Error> {
         let base_fee = self
@@ -162,7 +162,7 @@ impl L2ExecutionLayer {
 
     pub async fn get_last_synced_anchor_block_id_from_taiko_anchor(&self) -> Result<u64, Error> {
         self.taiko_anchor
-            .lastSyncedBlock()
+            .lastCheckpoint()
             .call()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get last synced block: {}", e))
@@ -315,7 +315,7 @@ impl L2ExecutionLayer {
         l2_slot_info: &L2SlotInfo,
         anchor_block_id: u64,
         anchor_state_root: B256,
-        base_fee_config: LibSharedData::BaseFeeConfig,
+        base_fee_config: BaseFeeConfig,
     ) -> Result<Transaction, Error> {
         self.pacaya_el
             .construct_anchor_tx(
