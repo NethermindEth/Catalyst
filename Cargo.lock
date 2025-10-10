@@ -1808,7 +1808,7 @@ dependencies = [
 [[package]]
 name = "bindings"
 version = "0.1.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=c0553f2ff977f3512f642230ee685c38f2b9cdfc#c0553f2ff977f3512f642230ee685c38f2b9cdfc"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=479624c9429419bdb49cbf13552f542176a98012#479624c9429419bdb49cbf13552f542176a98012"
 dependencies = [
  "alloy",
  "serde",
@@ -3345,7 +3345,7 @@ dependencies = [
 [[package]]
 name = "event-indexer"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=c0553f2ff977f3512f642230ee685c38f2b9cdfc#c0553f2ff977f3512f642230ee685c38f2b9cdfc"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=479624c9429419bdb49cbf13552f542176a98012#479624c9429419bdb49cbf13552f542176a98012"
 dependencies = [
  "alloy",
  "alloy-contract",
@@ -9804,7 +9804,7 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 [[package]]
 name = "rpc"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=c0553f2ff977f3512f642230ee685c38f2b9cdfc#c0553f2ff977f3512f642230ee685c38f2b9cdfc"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=479624c9429419bdb49cbf13552f542176a98012#479624c9429419bdb49cbf13552f542176a98012"
 dependencies = [
  "alethia-reth-evm",
  "alethia-reth-primitives",
