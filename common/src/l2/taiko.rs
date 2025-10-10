@@ -1,5 +1,5 @@
 use super::{
-    bindings::OntakeAnchor::BaseFeeConfig,
+    bindings::TaikoAnchor::BaseFeeConfig,
     config::TaikoConfig,
     execution_layer::L2ExecutionLayer,
     operation_type::OperationType,

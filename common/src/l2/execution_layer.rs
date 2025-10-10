@@ -1,5 +1,5 @@
 use super::{
-    bindings::{Bridge, OntakeAnchor::BaseFeeConfig, TaikoAnchor},
+    bindings::{Bridge, TaikoAnchor, TaikoAnchor::BaseFeeConfig},
     config::TaikoConfig,
     pacaya::execution_layer::ExecutionLayer as PacayaExecutionLayer,
 };
@@ -161,11 +161,15 @@ impl L2ExecutionLayer {
     }
 
     pub async fn get_last_synced_anchor_block_id_from_taiko_anchor(&self) -> Result<u64, Error> {
-        self.taiko_anchor
-            .lastCheckpoint()
-            .call()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get last synced block: {}", e))
+        match self.taiko_anchor.lastSyncedBlock().call().await {
+            Ok(block_id) => Ok(block_id),
+            Err(_) => self
+                .taiko_anchor
+                .lastCheckpoint()
+                .call()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to get last synced block: {}", e)),
+        }
     }
 
     pub async fn get_last_synced_anchor_block_id_from_geth(&self) -> Result<u64, Error> {
