@@ -6,7 +6,7 @@ mod verifier;
 
 use crate::{
     chain_monitor::ChainMonitor,
-    l1::pacaya::execution_layer::ExecutionLayer,
+    l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::l2_head_verifier::L2HeadVerifier,
     shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},

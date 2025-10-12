@@ -8,14 +8,11 @@ use tokio::sync::mpsc;
 use tracing::info;
 
 // Module declarations
-mod forced_inclusion;
-mod l1;
 mod test_gas_params;
-mod utils;
 
 // Imports
-use l1::pacaya::config::EthereumL1Config;
-use l1::pacaya::execution_layer::ExecutionLayer;
+use pacaya::l1::config::EthereumL1Config;
+use pacaya::l1::execution_layer::ExecutionLayer;
 
 #[derive(Parser, Debug)]
 #[command(name = "test-gas")]
@@ -33,7 +30,8 @@ async fn main() -> Result<(), Error> {
 
     let args = Args::parse();
 
-    let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+    let config =
+        common_utils::config::Config::<pacaya::utils::config::Config>::read_env_variables();
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
 

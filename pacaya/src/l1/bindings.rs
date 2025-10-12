@@ -4,7 +4,7 @@ sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
     PreconfWhitelist,
-    "src/l1/pacaya/abi/PreconfWhitelist.json"
+    "src/l1/abi/PreconfWhitelist.json"
 );
 
 sol! {
@@ -79,7 +79,7 @@ pub mod taiko_inbox {
         #[allow(missing_docs)]
         #[sol(rpc)]
         ITaikoInbox,
-        "src/l1/pacaya/abi/ITaikoInbox.json"
+        "src/l1/abi/ITaikoInbox.json"
     );
 }
 
@@ -87,7 +87,7 @@ sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
     PreconfRouter,
-    "src/l1/pacaya/abi/PreconfRouter.json"
+    "src/l1/abi/PreconfRouter.json"
 );
 
 pub mod preconf_router {
@@ -117,7 +117,7 @@ pub mod taiko_wrapper {
         #[allow(missing_docs)]
         #[sol(rpc)]
         TaikoWrapper,
-        "src/l1/pacaya/abi/TaikoWrapper.json"
+        "src/l1/abi/TaikoWrapper.json"
     );
 }
 
