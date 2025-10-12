@@ -4368,6 +4368,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "node"
+version = "1.16.0"
+dependencies = [
+ "alloy",
+ "alloy-json-rpc",
+ "anyhow",
+ "chrono",
+ "clap",
+ "common",
+ "pacaya",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7136,23 +7153,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e8983c3ab33d6fb807cfcdad2491c4ea8cbc8ed839181c7dfd9c67c83e261b2"
 dependencies = [
  "rustls-pki-types",
-]
-
-[[package]]
-name = "whitelist"
-version = "1.16.0"
-dependencies = [
- "alloy",
- "alloy-json-rpc",
- "anyhow",
- "chrono",
- "clap",
- "common",
- "pacaya",
- "serde_json",
- "tokio",
- "tokio-util",
- "tracing",
 ]
 
 [[package]]

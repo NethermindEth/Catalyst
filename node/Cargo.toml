@@ -1,5 +1,5 @@
 [package]
-name = "whitelist"
+name = "node"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 publish = false
 
 [[bin]]
-name = "catalyst_whitelist"
+name = "catalyst_node"
 path = "src/main.rs"
 
 [[bin]]
