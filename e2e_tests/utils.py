@@ -167,7 +167,7 @@ def print_batch_info(event):
     print("---")
 
 def get_current_operator(eth_client, l1_contract_address):
-    with open("../whitelist/src/l1/pacaya/abi/PreconfWhitelist.json") as f:
+    with open("../pacaya/src/l1/abi/PreconfWhitelist.json") as f:
         abi = json.load(f)
 
     contract = eth_client.eth.contract(address=l1_contract_address, abi=abi)
@@ -175,7 +175,7 @@ def get_current_operator(eth_client, l1_contract_address):
 
 def get_next_operator(eth_client, l1_contract_address):
     import json
-    with open("../whitelist/src/l1/pacaya/abi/PreconfWhitelist.json") as f:
+    with open("../pacaya/src/l1/abi/PreconfWhitelist.json") as f:
         abi = json.load(f)
 
     contract = eth_client.eth.contract(address=l1_contract_address, abi=abi)
