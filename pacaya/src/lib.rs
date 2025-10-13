@@ -1,11 +1,11 @@
-use crate::{signer::Signer, utils::config::PacayaConfig};
+use crate::utils::config::PacayaConfig;
 use anyhow::Error;
 use common::{
     config::ConfigTrait,
     funds_monitor,
     l1::{self as common_l1, el_trait::ELTrait},
     metrics::{self, Metrics},
-    shared, signer,
+    shared,
 };
 use l1::execution_layer::ExecutionLayer;
 use std::sync::Arc;
@@ -21,7 +21,6 @@ pub mod utils;
 
 pub async fn create_pacaya_node(
     config: common::config::Config,
-    l1_signer: Arc<Signer>,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
     switch_timestamp: Option<u64>,
@@ -31,7 +30,7 @@ pub async fn create_pacaya_node(
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
-        common_l1::config::EthereumL1Config::new(&config, l1_signer),
+        common_l1::config::EthereumL1Config::new(&config).await?,
         l1::config::EthereumL1Config::try_from(pacaya_config.clone())?,
         transaction_error_sender,
         metrics.clone(),

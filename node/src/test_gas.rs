@@ -3,7 +3,7 @@
 use anyhow::Error;
 use clap::Parser;
 use common::config::ConfigTrait;
-use common::{l1 as common_l1, signer, utils as common_utils};
+use common::{l1 as common_l1, utils as common_utils};
 use pacaya::utils::config::PacayaConfig;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -38,15 +38,8 @@ async fn main() -> Result<(), Error> {
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
 
-    let l1_signer = signer::create_signer(
-        config.web3signer_l1_url.clone(),
-        config.catalyst_node_ecdsa_private_key.clone(),
-        config.preconfer_address.clone(),
-    )
-    .await?;
-
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
-        common_l1::config::EthereumL1Config::new(&config, l1_signer),
+        common_l1::config::EthereumL1Config::new(&config).await?,
         EthereumL1Config::try_from(pacaya_config.clone())?,
         transaction_error_sender,
         Arc::new(common::metrics::Metrics::new()),

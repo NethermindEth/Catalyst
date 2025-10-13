@@ -1,6 +1,7 @@
 use crate::config::Config;
-use crate::signer::Signer;
+use crate::signer::{Signer, create_signer};
 use alloy::primitives::Address;
+use anyhow::Error;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -21,8 +22,15 @@ pub struct EthereumL1Config {
 }
 
 impl EthereumL1Config {
-    pub fn new(config: &Config, l1_signer: Arc<Signer>) -> Self {
-        Self {
+    pub async fn new(config: &Config) -> Result<Self, Error> {
+        let signer = create_signer(
+            config.web3signer_l1_url.clone(),
+            config.catalyst_node_ecdsa_private_key.clone(),
+            config.preconfer_address.clone(),
+        )
+        .await?;
+
+        Ok(Self {
             execution_rpc_urls: config.l1_rpc_urls.clone(),
             consensus_rpc_url: config.l1_beacon_url.clone(),
             slot_duration_sec: config.l1_slot_duration_sec,
@@ -33,13 +41,13 @@ impl EthereumL1Config {
             max_attempts_to_send_tx: config.max_attempts_to_send_tx,
             max_attempts_to_wait_tx: config.max_attempts_to_wait_tx,
             delay_between_tx_attempts_sec: config.delay_between_tx_attempts_sec,
-            signer: l1_signer,
+            signer,
             preconfer_address: config.preconfer_address.clone().map(|s| {
                 s.parse()
                     .expect("Preconfer address is not a valid Ethereum address")
             }),
             extra_gas_percentage: config.extra_gas_percentage,
-        }
+        })
     }
 }
 
