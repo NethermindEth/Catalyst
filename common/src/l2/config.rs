@@ -1,4 +1,5 @@
-use crate::signer::Signer;
+use crate::config::Config;
+use crate::signer::{self, Signer};
 use crate::utils::file_operations::read_jwt_secret;
 use alloy::primitives::{Address, B256};
 use anyhow::Error;
@@ -34,8 +35,15 @@ pub struct TaikoConfig {
 }
 
 impl TaikoConfig {
-    pub fn new(config: &crate::config::Config, singer: Arc<Signer>) -> Result<Self, Error> {
+    pub async fn new(config: &Config) -> Result<Self, Error> {
         let jwt_secret_bytes = read_jwt_secret(&config.jwt_secret_file_path)?;
+        let signer = signer::create_signer(
+            config.web3signer_l2_url.clone(),
+            config.catalyst_node_ecdsa_private_key.clone(),
+            config.preconfer_address.clone(),
+        )
+        .await?;
+
         Ok(Self {
             taiko_geth_url: config.taiko_geth_rpc_url.clone(),
             taiko_geth_auth_url: config.taiko_geth_auth_rpc_url.clone(),
@@ -49,7 +57,7 @@ impl TaikoConfig {
             rpc_l2_execution_layer_timeout: config.rpc_l2_execution_layer_timeout,
             rpc_driver_preconf_timeout: config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: config.rpc_driver_status_timeout,
-            signer: singer,
+            signer: signer,
         })
     }
 }

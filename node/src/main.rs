@@ -68,12 +68,6 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
         config.preconfer_address.clone(),
     )
     .await?;
-    let l2_signer = signer::create_signer(
-        config.web3signer_l2_url.clone(),
-        config.catalyst_node_ecdsa_private_key.clone(),
-        config.preconfer_address.clone(),
-    )
-    .await?;
 
     match fork_info.fork {
         Fork::Pacaya => {
@@ -85,7 +79,6 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
             create_pacaya_node(
                 config.clone(),
                 l1_signer,
-                l2_signer,
                 metrics.clone(),
                 cancel_token.clone(),
                 fork_info.switch_timestamp,

@@ -22,7 +22,6 @@ pub mod utils;
 pub async fn create_pacaya_node(
     config: common::config::Config,
     l1_signer: Arc<Signer>,
-    l2_signer: Arc<Signer>,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
     switch_timestamp: Option<u64>,
@@ -42,14 +41,14 @@ pub async fn create_pacaya_node(
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
-    let taiko = Arc::new(
-        common::l2::taiko::Taiko::new(
-            ethereum_l1.clone(),
-            metrics.clone(),
-            common::l2::config::TaikoConfig::new(&config, l2_signer)?,
-        )
+    let taiko_config = common::l2::config::TaikoConfig::new(&config)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
+        .map_err(|e| anyhow::anyhow!("Failed to create TaikoCOnfig: {}", e))?;
+
+    let taiko = Arc::new(
+        common::l2::taiko::Taiko::new(ethereum_l1.clone(), metrics.clone(), taiko_config)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
     );
 
     let max_anchor_height_offset = ethereum_l1
