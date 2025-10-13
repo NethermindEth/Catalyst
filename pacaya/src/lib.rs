@@ -1,121 +1,25 @@
 use crate::signer::Signer;
 use anyhow::Error;
 use common::{
-    fork_info::{Fork, ForkInfo},
     funds_monitor,
     l1::{self as common_l1, el_trait::ELTrait},
     l2,
     metrics::{self, Metrics},
     shared, signer, utils as common_utils,
 };
-use l1::pacaya::execution_layer::ExecutionLayer;
+use l1::execution_layer::ExecutionLayer;
 use std::sync::Arc;
-use tokio::{
-    signal::unix::{SignalKind, signal},
-    sync::mpsc,
-};
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 mod chain_monitor;
 mod forced_inclusion;
-mod l1;
+pub mod l1;
 mod node;
-mod utils;
+pub mod utils;
 
-enum ExecutionStopped {
-    CloseApp,
-    RecreateNode,
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Error> {
-    common_utils::logging::init_logging();
-
-    info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
-
-    let mut iteration = 0;
-    loop {
-        iteration += 1;
-        match run_node(iteration).await {
-            Ok(ExecutionStopped::CloseApp) => {
-                info!("👋 ExecutionStopped::CloseApp , shutting down...");
-                break;
-            }
-            Ok(ExecutionStopped::RecreateNode) => {
-                info!("🔄 ExecutionStopped::RecreateNode, recreating node...");
-                continue;
-            }
-            Err(e) => {
-                error!("Failed to run node: {}", e);
-                return Err(e);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
-    info!("Running node iteration: {iteration}");
-
-    let fork_info = ForkInfo::from_env()?;
-
-    let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
-
-    let cancel_token = CancellationToken::new();
-
-    let metrics = Arc::new(Metrics::new());
-
-    // Set up panic hook to cancel token on panic
-    let panic_cancel_token = cancel_token.clone();
-    std::panic::set_hook(Box::new(move |panic_info| {
-        error!("Panic occurred: {:?}", panic_info);
-        panic_cancel_token.cancel();
-        info!("Cancellation token triggered, initiating shutdown...");
-    }));
-
-    let l1_signer = signer::create_signer(
-        config.web3signer_l1_url.clone(),
-        config.catalyst_node_ecdsa_private_key.clone(),
-        config.preconfer_address.clone(),
-    )
-    .await?;
-    let l2_signer = signer::create_signer(
-        config.web3signer_l2_url.clone(),
-        config.catalyst_node_ecdsa_private_key.clone(),
-        config.preconfer_address.clone(),
-    )
-    .await?;
-
-    match fork_info.fork {
-        Fork::Pacaya => {
-            info!(
-                "Current fork: Pacaya, switch_timestamp: {:?}",
-                fork_info.switch_timestamp
-            );
-            create_pacaya_node(
-                config.clone(),
-                l1_signer,
-                l2_signer,
-                metrics.clone(),
-                cancel_token.clone(),
-                fork_info.switch_timestamp,
-            )
-            .await?;
-        }
-        Fork::Shasta => {
-            info!("Current fork: Shasta");
-            unimplemented!("Shasta fork is not yet implemented");
-        }
-    }
-
-    metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());
-
-    Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
-}
-
-async fn create_pacaya_node(
+pub async fn create_pacaya_node(
     config: common_utils::config::Config<utils::config::Config>,
     l1_signer: Arc<Signer>,
     l2_signer: Arc<Signer>,
@@ -126,7 +30,7 @@ async fn create_pacaya_node(
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
         common_l1::config::EthereumL1Config::new(&config, l1_signer),
-        l1::pacaya::config::EthereumL1Config::try_from(config.specific_config.clone())?,
+        l1::config::EthereumL1Config::try_from(config.specific_config.clone())?,
         transaction_error_sender,
         metrics.clone(),
     )
@@ -293,32 +197,4 @@ async fn get_handover_window_slots(execution_layer: &ExecutionLayer) -> Result<u
         );
     }
     handover_window_slots
-}
-
-async fn wait_for_the_termination(
-    cancel_token: CancellationToken,
-    shutdown_delay_secs: u64,
-) -> ExecutionStopped {
-    info!("Starting signal handler...");
-    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
-    tokio::select! {
-        _ = sigterm.recv() => {
-            info!("Received SIGTERM, shutting down...");
-            cancel_token.cancel();
-            // Give tasks a little time to finish
-            info!("Waiting for {}s", shutdown_delay_secs);
-            tokio::time::sleep(tokio::time::Duration::from_secs(shutdown_delay_secs)).await;
-            ExecutionStopped::CloseApp
-        }
-        _ = tokio::signal::ctrl_c() => {
-            info!("Received Ctrl+C, shutting down...");
-            cancel_token.cancel();
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            ExecutionStopped::CloseApp
-        }
-        _ = cancel_token.cancelled() => {
-            info!("Shutdown signal received, exiting Catalyst node...");
-            ExecutionStopped::RecreateNode
-        }
-    }
 }

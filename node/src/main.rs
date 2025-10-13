@@ -1,0 +1,132 @@
+use anyhow::Error;
+use common::{
+    fork_info::{Fork, ForkInfo},
+    metrics::{self, Metrics},
+    signer, utils as common_utils,
+};
+use pacaya::create_pacaya_node;
+use std::sync::Arc;
+use tokio::signal::unix::{SignalKind, signal};
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
+
+enum ExecutionStopped {
+    CloseApp,
+    RecreateNode,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    common_utils::logging::init_logging();
+
+    info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
+
+    let mut iteration = 0;
+    loop {
+        iteration += 1;
+        match run_node(iteration).await {
+            Ok(ExecutionStopped::CloseApp) => {
+                info!("👋 ExecutionStopped::CloseApp , shutting down...");
+                break;
+            }
+            Ok(ExecutionStopped::RecreateNode) => {
+                info!("🔄 ExecutionStopped::RecreateNode, recreating node...");
+                continue;
+            }
+            Err(e) => {
+                error!("Failed to run node: {}", e);
+                return Err(e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
+    info!("Running node iteration: {iteration}");
+
+    let fork_info = ForkInfo::from_env()?;
+
+    let config =
+        common_utils::config::Config::<pacaya::utils::config::Config>::read_env_variables();
+
+    let cancel_token = CancellationToken::new();
+
+    let metrics = Arc::new(Metrics::new());
+
+    // Set up panic hook to cancel token on panic
+    let panic_cancel_token = cancel_token.clone();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        error!("Panic occurred: {:?}", panic_info);
+        panic_cancel_token.cancel();
+        info!("Cancellation token triggered, initiating shutdown...");
+    }));
+
+    let l1_signer = signer::create_signer(
+        config.web3signer_l1_url.clone(),
+        config.catalyst_node_ecdsa_private_key.clone(),
+        config.preconfer_address.clone(),
+    )
+    .await?;
+    let l2_signer = signer::create_signer(
+        config.web3signer_l2_url.clone(),
+        config.catalyst_node_ecdsa_private_key.clone(),
+        config.preconfer_address.clone(),
+    )
+    .await?;
+
+    match fork_info.fork {
+        Fork::Pacaya => {
+            info!(
+                "Current fork: Pacaya, switch_timestamp: {:?}",
+                fork_info.switch_timestamp
+            );
+            create_pacaya_node(
+                config.clone(),
+                l1_signer,
+                l2_signer,
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info.switch_timestamp,
+            )
+            .await?;
+        }
+        Fork::Shasta => {
+            info!("Current fork: Shasta");
+            unimplemented!("Shasta fork is not yet implemented");
+        }
+    }
+
+    metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());
+
+    Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
+}
+
+async fn wait_for_the_termination(
+    cancel_token: CancellationToken,
+    shutdown_delay_secs: u64,
+) -> ExecutionStopped {
+    info!("Starting signal handler...");
+    let mut sigterm = signal(SignalKind::terminate()).expect("Failed to set up SIGTERM handler");
+    tokio::select! {
+        _ = sigterm.recv() => {
+            info!("Received SIGTERM, shutting down...");
+            cancel_token.cancel();
+            // Give tasks a little time to finish
+            info!("Waiting for {}s", shutdown_delay_secs);
+            tokio::time::sleep(tokio::time::Duration::from_secs(shutdown_delay_secs)).await;
+            ExecutionStopped::CloseApp
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received Ctrl+C, shutting down...");
+            cancel_token.cancel();
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            ExecutionStopped::CloseApp
+        }
+        _ = cancel_token.cancelled() => {
+            info!("Shutdown signal received, exiting Catalyst node...");
+            ExecutionStopped::RecreateNode
+        }
+    }
+}

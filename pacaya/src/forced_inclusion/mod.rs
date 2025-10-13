@@ -1,4 +1,4 @@
-use crate::l1::pacaya::execution_layer::ExecutionLayer;
+use crate::l1::execution_layer::ExecutionLayer;
 use alloy::rpc::types::Transaction;
 use anyhow::Error;
 use common::{blob::blob_parser::extract_transactions_from_blob, l1::ethereum_l1::EthereumL1};

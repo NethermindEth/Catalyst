@@ -1,6 +1,6 @@
 use super::batch_manager::BatchManager;
 use crate::{
-    l1::pacaya::execution_layer::ExecutionLayer, metrics::Metrics,
+    l1::execution_layer::ExecutionLayer, metrics::Metrics,
     node::batch_manager::config::BatchesToSend,
 };
 use alloy::primitives::B256;

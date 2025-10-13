@@ -9,7 +9,7 @@ on:
     paths:
       - "common/**"
       - "permissionless/**"
-      - "whitelist/**"
+      - "node/**"
       - "tools/p2p_node/p2p_network/**"
       - "e2e_tests/**"
 
@@ -133,7 +133,7 @@ jobs:
           else
             echo "TAGS=latest" >> $GITHUB_ENV
           fi
-          
+
       - name: Login to Dockerhub registry with ORAS
         run: |
           oras login ${{ env.DOCKER_PUBLIC_REGISTRY }} \

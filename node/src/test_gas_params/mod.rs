@@ -1,10 +1,10 @@
-#[allow(clippy::all)]
-use crate::l1::pacaya::execution_layer::ExecutionLayer;
 use anyhow::Error;
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
 };
+#[allow(clippy::all)]
+use pacaya::l1::execution_layer::ExecutionLayer;
 use std::{str::FromStr, sync::Arc};
 use tokio::time::{Duration, sleep};
 use tracing::info;
