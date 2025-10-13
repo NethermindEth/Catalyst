@@ -12139,6 +12139,7 @@ dependencies = [
  "clap",
  "common",
  "event-indexer",
+ "rpc",
  "serde_json",
  "tokio",
  "tokio-util",

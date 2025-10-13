@@ -18,6 +18,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 mod chain_monitor;
+mod event_indexer;
 mod forced_inclusion;
 mod l1;
 mod node;
@@ -106,7 +107,14 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
         }
         Fork::Shasta => {
             info!("Current fork: Shasta");
-            unimplemented!("Shasta fork is not yet implemented");
+            create_shasta_node(
+                config.clone(),
+                l1_signer,
+                l2_signer,
+                metrics.clone(),
+                cancel_token.clone(),
+            )
+            .await?;
         }
     }
 
@@ -275,6 +283,30 @@ async fn create_pacaya_node(
         config.bridge_transaction_fee,
     );
     funds_monitor.run();
+
+    Ok(())
+}
+
+async fn create_shasta_node(
+    config: common_utils::config::Config<utils::config::Config>,
+    _l1_signer: Arc<Signer>,
+    _l2_signer: Arc<Signer>,
+    _metrics: Arc<Metrics>,
+    _cancel_token: CancellationToken,
+) -> Result<(), Error> {
+    let event_indexer = event_indexer::EventIndexer::new(
+        config
+            .l1_rpc_urls
+            .first()
+            .expect("L1 RPC URL is required")
+            .clone(),
+        config
+            .specific_config
+            .contract_addresses
+            .shasta_inbox
+            .clone(),
+    )
+    .await?;
 
     Ok(())
 }
