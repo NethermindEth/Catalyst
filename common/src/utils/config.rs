@@ -6,48 +6,57 @@ use crate::blob::constants::MAX_BLOB_DATA_SIZE;
 
 #[derive(Debug, Clone)]
 pub struct Config<T: ConfigTrait> {
+    // Signer
     pub preconfer_address: Option<String>,
-    pub taiko_geth_rpc_url: String,
-    pub taiko_geth_auth_rpc_url: String,
-    pub taiko_driver_url: String,
-    pub catalyst_node_ecdsa_private_key: Option<String>,
-    pub mev_boost_url: String,
-    pub l1_rpc_urls: Vec<String>,
-    pub l1_beacon_url: String,
     pub web3signer_l1_url: Option<String>,
     pub web3signer_l2_url: Option<String>,
+    pub catalyst_node_ecdsa_private_key: Option<String>,
+    // L1
+    pub l1_rpc_urls: Vec<String>,
+    pub l1_beacon_url: String,
     pub l1_slot_duration_sec: u64,
     pub l1_slots_per_epoch: u64,
     pub preconf_heartbeat_ms: u64,
-    pub msg_expiry_sec: u64,
+    // L2
+    pub taiko_geth_rpc_url: String,
+    pub taiko_geth_auth_rpc_url: String,
+    pub taiko_driver_url: String,
+    /// jwt secret file path for taiko-geth and taiko-driver
     pub jwt_secret_file_path: String,
     pub rpc_l2_execution_layer_timeout: Duration,
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
+    // Taiko contracts
     pub taiko_anchor_address: String,
     pub taiko_bridge_address: String,
+    // Batch building parameters
     pub max_bytes_size_of_batch: u64,
     pub max_blocks_per_batch: u16,
     pub max_time_shift_between_blocks_sec: u64,
     pub max_anchor_height_offset_reduction: u64,
+    // Transaction parameters
     pub min_priority_fee_per_gas_wei: u64,
     pub tx_fees_increase_percentage: u64,
     pub max_attempts_to_send_tx: u64,
     pub max_attempts_to_wait_tx: u64,
     pub delay_between_tx_attempts_sec: u64,
+    pub extra_gas_percentage: u64,
+    // Thresholds for balances
     pub threshold_eth: u128,
     pub threshold_taiko: u128,
-    pub amount_to_bridge_from_l2_to_l1: u128,
+    // Bridgeing
     pub disable_bridging: bool,
-    pub max_bytes_per_tx_list: u64,
-    pub throttling_factor: u64,
-    pub min_bytes_per_tx_list: u64,
-    pub extra_gas_percentage: u64,
-    pub preconf_min_txs: u64,
-    pub preconf_max_skipped_l2_slots: u64,
-    pub specific_config: T,
+    pub amount_to_bridge_from_l2_to_l1: u128,
     pub bridge_relayer_fee: u64,
     pub bridge_transaction_fee: u64,
+    // Block production and throttling
+    pub max_bytes_per_tx_list: u64,
+    pub min_bytes_per_tx_list: u64,
+    pub throttling_factor: u64,
+    pub preconf_min_txs: u64,
+    pub preconf_max_skipped_l2_slots: u64,
+
+    pub specific_config: T,
 }
 
 impl<T: ConfigTrait> Config<T> {
@@ -118,11 +127,6 @@ impl<T: ConfigTrait> Config<T> {
                 }
             })
             .expect("PRECONF_HEARTBEAT_MS must be a number");
-
-        let msg_expiry_sec = std::env::var("MSG_EXPIRY_SEC")
-            .unwrap_or("3600".to_string())
-            .parse::<u64>()
-            .expect("MSG_EXPIRY_SEC must be a number");
 
         let jwt_secret_file_path = std::env::var("JWT_SECRET_FILE_PATH").unwrap_or_else(|_| {
             warn!(
@@ -299,8 +303,6 @@ impl<T: ConfigTrait> Config<T> {
             taiko_driver_url: std::env::var("TAIKO_DRIVER_URL")
                 .unwrap_or("http://127.0.0.1:1236".to_string()),
             catalyst_node_ecdsa_private_key,
-            mev_boost_url: std::env::var("MEV_BOOST_URL")
-                .unwrap_or("http://127.0.0.1:8080".to_string()),
             l1_rpc_urls: std::env::var("L1_RPC_URLS")
                 .unwrap_or("wss://127.0.0.1".to_string())
                 .split(",")
@@ -313,7 +315,6 @@ impl<T: ConfigTrait> Config<T> {
             l1_slot_duration_sec,
             l1_slots_per_epoch,
             preconf_heartbeat_ms,
-            msg_expiry_sec,
             // contract_addresses,
             jwt_secret_file_path,
             rpc_l2_execution_layer_timeout,
@@ -351,7 +352,6 @@ Configuration:{}
 Taiko geth L2 RPC URL: {},
 Taiko geth auth RPC URL: {},
 Taiko driver URL: {},
-MEV Boost URL: {},
 L1 RPC URL: {},
 Consensus layer URL: {},
 Web3signer L1 URL: {},
@@ -359,7 +359,6 @@ Web3signer L2 URL: {},
 L1 slot duration: {}s
 L1 slots per epoch: {}
 L2 slot duration (heart beat): {}
-Preconf registry expiry: {}s
 jwt secret file path: {}
 rpc L2 EL timeout: {}ms
 rpc driver preconf timeout: {}ms
@@ -396,7 +395,6 @@ bridge transaction fee: {}wei
             config.taiko_geth_rpc_url,
             config.taiko_geth_auth_rpc_url,
             config.taiko_driver_url,
-            config.mev_boost_url,
             match config.l1_rpc_urls.split_first() {
                 Some((first, rest)) => {
                     let mut urls = vec![format!("{} (main)", first)];
@@ -411,7 +409,6 @@ bridge transaction fee: {}wei
             config.l1_slot_duration_sec,
             config.l1_slots_per_epoch,
             config.preconf_heartbeat_ms,
-            config.msg_expiry_sec,
             config.jwt_secret_file_path,
             config.rpc_l2_execution_layer_timeout.as_millis(),
             config.rpc_driver_preconf_timeout.as_millis(),

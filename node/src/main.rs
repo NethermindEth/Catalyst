@@ -2,7 +2,7 @@ use anyhow::Error;
 use common::{
     fork_info::{Fork, ForkInfo},
     metrics::{self, Metrics},
-    signer, utils as common_utils,
+    signer,
 };
 use pacaya::create_pacaya_node;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ enum ExecutionStopped {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    common_utils::logging::init_logging();
+    common::utils::logging::init_logging();
 
     info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
 
@@ -49,7 +49,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     let fork_info = ForkInfo::from_env()?;
 
     let config =
-        common_utils::config::Config::<pacaya::utils::config::Config>::read_env_variables();
+        common::utils::config::Config::<pacaya::utils::config::Config>::read_env_variables();
 
     let cancel_token = CancellationToken::new();
 
