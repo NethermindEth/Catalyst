@@ -1,4 +1,4 @@
-use crate::utils::config::{Config as utils_config, L1ContractAddresses};
+use crate::utils::config::{L1ContractAddresses, PacayaConfig};
 use alloy::primitives::Address;
 use tokio::sync::OnceCell;
 
@@ -37,10 +37,10 @@ pub struct EthereumL1Config {
     pub contract_addresses: ContractAddresses,
 }
 
-impl TryFrom<utils_config> for EthereumL1Config {
+impl TryFrom<PacayaConfig> for EthereumL1Config {
     type Error = anyhow::Error;
 
-    fn try_from(config: utils_config) -> Result<Self, Self::Error> {
+    fn try_from(config: PacayaConfig) -> Result<Self, Self::Error> {
         Ok(EthereumL1Config {
             contract_addresses: ContractAddresses::try_from(config.contract_addresses)?,
         })

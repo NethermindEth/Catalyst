@@ -1,6 +1,7 @@
-use crate::signer::Signer;
+use crate::{signer::Signer, utils::config::PacayaConfig};
 use anyhow::Error;
 use common::{
+    config::ConfigTrait,
     funds_monitor,
     l1::{self as common_l1, el_trait::ELTrait},
     l2,
@@ -20,17 +21,20 @@ mod node;
 pub mod utils;
 
 pub async fn create_pacaya_node(
-    config: common_utils::config::Config<utils::config::Config>,
+    config: common::config::Config,
     l1_signer: Arc<Signer>,
     l2_signer: Arc<Signer>,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
     switch_timestamp: Option<u64>,
 ) -> Result<(), Error> {
+    // Read specific config from environment variables
+    let pacaya_config = PacayaConfig::read_env_variables();
+
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
         common_l1::config::EthereumL1Config::new(&config, l1_signer),
-        l1::config::EthereumL1Config::try_from(config.specific_config.clone())?,
+        l1::config::EthereumL1Config::try_from(pacaya_config.clone())?,
         transaction_error_sender,
         metrics.clone(),
     )
@@ -102,11 +106,7 @@ pub async fn create_pacaya_node(
                 .expect("L1 RPC URL is required")
                 .clone(),
             config.taiko_geth_rpc_url.clone(),
-            config
-                .specific_config
-                .contract_addresses
-                .taiko_inbox
-                .clone(),
+            pacaya_config.contract_addresses.taiko_inbox.clone(),
             cancel_token.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create ChainMonitor: {}", e))?,
@@ -121,9 +121,9 @@ pub async fn create_pacaya_node(
         .unwrap_or_else(|e| {
             warn!(
                 "Failed to get handover window slots: {e}, using default handover window slots: {}",
-                config.specific_config.handover_window_slots
+                pacaya_config.handover_window_slots
             );
-            config.specific_config.handover_window_slots
+            pacaya_config.handover_window_slots
         });
 
     let node = node::Node::new(
@@ -136,11 +136,10 @@ pub async fn create_pacaya_node(
         node::config::NodeConfig {
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
             handover_window_slots,
-            handover_start_buffer_ms: config.specific_config.handover_start_buffer_ms,
-            l1_height_lag: config.specific_config.l1_height_lag,
-            propose_forced_inclusion: config.specific_config.propose_forced_inclusion,
-            simulate_not_submitting_at_the_end_of_epoch: config
-                .specific_config
+            handover_start_buffer_ms: pacaya_config.handover_start_buffer_ms,
+            l1_height_lag: pacaya_config.l1_height_lag,
+            propose_forced_inclusion: pacaya_config.propose_forced_inclusion,
+            simulate_not_submitting_at_the_end_of_epoch: pacaya_config
                 .simulate_not_submitting_at_the_end_of_epoch,
         },
         node::batch_manager::config::BatchBuilderConfig {

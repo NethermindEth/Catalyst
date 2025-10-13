@@ -46,10 +46,9 @@ async fn main() -> Result<(), Error> {
 async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     info!("Running node iteration: {iteration}");
 
-    let fork_info = ForkInfo::from_env()?;
+    let config = common::config::Config::read_env_variables();
 
-    let config =
-        common::utils::config::Config::<pacaya::utils::config::Config>::read_env_variables();
+    let fork_info = ForkInfo::from_config((&config).into())?;
 
     let cancel_token = CancellationToken::new();
 
@@ -78,6 +77,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
 
     match fork_info.fork {
         Fork::Pacaya => {
+            // TODO pacaya::utils::config::Config
             info!(
                 "Current fork: Pacaya, switch_timestamp: {:?}",
                 fork_info.switch_timestamp

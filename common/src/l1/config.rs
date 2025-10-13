@@ -1,5 +1,5 @@
+use crate::config::Config;
 use crate::signer::Signer;
-use crate::utils::{config::Config, config_trait::ConfigTrait};
 use alloy::primitives::Address;
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ pub struct EthereumL1Config {
 }
 
 impl EthereumL1Config {
-    pub fn new<T: ConfigTrait>(config: &Config<T>, l1_signer: Arc<Signer>) -> Self {
+    pub fn new(config: &Config, l1_signer: Arc<Signer>) -> Self {
         Self {
             execution_rpc_urls: config.l1_rpc_urls.clone(),
             consensus_rpc_url: config.l1_beacon_url.clone(),

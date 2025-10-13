@@ -24,7 +24,7 @@ async fn main() -> Result<(), Error> {
         env!("CARGO_PKG_VERSION")
     );
 
-    let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+    let config = common_utils::config::Config::read_env_variables();
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let metrics = Arc::new(Metrics::new());
 

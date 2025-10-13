@@ -1,4 +1,4 @@
-use common::utils::config_trait::ConfigTrait;
+use common::config::ConfigTrait;
 use tracing::warn;
 
 #[allow(dead_code)] // TODO: remove this once we have a used shasta contract_addresses field
@@ -15,7 +15,7 @@ pub struct L1ContractAddresses {
 }
 
 #[derive(Debug, Clone)]
-pub struct Config {
+pub struct PacayaConfig {
     pub contract_addresses: L1ContractAddresses,
     pub handover_window_slots: u64,
     pub handover_start_buffer_ms: u64,
@@ -24,7 +24,7 @@ pub struct Config {
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
 }
 
-impl ConfigTrait for Config {
+impl ConfigTrait for PacayaConfig {
     fn read_env_variables() -> Self {
         let default_empty_address = "0x0000000000000000000000000000000000000000".to_string();
 
@@ -86,7 +86,7 @@ impl ConfigTrait for Config {
                 .parse::<bool>()
                 .expect("SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH must be a boolean");
 
-        Config {
+        PacayaConfig {
             contract_addresses,
             handover_window_slots,
             handover_start_buffer_ms,
@@ -98,7 +98,7 @@ impl ConfigTrait for Config {
 }
 
 use std::fmt;
-impl fmt::Display for Config {
+impl fmt::Display for PacayaConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Contract addresses: {:#?}", self.contract_addresses)?;
         writeln!(f, "handover window slots: {}", self.handover_window_slots)?;
