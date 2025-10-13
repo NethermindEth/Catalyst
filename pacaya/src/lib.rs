@@ -4,9 +4,8 @@ use common::{
     config::ConfigTrait,
     funds_monitor,
     l1::{self as common_l1, el_trait::ELTrait},
-    l2,
     metrics::{self, Metrics},
-    shared, signer, utils as common_utils,
+    shared, signer,
 };
 use l1::execution_layer::ExecutionLayer;
 use std::sync::Arc;
@@ -43,27 +42,11 @@ pub async fn create_pacaya_node(
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
-    let jwt_secret_bytes =
-        common_utils::file_operations::read_jwt_secret(&config.jwt_secret_file_path)?;
     let taiko = Arc::new(
-        l2::taiko::Taiko::new(
+        common::l2::taiko::Taiko::new(
             ethereum_l1.clone(),
             metrics.clone(),
-            l2::config::TaikoConfig::new(
-                config.taiko_geth_rpc_url.clone(),
-                config.taiko_geth_auth_rpc_url.clone(),
-                config.taiko_driver_url.clone(),
-                jwt_secret_bytes,
-                config.taiko_anchor_address.clone(),
-                config.taiko_bridge_address.clone(),
-                config.max_bytes_per_tx_list,
-                config.min_bytes_per_tx_list,
-                config.throttling_factor,
-                config.rpc_l2_execution_layer_timeout,
-                config.rpc_driver_preconf_timeout,
-                config.rpc_driver_status_timeout,
-                l2_signer,
-            )?,
+            common::l2::config::TaikoConfig::new(&config, l2_signer)?,
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
