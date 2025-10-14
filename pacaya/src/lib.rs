@@ -42,7 +42,7 @@ pub async fn create_pacaya_node(
 
     let taiko_config = common::l2::config::TaikoConfig::new(&config)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to create TaikoCOnfig: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to create TaikoConfig: {}", e))?;
 
     let taiko = Arc::new(
         common::l2::taiko::Taiko::new(ethereum_l1.clone(), metrics.clone(), taiko_config)
