@@ -1,5 +1,4 @@
-use crate::utils;
-use common::utils as common_utils;
+//use common::config::Config;
 
 #[derive(Debug, Clone)]
 pub struct NodeConfig {
@@ -11,8 +10,9 @@ pub struct NodeConfig {
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
 }
 
-impl From<common_utils::config::Config<utils::config::Config>> for NodeConfig {
-    fn from(config: common_utils::config::Config<utils::config::Config>) -> Self {
+/*
+impl From<Config> for NodeConfig {
+    fn from(config: Config) -> Self {
         Self {
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
             handover_window_slots: config.specific_config.handover_window_slots,
@@ -25,3 +25,4 @@ impl From<common_utils::config::Config<utils::config::Config>> for NodeConfig {
         }
     }
 }
+    */

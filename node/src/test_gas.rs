@@ -2,7 +2,9 @@
 
 use anyhow::Error;
 use clap::Parser;
-use common::{l1 as common_l1, signer, utils as common_utils};
+use common::config::ConfigTrait;
+use common::{l1 as common_l1, utils as common_utils};
+use pacaya::utils::config::PacayaConfig;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -30,21 +32,15 @@ async fn main() -> Result<(), Error> {
 
     let args = Args::parse();
 
-    let config =
-        common_utils::config::Config::<pacaya::utils::config::Config>::read_env_variables();
+    let config = common::config::Config::read_env_variables();
+
+    let pacaya_config = PacayaConfig::read_env_variables();
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
 
-    let l1_signer = signer::create_signer(
-        config.web3signer_l1_url.clone(),
-        config.catalyst_node_ecdsa_private_key.clone(),
-        config.preconfer_address.clone(),
-    )
-    .await?;
-
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
-        common_l1::config::EthereumL1Config::new(&config, l1_signer),
-        EthereumL1Config::try_from(config.specific_config.clone())?,
+        common_l1::config::EthereumL1Config::new(&config).await?,
+        EthereumL1Config::try_from(pacaya_config.clone())?,
         transaction_error_sender,
         Arc::new(common::metrics::Metrics::new()),
     )
@@ -57,7 +53,7 @@ async fn main() -> Result<(), Error> {
     test_gas_params::test_gas_params(
         ethereum_l1,
         args.test_gas,
-        config.specific_config.l1_height_lag,
+        pacaya_config.l1_height_lag,
         config.max_bytes_size_of_batch,
         transaction_error_receiver,
     )

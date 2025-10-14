@@ -2,7 +2,6 @@ use anyhow::Error;
 use common::{
     fork_info::{Fork, ForkInfo},
     metrics::{self, Metrics},
-    signer,
 };
 use pacaya::create_pacaya_node;
 use std::sync::Arc;
@@ -46,10 +45,9 @@ async fn main() -> Result<(), Error> {
 async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     info!("Running node iteration: {iteration}");
 
-    let fork_info = ForkInfo::from_env()?;
+    let config = common::config::Config::read_env_variables();
 
-    let config =
-        common::utils::config::Config::<pacaya::utils::config::Config>::read_env_variables();
+    let fork_info = ForkInfo::from_config((&config).into())?;
 
     let cancel_token = CancellationToken::new();
 
@@ -63,29 +61,15 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
         info!("Cancellation token triggered, initiating shutdown...");
     }));
 
-    let l1_signer = signer::create_signer(
-        config.web3signer_l1_url.clone(),
-        config.catalyst_node_ecdsa_private_key.clone(),
-        config.preconfer_address.clone(),
-    )
-    .await?;
-    let l2_signer = signer::create_signer(
-        config.web3signer_l2_url.clone(),
-        config.catalyst_node_ecdsa_private_key.clone(),
-        config.preconfer_address.clone(),
-    )
-    .await?;
-
     match fork_info.fork {
         Fork::Pacaya => {
+            // TODO pacaya::utils::config::Config
             info!(
                 "Current fork: Pacaya, switch_timestamp: {:?}",
                 fork_info.switch_timestamp
             );
             create_pacaya_node(
                 config.clone(),
-                l1_signer,
-                l2_signer,
                 metrics.clone(),
                 cancel_token.clone(),
                 fork_info.switch_timestamp,

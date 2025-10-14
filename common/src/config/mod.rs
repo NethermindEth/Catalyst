@@ -1,11 +1,14 @@
+mod config_trait;
+pub use config_trait::ConfigTrait;
+
 use std::time::Duration;
 use tracing::{info, warn};
 
-use super::config_trait::ConfigTrait;
 use crate::blob::constants::MAX_BLOB_DATA_SIZE;
+use crate::fork_info::Fork;
 
 #[derive(Debug, Clone)]
-pub struct Config<T: ConfigTrait> {
+pub struct Config {
     // Signer
     pub preconfer_address: Option<String>,
     pub web3signer_l1_url: Option<String>,
@@ -55,11 +58,12 @@ pub struct Config<T: ConfigTrait> {
     pub throttling_factor: u64,
     pub preconf_min_txs: u64,
     pub preconf_max_skipped_l2_slots: u64,
-
-    pub specific_config: T,
+    // fork info
+    pub current_fork: Fork,
+    pub fork_switch_timestamp: Option<u64>,
 }
 
-impl<T: ConfigTrait> Config<T> {
+impl Config {
     pub fn read_env_variables() -> Self {
         // Load environment variables from .env file
         dotenvy::dotenv().ok();
@@ -281,7 +285,6 @@ impl<T: ConfigTrait> Config<T> {
             .parse::<u64>()
             .expect("PRECONF_MAX_SKIPPED_L2_SLOTS must be a number");
 
-        let specific_config = T::read_env_variables();
         // 0.003 eth
         let bridge_relayer_fee = std::env::var("BRIDGE_RELAYER_FEE")
             .unwrap_or("3047459064000000".to_string())
@@ -293,6 +296,22 @@ impl<T: ConfigTrait> Config<T> {
             .unwrap_or("1000000000000000".to_string())
             .parse::<u64>()
             .expect("BRIDGE_TRANSACTION_FEE must be a number");
+
+        // Fork info
+        let current_fork = std::env::var("CURRENT_FORK")
+            .unwrap_or("pacaya".to_string())
+            .parse::<Fork>()
+            .expect("CURRENT_FORK must be a valid fork");
+
+        let fork_switch_timestamp = match std::env::var("FORK_SWITCH_TIMESTAMP") {
+            Err(_) => None,
+            Ok(timestamp) => {
+                let v = timestamp
+                    .parse::<u64>()
+                    .expect("FORK_SWITCH_TIMESTAMP must be a number");
+                Some(v)
+            }
+        };
 
         let config = Self {
             preconfer_address,
@@ -341,9 +360,10 @@ impl<T: ConfigTrait> Config<T> {
             extra_gas_percentage,
             preconf_min_txs,
             preconf_max_skipped_l2_slots,
-            specific_config,
             bridge_relayer_fee,
             bridge_transaction_fee,
+            current_fork,
+            fork_switch_timestamp,
         };
 
         info!(
@@ -385,7 +405,8 @@ min number of transaction to create a L2 block: {}
 max number of skipped L2 slots while creating a L2 block: {}
 bridge relayer fee: {}wei
 bridge transaction fee: {}wei
-{}
+current fork: {}
+fork switch timestamp: {:?}
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -435,7 +456,8 @@ bridge transaction fee: {}wei
             config.preconf_max_skipped_l2_slots,
             config.bridge_relayer_fee,
             config.bridge_transaction_fee,
-            config.specific_config,
+            config.current_fork,
+            config.fork_switch_timestamp,
         );
 
         config

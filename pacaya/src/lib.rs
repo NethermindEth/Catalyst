@@ -1,11 +1,11 @@
-use crate::signer::Signer;
+use crate::utils::config::PacayaConfig;
 use anyhow::Error;
 use common::{
+    config::ConfigTrait,
     funds_monitor,
     l1::{self as common_l1, el_trait::ELTrait},
-    l2,
     metrics::{self, Metrics},
-    shared, signer, utils as common_utils,
+    shared,
 };
 use l1::execution_layer::ExecutionLayer;
 use std::sync::Arc;
@@ -20,17 +20,18 @@ mod node;
 pub mod utils;
 
 pub async fn create_pacaya_node(
-    config: common_utils::config::Config<utils::config::Config>,
-    l1_signer: Arc<Signer>,
-    l2_signer: Arc<Signer>,
+    config: common::config::Config,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
     switch_timestamp: Option<u64>,
 ) -> Result<(), Error> {
+    // Read specific config from environment variables
+    let pacaya_config = PacayaConfig::read_env_variables();
+
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
-        common_l1::config::EthereumL1Config::new(&config, l1_signer),
-        l1::config::EthereumL1Config::try_from(config.specific_config.clone())?,
+        common_l1::config::EthereumL1Config::new(&config).await?,
+        l1::config::EthereumL1Config::try_from(pacaya_config.clone())?,
         transaction_error_sender,
         metrics.clone(),
     )
@@ -39,30 +40,14 @@ pub async fn create_pacaya_node(
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
-    let jwt_secret_bytes =
-        common_utils::file_operations::read_jwt_secret(&config.jwt_secret_file_path)?;
-    let taiko = Arc::new(
-        l2::taiko::Taiko::new(
-            ethereum_l1.clone(),
-            metrics.clone(),
-            l2::config::TaikoConfig::new(
-                config.taiko_geth_rpc_url.clone(),
-                config.taiko_geth_auth_rpc_url.clone(),
-                config.taiko_driver_url.clone(),
-                jwt_secret_bytes,
-                config.taiko_anchor_address.clone(),
-                config.taiko_bridge_address.clone(),
-                config.max_bytes_per_tx_list,
-                config.min_bytes_per_tx_list,
-                config.throttling_factor,
-                config.rpc_l2_execution_layer_timeout,
-                config.rpc_driver_preconf_timeout,
-                config.rpc_driver_status_timeout,
-                l2_signer,
-            )?,
-        )
+    let taiko_config = common::l2::config::TaikoConfig::new(&config)
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
+        .map_err(|e| anyhow::anyhow!("Failed to create TaikoConfig: {}", e))?;
+
+    let taiko = Arc::new(
+        common::l2::taiko::Taiko::new(ethereum_l1.clone(), metrics.clone(), taiko_config)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
     );
 
     let max_anchor_height_offset = ethereum_l1
@@ -102,11 +87,7 @@ pub async fn create_pacaya_node(
                 .expect("L1 RPC URL is required")
                 .clone(),
             config.taiko_geth_rpc_url.clone(),
-            config
-                .specific_config
-                .contract_addresses
-                .taiko_inbox
-                .clone(),
+            pacaya_config.contract_addresses.taiko_inbox.clone(),
             cancel_token.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create ChainMonitor: {}", e))?,
@@ -121,9 +102,9 @@ pub async fn create_pacaya_node(
         .unwrap_or_else(|e| {
             warn!(
                 "Failed to get handover window slots: {e}, using default handover window slots: {}",
-                config.specific_config.handover_window_slots
+                pacaya_config.handover_window_slots
             );
-            config.specific_config.handover_window_slots
+            pacaya_config.handover_window_slots
         });
 
     let node = node::Node::new(
@@ -136,11 +117,10 @@ pub async fn create_pacaya_node(
         node::config::NodeConfig {
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
             handover_window_slots,
-            handover_start_buffer_ms: config.specific_config.handover_start_buffer_ms,
-            l1_height_lag: config.specific_config.l1_height_lag,
-            propose_forced_inclusion: config.specific_config.propose_forced_inclusion,
-            simulate_not_submitting_at_the_end_of_epoch: config
-                .specific_config
+            handover_start_buffer_ms: pacaya_config.handover_start_buffer_ms,
+            l1_height_lag: pacaya_config.l1_height_lag,
+            propose_forced_inclusion: pacaya_config.propose_forced_inclusion,
+            simulate_not_submitting_at_the_end_of_epoch: pacaya_config
                 .simulate_not_submitting_at_the_end_of_epoch,
         },
         node::batch_manager::config::BatchBuilderConfig {

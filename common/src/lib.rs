@@ -1,6 +1,7 @@
 // Shared modules for the catalyst node
 pub mod blob;
 pub mod chain_monitor;
+pub mod config;
 pub mod crypto;
 pub mod fork_info;
 pub mod funds_monitor;
