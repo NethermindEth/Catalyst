@@ -1,7 +1,6 @@
 use common::config::ConfigTrait;
 use tracing::warn;
 
-#[allow(dead_code)] // TODO: remove this once we have a used shasta contract_addresses field
 #[derive(Debug, Clone)]
 pub struct L1ContractAddresses {
     pub taiko_inbox: String,
@@ -9,7 +8,6 @@ pub struct L1ContractAddresses {
     pub preconf_router: String,
     pub taiko_wrapper: String,
     pub forced_inclusion_store: String,
-    pub shasta_inbox: String,
     pub codec_address: String,
     pub anchor_address: String,
 }
@@ -48,14 +46,12 @@ impl ConfigTrait for PacayaConfig {
             read_contract_address("FORCED_INCLUSION_STORE_ADDRESS", "ForcedInclusionStore");
         let codec_address = read_contract_address("CODEC_ADDRESS", "Codec");
         let anchor_address = read_contract_address("ANCHOR_ADDRESS", "Anchor");
-        let shasta_inbox = read_contract_address("SHASTA_INBOX_ADDRESS", "TaikoL1");
         let contract_addresses = L1ContractAddresses {
             taiko_inbox,
             preconf_whitelist,
             preconf_router,
             taiko_wrapper,
             forced_inclusion_store,
-            shasta_inbox,
             codec_address,
             anchor_address,
         };

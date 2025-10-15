@@ -2,11 +2,11 @@
 [workspace]
 members = [
     "common",
+    "node",
     "pacaya",
     "permissionless",
     "tools/p2p_node/p2p_boot_node",
     "urc",
-    "node",
 ]
 resolver = "2"
 default-members = ["node"]
@@ -71,14 +71,16 @@ k256 = { version = "0.13", default-features = false, features = [
 ] }
 lazy_static = { version = "1.5", default-features = false }
 mockito = { version = "1.7", default-features = false }
+pacaya = { path = "pacaya" }
 prometheus = { version = "0.14", default-features = false }
 rand = { version = "0.9", default-features = false }
 rand_core = { version = "0.9", default-features = false }
 reqwest = { version = "0.12", default-features = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
+shasta = { path = "shasta" }
 
-event_indexer = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "479624c9429419bdb49cbf13552f542176a98012", package = "event-indexer", version = "2.0.0" }
+taiko_event_indexer = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "479624c9429419bdb49cbf13552f542176a98012", package = "event-indexer", version = "2.0.0" }
 taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "479624c9429419bdb49cbf13552f542176a98012", package = "rpc", version = "2.0.0" }
 tiny-keccak = { version = "2.0", default-features = false }
 tokio = { version = "1.45", default-features = false, features = ["full"] }

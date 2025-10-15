@@ -78,7 +78,8 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
         }
         Fork::Shasta => {
             info!("Current fork: Shasta");
-            unimplemented!("Shasta fork is not yet implemented");
+            shasta::create_shasta_node(config.clone(), metrics.clone(), cancel_token.clone())
+                .await?;
         }
     }
 

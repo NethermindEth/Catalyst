@@ -27,11 +27,14 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && mv /app/catalyst_node/target/release/catalyst_node /root
 
 # Use small size system for final image
-FROM gcr.io/distroless/cc
+FROM gcr.io/distroless/cc-debian13
 
 # Copy artifacts
 COPY --from=builder /root/catalyst_node /usr/local/bin/catalyst_node
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /bin/sleep /bin/sleep
+
+# Copy required shared libraries
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libzstd.so.1 /usr/lib/x86_64-linux-gnu/
 
 ENTRYPOINT ["catalyst_node"]

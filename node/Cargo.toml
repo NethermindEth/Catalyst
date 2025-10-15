@@ -23,8 +23,7 @@ clap = { workspace = true }
 common = { workspace = true }
 pacaya = { workspace = true }
 serde_json = { workspace = true }
-event_indexer = { workspace = true }
-taiko_rpc = { workspace = true }
+shasta = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
