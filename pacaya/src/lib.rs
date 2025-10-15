@@ -2,7 +2,6 @@ use crate::utils::config::PacayaConfig;
 use anyhow::Error;
 use common::{
     config::ConfigTrait,
-    funds_monitor,
     l1::{self as common_l1, el_trait::ELTrait},
     metrics::{self, Metrics},
     shared,
@@ -15,7 +14,9 @@ use tracing::{info, warn};
 
 mod chain_monitor;
 mod forced_inclusion;
+mod funds_monitor;
 pub mod l1;
+mod l2;
 mod node;
 pub mod utils;
 
@@ -40,12 +41,12 @@ pub async fn create_pacaya_node(
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
-    let taiko_config = common::l2::config::TaikoConfig::new(&config)
+    let taiko_config = l2::config::TaikoConfig::new(&config)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create TaikoConfig: {}", e))?;
 
     let taiko = Arc::new(
-        common::l2::taiko::Taiko::new(ethereum_l1.clone(), metrics.clone(), taiko_config)
+        l2::taiko::Taiko::new(ethereum_l1.clone(), metrics.clone(), taiko_config)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
     );

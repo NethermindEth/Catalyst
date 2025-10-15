@@ -5,7 +5,13 @@ use super::{
     operation_type::OperationType,
     preconf_blocks::{self, BuildPreconfBlockResponse},
 };
-use crate::{
+use alloy::{
+    consensus::BlockHeader,
+    eips::BlockNumberOrTag,
+    primitives::{Address, B256},
+};
+use anyhow::Error;
+use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
     metrics::Metrics,
     shared::{
@@ -15,12 +21,6 @@ use crate::{
     },
     utils::rpc_client::{HttpRPCClient, JSONRPCClient},
 };
-use alloy::{
-    consensus::BlockHeader,
-    eips::BlockNumberOrTag,
-    primitives::{Address, B256},
-};
-use anyhow::Error;
 use serde_json::Value;
 use std::{
     cmp::{max, min},

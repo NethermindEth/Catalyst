@@ -1,3 +1,4 @@
+use crate::l2::taiko::Taiko;
 use alloy::primitives::U256;
 use anyhow::Error;
 use std::{sync::Arc, time::Duration};
@@ -5,9 +6,8 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-use crate::{
+use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
-    l2::taiko::Taiko,
     metrics::Metrics,
 };
 

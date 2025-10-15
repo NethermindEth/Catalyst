@@ -1,13 +1,13 @@
 use crate::l1::execution_layer::{ExecutionLayer, PreconfOperator};
+use crate::l2::{
+    preconf_blocks::TaikoStatus,
+    taiko::{PreconfDriver, Taiko},
+};
 use anyhow::Error;
 use common::{
     l1::{
         ethereum_l1::EthereumL1,
         slot_clock::{Clock, RealClock, SlotClock},
-    },
-    l2::{
-        preconf_blocks::TaikoStatus,
-        taiko::{PreconfDriver, Taiko},
     },
     shared::l2_slot_info::L2SlotInfo,
     utils::types::*,
@@ -409,11 +409,11 @@ impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
 mod tests {
     use super::*;
     use crate::l1::bindings::preconf_router::IPreconfRouter;
+    use crate::l2::preconf_blocks;
     use alloy::primitives::B256;
     use alloy::primitives::U256;
     use chrono::DateTime;
     use common::l1::slot_clock::Clock;
-    use common::l2::preconf_blocks;
     use std::time::SystemTime;
 
     const HANDOVER_WINDOW_SLOTS: u64 = 6;

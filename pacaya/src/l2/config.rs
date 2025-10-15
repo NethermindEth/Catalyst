@@ -1,8 +1,8 @@
-use crate::config::Config;
-use crate::signer::{Signer, create_signer};
-use crate::utils::file_operations::read_jwt_secret;
 use alloy::primitives::{Address, B256};
 use anyhow::Error;
+use common::config::Config;
+use common::signer::{Signer, create_signer};
+use common::utils::file_operations::read_jwt_secret;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
