@@ -1,6 +1,9 @@
 use anyhow::Error;
 use common::{
-    l1 as common_l1, l1::ethereum_l1::EthereumL1, metrics::Metrics, signer, utils as common_utils,
+    config::ConfigTrait,
+    l1::{self as common_l1, ethereum_l1::EthereumL1},
+    metrics::Metrics,
+    utils as common_utils,
 };
 use std::sync::Arc;
 use tokio::{
@@ -24,7 +27,9 @@ async fn main() -> Result<(), Error> {
         env!("CARGO_PKG_VERSION")
     );
 
-    let config = common_utils::config::Config::<utils::config::Config>::read_env_variables();
+    let config = common::config::Config::read_env_variables();
+    let permissionless_config = crate::utils::config::Config::read_env_variables();
+
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let metrics = Arc::new(Metrics::new());
 
@@ -36,17 +41,10 @@ async fn main() -> Result<(), Error> {
         info!("Cancellation token triggered, initiating shutdown...");
     }));
 
-    let l1_signer = signer::create_signer(
-        config.web3signer_l1_url.clone(),
-        config.catalyst_node_ecdsa_private_key.clone(),
-        config.preconfer_address.clone(),
-    )
-    .await?;
-
     let ethereum_l1 = Arc::new(
         EthereumL1::<l1::execution_layer::ExecutionLayer>::new(
-            common_l1::config::EthereumL1Config::new(&config, l1_signer),
-            l1::config::EthereumL1Config::try_from(config.specific_config.clone())?,
+            common_l1::config::EthereumL1Config::new(&config).await?,
+            l1::config::EthereumL1Config::try_from(permissionless_config.clone())?,
             transaction_error_sender,
             metrics.clone(),
         )
@@ -59,7 +57,9 @@ async fn main() -> Result<(), Error> {
         ethereum_l1,
         transaction_error_receiver,
         metrics,
-        node::config::NodeConfig::from(config.clone()),
+        node::config::NodeConfig {
+            preconf_heartbeat_ms: config.preconf_heartbeat_ms,
+        },
     )
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
 

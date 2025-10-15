@@ -1,4 +1,4 @@
-use super::super::bindings::{LibSharedData, TaikoAnchor};
+use super::super::bindings::{TaikoAnchor, TaikoAnchor::BaseFeeConfig};
 use super::super::config::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
 use alloy::{
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
@@ -33,7 +33,7 @@ impl ExecutionLayer {
         anchor_block_id: u64,
         anchor_state_root: B256,
         parent_gas_used: u32,
-        base_fee_config: LibSharedData::BaseFeeConfig,
+        base_fee_config: BaseFeeConfig,
         base_fee: u64,
     ) -> Result<Transaction, Error> {
         // Create the contract call

@@ -2,16 +2,17 @@
 [workspace]
 members = [
     "common",
+    "pacaya",
     "permissionless",
     "tools/p2p_node/p2p_boot_node",
     "urc",
-    "whitelist",
+    "node",
 ]
 resolver = "2"
-default-members = ["whitelist", "urc"]
+default-members = ["node"]
 
 [workspace.package]
-version = "1.14.0"
+version = "1.19.0"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
