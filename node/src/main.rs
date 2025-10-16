@@ -30,7 +30,6 @@ async fn main() -> Result<(), Error> {
             }
             Ok(ExecutionStopped::RecreateNode) => {
                 info!("🔄 ExecutionStopped::RecreateNode, recreating node...");
-                tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
             Err(e) => {
