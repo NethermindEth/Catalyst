@@ -10,16 +10,13 @@ use alloy::{
 use anyhow::{Error, anyhow};
 use common::{
     execution_layer::ExecutionLayer as ExecutionLayerCommon,
-    l1::{
-        el_trait::ELTrait,
-        transaction_error::TransactionError,
-    },
+    l1::{el_trait::ELTrait, transaction_error::TransactionError},
     metrics::Metrics,
     shared::alloy_tools,
 };
+use pacaya::l1::protocol_config::{BaseFeeConfig, ProtocolConfig};
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
-use pacaya::l1::protocol_config::{BaseFeeConfig, ProtocolConfig};
 
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -57,10 +54,7 @@ impl ELTrait for ExecutionLayer {
             block_max_gas_limit: 0,
         };
 
-        let common = ExecutionLayerCommon::new(
-            provider.clone(),
-        )
-        .await?;
+        let common = ExecutionLayerCommon::new(provider.clone()).await?;
 
         Ok(Self {
             common,

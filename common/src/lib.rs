@@ -3,7 +3,6 @@ pub mod blob;
 pub mod chain_monitor;
 pub mod config;
 pub mod crypto;
-pub mod execution_layer;
 pub mod fork_info;
 pub mod l1;
 pub mod metrics;

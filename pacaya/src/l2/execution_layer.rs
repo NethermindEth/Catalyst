@@ -7,18 +7,17 @@ use alloy::{
     consensus::Transaction as AnchorTransaction,
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
     network::ReceiptResponse,
-    primitives::{Address, B256, Bytes,  Uint},
+    primitives::{Address, B256, Bytes, Uint},
     providers::{DynProvider, Provider},
-    rpc::types::{Transaction},
+    rpc::types::Transaction,
     signers::Signature,
 };
 use anyhow::Error;
 use common::crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
-use common::execution_layer::ExecutionLayer as ExecutionLayerCommon;
+use common::shared::execution_layer::ExecutionLayer as ExecutionLayerCommon;
 use serde_json::Value;
 use std::time::Duration;
 use tracing::{debug, info, warn};
-
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
