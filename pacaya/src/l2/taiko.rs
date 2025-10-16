@@ -126,11 +126,11 @@ impl Taiko {
     }
 
     pub async fn get_balance(&self, address: Address) -> Result<alloy::primitives::U256, Error> {
-        self.l2_execution_layer.get_balance(address).await
+        self.l2_execution_layer.common().get_account_balance(address).await
     }
 
     pub async fn get_latest_l2_block_id(&self) -> Result<u64, Error> {
-        self.l2_execution_layer.get_latest_l2_block_id().await
+        self.l2_execution_layer.common().get_latest_block_id().await
     }
 
     pub async fn get_l2_block_by_number(
@@ -139,7 +139,8 @@ impl Taiko {
         full_txs: bool,
     ) -> Result<alloy::rpc::types::Block, Error> {
         self.l2_execution_layer
-            .get_l2_block_by_number(number, full_txs)
+            .common()
+            .get_block_by_number(number, full_txs)
             .await
     }
 
@@ -168,14 +169,14 @@ impl Taiko {
         &self,
         hash: B256,
     ) -> Result<alloy::rpc::types::Transaction, Error> {
-        self.l2_execution_layer.get_transaction_by_hash(hash).await
+        self.l2_execution_layer.common().get_transaction_by_hash(hash).await
     }
 
     pub async fn get_l2_block_id_hash_and_gas_used(
         &self,
         block: BlockNumberOrTag,
     ) -> Result<(u64, B256, u64), Error> {
-        let block = self.l2_execution_layer.get_l2_block_header(block).await?;
+        let block = self.l2_execution_layer.common().get_block_header(block).await?;
 
         Ok((
             block.header.number(),
@@ -185,7 +186,7 @@ impl Taiko {
     }
 
     pub async fn get_l2_block_hash(&self, number: u64) -> Result<B256, Error> {
-        self.l2_execution_layer.get_l2_block_hash(number).await
+        self.l2_execution_layer.common().get_block_hash(number).await
     }
 
     pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfo, Error> {

@@ -6,20 +6,22 @@ use crate::shared::{alloy_tools, l2_slot_info::L2SlotInfo};
 use alloy::{
     consensus::Transaction as AnchorTransaction,
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
-    eips::BlockNumberOrTag,
     network::ReceiptResponse,
-    primitives::{Address, B256, Bytes, U256, Uint},
+    primitives::{Address, B256, Bytes,  Uint},
     providers::{DynProvider, Provider},
-    rpc::types::{Block as RpcBlock, Transaction},
+    rpc::types::{Transaction},
     signers::Signature,
 };
 use anyhow::Error;
 use common::crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
+use common::execution_layer::ExecutionLayer as ExecutionLayerCommon;
 use serde_json::Value;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
+
 pub struct L2ExecutionLayer {
+    common: ExecutionLayerCommon,
     provider: DynProvider,
     taiko_anchor: TaikoAnchor::TaikoAnchorInstance<DynProvider>,
     chain_id: u64,
@@ -39,7 +41,10 @@ impl L2ExecutionLayer {
 
         let taiko_anchor = TaikoAnchor::new(taiko_config.taiko_anchor_address, provider.clone());
 
+        let common = ExecutionLayerCommon::new(provider.clone()).await?;
+
         Ok(Self {
+            common,
             provider,
             taiko_anchor,
             chain_id,
@@ -47,35 +52,8 @@ impl L2ExecutionLayer {
         })
     }
 
-    pub async fn get_l2_block_hash(&self, number: u64) -> Result<B256, Error> {
-        let block = self
-            .get_l2_block_header(BlockNumberOrTag::Number(number))
-            .await?;
-        Ok(block.header.hash)
-    }
-
-    pub async fn get_l2_block_header(&self, block: BlockNumberOrTag) -> Result<RpcBlock, Error> {
-        self.provider
-            .get_block_by_number(block)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get L2 block header: {}", e))?
-            .ok_or(anyhow::anyhow!("Failed to get L2 block header"))
-    }
-
-    async fn get_latest_l2_block_with_txs(&self) -> Result<RpcBlock, Error> {
-        self.provider
-            .get_block_by_number(BlockNumberOrTag::Latest)
-            .full()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get latest L2 block: {}", e))?
-            .ok_or(anyhow::anyhow!("Failed to get latest L2 block"))
-    }
-
-    pub async fn get_balance(&self, address: Address) -> Result<U256, Error> {
-        self.provider
-            .get_balance(address)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get L2 balance: {}", e))
+    pub fn common(&self) -> &ExecutionLayerCommon {
+        &self.common
     }
 
     pub async fn get_forced_inclusion_form_l1origin(&self, block_id: u64) -> Result<bool, Error> {
@@ -89,48 +67,6 @@ impl L2ExecutionLayer {
             .get("isForcedInclusion")
             .and_then(Value::as_bool)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
-    }
-
-    pub async fn get_latest_l2_block_id(&self) -> Result<u64, Error> {
-        self.provider
-            .get_block_number()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get latest L2 block number: {}", e))
-    }
-
-    pub async fn get_l2_block_by_number(
-        &self,
-        number: u64,
-        full_txs: bool,
-    ) -> Result<alloy::rpc::types::Block, Error> {
-        let mut block_by_number = self
-            .provider
-            .get_block_by_number(BlockNumberOrTag::Number(number));
-
-        if full_txs {
-            block_by_number = block_by_number.full();
-        }
-
-        block_by_number
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get L2 block by number: {}", e))?
-            .ok_or(anyhow::anyhow!(
-                "Failed to get L2 block {}: value was None",
-                number
-            ))
-    }
-
-    pub async fn get_transaction_by_hash(
-        &self,
-        hash: B256,
-    ) -> Result<alloy::rpc::types::Transaction, Error> {
-        self.provider
-            .get_transaction_by_hash(hash)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get L2 transaction by hash: {}", e))?
-            .ok_or(anyhow::anyhow!(
-                "Failed to get L2 transaction: value is None"
-            ))
     }
 
     pub async fn get_base_fee(
@@ -167,7 +103,7 @@ impl L2ExecutionLayer {
     }
 
     pub async fn get_last_synced_anchor_block_id_from_geth(&self) -> Result<u64, Error> {
-        let block = self.get_latest_l2_block_with_txs().await?;
+        let block = self.common.get_latest_block_with_txs().await?;
         let (anchor_tx, _) = match block.transactions.as_transactions() {
             Some(txs) => txs
                 .split_first()

@@ -2,7 +2,7 @@ use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, B256},
     providers::{DynProvider, Provider},
-    rpc::types::{Filter, Log},
+    rpc::types::{Filter, Block as RpcBlock, Log},
 };
 use anyhow::Error;
 
@@ -95,5 +95,73 @@ impl ExecutionLayer {
             .get_logs(&filter)
             .await
             .map_err(|e| Error::msg(format!("Failed to get logs: {e}")))
+    }
+
+    pub async fn get_block_hash(&self, number: u64) -> Result<B256, Error> {
+        let block = self
+            .get_block_header(BlockNumberOrTag::Number(number))
+            .await?;
+        Ok(block.header.hash)
+    }
+
+    pub async fn get_block_header(&self, block: BlockNumberOrTag) -> Result<RpcBlock, Error> {
+        self.provider
+            .get_block_by_number(block)
+            .await
+            .map_err(|e| anyhow::anyhow!("[chain_id: {}]  Failed to get  block header: {}", self.chain_id, e))?
+            .ok_or(anyhow::anyhow!("[chain_id: {}] Failed to get block header", self.chain_id))
+    }
+
+    pub async fn get_latest_block_with_txs(&self) -> Result<RpcBlock, Error> {
+        self.provider
+            .get_block_by_number(BlockNumberOrTag::Latest)
+            .full()
+            .await
+            .map_err(|e| anyhow::anyhow!("[chain_id: {}]  Failed to get latest block: {}", self.chain_id, e))?
+            .ok_or(anyhow::anyhow!("[chain_id: {}]  Failed to get latest block", self.chain_id))
+    }
+
+    pub async fn get_latest_block_id(&self) -> Result<u64, Error> {
+        self.provider
+            .get_block_number()
+            .await
+            .map_err(|e| anyhow::anyhow!("[chain_id: {}] Failed to get latest block number: {}",self.chain_id, e))
+    }
+
+    pub async fn get_block_by_number(
+        &self,
+        number: u64,
+        full_txs: bool,
+    ) -> Result<alloy::rpc::types::Block, Error> {
+        let mut block_by_number = self
+            .provider
+            .get_block_by_number(BlockNumberOrTag::Number(number));
+
+        if full_txs {
+            block_by_number = block_by_number.full();
+        }
+
+        block_by_number
+            .await
+            .map_err(|e| anyhow::anyhow!("[chain_id: {}]  Failed to get block by number: {}", self.chain_id, e))?
+            .ok_or(anyhow::anyhow!(
+                "[chain_id: {}]  Failed to get L2 block {}: value was None",
+                self.chain_id,
+                number
+            ))
+    }
+
+    pub async fn get_transaction_by_hash(
+        &self,
+        hash: B256,
+    ) -> Result<alloy::rpc::types::Transaction, Error> {
+        self.provider
+            .get_transaction_by_hash(hash)
+            .await
+            .map_err(|e| anyhow::anyhow!("[chain_id: {}] Failed to get L2 transaction by hash: {}", self.chain_id, e))?
+            .ok_or(anyhow::anyhow!(
+                "[chain_id: {}] Failed to get transaction: value is None",
+                self.chain_id
+            ))
     }
 }
