@@ -7,23 +7,22 @@ use super::{
     },
     config::EthereumL1Config,
     propose_batch_builder::ProposeBatchBuilder,
+    protocol_config::{BaseFeeConfig, ProtocolConfig},
 };
 use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
+    eips::BlockNumberOrTag,
     primitives::{Address, U256},
     providers::DynProvider,
 };
 use anyhow::{Error, anyhow};
 use common::{
-    l1::{
-        bindings::IERC20,
-        config::{BaseFeeConfig, ProtocolConfig},
-        el_trait::ELTrait,
-        execution_layer::ExecutionLayer as ExecutionLayerCommon,
-        transaction_error::TransactionError,
-    },
+    execution_layer::ExecutionLayer as ExecutionLayerCommon,
+    l1::{bindings::IERC20, el_trait::ELTrait, transaction_error::TransactionError},
     metrics::Metrics,
     shared::{alloy_tools, l2_block::L2Block, l2_tx_lists::encode_and_compress},
+    transaction_monitor::TransactionMonitor,
+    utils::types::PreconferAddress,
 };
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -33,8 +32,13 @@ use tracing::{debug, info, warn};
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
+    preconfer_address: Address,
     config: EthereumL1Config,
     taiko_wrapper_contract: taiko_wrapper::TaikoWrapper::TaikoWrapperInstance<DynProvider>,
+    pub transaction_monitor: TransactionMonitor,
+    protocol_config: ProtocolConfig,
+    metrics: Arc<Metrics>,
+    extra_gas_percentage: u64,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -57,26 +61,33 @@ impl ELTrait for ExecutionLayer {
         let protocol_config =
             Self::fetch_protocol_config(&specific_config.contract_addresses.taiko_inbox, &provider)
                 .await?;
-        let common = ExecutionLayerCommon::new(
-            common_config,
-            transaction_error_channel,
-            metrics,
-            protocol_config,
-            provider.clone(),
-            preconfer_address,
-        )
-        .await?;
+        let common = ExecutionLayerCommon::new(provider.clone()).await?;
 
         let taiko_wrapper_contract = taiko_wrapper::TaikoWrapper::new(
             specific_config.contract_addresses.taiko_wrapper,
             provider.clone(),
         );
 
+        let transaction_monitor = TransactionMonitor::new(
+            provider.clone(),
+            &common_config,
+            transaction_error_channel,
+            metrics.clone(),
+            common.chain_id(),
+        )
+        .await
+        .map_err(|e| Error::msg(format!("Failed to create TransactionMonitor: {e}")))?;
+
         Ok(Self {
             common,
             provider,
+            preconfer_address,
             config: specific_config,
             taiko_wrapper_contract,
+            transaction_monitor,
+            protocol_config,
+            metrics,
+            extra_gas_percentage: common_config.extra_gas_percentage,
         })
     }
 
@@ -157,7 +168,7 @@ impl ExecutionLayer {
             tx_vec.extend(l2_block.prebuilt_tx_list.tx_list.clone());
 
             // Emit metrics for transaction count in this block
-            self.common.metrics.observe_block_tx_count(u64::from(count));
+            self.metrics.observe_block_tx_count(u64::from(count));
 
             /* times_shift is the difference in seconds between the current L2 block and the L2 previous block. */
             let time_shift: u8 = if i == 0 {
@@ -184,23 +195,21 @@ impl ExecutionLayer {
             forced_inclusion.is_some(),
         );
 
-        self.common
-            .metrics
+        self.metrics
             .observe_batch_info(blocks.len() as u64, tx_lists_bytes.len() as u64);
 
         debug!(
             "Proposing batch: current L1 block: {}, last_block_timestamp {}, last_anchor_origin_height {}",
-            self.common.get_l1_height().await?,
+            self.common.get_chain_height().await?,
             last_block_timestamp,
             last_anchor_origin_height
         );
 
         // Build proposeBatch transaction
-        let builder =
-            ProposeBatchBuilder::new(self.provider.clone(), self.common.extra_gas_percentage());
+        let builder = ProposeBatchBuilder::new(self.provider.clone(), self.extra_gas_percentage);
         let tx = builder
             .build_propose_batch_tx(
-                self.common.preconfer_address(),
+                self.preconfer_address,
                 self.config.contract_addresses.preconf_router,
                 tx_lists_bytes,
                 blocks.clone(),
@@ -211,10 +220,9 @@ impl ExecutionLayer {
             )
             .await?;
 
-        let pending_nonce = self.common.get_preconfer_nonce_pending().await?;
+        let pending_nonce = self.get_preconfer_nonce_pending().await?;
         // Spawn a monitor for this transaction
-        self.common
-            .transaction_monitor
+        self.transaction_monitor
             .monitor_new_transaction(tx, pending_nonce)
             .await
             .map_err(|e| Error::msg(format!("Sending batch to L1 failed: {e}")))?;
@@ -258,7 +266,7 @@ impl ExecutionLayer {
             &self.provider,
         );
         let bonds_balance = contract
-            .bondBalanceOf(self.common.preconfer_address())
+            .bondBalanceOf(self.preconfer_address)
             .call()
             .await
             .map_err(|e| Error::msg(format!("Failed to get bonds balance: {e}")))?;
@@ -288,7 +296,7 @@ impl ExecutionLayer {
         let contract = IERC20::new(*taiko_token, &self.provider);
         let allowance = contract
             .allowance(
-                self.common.preconfer_address(),
+                self.preconfer_address,
                 self.config.contract_addresses.taiko_inbox,
             )
             .call()
@@ -296,7 +304,7 @@ impl ExecutionLayer {
             .map_err(|e| Error::msg(format!("Failed to get allowance: {e}")))?;
 
         let balance = contract
-            .balanceOf(self.common.preconfer_address())
+            .balanceOf(self.preconfer_address)
             .call()
             .await
             .map_err(|e| Error::msg(format!("Failed to get preconfer balance: {e}")))?;
@@ -390,7 +398,7 @@ impl ExecutionLayer {
         info: &ForcedInclusionInfo,
     ) -> BatchParams {
         ProposeBatchBuilder::build_forced_inclusion_batch(
-            self.common.preconfer_address(),
+            self.preconfer_address,
             coinbase,
             last_anchor_origin_height,
             last_l2_block_timestamp,
@@ -409,6 +417,56 @@ impl ExecutionLayer {
             .await
             .map_err(|e| Error::msg(format!("Failed to get preconf router config: {e}")))
     }
+
+    pub async fn get_preconfer_wallet_eth(&self) -> Result<alloy::primitives::U256, Error> {
+        self.common()
+            .get_account_balance(self.preconfer_address)
+            .await
+    }
+
+    pub async fn get_preconfer_nonce_pending(&self) -> Result<u64, Error> {
+        self.common()
+            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Pending)
+            .await
+    }
+
+    pub async fn get_preconfer_nonce_latest(&self) -> Result<u64, Error> {
+        self.common()
+            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Latest)
+            .await
+    }
+
+    pub fn get_block_max_gas_limit(&self) -> u32 {
+        self.protocol_config.block_max_gas_limit
+    }
+
+    pub fn get_config_max_blocks_per_batch(&self) -> u16 {
+        self.protocol_config.max_blocks_per_batch
+    }
+
+    pub fn get_config_max_anchor_height_offset(&self) -> u64 {
+        self.protocol_config.max_anchor_height_offset
+    }
+
+    pub fn get_config_block_max_gas_limit(&self) -> u32 {
+        self.protocol_config.block_max_gas_limit
+    }
+
+    pub fn get_protocol_config(&self) -> ProtocolConfig {
+        self.protocol_config.clone()
+    }
+
+    pub fn get_preconfer_alloy_address(&self) -> Address {
+        self.preconfer_address
+    }
+
+    pub fn get_preconfer_address(&self) -> PreconferAddress {
+        self.preconfer_address.into_array()
+    }
+
+    pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {
+        self.transaction_monitor.is_transaction_in_progress().await
+    }
 }
 
 pub trait PreconfOperator {
@@ -426,12 +484,12 @@ pub trait PreconfOperator {
 impl PreconfOperator for ExecutionLayer {
     async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
         let operator = self.get_operator_for_current_epoch().await?;
-        Ok(operator == self.common.preconfer_address())
+        Ok(operator == self.preconfer_address)
     }
 
     async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
         let operator = self.get_operator_for_next_epoch().await?;
-        Ok(operator == self.common.preconfer_address())
+        Ok(operator == self.preconfer_address)
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {

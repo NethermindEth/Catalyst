@@ -1,3 +1,4 @@
+use super::config::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
 use super::{
     bindings::{Bridge, TaikoAnchor, TaikoAnchor::BaseFeeConfig},
     config::TaikoConfig,
@@ -14,14 +15,12 @@ use alloy::{
     signers::Signature,
 };
 use anyhow::Error;
-use common::crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
 use serde_json::Value;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
 pub struct L2ExecutionLayer {
     provider: DynProvider,
-    taiko_anchor: TaikoAnchor::TaikoAnchorInstance<DynProvider>,
     chain_id: u64,
     config: TaikoConfig,
 }
@@ -326,7 +325,7 @@ impl L2ExecutionLayer {
         .await
     }
 
-    async fn construct_anchor_tx_impl(
+    pub async fn construct_anchor_tx_impl(
         &self,
         parent_hash: B256,
         anchor_block_id: u64,

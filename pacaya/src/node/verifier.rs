@@ -33,7 +33,7 @@ pub struct Verifier {
 }
 
 struct VerifierThread {
-    taiko: Arc<Taiko<ExecutionLayer>>,
+    taiko: Arc<Taiko>,
     preconfirmation_root: PreconfirmationRootBlock,
     batch_manager: BatchManager,
     cancel_token: CancellationToken,
@@ -42,7 +42,7 @@ struct VerifierThread {
 impl Verifier {
     pub async fn new_with_taiko_height(
         taiko_geth_height: u64,
-        taiko: Arc<Taiko<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         batch_manager: BatchManager,
         verification_slot: Slot,
         cancel_token: CancellationToken,

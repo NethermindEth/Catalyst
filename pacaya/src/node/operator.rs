@@ -19,7 +19,7 @@ use tracing::{debug, warn};
 pub struct Operator<
     T: PreconfOperator = ExecutionLayer,
     U: Clock = RealClock,
-    V: PreconfDriver = Taiko<ExecutionLayer>,
+    V: PreconfDriver = Taiko,
 > {
     execution_layer: Arc<T>,
     slot_clock: Arc<SlotClock<U>>,
@@ -101,7 +101,7 @@ impl std::fmt::Display for Status {
 impl Operator {
     pub fn new(
         ethereum_l1: &EthereumL1<ExecutionLayer>,
-        taiko: Arc<Taiko<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         handover_window_slots: u64,
         handover_start_buffer_ms: u64,
         simulate_not_submitting_at_the_end_of_epoch: bool,

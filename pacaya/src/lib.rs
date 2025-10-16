@@ -2,7 +2,7 @@ use crate::utils::config::PacayaConfig;
 use anyhow::Error;
 use common::{
     config::ConfigTrait,
-    l1::{self as common_l1, el_trait::ELTrait},
+    l1::{self as common_l1},
     metrics::{self, Metrics},
     shared,
 };
@@ -53,7 +53,6 @@ pub async fn create_pacaya_node(
 
     let max_anchor_height_offset = ethereum_l1
         .execution_layer
-        .common()
         .get_config_max_anchor_height_offset();
     if config.max_anchor_height_offset_reduction >= max_anchor_height_offset {
         panic!(
@@ -64,7 +63,6 @@ pub async fn create_pacaya_node(
 
     let l1_max_blocks_per_batch = ethereum_l1
         .execution_layer
-        .common()
         .get_config_max_blocks_per_batch();
 
     if config.max_blocks_per_batch > l1_max_blocks_per_batch {
@@ -131,10 +129,7 @@ pub async fn create_pacaya_node(
             max_time_shift_between_blocks_sec: config.max_time_shift_between_blocks_sec,
             max_anchor_height_offset: max_anchor_height_offset
                 - config.max_anchor_height_offset_reduction,
-            default_coinbase: ethereum_l1
-                .execution_layer
-                .common()
-                .get_preconfer_alloy_address(),
+            default_coinbase: ethereum_l1.execution_layer.get_preconfer_alloy_address(),
             preconf_min_txs: config.preconf_min_txs,
             preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
         },

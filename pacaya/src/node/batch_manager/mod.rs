@@ -27,7 +27,7 @@ use tracing::{debug, error, info, warn};
 pub struct BatchManager {
     batch_builder: BatchBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-    pub taiko: Arc<Taiko<ExecutionLayer>>,
+    pub taiko: Arc<Taiko>,
     l1_height_lag: u64,
     forced_inclusion: Arc<ForcedInclusion>,
     metrics: Arc<Metrics>,
@@ -39,7 +39,7 @@ impl BatchManager {
         l1_height_lag: u64,
         config: BatchBuilderConfig,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-        taiko: Arc<Taiko<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
     ) -> Result<Self, Error> {
@@ -230,7 +230,6 @@ impl BatchManager {
             < self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_config_max_anchor_height_offset()
     }
 
@@ -595,7 +594,7 @@ impl BatchManager {
             .ethereum_l1
             .execution_layer
             .common()
-            .get_l1_height()
+            .get_chain_height()
             .await?;
         let l1_height_with_lag = l1_height - self.l1_height_lag;
         let anchor_id_from_last_l2_block =

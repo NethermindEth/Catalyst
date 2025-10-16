@@ -1,4 +1,4 @@
-use super::{config::EthereumL1Config, tools, transaction_error::TransactionError};
+use crate::l1::{config::EthereumL1Config, tools, transaction_error::TransactionError};
 use crate::{metrics::Metrics, shared::alloy_tools, signer::Signer};
 use alloy::{
     consensus::TxType,

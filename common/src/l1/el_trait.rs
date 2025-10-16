@@ -1,6 +1,6 @@
 use crate::l1::transaction_error::TransactionError;
 
-use super::execution_layer::ExecutionLayer;
+use crate::execution_layer::ExecutionLayer;
 use crate::metrics::Metrics;
 use alloy::primitives::U256;
 use anyhow::Error;
