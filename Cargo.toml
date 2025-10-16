@@ -2,19 +2,19 @@
 [workspace]
 members = [
     "common",
+    "node",
     "pacaya",
     "permissionless",
     "tools/p2p_node/p2p_boot_node",
     "tools/p2p_node/p2p_network",
     "tools/p2p_node/p2p_test_node",
     "urc",
-    "node",
 ]
 resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.19.0"
+version = "1.19.1"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -83,8 +83,8 @@ libp2p = { version = "0.55.0", default-features = false, features = [
 ] }
 libp2p-mplex = { version = "0.43", default-features = false }
 mockito = { version = "1.7", default-features = false }
-pacaya = { path = "pacaya" }
 p2p-network = { path = "tools/p2p_node/p2p_network", default-features = false }
+pacaya = { path = "pacaya" }
 prometheus = { version = "0.14", default-features = false }
 rand = { version = "0.9", default-features = false }
 rand_core = { version = "0.9", default-features = false }

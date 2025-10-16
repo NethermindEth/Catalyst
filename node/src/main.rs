@@ -30,6 +30,7 @@ async fn main() -> Result<(), Error> {
             }
             Ok(ExecutionStopped::RecreateNode) => {
                 info!("🔄 ExecutionStopped::RecreateNode, recreating node...");
+                tokio::time::sleep(Duration::from_secs(1)).await;
                 continue;
             }
             Err(e) => {
@@ -110,6 +111,8 @@ async fn wait_for_the_termination(
         }
         _ = cancel_token.cancelled() => {
             info!("Shutdown signal received, exiting Catalyst node...");
+            // prevent rapid recreation of the node in case of initial error
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             ExecutionStopped::RecreateNode
         }
     }
