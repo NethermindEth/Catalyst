@@ -9,10 +9,10 @@ use alloy::{
 };
 use anyhow::{Error, anyhow};
 use common::{
-    execution_layer::ExecutionLayer as ExecutionLayerCommon,
     l1::{el_trait::ELTrait, transaction_error::TransactionError},
     metrics::Metrics,
     shared::alloy_tools,
+    shared::execution_layer::ExecutionLayer as ExecutionLayerCommon,
 };
 use pacaya::l1::protocol_config::{BaseFeeConfig, ProtocolConfig};
 use std::sync::Arc;
