@@ -110,6 +110,8 @@ async fn wait_for_the_termination(
         }
         _ = cancel_token.cancelled() => {
             info!("Shutdown signal received, exiting Catalyst node...");
+            // prevent rapid recreation of the node in case of initial error
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             ExecutionStopped::RecreateNode
         }
     }
