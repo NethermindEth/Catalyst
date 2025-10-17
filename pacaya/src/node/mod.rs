@@ -16,10 +16,7 @@ use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     fork_info::ForkInfo,
-    l1::{
-        ethereum_l1::EthereumL1, traits::preconfer_provider::PreconferProvider,
-        transaction_error::TransactionError,
-    },
+    l1::{ethereum_l1::EthereumL1, traits::PreconferProvider, transaction_error::TransactionError},
     l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
     utils as common_utils,
 };

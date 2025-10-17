@@ -1,1 +1,3 @@
-pub mod bridgeable;
+mod bridgeable;
+
+pub use bridgeable::Bridgeable;

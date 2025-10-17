@@ -3,7 +3,7 @@ use anyhow::Error;
 use common::{
     config::ConfigTrait,
     funds_controller::FundsController,
-    l1::{self as common_l1, traits::preconfer_provider::PreconferProvider},
+    l1::{self as common_l1, traits::PreconferProvider},
     metrics::{self, Metrics},
     shared,
 };

@@ -9,8 +9,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::{
-    l1::traits::{el_trait::ELTrait, preconfer_provider::PreconferProvider},
-    l2::traits::bridgeable::Bridgeable,
+    l1::traits::{ELTrait, PreconferProvider},
+    l2::traits::Bridgeable,
     metrics::Metrics,
 };
 

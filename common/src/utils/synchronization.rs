@@ -1,4 +1,4 @@
-use crate::l1::{ethereum_l1::EthereumL1, traits::el_trait::ELTrait};
+use crate::l1::{ethereum_l1::EthereumL1, traits::ELTrait};
 use tokio::time::sleep;
 use tracing::{error, info};
 

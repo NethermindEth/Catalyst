@@ -19,7 +19,7 @@ use anyhow::{Error, anyhow};
 use common::{
     l1::{
         bindings::IERC20,
-        traits::{el_trait::ELTrait, preconfer_provider::PreconferProvider},
+        traits::{ELTrait, PreconferProvider},
         transaction_error::TransactionError,
     },
     metrics::Metrics,

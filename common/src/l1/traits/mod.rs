@@ -1,2 +1,5 @@
-pub mod el_trait;
-pub mod preconfer_provider;
+mod el_trait;
+mod preconfer_provider;
+
+pub use el_trait::ELTrait;
+pub use preconfer_provider::PreconferProvider;

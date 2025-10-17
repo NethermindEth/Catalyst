@@ -1,6 +1,6 @@
 use anyhow::Error;
 use common::{
-    l1::{ethereum_l1::EthereumL1, traits::el_trait::ELTrait},
+    l1::{ethereum_l1::EthereumL1, traits::ELTrait},
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
 };
 #[allow(clippy::all)]

@@ -11,14 +11,14 @@ use anyhow::Error;
 use common::{
     l1::{
         ethereum_l1::EthereumL1,
-        traits::{el_trait::ELTrait, preconfer_provider::PreconferProvider},
+        traits::{ELTrait, PreconferProvider},
     },
     l2::{
         taiko_driver::models::{
             BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData, TaikoStatus,
         },
         taiko_driver::{OperationType, TaikoDriver, TaikoDriverConfig},
-        traits::bridgeable::Bridgeable,
+        traits::Bridgeable,
     },
     metrics::Metrics,
     shared::{
