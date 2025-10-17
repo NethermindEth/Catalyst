@@ -2,6 +2,7 @@ use crate::utils::config::PacayaConfig;
 use anyhow::Error;
 use common::{
     config::ConfigTrait,
+    funds_controller::FundsController,
     l1::{self as common_l1, traits::preconfer_provider::PreconferProvider},
     metrics::{self, Metrics},
     shared,
@@ -14,7 +15,6 @@ use tracing::{info, warn};
 
 mod chain_monitor;
 mod forced_inclusion;
-mod funds_controller;
 pub mod l1;
 mod l2;
 mod node;
@@ -142,7 +142,7 @@ pub async fn create_pacaya_node(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start Node: {}", e))?;
 
-    let funds_controller = funds_controller::FundsController::new(
+    let funds_controller = FundsController::new(
         (&config).into(),
         ethereum_l1.execution_layer.clone(),
         taiko.clone(),

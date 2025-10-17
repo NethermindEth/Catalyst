@@ -1,5 +1,5 @@
 use alloy::primitives::U256;
-use common::config::Config;
+use crate::config::Config;
 use std::time::Duration;
 
 pub struct Thresholds {

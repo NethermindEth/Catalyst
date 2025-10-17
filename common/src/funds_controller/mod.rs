@@ -8,7 +8,7 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-use common::{
+use crate::{
     l1::traits::preconfer_provider::PreconferProvider, l2::traits::bridgeable::Bridgeable,
     metrics::Metrics,
 };
