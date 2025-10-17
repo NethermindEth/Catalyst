@@ -7,7 +7,7 @@ mod verifier;
 use crate::{
     chain_monitor::ChainMonitor,
     l1::execution_layer::ExecutionLayer,
-    l2::{operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
+    l2::taiko::Taiko,
     metrics::Metrics,
     node::l2_head_verifier::L2HeadVerifier,
     shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
@@ -17,6 +17,7 @@ use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
+    l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
     utils as common_utils,
 };
 use config::NodeConfig;

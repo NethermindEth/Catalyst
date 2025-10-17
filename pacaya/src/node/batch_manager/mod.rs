@@ -7,8 +7,6 @@ use crate::{
     l1::execution_layer::ExecutionLayer,
     l2::{
         self,
-        operation_type::OperationType,
-        preconf_blocks::BuildPreconfBlockResponse,
         taiko::{self, Taiko},
     },
     metrics::Metrics,
@@ -18,7 +16,10 @@ use crate::{
 use alloy::{consensus::BlockHeader, consensus::Transaction, primitives::Address};
 use anyhow::Error;
 use batch_builder::BatchBuilder;
-use common::l1::{el_trait::ELTrait, ethereum_l1::EthereumL1};
+use common::{
+    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
+    l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
+};
 use config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;

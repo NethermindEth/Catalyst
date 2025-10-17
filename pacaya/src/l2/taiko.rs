@@ -1,9 +1,5 @@
 use super::{
-    bindings::TaikoAnchor::BaseFeeConfig,
-    config::TaikoConfig,
-    execution_layer::L2ExecutionLayer,
-    operation_type::OperationType,
-    preconf_blocks::{self, BuildPreconfBlockResponse},
+    bindings::TaikoAnchor::BaseFeeConfig, config::TaikoConfig, execution_layer::L2ExecutionLayer,
 };
 use crate::l1::execution_layer::ExecutionLayer as L1ExecutionLayer;
 use alloy::{
@@ -14,13 +10,19 @@ use alloy::{
 use anyhow::Error;
 use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
+    l2::{
+        taiko_driver::models::{
+            BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData, TaikoStatus,
+        },
+        taiko_driver::{OperationType, TaikoDriver, TaikoDriverConfig},
+    },
     metrics::Metrics,
     shared::{
         l2_block::L2Block,
         l2_slot_info::L2SlotInfo,
         l2_tx_lists::{self, PreBuiltTxList},
     },
-    utils::rpc_client::{HttpRPCClient, JSONRPCClient},
+    utils::rpc_client::JSONRPCClient,
 };
 use serde_json::Value;
 use std::{
@@ -33,20 +35,24 @@ use tracing::{debug, trace};
 pub struct Taiko {
     l2_execution_layer: L2ExecutionLayer,
     taiko_geth_auth_rpc: JSONRPCClient,
-    driver_preconf_rpc: HttpRPCClient,
-    driver_status_rpc: HttpRPCClient,
+    driver: TaikoDriver,
     ethereum_l1: Arc<EthereumL1<L1ExecutionLayer>>,
-    metrics: Arc<Metrics>,
     config: TaikoConfig,
 }
 
 impl Taiko {
-    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         ethereum_l1: Arc<EthereumL1<L1ExecutionLayer>>,
         metrics: Arc<Metrics>,
         taiko_config: TaikoConfig,
     ) -> Result<Self, Error> {
+        let driver_config: TaikoDriverConfig = TaikoDriverConfig {
+            driver_url: taiko_config.driver_url.clone(),
+            rpc_driver_preconf_timeout: taiko_config.rpc_driver_preconf_timeout,
+            rpc_driver_status_timeout: taiko_config.rpc_driver_status_timeout,
+            jwt_secret_bytes: taiko_config.jwt_secret_bytes.to_vec(),
+            call_timeout: Duration::from_secs(taiko_config.preconf_heartbeat_ms / 2),
+        };
         Ok(Self {
             l2_execution_layer: L2ExecutionLayer::new(taiko_config.clone())
                 .await
@@ -59,24 +65,8 @@ impl Taiko {
             .map_err(|e| {
                 anyhow::anyhow!("Failed to create JSONRPCClient for taiko geth auth: {}", e)
             })?,
-            driver_preconf_rpc: HttpRPCClient::new_with_jwt(
-                &taiko_config.driver_url,
-                taiko_config.rpc_driver_preconf_timeout,
-                &taiko_config.jwt_secret_bytes,
-            )
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to create HttpRPCClient for driver preconf: {}", e)
-            })?,
-            driver_status_rpc: HttpRPCClient::new_with_jwt(
-                &taiko_config.driver_url,
-                taiko_config.rpc_driver_status_timeout,
-                &taiko_config.jwt_secret_bytes,
-            )
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to create HttpRPCClient for driver status: {}", e)
-            })?,
+            driver: TaikoDriver::new(&driver_config, metrics).await?,
             ethereum_l1,
-            metrics,
             config: taiko_config,
         })
     }
@@ -294,7 +284,7 @@ impl Taiko {
         let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
         let extra_data = vec![sharing_pctg];
 
-        let executable_data = preconf_blocks::ExecutableData {
+        let executable_data = ExecutableData {
             base_fee_per_gas: l2_slot_info.base_fee(),
             block_number: l2_slot_info.parent_id() + 1,
             extra_data: format!("0x{:0>64}", hex::encode(extra_data)),
@@ -308,99 +298,19 @@ impl Taiko {
             transactions: format!("0x{}", hex::encode(tx_list_bytes)),
         };
 
-        let request_body = preconf_blocks::BuildPreconfBlockRequestBody {
+        let request_body = BuildPreconfBlockRequestBody {
             executable_data,
             end_of_sequencing,
             is_forced_inclusion,
         };
 
-        const API_ENDPOINT: &str = "preconfBlocks";
-
-        let response = self
-            .call_driver(
-                &self.driver_preconf_rpc,
-                http::Method::POST,
-                API_ENDPOINT,
-                &request_body,
-                operation_type,
-            )
-            .await?;
-
-        trace!("Response from preconfBlocks: {:?}", response);
-
-        let preconfirmed_block = BuildPreconfBlockResponse::new_from_value(response);
-
-        if preconfirmed_block.is_none() {
-            tracing::error!("Block was preconfirmed, but failed to decode response from driver.");
-        }
-
-        self.metrics.inc_blocks_preconfirmed();
-
-        Ok(preconfirmed_block)
-    }
-
-    pub async fn get_status(&self) -> Result<preconf_blocks::TaikoStatus, Error> {
-        trace!("Get status form taiko driver");
-
-        const API_ENDPOINT: &str = "status";
-        let request_body = serde_json::json!({});
-
-        let response = self
-            .call_driver(
-                &self.driver_status_rpc,
-                http::Method::GET,
-                API_ENDPOINT,
-                &request_body,
-                OperationType::Status,
-            )
-            .await?;
-
-        trace!("Response from taiko status: {:?}", response);
-
-        let status: preconf_blocks::TaikoStatus = serde_json::from_value(response)?;
-
-        Ok(status)
-    }
-
-    async fn call_driver<T>(
-        &self,
-        client: &HttpRPCClient,
-        method: http::Method,
-        endpoint: &str,
-        payload: &T,
-        operation_type: OperationType,
-    ) -> Result<Value, Error>
-    where
-        T: serde::Serialize,
-    {
-        let heartbeat_ms = self.ethereum_l1.slot_clock.get_preconf_heartbeat_ms();
-        let max_duration = Duration::from_millis(heartbeat_ms / 2); // half of the heartbeat duration, leave time for other operations
-
-        let metric_label = operation_type.to_string();
-        self.metrics.inc_rpc_driver_call(&metric_label);
-        let start_time = std::time::Instant::now();
-
-        match client
-            .retry_request_with_timeout(method, endpoint, payload, max_duration)
+        self.driver
+            .preconf_blocks(request_body, operation_type)
             .await
-        {
-            Ok(response) => {
-                self.metrics.observe_rpc_driver_call_duration(
-                    &metric_label,
-                    start_time.elapsed().as_secs_f64(),
-                );
-                Ok(response)
-            }
-            Err(e) => {
-                self.metrics.inc_rpc_driver_call_error(&metric_label);
-                let metric_label_error = format!("{metric_label}-error");
-                self.metrics.observe_rpc_driver_call_duration(
-                    &metric_label_error,
-                    start_time.elapsed().as_secs_f64(),
-                );
-                Err(e)
-            }
-        }
+    }
+
+    pub async fn get_status(&self) -> Result<TaikoStatus, Error> {
+        self.driver.get_status().await
     }
 
     fn get_base_fee_config(&self) -> BaseFeeConfig {
@@ -462,13 +372,11 @@ impl Taiko {
 }
 
 pub trait PreconfDriver {
-    fn get_status(
-        &self,
-    ) -> impl std::future::Future<Output = Result<preconf_blocks::TaikoStatus, Error>> + Send;
+    fn get_status(&self) -> impl std::future::Future<Output = Result<TaikoStatus, Error>> + Send;
 }
 
 impl PreconfDriver for Taiko {
-    async fn get_status(&self) -> Result<preconf_blocks::TaikoStatus, Error> {
+    async fn get_status(&self) -> Result<TaikoStatus, Error> {
         Taiko::get_status(self).await
     }
 }

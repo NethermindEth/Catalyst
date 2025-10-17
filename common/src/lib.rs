@@ -5,6 +5,7 @@ pub mod config;
 pub mod crypto;
 pub mod fork_info;
 pub mod l1;
+pub mod l2;
 pub mod metrics;
 pub mod shared;
 pub mod signer;
