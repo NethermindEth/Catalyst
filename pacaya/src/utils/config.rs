@@ -8,7 +8,6 @@ pub struct L1ContractAddresses {
     pub preconf_router: String,
     pub taiko_wrapper: String,
     pub forced_inclusion_store: String,
-    pub codec_address: String,
     pub anchor_address: String,
 }
 
@@ -44,7 +43,6 @@ impl ConfigTrait for PacayaConfig {
         let taiko_wrapper = read_contract_address("TAIKO_WRAPPER_ADDRESS", "TaikoWrapper");
         let forced_inclusion_store =
             read_contract_address("FORCED_INCLUSION_STORE_ADDRESS", "ForcedInclusionStore");
-        let codec_address = read_contract_address("CODEC_ADDRESS", "Codec");
         let anchor_address = read_contract_address("ANCHOR_ADDRESS", "Anchor");
         let contract_addresses = L1ContractAddresses {
             taiko_inbox,
@@ -52,7 +50,6 @@ impl ConfigTrait for PacayaConfig {
             preconf_router,
             taiko_wrapper,
             forced_inclusion_store,
-            codec_address,
             anchor_address,
         };
 
