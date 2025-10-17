@@ -12,7 +12,7 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.19.1"
+version = "1.19.2"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -80,8 +80,6 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
 shasta = { path = "shasta" }
 
-taiko_event_indexer = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "479624c9429419bdb49cbf13552f542176a98012", package = "event-indexer", version = "2.0.0" }
-taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "479624c9429419bdb49cbf13552f542176a98012", package = "rpc", version = "2.0.0" }
 tiny-keccak = { version = "2.0", default-features = false }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
