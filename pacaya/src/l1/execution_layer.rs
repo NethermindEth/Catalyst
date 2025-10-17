@@ -1,4 +1,4 @@
-use super::protocol_config::{BaseFeeConfig, ProtocolConfig};
+use super::protocol_config::ProtocolConfig;
 use super::{
     bindings::{
         BatchParams, BlockParams, PreconfWhitelist,
@@ -144,18 +144,7 @@ impl ExecutionLayer {
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch pacaya config: {e}")))?;
 
-        Ok(ProtocolConfig {
-            base_fee_config: BaseFeeConfig {
-                adjustment_quotient: pacaya_config.baseFeeConfig.adjustmentQuotient,
-                sharing_pctg: pacaya_config.baseFeeConfig.sharingPctg,
-                gas_issuance_per_second: pacaya_config.baseFeeConfig.gasIssuancePerSecond,
-                min_gas_excess: pacaya_config.baseFeeConfig.minGasExcess,
-                max_gas_issuance_per_block: pacaya_config.baseFeeConfig.maxGasIssuancePerBlock,
-            },
-            max_blocks_per_batch: pacaya_config.maxBlocksPerBatch,
-            max_anchor_height_offset: pacaya_config.maxAnchorHeightOffset,
-            block_max_gas_limit: pacaya_config.blockMaxGasLimit,
-        })
+        Ok(ProtocolConfig::from(pacaya_config))
     }
 
     pub async fn send_batch_to_l1(

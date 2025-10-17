@@ -40,18 +40,7 @@ impl ELTrait for ExecutionLayer {
                 .ok_or_else(|| anyhow!("L1 RPC URL is required"))?,
         )
         .await?;
-        let protocol_config = ProtocolConfig {
-            base_fee_config: BaseFeeConfig {
-                adjustment_quotient: 0,
-                sharing_pctg: 0,
-                gas_issuance_per_second: 0,
-                min_gas_excess: 0,
-                max_gas_issuance_per_block: 0,
-            },
-            max_blocks_per_batch: 0,
-            max_anchor_height_offset: 0,
-            block_max_gas_limit: 0,
-        };
+        let protocol_config = ProtocolConfig::default();
 
         let common = ExecutionLayerCommon::new(provider.clone()).await?;
 
