@@ -44,16 +44,20 @@ pub async fn create_pacaya_node(
     let taiko_config = l2::config::TaikoConfig::new(&config)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create TaikoConfig: {}", e))?;
+    let protocol_config = ethereum_l1.execution_layer.fetch_protocol_config().await?;
 
     let taiko = Arc::new(
-        l2::taiko::Taiko::new(ethereum_l1.clone(), metrics.clone(), taiko_config)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
+        l2::taiko::Taiko::new(
+            ethereum_l1.slot_clock.clone(),
+            protocol_config.clone(),
+            metrics.clone(),
+            taiko_config,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
     );
 
-    let max_anchor_height_offset = ethereum_l1
-        .execution_layer
-        .get_config_max_anchor_height_offset();
+    let max_anchor_height_offset = protocol_config.get_config_max_anchor_height_offset();
     if config.max_anchor_height_offset_reduction >= max_anchor_height_offset {
         panic!(
             "max_anchor_height_offset_reduction {} is greater than max_anchor_height_offset from pacaya config {}",
@@ -61,9 +65,7 @@ pub async fn create_pacaya_node(
         );
     }
 
-    let l1_max_blocks_per_batch = ethereum_l1
-        .execution_layer
-        .get_config_max_blocks_per_batch();
+    let l1_max_blocks_per_batch = protocol_config.get_config_max_blocks_per_batch();
 
     if config.max_blocks_per_batch > l1_max_blocks_per_batch {
         panic!(

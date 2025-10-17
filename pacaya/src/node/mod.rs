@@ -454,8 +454,8 @@ impl Node {
                 .get_l1_anchor_block_offset_for_l2_block(l2_block_id)
                 .await?;
             let max_anchor_height_offset = self
-                .ethereum_l1
-                .execution_layer
+                .taiko
+                .get_protocol_config()
                 .get_config_max_anchor_height_offset();
 
             // +1 because we are checking the next block
