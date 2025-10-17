@@ -20,8 +20,8 @@ use common::{
     l1::{bindings::IERC20, el_trait::ELTrait, transaction_error::TransactionError},
     metrics::Metrics,
     shared::execution_layer::ExecutionLayer as ExecutionLayerCommon,
+    shared::transaction_monitor::TransactionMonitor,
     shared::{alloy_tools, l2_block::L2Block, l2_tx_lists::encode_and_compress},
-    transaction_monitor::TransactionMonitor,
     utils::types::PreconferAddress,
 };
 use std::sync::Arc;

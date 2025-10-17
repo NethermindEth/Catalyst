@@ -8,5 +8,4 @@ pub mod l1;
 pub mod metrics;
 pub mod shared;
 pub mod signer;
-pub mod transaction_monitor;
 pub mod utils;
