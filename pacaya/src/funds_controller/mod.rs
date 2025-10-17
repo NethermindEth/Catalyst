@@ -24,7 +24,6 @@ pub struct FundsController {
 }
 
 impl FundsController {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: FundsControllerConfig,
         ethereum_l1: Arc<EthereumL1<L1ExecutionLayer>>,

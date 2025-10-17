@@ -27,7 +27,7 @@ impl From<&Config> for FundsControllerConfig {
             disable_bridging: config.disable_bridging,
             bridge_relayer_fee: config.bridge_relayer_fee,
             bridge_transaction_fee: config.bridge_transaction_fee,
-            monitor_interval: Duration::from_secs(60), //TODO
+            monitor_interval: Duration::from_secs(config.funds_monitor_interval_sec),
         }
     }
 }
