@@ -9,17 +9,18 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::{
-    l1::traits::preconfer_provider::PreconferProvider, l2::traits::bridgeable::Bridgeable,
+    l1::traits::{el_trait::ELTrait, preconfer_provider::PreconferProvider},
+    l2::traits::bridgeable::Bridgeable,
     metrics::Metrics,
 };
 
 pub struct FundsController<L1, L2>
 where
-    L1: PreconferProvider + Send + Sync + 'static,
+    L1: ELTrait + PreconferProvider + Send + Sync + 'static,
     L2: Bridgeable + Send + Sync + 'static,
 {
     config: FundsControllerConfig,
-    preconfer_provider: Arc<L1>,
+    l1_execution_layer: Arc<L1>,
     taiko: Arc<L2>,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
@@ -27,19 +28,19 @@ where
 
 impl<L1, L2> FundsController<L1, L2>
 where
-    L1: PreconferProvider + Send + Sync + 'static,
+    L1: ELTrait + PreconferProvider + Send + Sync + 'static,
     L2: Bridgeable + Send + Sync + 'static,
 {
     pub fn new(
         config: FundsControllerConfig,
-        preconfer_provider: Arc<L1>,
+        l1_execution_layer: Arc<L1>,
         taiko: Arc<L2>,
         metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
     ) -> Self {
         Self {
             config,
-            preconfer_provider,
+            l1_execution_layer,
             taiko,
             metrics,
             cancel_token,
@@ -75,7 +76,7 @@ where
     async fn check_initial_funds(&self) -> Result<(), Error> {
         // Check TAIKO TOKEN balance
         let total_balance = self
-            .preconfer_provider
+            .l1_execution_layer
             .get_preconfer_total_bonds()
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch bond balance: {e}")))?;
@@ -92,7 +93,7 @@ where
 
         // Check ETH balance
         let balance = self
-            .preconfer_provider
+            .l1_execution_layer
             .get_preconfer_wallet_eth()
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch ETH balance: {e}")))?;
@@ -111,7 +112,7 @@ where
     }
 
     async fn transfer_funds_from_l2_to_l1_when_needed(&self) {
-        let eth_balance = self.preconfer_provider.get_preconfer_wallet_eth().await;
+        let eth_balance = self.l1_execution_layer.get_preconfer_wallet_eth().await;
         let eth_balance_str = match eth_balance.as_ref() {
             Ok(balance) => {
                 self.metrics.set_preconfer_eth_balance(*balance);
@@ -122,7 +123,7 @@ where
                 "-".to_string()
             }
         };
-        let taiko_balance_str = match self.preconfer_provider.get_preconfer_total_bonds().await {
+        let taiko_balance_str = match self.l1_execution_layer.get_preconfer_total_bonds().await {
             Ok(balance) => {
                 self.metrics.set_preconfer_taiko_balance(balance);
                 format!("{balance}")
@@ -133,7 +134,7 @@ where
             }
         };
 
-        let preconfer_address = self.preconfer_provider.get_preconfer_alloy_address();
+        let preconfer_address = self.l1_execution_layer.get_preconfer_alloy_address();
         let l2_eth_balance = self.taiko.get_balance(preconfer_address).await;
         let l2_eth_balance_str = match l2_eth_balance.as_ref() {
             Ok(balance) => {
@@ -164,6 +165,8 @@ where
                 .taiko
                 .transfer_eth_from_l2_to_l1(
                     self.config.amount_to_bridge_from_l2_to_l1,
+                    self.l1_execution_layer.common().chain_id(),
+                    preconfer_address,
                     self.config.bridge_relayer_fee,
                 )
                 .await

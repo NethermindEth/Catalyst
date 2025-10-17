@@ -7,6 +7,8 @@ pub trait Bridgeable {
     fn transfer_eth_from_l2_to_l1(
         &self,
         amount: u128,
+        chain_id: u64,
+        address: Address,
         bridge_relayer_fee: u64,
     ) -> impl Future<Output = Result<(), Error>> + Send;
 }

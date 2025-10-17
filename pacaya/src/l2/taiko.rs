@@ -362,17 +362,12 @@ impl Bridgeable for Taiko {
     async fn transfer_eth_from_l2_to_l1(
         &self,
         amount: u128,
+        dest_chain_id: u64,
+        address: Address,
         bridge_relayer_fee: u64,
     ) -> Result<(), Error> {
         self.l2_execution_layer
-            .transfer_eth_from_l2_to_l1(
-                amount,
-                self.ethereum_l1.execution_layer.common().chain_id(),
-                self.ethereum_l1
-                    .execution_layer
-                    .get_preconfer_alloy_address(),
-                bridge_relayer_fee,
-            )
+            .transfer_eth_from_l2_to_l1(amount, dest_chain_id, address, bridge_relayer_fee)
             .await
     }
 }
