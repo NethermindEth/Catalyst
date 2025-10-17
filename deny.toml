@@ -62,7 +62,11 @@ unused = 'deny'
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-git = []
+allow-git = [
+    "https://github.com/taikoxyz/taiko-mono.git",
+    "https://github.com/paradigmxyz/reth.git",
+    "https://github.com/taikoxyz/alethia-reth",
+]
 
 [sources.allow-org]
 github = []
