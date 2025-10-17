@@ -9,7 +9,7 @@ use alloy::{
 };
 use anyhow::{Error, anyhow};
 use common::{
-    l1::{traits::el_trait::ELTrait, transaction_error::TransactionError},
+    l1::{traits::ELTrait, transaction_error::TransactionError},
     metrics::Metrics,
     shared::alloy_tools,
     shared::execution_layer::ExecutionLayer as ExecutionLayerCommon,
