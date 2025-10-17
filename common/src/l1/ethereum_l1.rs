@@ -1,6 +1,6 @@
 use super::{
-    config::EthereumL1Config, consensus_layer::ConsensusLayer, el_trait::ELTrait,
-    slot_clock::SlotClock, transaction_error::TransactionError,
+    config::EthereumL1Config, consensus_layer::ConsensusLayer, slot_clock::SlotClock,
+    traits::el_trait::ELTrait, transaction_error::TransactionError,
 };
 use anyhow::Error;
 use std::{sync::Arc, time::Duration};

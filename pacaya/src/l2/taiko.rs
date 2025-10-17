@@ -9,12 +9,16 @@ use alloy::{
 };
 use anyhow::Error;
 use common::{
-    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
+    l1::{
+        ethereum_l1::EthereumL1,
+        traits::{el_trait::ELTrait, preconfer_provider::PreconferProvider},
+    },
     l2::{
         taiko_driver::models::{
             BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData, TaikoStatus,
         },
         taiko_driver::{OperationType, TaikoDriver, TaikoDriverConfig},
+        traits::bridgeable::Bridgeable,
     },
     metrics::Metrics,
     shared::{
@@ -113,13 +117,6 @@ impl Taiko {
         } else {
             Ok(None)
         }
-    }
-
-    pub async fn get_balance(&self, address: Address) -> Result<alloy::primitives::U256, Error> {
-        self.l2_execution_layer
-            .common()
-            .get_account_balance(address)
-            .await
     }
 
     pub async fn get_latest_l2_block_id(&self) -> Result<u64, Error> {
@@ -352,8 +349,17 @@ impl Taiko {
             .get_last_synced_anchor_block_id_from_geth()
             .await
     }
+}
 
-    pub async fn transfer_eth_from_l2_to_l1(
+impl Bridgeable for Taiko {
+    async fn get_balance(&self, address: Address) -> Result<alloy::primitives::U256, Error> {
+        self.l2_execution_layer
+            .common()
+            .get_account_balance(address)
+            .await
+    }
+
+    async fn transfer_eth_from_l2_to_l1(
         &self,
         amount: u128,
         bridge_relayer_fee: u64,

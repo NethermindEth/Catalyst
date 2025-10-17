@@ -8,7 +8,7 @@ use alloy::{
 use anyhow::{Error, anyhow};
 use blst::min_pk::PublicKey;
 use common::{
-    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
+    l1::{ethereum_l1::EthereumL1, traits::el_trait::ELTrait},
     utils::types::{Epoch, Slot},
 };
 use std::{str::FromStr, sync::Arc};

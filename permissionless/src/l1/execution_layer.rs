@@ -9,7 +9,7 @@ use alloy::{
 };
 use anyhow::{Error, anyhow};
 use common::{
-    l1::{el_trait::ELTrait, transaction_error::TransactionError},
+    l1::{traits::el_trait::ELTrait, transaction_error::TransactionError},
     metrics::Metrics,
     shared::alloy_tools,
     shared::execution_layer::ExecutionLayer as ExecutionLayerCommon,
@@ -61,10 +61,6 @@ impl ELTrait for ExecutionLayer {
             provider,
             config: specific_config,
         })
-    }
-
-    async fn get_preconfer_total_bonds(&self) -> Result<alloy::primitives::U256, Error> {
-        todo!()
     }
 
     fn common(&self) -> &ExecutionLayerCommon {

@@ -17,7 +17,7 @@ use alloy::{consensus::BlockHeader, consensus::Transaction, primitives::Address}
 use anyhow::Error;
 use batch_builder::BatchBuilder;
 use common::{
-    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
+    l1::{ethereum_l1::EthereumL1, traits::el_trait::ELTrait},
     l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
 };
 use config::BatchBuilderConfig;

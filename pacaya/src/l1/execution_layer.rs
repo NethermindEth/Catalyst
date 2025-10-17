@@ -17,7 +17,11 @@ use alloy::{
 };
 use anyhow::{Error, anyhow};
 use common::{
-    l1::{bindings::IERC20, el_trait::ELTrait, transaction_error::TransactionError},
+    l1::{
+        bindings::IERC20,
+        traits::{el_trait::ELTrait, preconfer_provider::PreconferProvider},
+        transaction_error::TransactionError,
+    },
     metrics::Metrics,
     shared::execution_layer::ExecutionLayer as ExecutionLayerCommon,
     shared::transaction_monitor::TransactionMonitor,
@@ -91,6 +95,12 @@ impl ELTrait for ExecutionLayer {
         })
     }
 
+    fn common(&self) -> &ExecutionLayerCommon {
+        &self.common
+    }
+}
+
+impl PreconferProvider for ExecutionLayer {
     async fn get_preconfer_total_bonds(&self) -> Result<alloy::primitives::U256, Error> {
         // Check TAIKO TOKEN balance
         let bond_balance = self
@@ -106,8 +116,30 @@ impl ELTrait for ExecutionLayer {
         Ok(bond_balance + wallet_balance)
     }
 
-    fn common(&self) -> &ExecutionLayerCommon {
-        &self.common
+    async fn get_preconfer_wallet_eth(&self) -> Result<alloy::primitives::U256, Error> {
+        self.common()
+            .get_account_balance(self.preconfer_address)
+            .await
+    }
+
+    async fn get_preconfer_nonce_pending(&self) -> Result<u64, Error> {
+        self.common()
+            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Pending)
+            .await
+    }
+
+    async fn get_preconfer_nonce_latest(&self) -> Result<u64, Error> {
+        self.common()
+            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Latest)
+            .await
+    }
+
+    fn get_preconfer_alloy_address(&self) -> Address {
+        self.preconfer_address
+    }
+
+    fn get_preconfer_address(&self) -> PreconferAddress {
+        self.preconfer_address.into_array()
     }
 }
 
@@ -260,7 +292,7 @@ impl ExecutionLayer {
         Ok(batch.lastBlockId)
     }
 
-    pub async fn get_preconfer_inbox_bonds(&self) -> Result<alloy::primitives::U256, Error> {
+    async fn get_preconfer_inbox_bonds(&self) -> Result<alloy::primitives::U256, Error> {
         let contract = taiko_inbox::ITaikoInbox::new(
             self.config.contract_addresses.taiko_inbox,
             &self.provider,
@@ -273,7 +305,7 @@ impl ExecutionLayer {
         Ok(bonds_balance)
     }
 
-    pub async fn get_preconfer_wallet_bonds(&self) -> Result<alloy::primitives::U256, Error> {
+    async fn get_preconfer_wallet_bonds(&self) -> Result<alloy::primitives::U256, Error> {
         let taiko_token = self
             .config
             .contract_addresses
@@ -418,24 +450,6 @@ impl ExecutionLayer {
             .map_err(|e| Error::msg(format!("Failed to get preconf router config: {e}")))
     }
 
-    pub async fn get_preconfer_wallet_eth(&self) -> Result<alloy::primitives::U256, Error> {
-        self.common()
-            .get_account_balance(self.preconfer_address)
-            .await
-    }
-
-    pub async fn get_preconfer_nonce_pending(&self) -> Result<u64, Error> {
-        self.common()
-            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Pending)
-            .await
-    }
-
-    pub async fn get_preconfer_nonce_latest(&self) -> Result<u64, Error> {
-        self.common()
-            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Latest)
-            .await
-    }
-
     pub fn get_block_max_gas_limit(&self) -> u32 {
         self.protocol_config.block_max_gas_limit
     }
@@ -454,14 +468,6 @@ impl ExecutionLayer {
 
     pub fn get_protocol_config(&self) -> ProtocolConfig {
         self.protocol_config.clone()
-    }
-
-    pub fn get_preconfer_alloy_address(&self) -> Address {
-        self.preconfer_address
-    }
-
-    pub fn get_preconfer_address(&self) -> PreconferAddress {
-        self.preconfer_address.into_array()
     }
 
     pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {
