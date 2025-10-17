@@ -1,3 +1,5 @@
+use crate::l1::execution_layer::ExecutionLayer as L1ExecutionLayer;
+use crate::l2::taiko::Taiko;
 use alloy::primitives::U256;
 use anyhow::Error;
 use std::{sync::Arc, time::Duration};
@@ -5,15 +7,14 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-use crate::{
+use common::{
     l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
-    l2::taiko::Taiko,
     metrics::Metrics,
 };
 
-pub struct FundsMonitor<T: ELTrait> {
-    ethereum_l1: Arc<EthereumL1<T>>,
-    taiko: Arc<Taiko<T>>,
+pub struct FundsMonitor {
+    ethereum_l1: Arc<EthereumL1<L1ExecutionLayer>>,
+    taiko: Arc<Taiko>,
     metrics: Arc<Metrics>,
     thresholds: Thresholds,
     amount_to_bridge_from_l2_to_l1: u128,
@@ -30,11 +31,11 @@ pub struct Thresholds {
     pub taiko: U256,
 }
 
-impl<T: ELTrait + 'static> FundsMonitor<T> {
+impl FundsMonitor {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        ethereum_l1: Arc<EthereumL1<T>>,
-        taiko: Arc<Taiko<T>>,
+        ethereum_l1: Arc<EthereumL1<L1ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
         eth_threshold: u128,
         taiko_threshold: u128,
@@ -109,7 +110,6 @@ impl<T: ELTrait + 'static> FundsMonitor<T> {
         let balance = self
             .ethereum_l1
             .execution_layer
-            .common()
             .get_preconfer_wallet_eth()
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch ETH balance: {e}")))?;
@@ -131,7 +131,6 @@ impl<T: ELTrait + 'static> FundsMonitor<T> {
         let eth_balance = self
             .ethereum_l1
             .execution_layer
-            .common()
             .get_preconfer_wallet_eth()
             .await;
         let eth_balance_str = match eth_balance.as_ref() {
@@ -163,7 +162,6 @@ impl<T: ELTrait + 'static> FundsMonitor<T> {
         let preconfer_address = self
             .ethereum_l1
             .execution_layer
-            .common()
             .get_preconfer_alloy_address();
 
         let l2_eth_balance = self.taiko.get_balance(preconfer_address).await;

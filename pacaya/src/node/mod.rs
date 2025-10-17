@@ -7,6 +7,7 @@ mod verifier;
 use crate::{
     chain_monitor::ChainMonitor,
     l1::execution_layer::ExecutionLayer,
+    l2::{operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
     metrics::Metrics,
     node::l2_head_verifier::L2HeadVerifier,
     shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
@@ -15,8 +16,7 @@ use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     fork_info::ForkInfo,
-    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
-    l2::{operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
+    l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     utils as common_utils,
 };
 use config::NodeConfig;
@@ -37,7 +37,7 @@ pub struct Node {
     operator: Operator,
     batch_manager: BatchManager,
     verifier: Option<Verifier>,
-    taiko: Arc<Taiko<ExecutionLayer>>,
+    taiko: Arc<Taiko>,
     transaction_error_channel: Receiver<TransactionError>,
     metrics: Arc<Metrics>,
     watchdog: common_utils::watchdog::Watchdog,
@@ -51,7 +51,7 @@ impl Node {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         cancel_token: CancellationToken,
-        taiko: Arc<Taiko<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         chain_monitor: Arc<ChainMonitor>,
         transaction_error_channel: Receiver<TransactionError>,
@@ -171,13 +171,11 @@ impl Node {
             let nonce_latest: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_preconfer_nonce_latest()
                 .await?;
             let nonce_pending: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_preconfer_nonce_pending()
                 .await?;
             if nonce_pending == nonce_latest {
@@ -244,13 +242,11 @@ impl Node {
             let nonce_latest: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_preconfer_nonce_latest()
                 .await?;
             let nonce_pending: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_preconfer_nonce_pending()
                 .await?;
             debug!("Nonce Latest: {nonce_latest}, Nonce Pending: {nonce_pending}");
@@ -289,7 +285,6 @@ impl Node {
         let transaction_in_progress = self
             .ethereum_l1
             .execution_layer
-            .common()
             .is_transaction_in_progress()
             .await?;
 
@@ -460,7 +455,6 @@ impl Node {
             let max_anchor_height_offset = self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_config_max_anchor_height_offset();
 
             // +1 because we are checking the next block

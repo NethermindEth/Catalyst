@@ -1,12 +1,12 @@
 use super::batch_manager::BatchManager;
 use crate::{
-    l1::execution_layer::ExecutionLayer, metrics::Metrics,
+    l1::execution_layer::ExecutionLayer, l2::taiko::Taiko, metrics::Metrics,
     node::batch_manager::config::BatchesToSend,
 };
 use alloy::primitives::B256;
 use anyhow::Error;
+use common::l1::ethereum_l1::EthereumL1;
 use common::utils::types::*;
-use common::{l1::ethereum_l1::EthereumL1, l2::taiko::Taiko};
 use std::{cmp::Ordering, sync::Arc};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -33,7 +33,7 @@ pub struct Verifier {
 }
 
 struct VerifierThread {
-    taiko: Arc<Taiko<ExecutionLayer>>,
+    taiko: Arc<Taiko>,
     preconfirmation_root: PreconfirmationRootBlock,
     batch_manager: BatchManager,
     cancel_token: CancellationToken,
@@ -42,7 +42,7 @@ struct VerifierThread {
 impl Verifier {
     pub async fn new_with_taiko_height(
         taiko_geth_height: u64,
-        taiko: Arc<Taiko<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         batch_manager: BatchManager,
         verification_slot: Slot,
         cancel_token: CancellationToken,

@@ -10,8 +10,7 @@ use crate::{
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::l1::{
-    el_trait::ELTrait, ethereum_l1::EthereumL1, slot_clock::SlotClock,
-    transaction_error::TransactionError,
+    ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError,
 };
 use tracing::{debug, error, trace, warn};
 
@@ -303,7 +302,6 @@ impl BatchBuilder {
         if let Some((forced_inclusion, batch)) = self.batches_to_send.front() {
             if ethereum_l1
                 .execution_layer
-                .common()
                 .is_transaction_in_progress()
                 .await?
             {

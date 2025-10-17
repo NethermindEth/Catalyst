@@ -2,8 +2,7 @@ use crate::utils::config::PacayaConfig;
 use anyhow::Error;
 use common::{
     config::ConfigTrait,
-    funds_monitor,
-    l1::{self as common_l1, el_trait::ELTrait},
+    l1::{self as common_l1},
     metrics::{self, Metrics},
     shared,
 };
@@ -15,7 +14,9 @@ use tracing::{info, warn};
 
 mod chain_monitor;
 mod forced_inclusion;
+mod funds_monitor;
 pub mod l1;
+mod l2;
 mod node;
 pub mod utils;
 
@@ -40,19 +41,18 @@ pub async fn create_pacaya_node(
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
-    let taiko_config = common::l2::config::TaikoConfig::new(&config)
+    let taiko_config = l2::config::TaikoConfig::new(&config)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create TaikoConfig: {}", e))?;
 
     let taiko = Arc::new(
-        common::l2::taiko::Taiko::new(ethereum_l1.clone(), metrics.clone(), taiko_config)
+        l2::taiko::Taiko::new(ethereum_l1.clone(), metrics.clone(), taiko_config)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
     );
 
     let max_anchor_height_offset = ethereum_l1
         .execution_layer
-        .common()
         .get_config_max_anchor_height_offset();
     if config.max_anchor_height_offset_reduction >= max_anchor_height_offset {
         panic!(
@@ -63,7 +63,6 @@ pub async fn create_pacaya_node(
 
     let l1_max_blocks_per_batch = ethereum_l1
         .execution_layer
-        .common()
         .get_config_max_blocks_per_batch();
 
     if config.max_blocks_per_batch > l1_max_blocks_per_batch {
@@ -130,10 +129,7 @@ pub async fn create_pacaya_node(
             max_time_shift_between_blocks_sec: config.max_time_shift_between_blocks_sec,
             max_anchor_height_offset: max_anchor_height_offset
                 - config.max_anchor_height_offset_reduction,
-            default_coinbase: ethereum_l1
-                .execution_layer
-                .common()
-                .get_preconfer_alloy_address(),
+            default_coinbase: ethereum_l1.execution_layer.get_preconfer_alloy_address(),
             preconf_min_txs: config.preconf_min_txs,
             preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
         },

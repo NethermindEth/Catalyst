@@ -9,15 +9,12 @@ use alloy::{
 };
 use anyhow::{Error, anyhow};
 use common::{
-    l1::{
-        config::{BaseFeeConfig, ProtocolConfig},
-        el_trait::ELTrait,
-        execution_layer::ExecutionLayer as ExecutionLayerCommon,
-        transaction_error::TransactionError,
-    },
+    l1::{el_trait::ELTrait, transaction_error::TransactionError},
     metrics::Metrics,
     shared::alloy_tools,
+    shared::execution_layer::ExecutionLayer as ExecutionLayerCommon,
 };
+use pacaya::l1::protocol_config::{BaseFeeConfig, ProtocolConfig};
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 
@@ -57,15 +54,7 @@ impl ELTrait for ExecutionLayer {
             block_max_gas_limit: 0,
         };
 
-        let common = ExecutionLayerCommon::new(
-            common_config,
-            transaction_error_channel,
-            metrics,
-            protocol_config,
-            provider.clone(),
-            preconfer_address,
-        )
-        .await?;
+        let common = ExecutionLayerCommon::new(provider.clone()).await?;
 
         Ok(Self {
             common,
