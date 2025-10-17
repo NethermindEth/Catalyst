@@ -14,7 +14,7 @@ use tracing::{info, warn};
 
 mod chain_monitor;
 mod forced_inclusion;
-mod funds_monitor;
+mod funds_controller;
 pub mod l1;
 mod l2;
 mod node;
@@ -142,17 +142,12 @@ pub async fn create_pacaya_node(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start Node: {}", e))?;
 
-    let funds_monitor = funds_monitor::FundsMonitor::new(
+    let funds_monitor = funds_controller::FundsController::new(
+        (&config).into(),
         ethereum_l1.clone(),
         taiko.clone(),
         metrics.clone(),
-        config.threshold_eth,
-        config.threshold_taiko,
-        config.amount_to_bridge_from_l2_to_l1,
-        config.disable_bridging,
         cancel_token.clone(),
-        config.bridge_relayer_fee,
-        config.bridge_transaction_fee,
     );
     funds_monitor.run();
 

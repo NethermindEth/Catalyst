@@ -1,8 +1,11 @@
+mod config;
+
+use config::FundsControllerConfig;
 use crate::l1::execution_layer::ExecutionLayer as L1ExecutionLayer;
 use crate::l2::taiko::Taiko;
 use alloy::primitives::U256;
 use anyhow::Error;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
@@ -12,52 +15,29 @@ use common::{
     metrics::Metrics,
 };
 
-pub struct FundsMonitor {
+pub struct FundsController {
+    config: FundsControllerConfig,
     ethereum_l1: Arc<EthereumL1<L1ExecutionLayer>>,
     taiko: Arc<Taiko>,
     metrics: Arc<Metrics>,
-    thresholds: Thresholds,
-    amount_to_bridge_from_l2_to_l1: u128,
-    disable_bridging: bool,
     cancel_token: CancellationToken,
-    bridge_relayer_fee: u64,
-    bridge_transaction_fee: u64,
 }
 
-const MONITOR_INTERVAL_SEC: u64 = 60;
-
-pub struct Thresholds {
-    pub eth: U256,
-    pub taiko: U256,
-}
-
-impl FundsMonitor {
+impl FundsController {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        config: FundsControllerConfig,
         ethereum_l1: Arc<EthereumL1<L1ExecutionLayer>>,
         taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
-        eth_threshold: u128,
-        taiko_threshold: u128,
-        amount_to_bridge_from_l2_to_l1: u128,
-        disable_bridging: bool,
         cancel_token: CancellationToken,
-        bridge_relayer_fee: u64,
-        bridge_transaction_fee: u64,
     ) -> Self {
         Self {
+            config,
             ethereum_l1,
             taiko,
             metrics,
-            thresholds: Thresholds {
-                eth: U256::from(eth_threshold),
-                taiko: U256::from(taiko_threshold),
-            },
-            amount_to_bridge_from_l2_to_l1,
-            disable_bridging,
             cancel_token,
-            bridge_relayer_fee,
-            bridge_transaction_fee,
         }
     }
 
@@ -78,7 +58,7 @@ impl FundsMonitor {
         loop {
             self.transfer_funds_from_l2_to_l1_when_needed().await;
             tokio::select! {
-                _ = sleep(Duration::from_secs(MONITOR_INTERVAL_SEC)) => {},
+                _ = sleep(self.config.monitor_interval) => {},
                 _ = self.cancel_token.cancelled() => {
                     info!("Shutdown signal received, exiting metrics loop...");
                     return;
@@ -96,11 +76,11 @@ impl FundsMonitor {
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch bond balance: {e}")))?;
 
-        if total_balance < self.thresholds.taiko {
+        if total_balance < self.config.thresholds.taiko {
             anyhow::bail!(
                 "Total balance ({}) is below the required threshold ({})",
                 total_balance,
-                self.thresholds.taiko
+                self.config.thresholds.taiko
             );
         }
 
@@ -114,11 +94,11 @@ impl FundsMonitor {
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch ETH balance: {e}")))?;
 
-        if balance < self.thresholds.eth {
+        if balance < self.config.thresholds.eth {
             anyhow::bail!(
                 "ETH balance ({}) is below the required threshold ({})",
                 balance,
-                self.thresholds.eth
+                self.config.thresholds.eth
             );
         }
 
@@ -181,26 +161,26 @@ impl FundsMonitor {
             eth_balance_str, l2_eth_balance_str, taiko_balance_str
         );
 
-        if !self.disable_bridging
+        if !self.config.disable_bridging
             && let Ok(l2_eth_balance) = l2_eth_balance
             && l2_eth_balance
                 > U256::from(
-                    self.amount_to_bridge_from_l2_to_l1
-                        + u128::from(self.bridge_relayer_fee)
-                        + u128::from(self.bridge_transaction_fee), // estimated transaction fee
+                    self.config.amount_to_bridge_from_l2_to_l1
+                        + u128::from(self.config.bridge_relayer_fee)
+                        + u128::from(self.config.bridge_transaction_fee), // estimated transaction fee
                 )
         {
             match self
                 .taiko
                 .transfer_eth_from_l2_to_l1(
-                    self.amount_to_bridge_from_l2_to_l1,
-                    self.bridge_relayer_fee,
+                    self.config.amount_to_bridge_from_l2_to_l1,
+                    self.config.bridge_relayer_fee,
                 )
                 .await
             {
                 Ok(_) => info!(
                     "Transferred {} ETH from L2 to L1",
-                    self.amount_to_bridge_from_l2_to_l1
+                    self.config.amount_to_bridge_from_l2_to_l1
                 ),
                 Err(e) => warn!("Failed to transfer ETH from L2 to L1: {}", e),
             }
