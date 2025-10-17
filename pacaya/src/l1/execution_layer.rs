@@ -1,3 +1,4 @@
+use super::protocol_config::ProtocolConfig;
 use super::{
     bindings::{
         BatchParams, BlockParams, PreconfWhitelist,
@@ -7,7 +8,6 @@ use super::{
     },
     config::EthereumL1Config,
     propose_batch_builder::ProposeBatchBuilder,
-    protocol_config::{BaseFeeConfig, ProtocolConfig},
 };
 use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
@@ -40,7 +40,6 @@ pub struct ExecutionLayer {
     config: EthereumL1Config,
     taiko_wrapper_contract: taiko_wrapper::TaikoWrapper::TaikoWrapperInstance<DynProvider>,
     pub transaction_monitor: TransactionMonitor,
-    protocol_config: ProtocolConfig,
     metrics: Arc<Metrics>,
     extra_gas_percentage: u64,
 }
@@ -53,18 +52,14 @@ impl ELTrait for ExecutionLayer {
         transaction_error_channel: Sender<TransactionError>,
         metrics: Arc<Metrics>,
     ) -> Result<Self, Error> {
-        let (provider, preconfer_address) = alloy_tools::construct_alloy_provider(
+        let provider = alloy_tools::construct_alloy_provider(
             &common_config.signer,
             common_config
                 .execution_rpc_urls
                 .first()
                 .ok_or_else(|| anyhow!("L1 RPC URL is required"))?,
-            common_config.preconfer_address,
         )
         .await?;
-        let protocol_config =
-            Self::fetch_protocol_config(&specific_config.contract_addresses.taiko_inbox, &provider)
-                .await?;
         let common = ExecutionLayerCommon::new(provider.clone()).await?;
 
         let taiko_wrapper_contract = taiko_wrapper::TaikoWrapper::new(
@@ -85,11 +80,10 @@ impl ELTrait for ExecutionLayer {
         Ok(Self {
             common,
             provider,
-            preconfer_address,
+            preconfer_address: common_config.signer.get_address(),
             config: specific_config,
             taiko_wrapper_contract,
             transaction_monitor,
-            protocol_config,
             metrics,
             extra_gas_percentage: common_config.extra_gas_percentage,
         })
@@ -144,26 +138,13 @@ impl PreconferProvider for ExecutionLayer {
 }
 
 impl ExecutionLayer {
-    async fn fetch_protocol_config(
-        taiko_inbox_address: &Address,
-        provider: &DynProvider,
-    ) -> Result<ProtocolConfig, Error> {
-        let pacaya_config = Self::fetch_pacaya_config(taiko_inbox_address, provider)
+    pub async fn fetch_protocol_config(&self) -> Result<ProtocolConfig, Error> {
+        let pacaya_config = self
+            .fetch_pacaya_config()
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch pacaya config: {e}")))?;
 
-        Ok(ProtocolConfig {
-            base_fee_config: BaseFeeConfig {
-                adjustment_quotient: pacaya_config.baseFeeConfig.adjustmentQuotient,
-                sharing_pctg: pacaya_config.baseFeeConfig.sharingPctg,
-                gas_issuance_per_second: pacaya_config.baseFeeConfig.gasIssuancePerSecond,
-                min_gas_excess: pacaya_config.baseFeeConfig.minGasExcess,
-                max_gas_issuance_per_block: pacaya_config.baseFeeConfig.maxGasIssuancePerBlock,
-            },
-            max_blocks_per_batch: pacaya_config.maxBlocksPerBatch,
-            max_anchor_height_offset: pacaya_config.maxAnchorHeightOffset,
-            block_max_gas_limit: pacaya_config.blockMaxGasLimit,
-        })
+        Ok(ProtocolConfig::from(pacaya_config))
     }
 
     pub async fn send_batch_to_l1(
@@ -262,11 +243,11 @@ impl ExecutionLayer {
         Ok(())
     }
 
-    async fn fetch_pacaya_config(
-        taiko_inbox_address: &Address,
-        provider: &DynProvider,
-    ) -> Result<taiko_inbox::ITaikoInbox::Config, Error> {
-        let contract = taiko_inbox::ITaikoInbox::new(*taiko_inbox_address, provider);
+    async fn fetch_pacaya_config(&self) -> Result<taiko_inbox::ITaikoInbox::Config, Error> {
+        let contract = taiko_inbox::ITaikoInbox::new(
+            self.config.contract_addresses.taiko_inbox,
+            &self.provider,
+        );
         let pacaya_config = contract.pacayaConfig().call().await?;
 
         info!(
@@ -448,26 +429,6 @@ impl ExecutionLayer {
             .call()
             .await
             .map_err(|e| Error::msg(format!("Failed to get preconf router config: {e}")))
-    }
-
-    pub fn get_block_max_gas_limit(&self) -> u32 {
-        self.protocol_config.block_max_gas_limit
-    }
-
-    pub fn get_config_max_blocks_per_batch(&self) -> u16 {
-        self.protocol_config.max_blocks_per_batch
-    }
-
-    pub fn get_config_max_anchor_height_offset(&self) -> u64 {
-        self.protocol_config.max_anchor_height_offset
-    }
-
-    pub fn get_config_block_max_gas_limit(&self) -> u32 {
-        self.protocol_config.block_max_gas_limit
-    }
-
-    pub fn get_protocol_config(&self) -> ProtocolConfig {
-        self.protocol_config.clone()
     }
 
     pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {

@@ -1,7 +1,7 @@
 use crate::signer::Signer;
 use alloy::{
     network::{Ethereum, EthereumWallet},
-    primitives::{Address, B256},
+    primitives::B256,
     providers::{DynProvider, Provider, ProviderBuilder, WsConnect, ext::DebugApi},
     rpc::types::{Transaction, TransactionRequest, trace::geth::GethDebugTracingOptions},
     signers::local::PrivateKeySigner,
@@ -76,34 +76,23 @@ fn find_errors_from_trace(trace_str: &str) -> Option<String> {
 pub async fn construct_alloy_provider(
     signer: &Signer,
     execution_ws_rpc_url: &str,
-    preconfer_address: Option<Address>,
-) -> Result<(DynProvider, Address), Error> {
+) -> Result<DynProvider, Error> {
     match signer {
-        Signer::PrivateKey(private_key) => {
+        Signer::PrivateKey(private_key, _) => {
             debug!(
                 "Creating alloy provider with URL: {} and private key signer.",
                 execution_ws_rpc_url
             );
             let signer = PrivateKeySigner::from_str(private_key.as_str())?;
-            let preconfer_address: Address = signer.address();
 
-            Ok((
-                create_alloy_provider_with_wallet(signer.into(), execution_ws_rpc_url).await?,
-                preconfer_address,
-            ))
+            Ok(create_alloy_provider_with_wallet(signer.into(), execution_ws_rpc_url).await?)
         }
-        Signer::Web3signer(web3signer) => {
+        Signer::Web3signer(web3signer, address) => {
             debug!(
                 "Creating alloy provider with URL: {} and web3signer signer.",
                 execution_ws_rpc_url
             );
-            let preconfer_address = if let Some(preconfer_address) = preconfer_address {
-                preconfer_address
-            } else {
-                return Err(anyhow::anyhow!(
-                    "Preconfer address is not provided for web3signer signer"
-                ));
-            };
+            let preconfer_address = *address;
 
             let tx_signer = crate::signer::web3signer::Web3TxSigner::new(
                 web3signer.clone(),
@@ -111,10 +100,7 @@ pub async fn construct_alloy_provider(
             )?;
             let wallet = EthereumWallet::new(tx_signer);
 
-            Ok((
-                create_alloy_provider_with_wallet(wallet, execution_ws_rpc_url).await?,
-                preconfer_address,
-            ))
+            Ok(create_alloy_provider_with_wallet(wallet, execution_ws_rpc_url).await?)
         }
     }
 }

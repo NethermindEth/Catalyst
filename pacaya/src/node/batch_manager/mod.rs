@@ -229,8 +229,8 @@ impl BatchManager {
     pub fn is_anchor_block_offset_valid(&self, anchor_block_offset: u64) -> bool {
         anchor_block_offset
             < self
-                .ethereum_l1
-                .execution_layer
+                .taiko
+                .get_protocol_config()
                 .get_config_max_anchor_height_offset()
     }
 
@@ -339,6 +339,11 @@ impl BatchManager {
                 .advance_head_to_new_l2_block(
                     forced_inclusion_block,
                     anchor_block_id,
+                    self.ethereum_l1
+                        .execution_layer
+                        .common()
+                        .get_block_state_root_by_number(anchor_block_id)
+                        .await?,
                     l2_slot_info,
                     false,
                     true,
@@ -426,6 +431,11 @@ impl BatchManager {
                 .advance_head_to_new_l2_block(
                     forced_inclusion_block,
                     anchor_block_id,
+                    self.ethereum_l1
+                        .execution_layer
+                        .common()
+                        .get_block_state_root_by_number(anchor_block_id)
+                        .await?,
                     l2_slot_info,
                     false,
                     true,
@@ -487,6 +497,11 @@ impl BatchManager {
             .advance_head_to_new_l2_block(
                 l2_block,
                 anchor_block_id,
+                self.ethereum_l1
+                    .execution_layer
+                    .common()
+                    .get_block_state_root_by_number(anchor_block_id)
+                    .await?,
                 l2_slot_info,
                 end_of_sequencing,
                 false,
