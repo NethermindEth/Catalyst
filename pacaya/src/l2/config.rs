@@ -21,6 +21,7 @@ pub struct TaikoConfig {
     pub rpc_l2_execution_layer_timeout: Duration,
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
+    pub preconf_heartbeat_ms: u64,
     pub signer: Arc<Signer>,
 }
 
@@ -47,6 +48,7 @@ impl TaikoConfig {
             rpc_l2_execution_layer_timeout: config.rpc_l2_execution_layer_timeout,
             rpc_driver_preconf_timeout: config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: config.rpc_driver_status_timeout,
+            preconf_heartbeat_ms: config.preconf_heartbeat_ms,
             signer,
         })
     }

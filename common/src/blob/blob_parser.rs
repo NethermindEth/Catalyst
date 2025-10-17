@@ -4,7 +4,7 @@ use alloy::{eips::eip4844::kzg_to_versioned_hash, primitives::B256, rpc::types::
 use anyhow::Error;
 
 use super::blob_decoder::BlobDecoder;
-use crate::l1::{el_trait::ELTrait, ethereum_l1::EthereumL1};
+use crate::l1::{ethereum_l1::EthereumL1, traits::ELTrait};
 use crate::shared::l2_tx_lists::uncompress_and_decode;
 
 pub async fn extract_transactions_from_blob<T: ELTrait>(

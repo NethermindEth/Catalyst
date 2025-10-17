@@ -45,9 +45,10 @@ pub struct Config {
     pub delay_between_tx_attempts_sec: u64,
     pub extra_gas_percentage: u64,
     // Thresholds for balances
+    pub funds_monitor_interval_sec: u64,
     pub threshold_eth: u128,
     pub threshold_taiko: u128,
-    // Bridgeing
+    // Bridging
     pub disable_bridging: bool,
     pub amount_to_bridge_from_l2_to_l1: u128,
     pub bridge_relayer_fee: u64,
@@ -234,6 +235,11 @@ impl Config {
             .parse::<u64>()
             .expect("DELAY_BETWEEN_TX_ATTEMPTS_SEC must be a number");
 
+        let funds_monitor_interval_sec = std::env::var("FUNDS_MONITOR_INTERVAL_SEC")
+            .unwrap_or("60".to_string())
+            .parse::<u64>()
+            .expect("FUNDS_MONITOR_INTERVAL_SEC must be a number");
+
         // 0.5 ETH
         let threshold_eth =
             std::env::var("THRESHOLD_ETH").unwrap_or("500000000000000000".to_string());
@@ -350,6 +356,7 @@ impl Config {
             max_attempts_to_send_tx,
             max_attempts_to_wait_tx,
             delay_between_tx_attempts_sec,
+            funds_monitor_interval_sec,
             threshold_eth,
             threshold_taiko,
             amount_to_bridge_from_l2_to_l1,
@@ -397,6 +404,7 @@ tx fees increase percentage: {}
 max attempts to send tx: {}
 max attempts to wait tx: {}
 delay between tx attempts: {}s
+funds_monitor_interval_sec: {}s
 threshold_eth: {}
 threshold_taiko: {}
 amount to bridge from l2 to l1: {}
@@ -448,6 +456,7 @@ fork switch timestamp: {:?}
             config.max_attempts_to_send_tx,
             config.max_attempts_to_wait_tx,
             config.delay_between_tx_attempts_sec,
+            funds_monitor_interval_sec,
             threshold_eth,
             threshold_taiko,
             config.amount_to_bridge_from_l2_to_l1,

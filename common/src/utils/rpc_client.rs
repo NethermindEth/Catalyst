@@ -227,7 +227,7 @@ impl HttpRPCClient {
         method: http::Method,
         endpoint: &str,
         payload: &T,
-        max_duration: Duration,
+        timeout: Duration,
     ) -> Result<Value, Error>
     where
         T: serde::Serialize,
@@ -249,7 +249,7 @@ impl HttpRPCClient {
             },
             Duration::from_millis(10),
             Duration::from_secs(1),
-            max_duration,
+            timeout,
         )
         .await;
 
