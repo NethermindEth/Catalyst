@@ -6,15 +6,13 @@ members = [
     "pacaya",
     "permissionless",
     "tools/p2p_node/p2p_boot_node",
-    "tools/p2p_node/p2p_network",
-    "tools/p2p_node/p2p_test_node",
     "urc",
 ]
 resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.19.1"
+version = "1.19.2"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -72,18 +70,7 @@ k256 = { version = "0.13", default-features = false, features = [
     "std",
 ] }
 lazy_static = { version = "1.5", default-features = false }
-libp2p = { version = "0.55.0", default-features = false, features = [
-    "tcp",
-    "tokio",
-    "identify",
-    "yamux",
-    "noise",
-    "gossipsub",
-    "macros",
-] }
-libp2p-mplex = { version = "0.43", default-features = false }
 mockito = { version = "1.7", default-features = false }
-p2p-network = { path = "tools/p2p_node/p2p_network", default-features = false }
 pacaya = { path = "pacaya" }
 prometheus = { version = "0.14", default-features = false }
 rand = { version = "0.9", default-features = false }
@@ -91,7 +78,8 @@ rand_core = { version = "0.9", default-features = false }
 reqwest = { version = "0.12", default-features = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
-serde_millis = { version = "0.1.1", default-features = false }
+shasta = { path = "shasta" }
+
 tiny-keccak = { version = "2.0", default-features = false }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
