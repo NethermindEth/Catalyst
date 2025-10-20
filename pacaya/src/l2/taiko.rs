@@ -1,7 +1,7 @@
 use super::{
     bindings::TaikoAnchor::BaseFeeConfig, config::TaikoConfig, execution_layer::L2ExecutionLayer,
 };
-use crate::l1::execution_layer::ExecutionLayer as L1ExecutionLayer;
+use crate::l1::protocol_config::ProtocolConfig;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
@@ -9,15 +9,15 @@ use alloy::{
 };
 use anyhow::Error;
 use common::{
-    l1::{
-        ethereum_l1::EthereumL1,
-        traits::{ELTrait, PreconferProvider},
-    },
+    l1::slot_clock::SlotClock,
     l2::{
-        taiko_driver::models::{
-            BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData, TaikoStatus,
+        taiko_driver::{
+            OperationType, TaikoDriver, TaikoDriverConfig,
+            models::{
+                BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData,
+                TaikoStatus,
+            },
         },
-        taiko_driver::{OperationType, TaikoDriver, TaikoDriverConfig},
         traits::Bridgeable,
     },
     metrics::Metrics,
@@ -37,16 +37,19 @@ use std::{
 use tracing::{debug, trace};
 
 pub struct Taiko {
+    protocol_config: ProtocolConfig,
     l2_execution_layer: L2ExecutionLayer,
     taiko_geth_auth_rpc: JSONRPCClient,
     driver: TaikoDriver,
-    ethereum_l1: Arc<EthereumL1<L1ExecutionLayer>>,
+    slot_clock: Arc<SlotClock>,
     config: TaikoConfig,
+    coinbase: String,
 }
 
 impl Taiko {
     pub async fn new(
-        ethereum_l1: Arc<EthereumL1<L1ExecutionLayer>>,
+        slot_clock: Arc<SlotClock>,
+        protocol_config: ProtocolConfig,
         metrics: Arc<Metrics>,
         taiko_config: TaikoConfig,
     ) -> Result<Self, Error> {
@@ -58,6 +61,7 @@ impl Taiko {
             call_timeout: Duration::from_secs(taiko_config.preconf_heartbeat_ms / 2),
         };
         Ok(Self {
+            protocol_config,
             l2_execution_layer: L2ExecutionLayer::new(taiko_config.clone())
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
@@ -70,9 +74,14 @@ impl Taiko {
                 anyhow::anyhow!("Failed to create JSONRPCClient for taiko geth auth: {}", e)
             })?,
             driver: TaikoDriver::new(&driver_config, metrics).await?,
-            ethereum_l1,
+            slot_clock,
+            coinbase: format!("0x{}", hex::encode(taiko_config.signer.get_address())),
             config: taiko_config,
         })
+    }
+
+    pub fn get_protocol_config(&self) -> &ProtocolConfig {
+        &self.protocol_config
     }
 
     pub async fn get_pending_l2_tx_list_from_taiko_geth(
@@ -87,21 +96,13 @@ impl Taiko {
             self.config.min_bytes_per_tx_list,
         );
         let params = vec![
-            Value::String(format!(
-                "0x{}",
-                hex::encode(self.ethereum_l1.execution_layer.get_preconfer_address())
-            )), // beneficiary address
-            Value::from(base_fee), // baseFee
-            Value::Number(
-                self.ethereum_l1
-                    .execution_layer
-                    .get_block_max_gas_limit()
-                    .into(),
-            ), // blockMaxGasLimit
+            Value::String(self.coinbase.clone()), // beneficiary address
+            Value::from(base_fee),                // baseFee
+            Value::Number(self.protocol_config.get_block_max_gas_limit().into()), // blockMaxGasLimit
             Value::Number(max_bytes_per_tx_list.into()), // maxBytesPerTxList (128KB by default)
-            Value::Array(vec![]),  // locals (empty array)
-            Value::Number(1.into()), // maxTransactionsLists
-            Value::Number(0.into()), // minTip
+            Value::Array(vec![]),                        // locals (empty array)
+            Value::Number(1.into()),                     // maxTransactionsLists
+            Value::Number(0.into()),                     // minTip
         ];
 
         let result = self
@@ -204,7 +205,7 @@ impl Taiko {
         &self,
         block: BlockNumberOrTag,
     ) -> Result<L2SlotInfo, Error> {
-        let l2_slot_timestamp = self.ethereum_l1.slot_clock.get_l2_slot_begin_timestamp()?;
+        let l2_slot_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
         let (parent_id, parent_hash, parent_gas_used) =
             self.get_l2_block_id_hash_and_gas_used(block).await?;
 
@@ -241,10 +242,12 @@ impl Taiko {
         ))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn advance_head_to_new_l2_block(
         &self,
         l2_block: L2Block,
         anchor_origin_height: u64,
+        anchor_block_state_root: B256,
         l2_slot_info: &L2SlotInfo,
         end_of_sequencing: bool,
         is_forced_inclusion: bool,
@@ -254,13 +257,6 @@ impl Taiko {
             "Submitting new L2 block to the Taiko driver with {} txs",
             l2_block.prebuilt_tx_list.tx_list.len()
         );
-
-        let anchor_block_state_root = self
-            .ethereum_l1
-            .execution_layer
-            .common()
-            .get_block_state_root_by_number(anchor_origin_height)
-            .await?;
 
         let base_fee_config = self.get_base_fee_config();
         let sharing_pctg = base_fee_config.sharingPctg;
@@ -285,10 +281,7 @@ impl Taiko {
             base_fee_per_gas: l2_slot_info.base_fee(),
             block_number: l2_slot_info.parent_id() + 1,
             extra_data: format!("0x{:0>64}", hex::encode(extra_data)),
-            fee_recipient: format!(
-                "0x{}",
-                hex::encode(self.ethereum_l1.execution_layer.get_preconfer_address())
-            ),
+            fee_recipient: self.coinbase.clone(),
             gas_limit: 241_000_000u64,
             parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
             timestamp: l2_block.timestamp_sec,
@@ -311,13 +304,14 @@ impl Taiko {
     }
 
     fn get_base_fee_config(&self) -> BaseFeeConfig {
-        let config = self.ethereum_l1.execution_layer.get_protocol_config();
         BaseFeeConfig {
-            adjustmentQuotient: config.base_fee_config.adjustment_quotient,
-            sharingPctg: config.base_fee_config.sharing_pctg,
-            gasIssuancePerSecond: config.base_fee_config.gas_issuance_per_second,
-            minGasExcess: config.base_fee_config.min_gas_excess,
-            maxGasIssuancePerBlock: config.base_fee_config.max_gas_issuance_per_block,
+            adjustmentQuotient: self.protocol_config.get_base_fee_adjustment_quotient(),
+            sharingPctg: self.protocol_config.get_base_fee_sharing_pctg(),
+            gasIssuancePerSecond: self.protocol_config.get_base_fee_gas_issuance_per_second(),
+            minGasExcess: self.protocol_config.get_base_fee_min_gas_excess(),
+            maxGasIssuancePerBlock: self
+                .protocol_config
+                .get_base_fee_max_gas_issuance_per_block(),
         }
     }
 

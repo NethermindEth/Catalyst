@@ -131,12 +131,9 @@ impl L2ExecutionLayer {
             self.chain_id, dest_chain_id
         );
 
-        let (provider, _) = alloy_tools::construct_alloy_provider(
-            &self.config.signer,
-            &self.config.taiko_geth_url,
-            Some(preconfer_address),
-        )
-        .await?;
+        let provider =
+            alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.taiko_geth_url)
+                .await?;
 
         self.transfer_eth_from_l2_to_l1_with_provider(
             provider,
