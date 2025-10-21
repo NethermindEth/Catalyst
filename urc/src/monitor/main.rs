@@ -1,7 +1,6 @@
 use anyhow::Error;
 use urc::monitor::config::Config;
 use urc::monitor::registry_monitor::RegistryMonitor;
-//use registry_monitor::RegistryMonitor;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
