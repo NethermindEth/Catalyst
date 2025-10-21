@@ -20,6 +20,7 @@ alloy-json-rpc = { workspace = true }
 anyhow = { workspace = true }
 blst = { workspace = true }
 clap = { workspace = true }
+common = { workspace = true }
 dotenvy = { workspace = true }
 rand_core = { workspace = true }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "macros"] }

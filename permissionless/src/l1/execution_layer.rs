@@ -1,6 +1,6 @@
 #![allow(unused)] // TODO: remove this once we have a used inner, provider, and config fields
 
-use super::{bindings, config::EthereumL1Config};
+use super::config::EthereumL1Config;
 use alloy::{
     primitives::Address,
     providers::{DynProvider, Provider},
@@ -62,7 +62,7 @@ impl ExecutionLayer {
 
         let filter = Filter::new()
             .address(registry_address)
-            .event_signature(bindings::IRegistry::OperatorRegistered::SIGNATURE_HASH);
+            .event_signature(urc::bindings::IRegistry::OperatorRegistered::SIGNATURE_HASH);
 
         let logs = self.provider.get_logs(&filter).await?;
 
