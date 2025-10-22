@@ -5773,6 +5773,7 @@ dependencies = [
  "anyhow",
  "blst",
  "clap",
+ "common",
  "dotenvy",
  "rand_core 0.9.3",
  "sqlx",

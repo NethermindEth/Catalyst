@@ -1,8 +1,15 @@
 use alloy::sol;
 
-sol! {
+sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
     IRegistry,
-    "src/bindings/abi/Registry.json"
-}
+    "src/bindings/abi/IRegistry.json"
+);
+
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    ILookaheadStore,
+    "src/bindings/abi/ILookaheadStore.json"
+);
