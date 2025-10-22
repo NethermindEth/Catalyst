@@ -47,7 +47,7 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
 
     let config = common::config::Config::read_env_variables();
 
-    let fork_info = ForkInfo::from_config((&config).into())?;
+    let fork_info = ForkInfo::from_config((&config).into());
 
     let cancel_token = CancellationToken::new();
 
@@ -66,13 +66,13 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
             // TODO pacaya::utils::config::Config
             info!(
                 "Current fork: Pacaya, switch_timestamp: {:?}",
-                fork_info.switch_timestamp
+                fork_info.config.fork_switch_timestamp
             );
             create_pacaya_node(
                 config.clone(),
                 metrics.clone(),
                 cancel_token.clone(),
-                fork_info.switch_timestamp,
+                fork_info,
             )
             .await?;
         }

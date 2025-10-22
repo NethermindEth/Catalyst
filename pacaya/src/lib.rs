@@ -2,6 +2,7 @@ use crate::utils::config::PacayaConfig;
 use anyhow::Error;
 use common::{
     config::ConfigTrait,
+    fork_info::ForkInfo,
     funds_controller::FundsController,
     l1::{self as common_l1, traits::PreconferProvider},
     metrics::{self, Metrics},
@@ -24,7 +25,7 @@ pub async fn create_pacaya_node(
     config: common::config::Config,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
-    switch_timestamp: Option<u64>,
+    fork_info: ForkInfo,
 ) -> Result<(), Error> {
     // Read specific config from environment variables
     let pacaya_config = PacayaConfig::read_env_variables();
@@ -135,7 +136,7 @@ pub async fn create_pacaya_node(
             preconf_min_txs: config.preconf_min_txs,
             preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
         },
-        switch_timestamp,
+        fork_info,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
