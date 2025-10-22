@@ -8,11 +8,12 @@ on:
       - "v*"
     paths:
       - "common/**"
+      - "e2e_tests/**"
       - "pacaya/**"
       - "permissionless/**"
       - "node/**"
       - "shasta/**"
-      - "e2e_tests/**"
+      - "urc/**"
 
 env:
   DOCKER_PUBLIC_REGISTRY: docker.io
