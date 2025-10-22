@@ -9,8 +9,9 @@ on:
     paths:
       - "common/**"
       - "permissionless/**"
+      - "pacaya/**"
       - "node/**"
-      - "tools/p2p_node/p2p_network/**"
+      - "shasta/**"
       - "e2e_tests/**"
 
 env:
