@@ -441,10 +441,6 @@ impl BatchBuilder {
             return true;
         }
 
-        if number_of_pending_txs == 0 {
-            return false;
-        }
-
         if number_of_pending_txs >= self.config.preconf_min_txs {
             return true;
         }
@@ -716,7 +712,7 @@ mod tests {
         batch_builder.current_batch = Some(batch_with_blocks);
 
         // Test case 4: Should create new block when skipped slots > preconf_max_skipped_l2_slots
-        assert!(batch_builder.should_new_block_be_created(3, 1008, false));
+        assert!(batch_builder.should_new_block_be_created(0, 1008, false));
 
         // Test case 5: Should not create new block when skipped slots <= preconf_max_skipped_l2_slots
         assert!(!batch_builder.should_new_block_be_created(3, 1006, false));
@@ -725,7 +721,7 @@ mod tests {
         assert!(batch_builder.should_new_block_be_created(3, 1006, true));
 
         // Test case 7: Should not create new block when is_empty_block_required is false
-        assert!(!batch_builder.should_new_block_be_created(0, 1008, false));
+        assert!(!batch_builder.should_new_block_be_created(0, 1006, false));
 
         // Test case 8: Should create new block when is_empty_block_required is true
         assert!(batch_builder.should_new_block_be_created(0, 1260, false));
