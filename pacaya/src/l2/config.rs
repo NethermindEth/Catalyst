@@ -1,21 +1,11 @@
-use crate::config::Config;
-use crate::signer::{Signer, create_signer};
-use crate::utils::file_operations::read_jwt_secret;
-use alloy::primitives::{Address, B256};
+use alloy::primitives::Address;
 use anyhow::Error;
+use common::config::Config;
+use common::signer::{Signer, create_signer};
+use common::utils::file_operations::read_jwt_secret;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-
-pub const GOLDEN_TOUCH_PRIVATE_KEY: B256 = B256::new([
-    0x92, 0x95, 0x43, 0x68, 0xaf, 0xd3, 0xca, 0xa1, 0xf3, 0xce, 0x3e, 0xad, 0x00, 0x69, 0xc1, 0xaf,
-    0x41, 0x40, 0x54, 0xae, 0xfe, 0x1e, 0xf9, 0xae, 0xac, 0xc1, 0xbf, 0x42, 0x62, 0x22, 0xce, 0x38,
-]);
-
-pub const GOLDEN_TOUCH_ADDRESS: Address = Address::new([
-    0x00, 0x00, 0x77, 0x77, 0x35, 0x36, 0x7b, 0x36, 0xbc, 0x9b, 0x61, 0xc5, 0x00, 0x22, 0xd9, 0xd0,
-    0x70, 0x0d, 0xb4, 0xec,
-]);
 
 #[derive(Clone)]
 pub struct TaikoConfig {
@@ -31,6 +21,7 @@ pub struct TaikoConfig {
     pub rpc_l2_execution_layer_timeout: Duration,
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
+    pub preconf_heartbeat_ms: u64,
     pub signer: Arc<Signer>,
 }
 
@@ -57,6 +48,7 @@ impl TaikoConfig {
             rpc_l2_execution_layer_timeout: config.rpc_l2_execution_layer_timeout,
             rpc_driver_preconf_timeout: config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: config.rpc_driver_status_timeout,
+            preconf_heartbeat_ms: config.preconf_heartbeat_ms,
             signer,
         })
     }

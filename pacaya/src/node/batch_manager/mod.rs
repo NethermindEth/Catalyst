@@ -5,6 +5,10 @@ pub mod config;
 use crate::{
     forced_inclusion::ForcedInclusion,
     l1::execution_layer::ExecutionLayer,
+    l2::{
+        self,
+        taiko::{self, Taiko},
+    },
     metrics::Metrics,
     node::batch_manager::config::BatchesToSend,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
@@ -13,13 +17,8 @@ use alloy::{consensus::BlockHeader, consensus::Transaction, primitives::Address}
 use anyhow::Error;
 use batch_builder::BatchBuilder;
 use common::{
-    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
-    l2::{
-        self,
-        operation_type::OperationType,
-        preconf_blocks::BuildPreconfBlockResponse,
-        taiko::{self, Taiko},
-    },
+    l1::{ethereum_l1::EthereumL1, traits::ELTrait},
+    l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
 };
 use config::BatchBuilderConfig;
 use std::sync::Arc;
@@ -29,7 +28,7 @@ use tracing::{debug, error, info, warn};
 pub struct BatchManager {
     batch_builder: BatchBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-    pub taiko: Arc<Taiko<ExecutionLayer>>,
+    pub taiko: Arc<Taiko>,
     l1_height_lag: u64,
     forced_inclusion: Arc<ForcedInclusion>,
     metrics: Arc<Metrics>,
@@ -41,7 +40,7 @@ impl BatchManager {
         l1_height_lag: u64,
         config: BatchBuilderConfig,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-        taiko: Arc<Taiko<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
     ) -> Result<Self, Error> {
@@ -230,9 +229,8 @@ impl BatchManager {
     pub fn is_anchor_block_offset_valid(&self, anchor_block_offset: u64) -> bool {
         anchor_block_offset
             < self
-                .ethereum_l1
-                .execution_layer
-                .common()
+                .taiko
+                .get_protocol_config()
                 .get_config_max_anchor_height_offset()
     }
 
@@ -341,6 +339,11 @@ impl BatchManager {
                 .advance_head_to_new_l2_block(
                     forced_inclusion_block,
                     anchor_block_id,
+                    self.ethereum_l1
+                        .execution_layer
+                        .common()
+                        .get_block_state_root_by_number(anchor_block_id)
+                        .await?,
                     l2_slot_info,
                     false,
                     true,
@@ -428,6 +431,11 @@ impl BatchManager {
                 .advance_head_to_new_l2_block(
                     forced_inclusion_block,
                     anchor_block_id,
+                    self.ethereum_l1
+                        .execution_layer
+                        .common()
+                        .get_block_state_root_by_number(anchor_block_id)
+                        .await?,
                     l2_slot_info,
                     false,
                     true,
@@ -489,6 +497,11 @@ impl BatchManager {
             .advance_head_to_new_l2_block(
                 l2_block,
                 anchor_block_id,
+                self.ethereum_l1
+                    .execution_layer
+                    .common()
+                    .get_block_state_root_by_number(anchor_block_id)
+                    .await?,
                 l2_slot_info,
                 end_of_sequencing,
                 false,
@@ -597,7 +610,7 @@ impl BatchManager {
             .ethereum_l1
             .execution_layer
             .common()
-            .get_l1_height()
+            .get_latest_block_id()
             .await?;
         let l1_height_with_lag = l1_height - self.l1_height_lag;
         let anchor_id_from_last_l2_block =

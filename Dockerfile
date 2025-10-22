@@ -34,7 +34,7 @@ COPY --from=builder /root/catalyst_node /usr/local/bin/catalyst_node
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /bin/sleep /bin/sleep
 
-# Copy required shared libraries
-COPY --from=builder /usr/lib/x86_64-linux-gnu/libzstd.so.1 /usr/lib/x86_64-linux-gnu/
+# Copy required shared libraries, dependencies for event indexer
+COPY --from=builder /usr/lib/*/libzstd.so.1 /usr/lib/
 
 ENTRYPOINT ["catalyst_node"]

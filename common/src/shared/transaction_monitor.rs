@@ -1,9 +1,9 @@
-use super::{config::EthereumL1Config, tools, transaction_error::TransactionError};
+use crate::l1::{config::EthereumL1Config, tools, transaction_error::TransactionError};
 use crate::{metrics::Metrics, shared::alloy_tools, signer::Signer};
 use alloy::{
     consensus::TxType,
     network::{Network, ReceiptResponse, TransactionBuilder, TransactionBuilder4844},
-    primitives::{Address, B256},
+    primitives::B256,
     providers::{
         DynProvider, PendingTransactionBuilder, PendingTransactionError, Provider, RootProvider,
         WatchTxError,
@@ -35,7 +35,6 @@ pub struct TransactionMonitorConfig {
     max_attempts_to_wait_tx: u64,
     delay_between_tx_attempts: Duration,
     execution_rpc_urls: Vec<String>,
-    preconfer_address: Option<Address>,
     signer: Arc<Signer>,
 }
 
@@ -78,7 +77,6 @@ impl TransactionMonitor {
                     config.delay_between_tx_attempts_sec,
                 ),
                 execution_rpc_urls: config.execution_rpc_urls.clone(),
-                preconfer_address: config.preconfer_address,
                 signer: config.signer.clone(),
             },
             join_handle: Mutex::new(None),
@@ -385,15 +383,10 @@ impl TransactionMonitorThread {
     async fn propagate_transaction_to_other_backup_nodes(&self, tx: TransactionRequest) {
         // Skip the first RPC URL since it is the main one
         for url in self.config.execution_rpc_urls.iter().skip(1) {
-            let provider = alloy_tools::construct_alloy_provider(
-                &self.config.signer,
-                url,
-                self.config.preconfer_address,
-            )
-            .await;
+            let provider = alloy_tools::construct_alloy_provider(&self.config.signer, url).await;
             match provider {
                 Ok(provider) => {
-                    let tx = provider.0.send_transaction(tx.clone()).await;
+                    let tx = provider.send_transaction(tx.clone()).await;
                     if let Err(e) = tx {
                         if e.to_string().contains("AlreadyKnown")
                             || e.to_string().to_lowercase().contains("already known")

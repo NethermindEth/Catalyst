@@ -7,6 +7,7 @@ mod verifier;
 use crate::{
     chain_monitor::ChainMonitor,
     l1::execution_layer::ExecutionLayer,
+    l2::taiko::Taiko,
     metrics::Metrics,
     node::l2_head_verifier::L2HeadVerifier,
     shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
@@ -15,8 +16,8 @@ use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     fork_info::ForkInfo,
-    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1, transaction_error::TransactionError},
-    l2::{operation_type::OperationType, preconf_blocks::BuildPreconfBlockResponse, taiko::Taiko},
+    l1::{ethereum_l1::EthereumL1, traits::PreconferProvider, transaction_error::TransactionError},
+    l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
     utils as common_utils,
 };
 use config::NodeConfig;
@@ -37,28 +38,27 @@ pub struct Node {
     operator: Operator,
     batch_manager: BatchManager,
     verifier: Option<Verifier>,
-    taiko: Arc<Taiko<ExecutionLayer>>,
+    taiko: Arc<Taiko>,
     transaction_error_channel: Receiver<TransactionError>,
     metrics: Arc<Metrics>,
     watchdog: common_utils::watchdog::Watchdog,
     head_verifier: L2HeadVerifier,
     config: NodeConfig,
-    // TODO rename
-    fork_active_until: Option<u64>,
+    fork_info: ForkInfo,
 }
 
 impl Node {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         cancel_token: CancellationToken,
-        taiko: Arc<Taiko<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         chain_monitor: Arc<ChainMonitor>,
         transaction_error_channel: Receiver<TransactionError>,
         metrics: Arc<Metrics>,
         config: NodeConfig,
         batch_builder_config: BatchBuilderConfig,
-        fork_active_until: Option<u64>,
+        fork_info: ForkInfo,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             &ethereum_l1,
@@ -105,7 +105,7 @@ impl Node {
             watchdog,
             head_verifier,
             config,
-            fork_active_until,
+            fork_info,
         })
     }
 
@@ -171,13 +171,11 @@ impl Node {
             let nonce_latest: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_preconfer_nonce_latest()
                 .await?;
             let nonce_pending: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_preconfer_nonce_pending()
                 .await?;
             if nonce_pending == nonce_latest {
@@ -202,11 +200,6 @@ impl Node {
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            if let Err(e) = self.recreate_node_when_next_fork_became_active().await {
-                error!("Failed to check if next fork became active: {}", e);
-                self.watchdog.increment();
-                continue;
-            }
 
             if self.cancel_token.is_cancelled() {
                 info!("Shutdown signal received, exiting main loop...");
@@ -222,13 +215,17 @@ impl Node {
         }
     }
 
-    async fn recreate_node_when_next_fork_became_active(&self) -> Result<(), Error> {
-        if ForkInfo::is_next_fork_active(self.fork_active_until)? {
+    async fn recreate_node_when_next_fork_became_active(
+        &self,
+        l2_height: u64,
+    ) -> Result<bool, Error> {
+        if self.fork_info.is_next_fork_active(l2_height)? {
             debug!("Next fork became active, recreating node...");
             self.cancel_token.cancel();
+            return Ok(true);
         }
 
-        Ok(())
+        Ok(false)
     }
 
     async fn check_for_missing_proposed_batches(&mut self) -> Result<(), Error> {
@@ -244,13 +241,11 @@ impl Node {
             let nonce_latest: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_preconfer_nonce_latest()
                 .await?;
             let nonce_pending: u64 = self
                 .ethereum_l1
                 .execution_layer
-                .common()
                 .get_preconfer_nonce_pending()
                 .await?;
             debug!("Nonce Latest: {nonce_latest}, Nonce Pending: {nonce_pending}");
@@ -284,12 +279,19 @@ impl Node {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
 
+        if self
+            .recreate_node_when_next_fork_became_active(l2_slot_info.parent_id())
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to check if next fork became active: {}", e))?
+        {
+            return Ok(());
+        }
+
         // Get the transaction status before checking the error channel
         // to avoid race condition
         let transaction_in_progress = self
             .ethereum_l1
             .execution_layer
-            .common()
             .is_transaction_in_progress()
             .await?;
 
@@ -458,9 +460,8 @@ impl Node {
                 .get_l1_anchor_block_offset_for_l2_block(l2_block_id)
                 .await?;
             let max_anchor_height_offset = self
-                .ethereum_l1
-                .execution_layer
-                .common()
+                .taiko
+                .get_protocol_config()
                 .get_config_max_anchor_height_offset();
 
             // +1 because we are checking the next block

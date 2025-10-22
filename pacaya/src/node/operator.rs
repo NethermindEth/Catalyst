@@ -1,14 +1,12 @@
 use crate::l1::execution_layer::{ExecutionLayer, PreconfOperator};
+use crate::l2::taiko::{PreconfDriver, Taiko};
 use anyhow::Error;
 use common::{
     l1::{
         ethereum_l1::EthereumL1,
         slot_clock::{Clock, RealClock, SlotClock},
     },
-    l2::{
-        preconf_blocks::TaikoStatus,
-        taiko::{PreconfDriver, Taiko},
-    },
+    l2::taiko_driver::models::TaikoStatus,
     shared::l2_slot_info::L2SlotInfo,
     utils::types::*,
 };
@@ -19,7 +17,7 @@ use tracing::{debug, warn};
 pub struct Operator<
     T: PreconfOperator = ExecutionLayer,
     U: Clock = RealClock,
-    V: PreconfDriver = Taiko<ExecutionLayer>,
+    V: PreconfDriver = Taiko,
 > {
     execution_layer: Arc<T>,
     slot_clock: Arc<SlotClock<U>>,
@@ -101,7 +99,7 @@ impl std::fmt::Display for Status {
 impl Operator {
     pub fn new(
         ethereum_l1: &EthereumL1<ExecutionLayer>,
-        taiko: Arc<Taiko<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         handover_window_slots: u64,
         handover_start_buffer_ms: u64,
         simulate_not_submitting_at_the_end_of_epoch: bool,
@@ -413,7 +411,7 @@ mod tests {
     use alloy::primitives::U256;
     use chrono::DateTime;
     use common::l1::slot_clock::Clock;
-    use common::l2::preconf_blocks;
+    use common::l2::taiko_driver::models;
     use std::time::SystemTime;
 
     const HANDOVER_WINDOW_SLOTS: u64 = 6;
@@ -490,8 +488,8 @@ mod tests {
     }
 
     impl PreconfDriver for TaikoUnsyncedMock {
-        async fn get_status(&self) -> Result<preconf_blocks::TaikoStatus, Error> {
-            Ok(preconf_blocks::TaikoStatus {
+        async fn get_status(&self) -> Result<models::TaikoStatus, Error> {
+            Ok(models::TaikoStatus {
                 end_of_sequencing_block_hash: self.end_of_sequencing_block_hash,
                 highest_unsafe_l2_payload_block_id: 2,
             })
@@ -502,8 +500,8 @@ mod tests {
         end_of_sequencing_block_hash: B256,
     }
     impl PreconfDriver for TaikoMock {
-        async fn get_status(&self) -> Result<preconf_blocks::TaikoStatus, Error> {
-            Ok(preconf_blocks::TaikoStatus {
+        async fn get_status(&self) -> Result<models::TaikoStatus, Error> {
+            Ok(models::TaikoStatus {
                 end_of_sequencing_block_hash: self.end_of_sequencing_block_hash,
                 highest_unsafe_l2_payload_block_id: 0,
             })

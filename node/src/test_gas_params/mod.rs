@@ -1,6 +1,6 @@
 use anyhow::Error;
 use common::{
-    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
+    l1::{ethereum_l1::EthereumL1, traits::ELTrait},
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
 };
 #[allow(clippy::all)]
@@ -74,7 +74,11 @@ pub async fn test_gas_params(
     let coinbase =
         alloy::primitives::Address::from_str("0xC4B0F902f4CEd6dC1Ad1Be7FFeC47ab50845955e")?;
 
-    let l1_height = ethereum_l1.execution_layer.common().get_l1_height().await?;
+    let l1_height = ethereum_l1
+        .execution_layer
+        .common()
+        .get_latest_block_id()
+        .await?;
     let anchor_block_id = l1_height - anchor_height_lag;
 
     info!("anchor_block_id: {}", anchor_block_id);
@@ -95,7 +99,6 @@ pub async fn test_gas_params(
 
     while ethereum_l1
         .execution_layer
-        .common()
         .is_transaction_in_progress()
         .await?
     {

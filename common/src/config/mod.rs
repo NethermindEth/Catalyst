@@ -45,9 +45,10 @@ pub struct Config {
     pub delay_between_tx_attempts_sec: u64,
     pub extra_gas_percentage: u64,
     // Thresholds for balances
+    pub funds_monitor_interval_sec: u64,
     pub threshold_eth: u128,
     pub threshold_taiko: u128,
-    // Bridgeing
+    // Bridging
     pub disable_bridging: bool,
     pub amount_to_bridge_from_l2_to_l1: u128,
     pub bridge_relayer_fee: u64,
@@ -59,8 +60,9 @@ pub struct Config {
     pub preconf_min_txs: u64,
     pub preconf_max_skipped_l2_slots: u64,
     // fork info
-    pub current_fork: Fork,
+    pub initial_fork: Fork,
     pub fork_switch_timestamp: Option<u64>,
+    pub fork_switch_l2_height: Option<u64>,
 }
 
 impl Config {
@@ -234,6 +236,11 @@ impl Config {
             .parse::<u64>()
             .expect("DELAY_BETWEEN_TX_ATTEMPTS_SEC must be a number");
 
+        let funds_monitor_interval_sec = std::env::var("FUNDS_MONITOR_INTERVAL_SEC")
+            .unwrap_or("60".to_string())
+            .parse::<u64>()
+            .expect("FUNDS_MONITOR_INTERVAL_SEC must be a number");
+
         // 0.5 ETH
         let threshold_eth =
             std::env::var("THRESHOLD_ETH").unwrap_or("500000000000000000".to_string());
@@ -298,10 +305,10 @@ impl Config {
             .expect("BRIDGE_TRANSACTION_FEE must be a number");
 
         // Fork info
-        let current_fork = std::env::var("CURRENT_FORK")
+        let initial_fork = std::env::var("INITIAL_FORK")
             .unwrap_or("pacaya".to_string())
             .parse::<Fork>()
-            .expect("CURRENT_FORK must be a valid fork");
+            .expect("INITIAL_FORK must be a valid fork");
 
         let fork_switch_timestamp = match std::env::var("FORK_SWITCH_TIMESTAMP") {
             Err(_) => None,
@@ -311,6 +318,16 @@ impl Config {
                     .expect("FORK_SWITCH_TIMESTAMP must be a number");
                 Some(v)
             }
+        };
+
+        let fork_switch_l2_height = match std::env::var("FORK_SWITCH_L2_HEIGHT") {
+            Err(std::env::VarError::NotPresent) => None,
+            Err(err) => panic!("Failed to parse FORK_SWITCH_L2_HEIGHT: {err}"),
+            Ok(height) => Some(
+                height
+                    .parse::<u64>()
+                    .expect("FORK_SWITCH_L2_HEIGHT must be a number"),
+            ),
         };
 
         let config = Self {
@@ -350,6 +367,7 @@ impl Config {
             max_attempts_to_send_tx,
             max_attempts_to_wait_tx,
             delay_between_tx_attempts_sec,
+            funds_monitor_interval_sec,
             threshold_eth,
             threshold_taiko,
             amount_to_bridge_from_l2_to_l1,
@@ -362,8 +380,9 @@ impl Config {
             preconf_max_skipped_l2_slots,
             bridge_relayer_fee,
             bridge_transaction_fee,
-            current_fork,
+            initial_fork,
             fork_switch_timestamp,
+            fork_switch_l2_height,
         };
 
         info!(
@@ -397,6 +416,7 @@ tx fees increase percentage: {}
 max attempts to send tx: {}
 max attempts to wait tx: {}
 delay between tx attempts: {}s
+funds_monitor_interval_sec: {}s
 threshold_eth: {}
 threshold_taiko: {}
 amount to bridge from l2 to l1: {}
@@ -405,8 +425,9 @@ min number of transaction to create a L2 block: {}
 max number of skipped L2 slots while creating a L2 block: {}
 bridge relayer fee: {}wei
 bridge transaction fee: {}wei
-current fork: {}
+initial fork: {}
 fork switch timestamp: {:?}
+fork switch l2 height: {:?}
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -448,6 +469,7 @@ fork switch timestamp: {:?}
             config.max_attempts_to_send_tx,
             config.max_attempts_to_wait_tx,
             config.delay_between_tx_attempts_sec,
+            funds_monitor_interval_sec,
             threshold_eth,
             threshold_taiko,
             config.amount_to_bridge_from_l2_to_l1,
@@ -456,8 +478,9 @@ fork switch timestamp: {:?}
             config.preconf_max_skipped_l2_slots,
             config.bridge_relayer_fee,
             config.bridge_transaction_fee,
-            config.current_fork,
+            config.initial_fork,
             config.fork_switch_timestamp,
+            config.fork_switch_l2_height,
         );
 
         config

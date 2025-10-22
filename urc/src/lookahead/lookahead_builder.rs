@@ -1,5 +1,6 @@
 #![allow(dead_code)] // Remove once LookaheadBuilder is used by the node
 
+use crate::monitor::db::DataBase as UrcDataBase;
 use alloy::{
     hex,
     primitives::{Address, Bytes, FixedBytes, U256},
@@ -8,20 +9,18 @@ use alloy::{
 use anyhow::{Error, anyhow};
 use blst::min_pk::PublicKey;
 use common::{
-    l1::{el_trait::ELTrait, ethereum_l1::EthereumL1},
+    l1::{consensus_layer::ConsensusLayer, slot_clock::SlotClock},
     utils::types::{Epoch, Slot},
 };
 use std::{str::FromStr, sync::Arc};
 use tracing::info;
-use urc::monitor::db::DataBase as UrcDataBase;
 
-use crate::l1::bindings::{
+use crate::bindings::{
     BLS::G1Point,
     ILookaheadStore::{
         self, ILookaheadStoreInstance, LookaheadData, LookaheadSlot, ProposerContext,
     },
 };
-use crate::l1::execution_layer::ExecutionLayer;
 
 use super::types::Lookahead;
 
@@ -42,7 +41,8 @@ pub struct Context {
 
 pub struct LookaheadBuilder {
     urc_db: UrcDataBase,
-    ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
+    slot_clock: Arc<SlotClock>,
+    consensus_layer: Arc<ConsensusLayer>,
     lookahead_store_contract: ILookaheadStoreInstance<DynProvider>,
     preconf_slasher_address: Address,
     context: Context,
@@ -50,19 +50,19 @@ pub struct LookaheadBuilder {
 
 impl LookaheadBuilder {
     pub async fn new(
-        ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
+        provider: DynProvider,
+        slot_clock: Arc<common::l1::slot_clock::SlotClock>,
+        consensus_layer: Arc<common::l1::consensus_layer::ConsensusLayer>,
         urc_db: UrcDataBase,
         lookahead_store_address: Address,
         preconf_slasher_address: Address,
     ) -> Result<Self, Error> {
-        let lookahead_store_contract = ILookaheadStore::new(
-            lookahead_store_address,
-            ethereum_l1.execution_layer.common().provider(),
-        );
+        let lookahead_store_contract = ILookaheadStore::new(lookahead_store_address, provider);
 
         let mut builder = Self {
-            ethereum_l1,
             urc_db,
+            slot_clock,
+            consensus_layer,
             lookahead_store_contract,
             preconf_slasher_address,
             context: Context {
@@ -74,7 +74,7 @@ impl LookaheadBuilder {
             },
         };
 
-        let current_epoch = builder.ethereum_l1.slot_clock.get_current_epoch()?;
+        let current_epoch = builder.slot_clock.get_current_epoch()?;
         builder.context.current_lookahead = builder.build(current_epoch).await?;
         builder.context.next_lookahead = builder.build(current_epoch + 1).await?;
         builder.context.lookahead_updated_at_slot = current_epoch;
@@ -88,12 +88,8 @@ impl LookaheadBuilder {
         // The epoch timestamp expected by the `getProposerContext(..)` function in the contract.
         // When we are at the boundary of an epoch, this is the starting timestamp of the next epoch.
         // Otherwise, it is the starting timestamp of the current epoch.
-        let epoch = self.ethereum_l1.slot_clock.get_epoch_from_slot(next_slot);
-        let epoch_timestamp = U256::from(
-            self.ethereum_l1
-                .slot_clock
-                .get_epoch_begin_timestamp(epoch)?,
-        );
+        let epoch = self.slot_clock.get_epoch_from_slot(next_slot);
+        let epoch_timestamp = U256::from(self.slot_clock.get_epoch_begin_timestamp(epoch)?);
 
         let proposer_context = self
             .lookahead_store_contract
@@ -124,8 +120,8 @@ impl LookaheadBuilder {
     }
 
     async fn update_context(&mut self) -> Result<Slot, Error> {
-        let current_epoch = self.ethereum_l1.slot_clock.get_current_epoch()?;
-        let next_slot = self.ethereum_l1.slot_clock.get_current_slot()? + 1;
+        let current_epoch = self.slot_clock.get_current_epoch()?;
+        let next_slot = self.slot_clock.get_current_slot()? + 1;
 
         if self.context.context_updated_at_slot == next_slot {
             return Ok(next_slot);
@@ -145,17 +141,16 @@ impl LookaheadBuilder {
             self.context.lookahead_updated_at_slot = current_epoch;
         }
 
-        if self.ethereum_l1.slot_clock.get_epoch_from_slot(next_slot) == current_epoch + 1 {
+        if self.slot_clock.get_epoch_from_slot(next_slot) == current_epoch + 1 {
             // If we are the boundary of the current epoch, adjust the context to use
             // the preconfer of the first slot of the next epoch
             self.context.current_lookahead = std::mem::take(&mut self.context.next_lookahead);
             self.context.current_lookahead_slot_index = U256::ZERO;
-        } else if self.context.current_lookahead.len() != 0 {
+        } else if !self.context.current_lookahead.is_empty() {
             // Use the next preconfer from the current epoch
             let mut slot_index: usize = self.context.current_lookahead_slot_index.try_into()?;
             let lookahead_slot_timestamp = self.context.current_lookahead[slot_index].timestamp;
-            let next_slot_timestamp =
-                U256::from(self.ethereum_l1.slot_clock.start_of(next_slot)?.as_secs());
+            let next_slot_timestamp = U256::from(self.slot_clock.start_of(next_slot)?.as_secs());
 
             // If the timestamp range of the last used lookahead slot no longer covers the next
             // slot, we update `current_lookahead_slot_index`
@@ -164,13 +159,10 @@ impl LookaheadBuilder {
                     self.context.current_lookahead_slot_index = U256::MAX;
                 } else {
                     let mut prev_lookahead_slot_timestamp = if slot_index == 0 {
-                        let current_epoch_timestamp = U256::from(
-                            self.ethereum_l1
-                                .slot_clock
-                                .get_epoch_begin_timestamp(current_epoch)?,
-                        );
+                        let current_epoch_timestamp =
+                            U256::from(self.slot_clock.get_epoch_begin_timestamp(current_epoch)?);
                         let slot_duration =
-                            U256::from(self.ethereum_l1.slot_clock.get_slot_duration().as_secs());
+                            U256::from(self.slot_clock.get_slot_duration().as_secs());
                         current_epoch_timestamp - slot_duration
                     } else {
                         lookahead_slot_timestamp
@@ -204,20 +196,12 @@ impl LookaheadBuilder {
     async fn build(&self, epoch: u64) -> Result<Lookahead, Error> {
         let mut lookahead_slots: Lookahead = Vec::with_capacity(32);
 
-        let epoch_timestamp = self
-            .ethereum_l1
-            .slot_clock
-            .get_epoch_begin_timestamp(epoch)?;
+        let epoch_timestamp = self.slot_clock.get_epoch_begin_timestamp(epoch)?;
 
         // Fetch all validator pubkeys for `epoch`
-        let validators = self
-            .ethereum_l1
-            .consensus_layer
-            .get_validators_for_epoch(epoch)
-            .await?;
-
+        let validators = self.consensus_layer.get_validators_for_epoch(epoch).await?;
         for (index, validator) in validators.iter().enumerate() {
-            let pubkey_bytes = hex::decode(&validator)?; // Compressed bytes
+            let pubkey_bytes = hex::decode(validator)?; // Compressed bytes
             let pubkey_g1 = Self::pubkey_bytes_to_g1_point(&pubkey_bytes)?;
 
             // Fetch all operators that have registered the validator
@@ -241,13 +225,13 @@ impl LookaheadBuilder {
                     .is_operator_valid(epoch_timestamp, &registration_root)
                     .await
                 {
-                    let slot_duration = self.ethereum_l1.slot_clock.get_slot_duration().as_secs();
+                    let slot_duration = self.slot_clock.get_slot_duration().as_secs();
                     let slot_timestamp = epoch_timestamp + ((index as u64) * slot_duration);
 
                     lookahead_slots.push(LookaheadSlot {
-                        committer: Address::from_str(&committer).unwrap(),
+                        committer: Address::from_str(&committer)?,
                         timestamp: U256::from(slot_timestamp),
-                        registrationRoot: FixedBytes::<32>::from_str(&registration_root).unwrap(),
+                        registrationRoot: FixedBytes::<32>::from_str(&registration_root)?,
                         validatorLeafIndex: U256::from(validator_leaf_index),
                     });
 
@@ -261,12 +245,16 @@ impl LookaheadBuilder {
     }
 
     async fn is_operator_valid(&self, epoch_timestamp: u64, registration_root: &str) -> bool {
+        let registration_root = match FixedBytes::<32>::from_str(registration_root) {
+            Ok(root) => root,
+            Err(_) => {
+                info!("is_operator_valid: registration_root parsing error");
+                return false;
+            }
+        };
         return self
             .lookahead_store_contract
-            .isLookaheadOperatorValid(
-                U256::from(epoch_timestamp),
-                FixedBytes::<32>::from_str(registration_root).unwrap(),
-            )
+            .isLookaheadOperatorValid(U256::from(epoch_timestamp), registration_root)
             .call()
             .await
             .unwrap_or_else(|_| {

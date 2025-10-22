@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Fork {
     Pacaya,
     Shasta,

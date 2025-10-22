@@ -2,8 +2,9 @@ use crate::utils::config::PacayaConfig;
 use anyhow::Error;
 use common::{
     config::ConfigTrait,
-    funds_monitor,
-    l1::{self as common_l1, el_trait::ELTrait},
+    fork_info::ForkInfo,
+    funds_controller::FundsController,
+    l1::{self as common_l1, traits::PreconferProvider},
     metrics::{self, Metrics},
     shared,
 };
@@ -16,6 +17,7 @@ use tracing::{info, warn};
 mod chain_monitor;
 mod forced_inclusion;
 pub mod l1;
+mod l2;
 mod node;
 pub mod utils;
 
@@ -23,7 +25,7 @@ pub async fn create_pacaya_node(
     config: common::config::Config,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
-    switch_timestamp: Option<u64>,
+    fork_info: ForkInfo,
 ) -> Result<(), Error> {
     // Read specific config from environment variables
     let pacaya_config = PacayaConfig::read_env_variables();
@@ -40,20 +42,23 @@ pub async fn create_pacaya_node(
 
     let ethereum_l1 = Arc::new(ethereum_l1);
 
-    let taiko_config = common::l2::config::TaikoConfig::new(&config)
+    let taiko_config = l2::config::TaikoConfig::new(&config)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create TaikoConfig: {}", e))?;
+    let protocol_config = ethereum_l1.execution_layer.fetch_protocol_config().await?;
 
     let taiko = Arc::new(
-        common::l2::taiko::Taiko::new(ethereum_l1.clone(), metrics.clone(), taiko_config)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
+        l2::taiko::Taiko::new(
+            ethereum_l1.slot_clock.clone(),
+            protocol_config.clone(),
+            metrics.clone(),
+            taiko_config,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
     );
 
-    let max_anchor_height_offset = ethereum_l1
-        .execution_layer
-        .common()
-        .get_config_max_anchor_height_offset();
+    let max_anchor_height_offset = protocol_config.get_config_max_anchor_height_offset();
     if config.max_anchor_height_offset_reduction >= max_anchor_height_offset {
         panic!(
             "max_anchor_height_offset_reduction {} is greater than max_anchor_height_offset from pacaya config {}",
@@ -61,10 +66,7 @@ pub async fn create_pacaya_node(
         );
     }
 
-    let l1_max_blocks_per_batch = ethereum_l1
-        .execution_layer
-        .common()
-        .get_config_max_blocks_per_batch();
+    let l1_max_blocks_per_batch = protocol_config.get_config_max_blocks_per_batch();
 
     if config.max_blocks_per_batch > l1_max_blocks_per_batch {
         panic!(
@@ -130,14 +132,11 @@ pub async fn create_pacaya_node(
             max_time_shift_between_blocks_sec: config.max_time_shift_between_blocks_sec,
             max_anchor_height_offset: max_anchor_height_offset
                 - config.max_anchor_height_offset_reduction,
-            default_coinbase: ethereum_l1
-                .execution_layer
-                .common()
-                .get_preconfer_alloy_address(),
+            default_coinbase: ethereum_l1.execution_layer.get_preconfer_alloy_address(),
             preconf_min_txs: config.preconf_min_txs,
             preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
         },
-        switch_timestamp,
+        fork_info,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
@@ -146,19 +145,14 @@ pub async fn create_pacaya_node(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start Node: {}", e))?;
 
-    let funds_monitor = funds_monitor::FundsMonitor::new(
-        ethereum_l1.clone(),
+    let funds_controller = FundsController::new(
+        (&config).into(),
+        ethereum_l1.execution_layer.clone(),
         taiko.clone(),
         metrics.clone(),
-        config.threshold_eth,
-        config.threshold_taiko,
-        config.amount_to_bridge_from_l2_to_l1,
-        config.disable_bridging,
         cancel_token.clone(),
-        config.bridge_relayer_fee,
-        config.bridge_transaction_fee,
     );
-    funds_monitor.run();
+    funds_controller.run();
 
     Ok(())
 }

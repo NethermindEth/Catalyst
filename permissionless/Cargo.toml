@@ -15,6 +15,7 @@ alloy = { workspace = true }
 anyhow = { workspace = true }
 blst = { workspace = true }
 common = { workspace = true }
+pacaya = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
