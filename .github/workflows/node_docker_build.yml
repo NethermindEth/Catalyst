@@ -8,8 +8,8 @@ on:
       - "v*"
     paths:
       - "common/**"
-      - "permissionless/**"
       - "pacaya/**"
+      - "permissionless/**"
       - "node/**"
       - "shasta/**"
       - "e2e_tests/**"
