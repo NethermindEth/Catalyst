@@ -5,6 +5,7 @@ use alloy::{
     rpc::types::{Block as RpcBlock, Filter, Log},
 };
 use anyhow::Error;
+use tracing::debug;
 
 pub struct ExecutionLayer {
     provider: DynProvider,
@@ -13,12 +14,19 @@ pub struct ExecutionLayer {
 
 impl ExecutionLayer {
     pub async fn new(provider: DynProvider) -> Result<Self, Error> {
+        debug!("Creating ExecutionLayer from provider");
         let chain_id = provider
             .get_chain_id()
             .await
             .map_err(|e| Error::msg(format!("Failed to get chain ID: {e}")))?;
 
         Ok(Self { provider, chain_id })
+    }
+
+    pub async fn new_read_only(url: &str) -> Result<Self, Error> {
+        debug!("Creating ExecutionLayer from URL: {}", url);
+        let provider = super::alloy_tools::create_alloy_provider_without_wallet(url).await?;
+        Self::new(provider).await
     }
 
     pub fn provider(&self) -> DynProvider {
@@ -43,13 +51,6 @@ impl ExecutionLayer {
 
         u64::from_str_radix(nonce_str.trim_start_matches("0x"), 16)
             .map_err(|e| Error::msg(format!("Failed to convert nonce: {e}")))
-    }
-
-    pub async fn get_chain_height(&self) -> Result<u64, Error> {
-        self.provider
-            .get_block_number()
-            .await
-            .map_err(|e| Error::msg(format!("Failed to get L1 height: {e}")))
     }
 
     pub async fn get_account_balance(

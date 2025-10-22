@@ -11,9 +11,11 @@ pub struct ForkInfo {
 }
 
 impl ForkInfo {
-    pub fn from_config(config: ForkInfoConfig) -> Result<Self, Error> {
-        let fork = if Self::is_fork_switch_time(&config, 0)? {
-            config.initial_fork.next().unwrap()
+    pub fn from_config(config: ForkInfoConfig, l2_height: u64) -> Result<Self, Error> {
+        let fork = if Self::is_fork_switch_time(&config, l2_height)?
+            && let Some(next_fork) = config.initial_fork.next()
+        {
+            next_fork
         } else {
             config.initial_fork.clone()
         };

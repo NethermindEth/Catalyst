@@ -610,7 +610,7 @@ impl BatchManager {
             .ethereum_l1
             .execution_layer
             .common()
-            .get_chain_height()
+            .get_latest_block_id()
             .await?;
         let l1_height_with_lag = l1_height - self.l1_height_lag;
         let anchor_id_from_last_l2_block =
