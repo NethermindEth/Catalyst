@@ -77,7 +77,7 @@ pub async fn test_gas_params(
     let l1_height = ethereum_l1
         .execution_layer
         .common()
-        .get_chain_height()
+        .get_latest_block_id()
         .await?;
     let anchor_block_id = l1_height - anchor_height_lag;
 

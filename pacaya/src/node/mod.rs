@@ -44,8 +44,7 @@ pub struct Node {
     watchdog: common_utils::watchdog::Watchdog,
     head_verifier: L2HeadVerifier,
     config: NodeConfig,
-    // TODO rename
-    fork_active_until: Option<u64>,
+    fork_info: ForkInfo,
 }
 
 impl Node {
@@ -59,7 +58,7 @@ impl Node {
         metrics: Arc<Metrics>,
         config: NodeConfig,
         batch_builder_config: BatchBuilderConfig,
-        fork_active_until: Option<u64>,
+        fork_info: ForkInfo,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             &ethereum_l1,
@@ -106,7 +105,7 @@ impl Node {
             watchdog,
             head_verifier,
             config,
-            fork_active_until,
+            fork_info,
         })
     }
 
@@ -201,11 +200,6 @@ impl Node {
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             interval.tick().await;
-            if let Err(e) = self.recreate_node_when_next_fork_became_active().await {
-                error!("Failed to check if next fork became active: {}", e);
-                self.watchdog.increment();
-                continue;
-            }
 
             if self.cancel_token.is_cancelled() {
                 info!("Shutdown signal received, exiting main loop...");
@@ -221,13 +215,17 @@ impl Node {
         }
     }
 
-    async fn recreate_node_when_next_fork_became_active(&self) -> Result<(), Error> {
-        if ForkInfo::is_next_fork_active(self.fork_active_until)? {
+    async fn recreate_node_when_next_fork_became_active(
+        &self,
+        l2_height: u64,
+    ) -> Result<bool, Error> {
+        if self.fork_info.is_next_fork_active(l2_height)? {
             debug!("Next fork became active, recreating node...");
             self.cancel_token.cancel();
+            return Ok(true);
         }
 
-        Ok(())
+        Ok(false)
     }
 
     async fn check_for_missing_proposed_batches(&mut self) -> Result<(), Error> {
@@ -280,6 +278,14 @@ impl Node {
     async fn main_block_preconfirmation_step(&mut self) -> Result<(), Error> {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
+
+        if self
+            .recreate_node_when_next_fork_became_active(l2_slot_info.parent_id())
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to check if next fork became active: {}", e))?
+        {
+            return Ok(());
+        }
 
         // Get the transaction status before checking the error channel
         // to avoid race condition

@@ -213,7 +213,7 @@ impl ExecutionLayer {
 
         debug!(
             "Proposing batch: current L1 block: {}, last_block_timestamp {}, last_anchor_origin_height {}",
-            self.common.get_chain_height().await?,
+            self.common.get_latest_block_id().await?,
             last_block_timestamp,
             last_anchor_origin_height
         );

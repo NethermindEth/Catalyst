@@ -60,8 +60,9 @@ pub struct Config {
     pub preconf_min_txs: u64,
     pub preconf_max_skipped_l2_slots: u64,
     // fork info
-    pub current_fork: Fork,
+    pub initial_fork: Fork,
     pub fork_switch_timestamp: Option<u64>,
+    pub fork_switch_l2_height: Option<u64>,
 }
 
 impl Config {
@@ -304,10 +305,10 @@ impl Config {
             .expect("BRIDGE_TRANSACTION_FEE must be a number");
 
         // Fork info
-        let current_fork = std::env::var("CURRENT_FORK")
+        let initial_fork = std::env::var("INITIAL_FORK")
             .unwrap_or("pacaya".to_string())
             .parse::<Fork>()
-            .expect("CURRENT_FORK must be a valid fork");
+            .expect("INITIAL_FORK must be a valid fork");
 
         let fork_switch_timestamp = match std::env::var("FORK_SWITCH_TIMESTAMP") {
             Err(_) => None,
@@ -317,6 +318,16 @@ impl Config {
                     .expect("FORK_SWITCH_TIMESTAMP must be a number");
                 Some(v)
             }
+        };
+
+        let fork_switch_l2_height = match std::env::var("FORK_SWITCH_L2_HEIGHT") {
+            Err(std::env::VarError::NotPresent) => None,
+            Err(err) => panic!("Failed to parse FORK_SWITCH_L2_HEIGHT: {err}"),
+            Ok(height) => Some(
+                height
+                    .parse::<u64>()
+                    .expect("FORK_SWITCH_L2_HEIGHT must be a number"),
+            ),
         };
 
         let config = Self {
@@ -369,8 +380,9 @@ impl Config {
             preconf_max_skipped_l2_slots,
             bridge_relayer_fee,
             bridge_transaction_fee,
-            current_fork,
+            initial_fork,
             fork_switch_timestamp,
+            fork_switch_l2_height,
         };
 
         info!(
@@ -413,8 +425,9 @@ min number of transaction to create a L2 block: {}
 max number of skipped L2 slots while creating a L2 block: {}
 bridge relayer fee: {}wei
 bridge transaction fee: {}wei
-current fork: {}
+initial fork: {}
 fork switch timestamp: {:?}
+fork switch l2 height: {:?}
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -465,8 +478,9 @@ fork switch timestamp: {:?}
             config.preconf_max_skipped_l2_slots,
             config.bridge_relayer_fee,
             config.bridge_transaction_fee,
-            config.current_fork,
+            config.initial_fork,
             config.fork_switch_timestamp,
+            config.fork_switch_l2_height,
         );
 
         config

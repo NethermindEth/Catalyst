@@ -2,6 +2,7 @@ use anyhow::Error;
 use common::{
     fork_info::{Fork, ForkInfo},
     metrics::{self, Metrics},
+    shared::execution_layer::ExecutionLayer,
 };
 use pacaya::create_pacaya_node;
 use std::sync::Arc;
@@ -47,7 +48,13 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
 
     let config = common::config::Config::read_env_variables();
 
-    let fork_info = ForkInfo::from_config((&config).into())?;
+    let l2_height = ExecutionLayer::new_read_only(&config.taiko_geth_rpc_url)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create L2 execution layer: {}", e))?
+        .get_latest_block_id()
+        .await?;
+    let fork_info = ForkInfo::from_config((&config).into(), l2_height)
+        .map_err(|e| anyhow::anyhow!("Failed to get fork info: {}", e))?;
 
     let cancel_token = CancellationToken::new();
 
@@ -66,13 +73,13 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
             // TODO pacaya::utils::config::Config
             info!(
                 "Current fork: Pacaya, switch_timestamp: {:?}",
-                fork_info.switch_timestamp
+                fork_info.config.fork_switch_timestamp
             );
             create_pacaya_node(
                 config.clone(),
                 metrics.clone(),
                 cancel_token.clone(),
-                fork_info.switch_timestamp,
+                fork_info,
             )
             .await?;
         }
