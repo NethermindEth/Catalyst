@@ -305,10 +305,10 @@ impl Config {
             .expect("BRIDGE_TRANSACTION_FEE must be a number");
 
         // Fork info
-        let current_fork = std::env::var("CURRENT_FORK")
+        let initial_fork = std::env::var("INITIAL_FORK")
             .unwrap_or("pacaya".to_string())
             .parse::<Fork>()
-            .expect("CURRENT_FORK must be a valid fork");
+            .expect("INITIAL_FORK must be a valid fork");
 
         let fork_switch_timestamp = match std::env::var("FORK_SWITCH_TIMESTAMP") {
             Err(_) => None,
@@ -380,7 +380,7 @@ impl Config {
             preconf_max_skipped_l2_slots,
             bridge_relayer_fee,
             bridge_transaction_fee,
-            initial_fork: current_fork,
+            initial_fork,
             fork_switch_timestamp,
             fork_switch_l2_height,
         };
@@ -425,7 +425,7 @@ min number of transaction to create a L2 block: {}
 max number of skipped L2 slots while creating a L2 block: {}
 bridge relayer fee: {}wei
 bridge transaction fee: {}wei
-current fork: {}
+initial fork: {}
 fork switch timestamp: {:?}
 fork switch l2 height: {:?}
 "#,
