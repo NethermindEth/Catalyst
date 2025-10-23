@@ -3,22 +3,29 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
-struct L2HeadStatus {
+struct HeadStatus {
     number: u64,
     hash: B256,
 }
 
-pub struct L2HeadVerifier {
-    head: Arc<Mutex<L2HeadStatus>>,
+pub struct HeadVerifier {
+    head: Arc<Mutex<HeadStatus>>,
 }
 
-impl L2HeadVerifier {
+impl Default for HeadVerifier {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HeadVerifier {
     pub fn new() -> Self {
-        let head = Arc::new(Mutex::new(L2HeadStatus {
-            number: 0,
-            hash: B256::ZERO,
-        }));
-        Self { head }
+        Self {
+            head: Arc::new(Mutex::new(HeadStatus {
+                number: 0,
+                hash: B256::ZERO,
+            })),
+        }
     }
 
     pub async fn set(&self, number: u64, hash: B256) {
