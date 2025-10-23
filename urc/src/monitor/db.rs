@@ -175,19 +175,17 @@ impl DataBase {
     }
 
     pub async fn get_indexed_block(&self) -> u64 {
-        let indexed_block: i64 = sqlx::query_scalar(
+       sqlx::query_as(
             r#"
             SELECT indexed_block FROM status WHERE id = 0
             "#,
         )
-        .fetch_optional(&self.pool)
+        .fetch_one(&self.pool)
         .await
-        .expect("Failed to query status table")
-        .unwrap_or(0);
-
-        indexed_block
-            .try_into()
-            .expect("Failed to get indexed block")
+        .unwrap_or((0,))
+        .0
+        .try_into()
+        .expect("Failed to get indexed block")
     }
 
     pub async fn update_status(&self, indexed_block: u64) -> Result<(), Error> {
