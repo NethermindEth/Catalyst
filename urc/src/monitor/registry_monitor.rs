@@ -26,7 +26,7 @@ pub struct RegistryMonitor {
 
 impl RegistryMonitor {
     pub async fn new(config: Config) -> Result<Self, Error> {
-        let db = DataBase::new(&config.db_filename).await?;
+        let db = DataBase::new(&config.database).await?;
         let indexed_block = db.get_indexed_block().await.max(config.l1_start_block);
         let l1_provider = ProviderBuilder::new()
             .connect_http(config.l1_rpc_url.parse()?)
