@@ -8,9 +8,7 @@ use crate::{
     l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
     metrics::Metrics,
-    shared::{
-        head_verifier::HeadVerifier, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList,
-    },
+    shared::{head_verifier::HeadVerifier, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
 };
 use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
