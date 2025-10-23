@@ -5,6 +5,7 @@ use common::{
     fork_info::ForkInfo,
     funds_controller::FundsController,
     l1::{self as common_l1, traits::PreconferProvider},
+    l2::engine::{L2Engine, L2EngineConfig},
     metrics::{self, Metrics},
     shared,
 };
@@ -47,12 +48,19 @@ pub async fn create_pacaya_node(
         .map_err(|e| anyhow::anyhow!("Failed to create TaikoConfig: {}", e))?;
     let protocol_config = ethereum_l1.execution_layer.fetch_protocol_config().await?;
 
+    let l2_engine = L2Engine::new(L2EngineConfig::new(
+        &config,
+        taiko_config.signer.get_address(),
+    )?)
+    .map_err(|e| anyhow::anyhow!("Failed to create L2Engine: {}", e))?;
+
     let taiko = Arc::new(
         l2::taiko::Taiko::new(
             ethereum_l1.slot_clock.clone(),
             protocol_config.clone(),
             metrics.clone(),
             taiko_config,
+            l2_engine,
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create Taiko: {}", e))?,
