@@ -18,7 +18,7 @@ use tracing::{info, warn};
 mod chain_monitor;
 mod forced_inclusion;
 pub mod l1;
-mod l2;
+pub mod l2;
 mod node;
 pub mod utils;
 

@@ -4,6 +4,7 @@ mod node;
 mod utils;
 
 mod l1;
+mod l2;
 
 use crate::utils::config::ShastaConfig;
 use anyhow::Error;
@@ -36,6 +37,14 @@ pub async fn create_shasta_node(
     .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?;
 
     let _ethereum_l1 = Arc::new(ethereum_l1);
+
+    let taiko_config = pacaya::l2::config::TaikoConfig::new(&config)
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create TaikoConfig: {}", e))?;
+
+    let _el = crate::l2::execution_layer::L2ExecutionLayer::new(taiko_config.clone())
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?;
 
     let _node = Node::new(cancel_token).await?;
 

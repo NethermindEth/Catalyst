@@ -4841,6 +4841,7 @@ dependencies = [
  "k256",
  "lazy_static",
  "mockito",
+ "pacaya",
  "prometheus",
  "reqwest",
  "serde",
