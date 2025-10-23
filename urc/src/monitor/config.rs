@@ -1,7 +1,24 @@
+use std::path::PathBuf;
+
 use anyhow::Error;
 
+#[derive(Debug, Clone)]
+pub enum DatabaseConfig {
+    Sqlite { path: PathBuf },
+    MySql { url: String },
+}
+
+impl DatabaseConfig {
+    fn description(&self) -> String {
+        match self {
+            Self::Sqlite { path } => format!("sqlite://{}", path.display()),
+            Self::MySql { url } => url.clone(),
+        }
+    }
+}
+
 pub struct Config {
-    pub db_filename: String,
+    pub database: DatabaseConfig,
     pub l1_rpc_url: String,
     pub registry_address: String,
     pub l1_start_block: u64,
@@ -15,10 +32,36 @@ impl Config {
         let env_path = format!("{}/.env", env!("CARGO_MANIFEST_DIR"));
         dotenvy::from_path(env_path).ok();
 
-        let db_filename = std::env::var("DB_FILENAME")
-            .map_err(|_| anyhow::anyhow!("DB_FILENAME env var not found"))?;
+        let mysql_url = std::env::var("DATABASE_URL")
+            .or_else(|_| std::env::var("MYSQL_URL"))
+            .ok();
+        let db_filename = std::env::var("DB_FILENAME").ok();
 
-        let db_filename = format!("{}/{}", env!("CARGO_MANIFEST_DIR"), db_filename);
+        let database = match (mysql_url, db_filename) {
+            (Some(_url), Some(_)) => {
+                return Err(anyhow::anyhow!(
+                    "Both DATABASE_URL (or MYSQL_URL) and DB_FILENAME are set; only one should be provided"
+                ));
+            }
+            (Some(url), None) => {
+                if !url.starts_with("mysql://") {
+                    return Err(anyhow::anyhow!(
+                        "DATABASE_URL must start with mysql:// when provided"
+                    ));
+                }
+                DatabaseConfig::MySql { url }
+            }
+            (None, Some(filename)) => {
+                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                path.push(filename);
+                DatabaseConfig::Sqlite { path }
+            }
+            (None, None) => {
+                return Err(anyhow::anyhow!(
+                    "Provide either DB_FILENAME for SQLite or DATABASE_URL / MYSQL_URL for MySQL"
+                ));
+            }
+        };
 
         let l1_rpc_url = std::env::var("L1_RPC_URL")
             .map_err(|_| anyhow::anyhow!("L1_RPC_URL env var not found"))?;
@@ -57,8 +100,8 @@ impl Config {
             })?;
 
         tracing::info!(
-            "Startup config:\ndb_filename: {}\nl1_rpc_url: {}\nregistry_address: {}\nl1_start_block: {}\nmax_l1_fork_depth: {}\nindex_block_batch_size: {}",
-            db_filename,
+            "Startup config:\ndatabase: {}\nl1_rpc_url: {}\nregistry_address: {}\nl1_start_block: {}\nmax_l1_fork_depth: {}\nindex_block_batch_size: {}",
+            database.description(),
             l1_rpc_url,
             registry_address,
             l1_start_block,
@@ -67,7 +110,7 @@ impl Config {
         );
 
         Ok(Config {
-            db_filename,
+            database,
             l1_rpc_url,
             registry_address,
             l1_start_block,
