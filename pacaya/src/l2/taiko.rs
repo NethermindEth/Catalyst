@@ -10,6 +10,7 @@ use alloy::{
 use anyhow::Error;
 use common::{
     l1::slot_clock::SlotClock,
+    l2::engine::L2Engine,
     l2::{
         taiko_driver::{
             OperationType, TaikoDriver, TaikoDriverConfig,
@@ -26,24 +27,17 @@ use common::{
         l2_slot_info::L2SlotInfo,
         l2_tx_lists::{self, PreBuiltTxList},
     },
-    utils::rpc_client::JSONRPCClient,
 };
-use serde_json::Value;
-use std::{
-    cmp::{max, min},
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 use tracing::{debug, trace};
 
 pub struct Taiko {
     protocol_config: ProtocolConfig,
     l2_execution_layer: L2ExecutionLayer,
-    taiko_geth_auth_rpc: JSONRPCClient,
     driver: TaikoDriver,
     slot_clock: Arc<SlotClock>,
-    config: TaikoConfig,
     coinbase: String,
+    l2_engine: L2Engine,
 }
 
 impl Taiko {
@@ -52,6 +46,7 @@ impl Taiko {
         protocol_config: ProtocolConfig,
         metrics: Arc<Metrics>,
         taiko_config: TaikoConfig,
+        l2_engine: L2Engine,
     ) -> Result<Self, Error> {
         let driver_config: TaikoDriverConfig = TaikoDriverConfig {
             driver_url: taiko_config.driver_url.clone(),
@@ -65,59 +60,29 @@ impl Taiko {
             l2_execution_layer: L2ExecutionLayer::new(taiko_config.clone())
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
-            taiko_geth_auth_rpc: JSONRPCClient::new_with_timeout_and_jwt(
-                &taiko_config.taiko_geth_auth_url,
-                taiko_config.rpc_l2_execution_layer_timeout,
-                &taiko_config.jwt_secret_bytes,
-            )
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to create JSONRPCClient for taiko geth auth: {}", e)
-            })?,
             driver: TaikoDriver::new(&driver_config, metrics).await?,
             slot_clock,
             coinbase: format!("0x{}", hex::encode(taiko_config.signer.get_address())),
-            config: taiko_config,
+            l2_engine,
         })
     }
 
-    pub fn get_protocol_config(&self) -> &ProtocolConfig {
-        &self.protocol_config
-    }
-
-    pub async fn get_pending_l2_tx_list_from_taiko_geth(
+    pub async fn get_pending_l2_tx_list_from_l2_engine(
         &self,
         base_fee: u64,
         batches_ready_to_send: u64,
     ) -> Result<Option<PreBuiltTxList>, Error> {
-        let max_bytes_per_tx_list = calculate_max_bytes_per_tx_list(
-            self.config.max_bytes_per_tx_list,
-            self.config.throttling_factor,
-            batches_ready_to_send,
-            self.config.min_bytes_per_tx_list,
-        );
-        let params = vec![
-            Value::String(self.coinbase.clone()), // beneficiary address
-            Value::from(base_fee),                // baseFee
-            Value::Number(self.protocol_config.get_block_max_gas_limit().into()), // blockMaxGasLimit
-            Value::Number(max_bytes_per_tx_list.into()), // maxBytesPerTxList (128KB by default)
-            Value::Array(vec![]),                        // locals (empty array)
-            Value::Number(1.into()),                     // maxTransactionsLists
-            Value::Number(0.into()),                     // minTip
-        ];
-
-        let result = self
-            .taiko_geth_auth_rpc
-            .call_method("taikoAuth_txPoolContentWithMinTip", params)
+        self.l2_engine
+            .get_pending_l2_tx_list(
+                base_fee,
+                batches_ready_to_send,
+                self.get_protocol_config().get_block_max_gas_limit(),
+            )
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to get L2 tx lists: {}", e))?;
-        if result != Value::Null {
-            let mut tx_lists = l2_tx_lists::decompose_pending_lists_json_from_geth(result)
-                .map_err(|e| anyhow::anyhow!("Failed to decompose L2 tx lists: {}", e))?;
-            // ignoring rest of tx lists, only one list per L2 block is processed
-            Ok(Some(tx_lists.remove(0)))
-        } else {
-            Ok(None)
-        }
+    }
+
+    pub fn get_protocol_config(&self) -> &ProtocolConfig {
+        &self.protocol_config
     }
 
     pub async fn get_latest_l2_block_id(&self) -> Result<u64, Error> {
@@ -379,150 +344,3 @@ impl PreconfDriver for Taiko {
 pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
     L2ExecutionLayer::decode_anchor_id_from_tx_data(data)
 }
-
-/// Calculate the max bytes per tx list based on the number of batches ready to send.
-/// The max bytes per tx list is reduced exponentially by given factor.
-fn calculate_max_bytes_per_tx_list(
-    max_bytes_per_tx_list: u64,
-    throttling_factor: u64,
-    batches_ready_to_send: u64,
-    min_bytes_per_tx_list: u64,
-) -> u64 {
-    let mut size = max_bytes_per_tx_list;
-    for _ in 0..batches_ready_to_send {
-        size = size.saturating_sub(size / throttling_factor);
-    }
-    size = min(max_bytes_per_tx_list, max(size, min_bytes_per_tx_list));
-    if batches_ready_to_send > 0 {
-        debug!("Reducing max bytes per tx list to {}", size);
-    }
-    size
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_calculate_max_bytes_per_tx_list() {
-        let max_bytes = 1000; // 128KB
-        let throttling_factor = 10;
-        let min_value = 100;
-
-        // Test with no throttling (attempt = 0)
-        assert_eq!(
-            calculate_max_bytes_per_tx_list(max_bytes, throttling_factor, 0, min_value),
-            max_bytes
-        );
-
-        assert_eq!(
-            calculate_max_bytes_per_tx_list(max_bytes, throttling_factor, 1, min_value),
-            900
-        );
-
-        assert_eq!(
-            calculate_max_bytes_per_tx_list(max_bytes, throttling_factor, 2, min_value),
-            810
-        );
-
-        assert_eq!(
-            calculate_max_bytes_per_tx_list(max_bytes, throttling_factor, 3, min_value),
-            729
-        );
-
-        // Test with throttling factor greater than max_bytes
-        assert_eq!(calculate_max_bytes_per_tx_list(100, 200, 1, min_value), 100);
-
-        // Test with zero max_bytes
-        assert_eq!(
-            calculate_max_bytes_per_tx_list(0, throttling_factor, 1, min_value),
-            0
-        );
-
-        // Test with min_value
-        assert_eq!(
-            calculate_max_bytes_per_tx_list(max_bytes, throttling_factor, 500, min_value),
-            min_value
-        );
-    }
-}
-
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-//     use crate::utils::rpc_server::test::RpcServer;
-//     use std::net::SocketAddr;
-
-//     #[tokio::test]
-//     async fn test_get_pending_l2_tx_lists() {
-//         let (mut rpc_server, taiko) = setup_rpc_server_and_taiko(3030).await;
-//         let json = taiko
-//             .get_pending_l2_tx_lists_from_taiko_geth()
-//             .await
-//             .unwrap();
-
-//         assert_eq!(json.len(), 1);
-//         assert_eq!(json[0].tx_list.len(), 2);
-//         rpc_server.stop().await;
-//     }
-
-//     #[tokio::test]
-//     async fn test_advance_head_to_new_l2_block() {
-//         let (mut rpc_server, taiko) = setup_rpc_server_and_taiko(3040).await;
-//         let value = serde_json::json!({
-//             "TxLists": [
-//                 [
-//                     {
-//                         "type": "0x0",
-//                         "chainId": "0x28c61",
-//                         "nonce": "0x1",
-//                         "to": "0xbfadd5365bb2890ad832038837115e60b71f7cbb",
-//                         "gas": "0x267ac",
-//                         "gasPrice": "0x5e76e0800",
-//                         "maxPriorityFeePerGas": null,
-//                         "maxFeePerGas": null,
-//                         "value": "0x0",
-//                         "input": "0x40d097c30000000000000000000000004cea2c7d358e313f5d0287c475f9ae943fe1a913",
-//                         "v": "0x518e6",
-//                         "r": "0xb22da5cdc4c091ec85d2dda9054aa497088e55bd9f0335f39864ae1c598dd35",
-//                         "s": "0x6eee1bcfe6a1855e89dd23d40942c90a036f273159b4c4fd217d58169493f055",
-//                         "hash": "0x7c76b9906579e54df54fe77ad1706c47aca706b3eb5cfd8a30ccc3c5a19e8ecd"
-//                     }
-//                 ]
-//             ]
-//         });
-
-//         let response = taiko.advance_head_to_new_l2_blocks(value).await.unwrap();
-//         assert_eq!(
-//             response["result"],
-//             "Request received and processed successfully"
-//         );
-//         rpc_server.stop().await;
-//     }
-
-// async fn setup_rpc_server_and_taiko(port: u16) -> (RpcServer, Taiko) {
-//     // Start the RPC server
-//     let mut rpc_server = RpcServer::new();
-//     let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().unwrap();
-//     rpc_server.start_test_responses(addr).await.unwrap();
-
-//     let taiko = Taiko::new(
-//         &format!("ws://127.0.0.1:{}", port + 1),
-//         &format!("http://127.0.0.1:{}", port),
-//         &format!("http://127.0.0.1:{}", port + 2), // driver_url
-//         1,
-//         Duration::from_secs(10),
-//         &[
-//             0xa6, 0xea, 0x92, 0x58, 0xca, 0x91, 0x2c, 0x59, 0x3b, 0x3e, 0x36, 0xee, 0x36, 0xc1,
-//             0x7f, 0xe9, 0x74, 0x47, 0xf9, 0x20, 0xf5, 0xb3, 0x6a, 0x90, 0x74, 0x4d, 0x79, 0xd4,
-//             0xf2, 0xd6, 0xae, 0x62,
-//         ],
-//         PRECONFER_ADDRESS_ZERO,
-
-//         "0x1670010000000000000000000000000000010001".to_string(),
-//     )
-//     .await
-//     .unwrap();
-//     (rpc_server, taiko)
-// }
-// }

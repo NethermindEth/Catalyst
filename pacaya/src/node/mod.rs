@@ -500,9 +500,8 @@ impl Node {
         let batches_ready_to_send = self.batch_manager.get_number_of_batches_ready_to_send();
         let pending_tx_list = match &l2_slot_info {
             Ok(info) => {
-                self.batch_manager
-                    .taiko
-                    .get_pending_l2_tx_list_from_taiko_geth(info.base_fee(), batches_ready_to_send)
+                self.taiko
+                    .get_pending_l2_tx_list_from_l2_engine(info.base_fee(), batches_ready_to_send)
                     .await
             }
             Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
