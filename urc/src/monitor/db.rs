@@ -175,7 +175,7 @@ impl DataBase {
     }
 
     pub async fn get_indexed_block(&self) -> u64 {
-       sqlx::query_as(
+        sqlx::query_as(
             r#"
             SELECT indexed_block FROM status WHERE id = 0
             "#,
