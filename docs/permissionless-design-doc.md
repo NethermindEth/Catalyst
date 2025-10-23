@@ -80,7 +80,7 @@ For the registration of L1 proposers, we utilize the **[Universal Registration C
 
 Here is an overview diagram of URC:
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image.png)
+![image.png](images/image.png)
 
 - (1) The operator submits a list of validator BLS key/signature pairs, the operator's *owner address* (the ECDSA key that can act on behalf of the set of BLS keys), and collateral to the URC.
     - (a) The Merkle root of the validator batch is calculated, and only the root is stored on-chain. This root maps to an *Operator* record that contains information such as the owner address, collateral amount, and opted-in slashing contracts.
@@ -137,11 +137,11 @@ The election step determines which L1 proposer is authorized to provide preconfi
 - the next L1 proposer in the proposer lookahead, who also
 - opted in to being a preconfer in the URC.
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%201.png)
+![image.png](images/image%201.png)
 
 At the core of the election mechanism is the *lookahead store contract*, which records the preconfer schedule for upcoming slots. This schedule is maintained through an ***optimistic submission scheme,*** where ****the first preconfer of each epoch is responsible for submitting the schedule for the next epoch. The submission is accepted without full validation, and if it is incorrect, anyone can provide a fraud proof to the lookahead slasher. More on slashing in [Lookahead Slashing](https://www.notion.so/Lookahead-Slashing-25b360fc38d0800ebaa8c432fb546c3a?pvs=21) section.
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%202.png)
+![image.png](images/image%202.png)
 
 📝 **Note:** You may be wondering why the lookahead is optimistic, especially after [EIP-7917](https://eips.ethereum.org/EIPS/eip-7917). This is because fully validating a lookahead would require not only proving that a validator is the proposer for a given slot and has opted in to preconfs, but also proving that other proposers for that epoch have *not* opted in to preconfs. In other words, it would require proof of non-inclusion in the URC registration trees. Generating and verifying such non-inclusion proofs would require significant complexity.
 
@@ -149,7 +149,7 @@ At the core of the election mechanism is the *lookahead store contract*, which r
 
 If no L1 proposer is opted in the remainder of the lookahead, the remaining slots are assigned to a fallback preconfer.
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%203.png)
+![image.png](images/image%203.png)
 
 The fallback can be selected from either a whitelisted set of entities or the pool of opted-in proposers. For the first iteration, we recommend using a whitelist, as it acts as a training wheel when opt-in rates are low while migrating to permissionless preconfing. The fallback whitelist preconfer will rotate for each epoch.
 
@@ -177,7 +177,7 @@ struct LookaheadSlot {
 
 The diagram below illustrates how proposers (P0–P7) are mapped to preconfers across slots, and how these assignments are recorded in the `LookaheadSlot[]` structure:
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%204.png)
+![image.png](images/image%204.png)
 
 **About `submissionWindowEnd`:**
 
@@ -399,7 +399,7 @@ Slash when the rawTxList/anchorID for a given L2 block ID differs between:
 
 For example, in this diagram, the preconfed block `B1` (preconfed in P2P) and the submitted block `B1′` (submitted to L1) have different rawTxList/anchorID for the same L2 block ID. 
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%205.png)
+![image.png](images/image%205.png)
 
 Note that slashing occurs after the submitted blocks are proven and the L2 execution result is settled to L1.
 
@@ -407,7 +407,7 @@ Furthermore, we should not always slash the preconfer of `B1` when this mismatch
 
 **Edge case: EOP Violation by Previous Preconfer**
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%206.png)
+![image.png](images/image%206.png)
 
 This case occurs when the previous preconfer continues submitting blocks (`A4` above) after signaling an `eop`, thereby violating their EOP commitment and shifting the valid start of the preconf window forward. As a result, the current preconfer’s `B1` may appear to mismatch the submitted `A4` for that block ID, but the mismatch is caused by the invalid extra block(s) from the previous preconfer.
 
@@ -415,13 +415,13 @@ We can detect this by comparing the `submissionWindowEnd` of the preconfed and s
 
 However, checking `submissionWindowEnd` alone is not sufficient to protect preconfer `B` from unjust slashing. As shown in the diagram below, there is a mismatch between `B2` and `B1` even though they share the same `submissionWindowEnd`. This mismatch originates from a parent block divergence, which was itself caused by the previous preconfer’s EOP violation.
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%207.png)
+![image.png](images/image%207.png)
 
 To protect against such cases, we compare not only the `rawTxList` and `anchorId` of the preconfirmed and submitted blocks, but also their **parent** `rawTxList`, `anchorId`, and `submissionWindowEnd` values. If any of these parent values differ, the slashing is not applied to the current preconfer. Instead, the slashing entity is expected to target the parent block. This allows us to trace the divergence back transitively to the original L2 block where the mismatch first occurred.
 
 ### Missed Submission
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%208.png)
+![image.png](images/image%208.png)
 
 This case occurs when the preconfer fails to submit their preconfed block to L1 within their allocated submission window. For example, in the diagram above, the preconfer of `B1`–`B3` preconfed three blocks, but none were submitted to L1 within their submission window. Instead, the next preconfer submitted `C1′`, which became the canonical L2 block. The mismatch between `B1` and `C1′` indicates a missed submission.
 
@@ -438,7 +438,7 @@ Since this check requires access to beacon chain data, it must be performed on L
 
 ### **Invalid EOP**
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%209.png)
+![image.png](images/image%209.png)
 
 The above illustrates a post-EOP submission violation: The preconfer submits additional L2 blocks after they published a L2 block with an `eop = true`. Block `B2` was preconfed with `EOP=true`, signaling the end of preconfs for that window, yet a new block `B3` was later submitted for the same window.
 
@@ -450,7 +450,7 @@ This violation is a clear equivocation by the preconfer and is fully slashable.
 
 ### **Missing EOP**
 
-![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%2010.png)
+![image.png](images/image%2010.png)
 
 The above illustrates a missing EOP violation: `B3` was preconfed with `EOP=false`, yet the next submitted block (`C1`) starts a new preconfirmation window.
 
@@ -500,7 +500,7 @@ To address this, we introduce an [*overseer*](https://ethresear.ch/t/preconfirma
 - The overseer contract integrates with the lookahead store to exclude blacklisted operators from future elections.
 - The overseer's address can be updated by the Taiko DAO.
     
-    ![image.png](%5BExt%5D%20%5BDesign%20Doc%5D%20Taiko%20Permissionless%20Preconfirm%2021d360fc38d08077ae97d9dd7a4b4ec9/image%2011.png)
+    ![image.png](images/image%2011.png)
     
 
 To detect withholding, the overseer monitors both the preconf P2P network and the public L2 mempool. If preconfs are not published in a timely manner, or if they consistently ignore a significant portion of mempool transactions for an extended period (exact thresholds are TBD and should be parameterized), the overseer can blacklist the overseer.
