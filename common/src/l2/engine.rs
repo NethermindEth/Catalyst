@@ -33,7 +33,7 @@ impl L2EngineConfig {
         Ok(Self {
             auth_url: config.taiko_geth_auth_rpc_url.clone(),
             rpc_timeout: config.rpc_l2_execution_layer_timeout,
-            jwt_secret_bytes: jwt_secret_bytes,
+            jwt_secret_bytes,
             max_bytes_per_tx_list: config.max_bytes_per_tx_list,
             min_bytes_per_tx_list: config.min_bytes_per_tx_list,
             throttling_factor: config.throttling_factor,
