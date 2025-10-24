@@ -1,10 +1,13 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
 
-use alloy::{primitives::Address, providers::DynProvider};
+use alloy::{eips::BlockNumberOrTag, primitives::Address, providers::DynProvider};
 use anyhow::{Error, anyhow};
 use common::{
-    l1::{traits::ELTrait, transaction_error::TransactionError},
+    l1::{
+        traits::{ELTrait, PreconferProvider},
+        transaction_error::TransactionError,
+    },
     metrics::Metrics,
     shared::{
         alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon,
@@ -69,3 +72,29 @@ impl ELTrait for ExecutionLayer {
         &self.common
     }
 }
+
+impl PreconferProvider for ExecutionLayer {
+    async fn get_preconfer_wallet_eth(&self) -> Result<alloy::primitives::U256, Error> {
+        self.common()
+            .get_account_balance(self.preconfer_address)
+            .await
+    }
+
+    async fn get_preconfer_nonce_pending(&self) -> Result<u64, Error> {
+        self.common()
+            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Pending)
+            .await
+    }
+
+    async fn get_preconfer_nonce_latest(&self) -> Result<u64, Error> {
+        self.common()
+            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Latest)
+            .await
+    }
+
+    fn get_preconfer_alloy_address(&self) -> Address {
+        self.preconfer_address
+    }
+}
+
+impl ExecutionLayer {}

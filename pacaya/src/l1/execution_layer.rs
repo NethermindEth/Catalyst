@@ -16,6 +16,7 @@ use alloy::{
     providers::DynProvider,
 };
 use anyhow::{Error, anyhow};
+use common::l1::traits::PreconferBondProvider;
 use common::{
     l1::{
         bindings::IERC20,
@@ -26,7 +27,6 @@ use common::{
     shared::execution_layer::ExecutionLayer as ExecutionLayerCommon,
     shared::transaction_monitor::TransactionMonitor,
     shared::{alloy_tools, l2_block::L2Block, l2_tx_lists::encode_and_compress},
-    utils::types::PreconferAddress,
 };
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -94,7 +94,7 @@ impl ELTrait for ExecutionLayer {
     }
 }
 
-impl PreconferProvider for ExecutionLayer {
+impl PreconferBondProvider for ExecutionLayer {
     async fn get_preconfer_total_bonds(&self) -> Result<alloy::primitives::U256, Error> {
         // Check TAIKO TOKEN balance
         let bond_balance = self
@@ -109,7 +109,9 @@ impl PreconferProvider for ExecutionLayer {
 
         Ok(bond_balance + wallet_balance)
     }
+}
 
+impl PreconferProvider for ExecutionLayer {
     async fn get_preconfer_wallet_eth(&self) -> Result<alloy::primitives::U256, Error> {
         self.common()
             .get_account_balance(self.preconfer_address)
@@ -130,10 +132,6 @@ impl PreconferProvider for ExecutionLayer {
 
     fn get_preconfer_alloy_address(&self) -> Address {
         self.preconfer_address
-    }
-
-    fn get_preconfer_address(&self) -> PreconferAddress {
-        self.preconfer_address.into_array()
     }
 }
 
