@@ -1,9 +1,4 @@
 mod event_indexer;
-mod utils;
-
-use crate::{event_indexer::EventIndexer, utils::config::ShastaConfig};
-#[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
-mod node;
 #[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
 mod node;
 #[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
@@ -12,8 +7,9 @@ mod utils;
 mod l1;
 mod l2;
 
-use crate::utils::config::ShastaConfig;
+use crate::{event_indexer::EventIndexer, utils::config::ShastaConfig};
 use anyhow::Error;
+use common::l1::traits::ELTrait;
 use common::l1::{self as common_l1};
 use common::{config::Config, config::ConfigTrait, metrics::Metrics};
 use l1::execution_layer::ExecutionLayer;
@@ -38,6 +34,9 @@ pub async fn create_shasta_node(
             .expect("L1 RPC URL is required")
             .clone(),
         shasta_config.contract_addresses.shasta_inbox.clone(),
+        config
+            .fork_switch_l2_height
+            .ok_or_else(|| anyhow::anyhow!("Fork switch L2 height is required"))?,
     )
     .await?;
 
@@ -51,7 +50,7 @@ pub async fn create_shasta_node(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?;
 
-    let _ethereum_l1 = Arc::new(ethereum_l1);
+    let ethereum_l1 = Arc::new(ethereum_l1);
 
     let taiko_config = pacaya::l2::config::TaikoConfig::new(&config)
         .await
@@ -71,7 +70,6 @@ pub async fn create_shasta_node(
     )
     .await?;
 
-    use alloy::primitives::B256;
     use common::l2::engine::L2Engine;
     use common::l2::engine::L2EngineConfig;
     use common::l2::taiko_driver::OperationType;
@@ -94,14 +92,16 @@ pub async fn create_shasta_node(
     };
     let driver = TaikoDriver::new(&driver_config, metrics).await?;
 
-    event_indexer.wait_historical_indexing_finished().await?;
     loop {
+        const BASE_FEE: u64 = 25000000;
         let pending_tx_list = l2_engine
-            .get_pending_l2_tx_list(25000000, 0, 15000000)
+            .get_pending_l2_tx_list(BASE_FEE, 0, 15000000)
             .await?;
 
+        let l2_height = execution_layer_l2.common().get_latest_block_id().await?;
+
         info!(
-            "Pending L2 tx list len: {:?}",
+            "Pending L2 tx list len: {:?}, L2 height: {l2_height}",
             if let Some(pending_tx_list) = &pending_tx_list {
                 pending_tx_list.tx_list.len()
             } else {
@@ -118,16 +118,44 @@ pub async fn create_shasta_node(
                     .as_secs(),
             );
 
+            const L1_HEIGHT_LAG: u64 = 4;
+            let anchor_height = ethereum_l1
+                .execution_layer
+                .common()
+                .get_latest_block_id()
+                .await?
+                - L1_HEIGHT_LAG;
+
+            let anchor_hash = ethereum_l1
+                .execution_layer
+                .common()
+                .get_block_hash(anchor_height)
+                .await?;
+
+            let anchor_block_state_root = ethereum_l1
+                .execution_layer
+                .common()
+                .get_block_state_root_by_number(anchor_height)
+                .await?;
+
+            let l2_height = execution_layer_l2.common().get_latest_block_id().await?;
+            let l2_hash = execution_layer_l2
+                .common()
+                .get_block_hash(l2_height)
+                .await?;
+
             l2::advance_head_to_new_l2_block(
                 l2_block,
-                0,
-                B256::ZERO,
-                &L2SlotInfo::new(0, 0, 0, B256::ZERO, 0),
+                anchor_height,
+                anchor_block_state_root,
+                anchor_hash,
+                &L2SlotInfo::new(BASE_FEE, 0, l2_height, l2_hash, 0),
                 false,
                 false,
                 OperationType::Preconfirm,
                 &driver,
                 &execution_layer_l2,
+                &signer.get_address(),
                 &event_indexer,
             )
             .await?;
@@ -136,5 +164,4 @@ pub async fn create_shasta_node(
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
 
-    Ok(())
 }

@@ -1,9 +1,9 @@
-use alloy::{primitives::Address, transports::http::reqwest::Url};
+use alloy::{eips::BlockNumberOrTag, primitives::Address, transports::http::reqwest::Url};
 use anyhow::Error;
 use std::{str::FromStr, sync::Arc};
 use taiko_event_indexer::{
     indexer::{ShastaEventIndexer, ShastaEventIndexerConfig},
-    interface::ShastaProposeInputReader,
+    interface::{ShastaProposeInput, ShastaProposeInputReader},
 };
 use taiko_rpc::SubscriptionSource;
 use tracing::debug;
@@ -14,81 +14,133 @@ pub struct EventIndexer {
 }
 
 impl EventIndexer {
-    pub async fn new(l1_ws_rpc_url: String, inbox_contract_address: String) -> Result<Self, Error> {
+    pub async fn new(
+        l1_ws_rpc_url: String,
+        inbox_contract_address: String,
+        shasta_height: u64,
+    ) -> Result<Self, Error> {
         let config = ShastaEventIndexerConfig {
             l1_subscription_source: SubscriptionSource::Ws(Url::from_str(l1_ws_rpc_url.as_str())?),
             inbox_address: Address::from_str(&inbox_contract_address)?,
         };
 
         let indexer = ShastaEventIndexer::new(config).await?;
-        indexer.clone().spawn();
+        indexer
+            .clone()
+            .spawn(BlockNumberOrTag::Number(shasta_height));
         debug!("Spawned Shasta event indexer");
         indexer.wait_historical_indexing_finished().await;
 
-        let propose_input = indexer.read_shasta_propose_input();
+        Ok(Self { indexer })
+    }
+
+    pub fn get_propose_input(&self) -> Option<ShastaProposeInput> {
+        let propose_input = self.indexer.read_shasta_propose_input();
+        self.debug_propose_input(&propose_input);
+        propose_input
+    }
+
+    fn debug_propose_input(&self, propose_input: &Option<ShastaProposeInput>) {
         if let Some(propose_input) = propose_input {
-            debug!(
+            let mut msg = String::new();
+            use std::fmt::Write;
+
+            writeln!(
+                &mut msg,
                 "core_state.nextProposalId: {:?}",
                 propose_input.core_state.nextProposalId
-            );
-            debug!(
+            )
+            .ok();
+            writeln!(
+                &mut msg,
                 "core_state.lastProposalBlockId: {:?}",
                 propose_input.core_state.lastProposalBlockId
-            );
-            debug!(
+            )
+            .ok();
+            writeln!(
+                &mut msg,
                 "core_state.lastFinalizedProposalId: {:?}",
                 propose_input.core_state.lastFinalizedProposalId
-            );
-            debug!(
+            )
+            .ok();
+            writeln!(
+                &mut msg,
                 "core_state.lastCheckpointTimestamp: {:?}",
                 propose_input.core_state.lastCheckpointTimestamp
-            );
-            debug!(
+            )
+            .ok();
+            writeln!(
+                &mut msg,
                 "core_state.lastFinalizedTransitionHash: {:?}",
                 propose_input.core_state.lastFinalizedTransitionHash
-            );
-            debug!(
+            )
+            .ok();
+            writeln!(
+                &mut msg,
                 "core_state.bondInstructionsHash: {:?}",
                 propose_input.core_state.bondInstructionsHash
-            );
+            )
+            .ok();
 
             for (idx, proposal) in propose_input.proposals.iter().enumerate() {
-                debug!("proposal[{}].id: {:?}", idx, proposal.id);
-                debug!("proposal[{}].timestamp: {:?}", idx, proposal.timestamp);
-                debug!(
+                writeln!(&mut msg, "proposal[{}].id: {:?}", idx, proposal.id).ok();
+                writeln!(
+                    &mut msg,
+                    "proposal[{}].timestamp: {:?}",
+                    idx, proposal.timestamp
+                )
+                .ok();
+                writeln!(
+                    &mut msg,
                     "proposal[{}].endOfSubmissionWindowTimestamp: {:?}",
                     idx, proposal.endOfSubmissionWindowTimestamp
-                );
-                debug!("proposal[{}].proposer: {:?}", idx, proposal.proposer);
-                debug!(
+                )
+                .ok();
+                writeln!(
+                    &mut msg,
+                    "proposal[{}].proposer: {:?}",
+                    idx, proposal.proposer
+                )
+                .ok();
+                writeln!(
+                    &mut msg,
                     "proposal[{}].coreStateHash: {:?}",
                     idx, proposal.coreStateHash
-                );
-                debug!(
+                )
+                .ok();
+                writeln!(
+                    &mut msg,
                     "proposal[{}].derivationHash: {:?}",
                     idx, proposal.derivationHash
-                );
+                )
+                .ok();
             }
 
             for (idx, tr) in propose_input.transition_records.iter().enumerate() {
-                debug!("transition_record[{}].span: {:?}", idx, tr.span);
-                debug!(
+                writeln!(&mut msg, "transition_record[{}].span: {:?}", idx, tr.span).ok();
+                writeln!(
+                    &mut msg,
                     "transition_record[{}].bondInstructions: {:?}",
                     idx, tr.bondInstructions
-                );
-                debug!(
+                )
+                .ok();
+                writeln!(
+                    &mut msg,
                     "transition_record[{}].transitionHash: {:?}",
                     idx, tr.transitionHash
-                );
-                debug!(
+                )
+                .ok();
+                writeln!(
+                    &mut msg,
                     "transition_record[{}].checkpointHash: {:?}",
                     idx, tr.checkpointHash
-                );
+                )
+                .ok();
             }
 
-            debug!("checkpoint: {:?}", propose_input.checkpoint);
-        }
+            writeln!(&mut msg, "checkpoint: {:?}", propose_input.checkpoint).ok();
 
-        Ok(Self { indexer })
+            debug!("{}", msg);
+        }
     }
 }

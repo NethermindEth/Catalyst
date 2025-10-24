@@ -1,6 +1,6 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
-use super::bindings::ShastaAnchor;
+use super::bindings::Anchor;
 use alloy::{
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
     primitives::{Address, B256, Bytes, FixedBytes, Uint},
@@ -12,12 +12,13 @@ use anyhow::Error;
 use common::crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
 use common::shared::{alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon};
 use pacaya::l2::config::TaikoConfig;
+use taiko_event_indexer::interface::ShastaProposeInput;
 use tracing::{debug, info};
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
-    shasta_anchor: ShastaAnchor::ShastaAnchorInstance<DynProvider>,
+    shasta_anchor: Anchor::AnchorInstance<DynProvider>,
     chain_id: u64,
     config: TaikoConfig,
 }
@@ -33,7 +34,7 @@ impl L2ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to get chain ID: {}", e))?;
         info!("L2 Chain ID: {}", chain_id);
 
-        let shasta_anchor = ShastaAnchor::new(taiko_config.taiko_anchor_address, provider.clone());
+        let shasta_anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
 
         let common = ExecutionLayerCommon::new(provider.clone()).await?;
 
@@ -46,36 +47,52 @@ impl L2ExecutionLayer {
         })
     }
 
+    pub fn common(&self) -> &ExecutionLayerCommon {
+        &self.common
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub async fn construct_anchor_tx(
         &self,
-        // proposal_id: u64,    // TODO: implement
-        proposer: Address,
+        preconfer_address: &Address,
         l2_block_number: u16,
         parent_hash: B256,
         anchor_block_id: u64,
-        // anchor_block_hash: B256,
+        anchor_block_hash: B256,
         anchor_state_root: B256,
         base_fee: u64,
+        propose_input: ShastaProposeInput,
     ) -> Result<Transaction, Error> {
+        debug!(
+            "Constructing anchor transaction for block number: {}",
+            l2_block_number
+        );
         let nonce = self
             .provider
             .get_transaction_count(GOLDEN_TOUCH_ADDRESS)
             .block_id(parent_hash.into())
-            .await?;
+            .await
+            .map_err(|e| {
+                self.common
+                    .chain_error("Failed to get transaction count", Some(&e.to_string()))
+            })?;
+
         let call_builder = self
             .shasta_anchor
-            .updateState(
-                Uint::<48, 1>::from(0), // proposal_id
-                proposer,
-                Bytes::new(),                // no prover designation
-                FixedBytes::from([0u8; 32]), // bond_instructions_hash, take them from the indexer
-                vec![],
-                l2_block_number,
-                Uint::<48, 1>::from(anchor_block_id),
-                B256::ZERO, // anchor_block_hash,
-                anchor_state_root,
-                Uint::<48, 1>::from(0), // 0 for whitelist
+            .anchorV4(
+                Anchor::ProposalParams {
+                    proposalId: propose_input.core_state.nextProposalId,
+                    proposer: preconfer_address.clone(),
+                    proverAuth: Bytes::new(), // no prover designation for now
+                    bondInstructionsHash: FixedBytes::from([0u8; 32]),
+                    bondInstructions: vec![],
+                },
+                Anchor::BlockParams {
+                    blockIndex: l2_block_number,
+                    anchorBlockNumber: Uint::<48, 1>::from(anchor_block_id),
+                    anchorBlockHash: anchor_block_hash,
+                    anchorStateRoot: anchor_state_root,
+                },
             )
             .gas(1_000_000) // value expected by Taiko
             .max_fee_per_gas(u128::from(base_fee)) // value expected by Taiko
