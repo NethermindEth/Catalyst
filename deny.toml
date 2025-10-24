@@ -49,6 +49,11 @@ allow = ["MPL-2.0", "CDLA-Permissive-2.0"]
 name = "webpki-roots"
 version = "*"
 
+[[licenses.exceptions]]
+allow = ["MPL-2.0"]
+name = "option-ext"
+version = "*"
+
 [bans]
 allow-wildcard-paths = true
 multiple-versions = "allow"

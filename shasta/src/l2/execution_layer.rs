@@ -1,7 +1,6 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
 use crate::l2::bindings::{
-    Anchor::{BlockParams, ProposalParams},
     BondManager,
 };
 
@@ -20,6 +19,7 @@ use common::{
     l1::traits::PreconferBondProvider,
 };
 use pacaya::l2::config::TaikoConfig;
+use taiko_event_indexer::interface::ShastaProposeInput;
 use tracing::{debug, info, warn};
 
 pub struct L2ExecutionLayer {
@@ -69,39 +69,46 @@ impl L2ExecutionLayer {
     #[allow(clippy::too_many_arguments)]
     pub async fn construct_anchor_tx(
         &self,
-        // proposal_id: u64,    // TODO: implement
-        proposer: Address,
+        preconfer_address: &Address,
         l2_block_number: u16,
         parent_hash: B256,
         anchor_block_id: u64,
-        // anchor_block_hash: B256,
+        anchor_block_hash: B256,
         anchor_state_root: B256,
         base_fee: u64,
+        propose_input: ShastaProposeInput,
     ) -> Result<Transaction, Error> {
+        debug!(
+            "Constructing anchor transaction for block number: {}",
+            l2_block_number
+        );
         let nonce = self
             .provider
             .get_transaction_count(GOLDEN_TOUCH_ADDRESS)
             .block_id(parent_hash.into())
-            .await?;
+            .await
+            .map_err(|e| {
+                self.common
+                    .chain_error("Failed to get transaction count", Some(&e.to_string()))
+            })?;
 
-        // TODO: implement
-        let proposal_params = ProposalParams {
-            proposalId: 0.try_into()?, // TODO: implement
-            proposer,
-            proverAuth: Bytes::new(),
-            bondInstructionsHash: FixedBytes::from([0u8; 32]), // bond_instructions_hash, take them from the indexer
-            bondInstructions: vec![],
-        };
-        // TODO: implement
-        let block_params = BlockParams {
-            blockIndex: l2_block_number,
-            anchorBlockNumber: anchor_block_id.try_into()?,
-            anchorBlockHash: B256::ZERO, // anchor_block_hash,
-            anchorStateRoot: anchor_state_root,
-        };
         let call_builder = self
             .shasta_anchor
-            .anchorV4(proposal_params, block_params)
+            .anchorV4(
+                Anchor::ProposalParams {
+                    proposalId: propose_input.core_state.nextProposalId,
+                    proposer: *preconfer_address,
+                    proverAuth: Bytes::new(), // no prover designation for now
+                    bondInstructionsHash: FixedBytes::from([0u8; 32]),
+                    bondInstructions: vec![],
+                },
+                Anchor::BlockParams {
+                    blockIndex: l2_block_number,
+                    anchorBlockNumber: anchor_block_id.try_into()?,
+                    anchorBlockHash: anchor_block_hash,
+                    anchorStateRoot: anchor_state_root,
+                },
+            )
             .gas(1_000_000) // value expected by Taiko
             .max_fee_per_gas(u128::from(base_fee)) // value expected by Taiko
             .max_priority_fee_per_gas(0) // value expected by Taiko
