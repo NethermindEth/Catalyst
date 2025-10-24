@@ -163,5 +163,4 @@ pub async fn create_shasta_node(
 
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
-
 }
