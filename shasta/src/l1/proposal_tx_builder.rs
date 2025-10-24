@@ -2,7 +2,6 @@
 #![allow(unused)]
 
 use super::{bindings::iinbox, proposal::Proposal};
-use crate::shared::l2_block::L2Block;
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{Address, Bytes},
@@ -10,6 +9,7 @@ use alloy::{
     rpc::types::TransactionRequest,
 };
 use anyhow::Error;
+use common::shared::l2_block::L2Block;
 
 struct ProposalBuilder {
     provider: DynProvider,
@@ -35,7 +35,7 @@ impl ProposalBuilder {
         // forced_inclusion: Option<BatchParams>, // TODO: add forced inclusion
     ) -> Result<TransactionRequest, Error> {
         let proposal = Proposal::build(l2_blocks, last_anchor_origin_height, coinbase)?;
-        let blob_sidecar = crate::blob::build_blob_sidecar(&proposal.blob_data)?;
+        let blob_sidecar = common::blob::build_blob_sidecar(&proposal.blob_data)?;
 
         let codec = iinbox::ICodec::new(self.codec_address, self.provider.clone());
         let encoded_proposal_input = codec
