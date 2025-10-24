@@ -30,6 +30,7 @@ pub async fn create_pacaya_node(
 ) -> Result<(), Error> {
     // Read specific config from environment variables
     let pacaya_config = PacayaConfig::read_env_variables();
+    info!("Pacaya config: {}", pacaya_config);
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
@@ -155,6 +156,7 @@ pub async fn create_pacaya_node(
 
     let funds_controller = FundsController::new(
         (&config).into(),
+        ethereum_l1.execution_layer.clone(),
         ethereum_l1.execution_layer.clone(),
         taiko.clone(),
         metrics.clone(),

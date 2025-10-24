@@ -9,30 +9,34 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::{
-    l1::traits::{ELTrait, PreconferProvider},
+    l1::traits::{ELTrait, PreconferBondProvider, PreconferProvider},
     l2::traits::Bridgeable,
     metrics::Metrics,
 };
 
-pub struct FundsController<L1, L2>
+pub struct FundsController<T, L1, L2>
 where
+    T: PreconferBondProvider + Send + Sync + 'static,
     L1: ELTrait + PreconferProvider + Send + Sync + 'static,
     L2: Bridgeable + Send + Sync + 'static,
 {
     config: FundsControllerConfig,
+    bond_provider: Arc<T>,
     l1_execution_layer: Arc<L1>,
     taiko: Arc<L2>,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
 }
 
-impl<L1, L2> FundsController<L1, L2>
+impl<T, L1, L2> FundsController<T, L1, L2>
 where
+    T: PreconferBondProvider + Send + Sync + 'static,
     L1: ELTrait + PreconferProvider + Send + Sync + 'static,
     L2: Bridgeable + Send + Sync + 'static,
 {
     pub fn new(
         config: FundsControllerConfig,
+        bond_provider: Arc<T>,
         l1_execution_layer: Arc<L1>,
         taiko: Arc<L2>,
         metrics: Arc<Metrics>,
@@ -40,6 +44,7 @@ where
     ) -> Self {
         Self {
             config,
+            bond_provider,
             l1_execution_layer,
             taiko,
             metrics,
@@ -76,7 +81,7 @@ where
     async fn check_initial_funds(&self) -> Result<(), Error> {
         // Check TAIKO TOKEN balance
         let total_balance = self
-            .l1_execution_layer
+            .bond_provider
             .get_preconfer_total_bonds()
             .await
             .map_err(|e| Error::msg(format!("Failed to fetch bond balance: {e}")))?;
@@ -123,7 +128,7 @@ where
                 "-".to_string()
             }
         };
-        let taiko_balance_str = match self.l1_execution_layer.get_preconfer_total_bonds().await {
+        let taiko_balance_str = match self.bond_provider.get_preconfer_total_bonds().await {
             Ok(balance) => {
                 self.metrics.set_preconfer_taiko_balance(balance);
                 format!("{balance}")

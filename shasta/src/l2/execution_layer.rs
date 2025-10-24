@@ -1,24 +1,30 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
+use crate::l2::bindings::BondManager;
+
 use super::bindings::Anchor;
 use alloy::{
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
-    primitives::{Address, B256, Bytes, FixedBytes, Uint},
+    primitives::{Address, B256, Bytes, FixedBytes},
     providers::{DynProvider, Provider},
     rpc::types::Transaction,
     signers::Signature,
 };
 use anyhow::Error;
-use common::crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
 use common::shared::{alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon};
+use common::{
+    crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY},
+    l1::traits::PreconferBondProvider,
+};
 use pacaya::l2::config::TaikoConfig;
 use taiko_event_indexer::interface::ShastaProposeInput;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
     shasta_anchor: Anchor::AnchorInstance<DynProvider>,
+    bond_manager: Address,
     chain_id: u64,
     config: TaikoConfig,
 }
@@ -38,10 +44,17 @@ impl L2ExecutionLayer {
 
         let common = ExecutionLayerCommon::new(provider.clone()).await?;
 
+        let bond_manager = shasta_anchor.bondManager().call().await.map_err(|e| {
+            anyhow::anyhow!("Failed to get BondManager address from TaikoAnchor: {e}")
+        })?;
+
+        info!("Bond manager address: {}", bond_manager);
+
         Ok(Self {
             common,
             provider,
             shasta_anchor,
+            bond_manager,
             chain_id,
             config: taiko_config,
         })
@@ -89,7 +102,7 @@ impl L2ExecutionLayer {
                 },
                 Anchor::BlockParams {
                     blockIndex: l2_block_number,
-                    anchorBlockNumber: Uint::<48, 1>::from(anchor_block_id),
+                    anchorBlockNumber: anchor_block_id.try_into()?,
                     anchorBlockHash: anchor_block_hash,
                     anchorStateRoot: anchor_state_root,
                 },
@@ -128,5 +141,68 @@ impl L2ExecutionLayer {
 
     fn sign_hash_deterministic(&self, hash: B256) -> Result<Signature, Error> {
         common::crypto::fixed_k_signer::sign_hash_deterministic(GOLDEN_TOUCH_PRIVATE_KEY, hash)
+    }
+
+    async fn get_preconfer_deposited_bonds(&self) -> Result<alloy::primitives::U256, Error> {
+        let contract = BondManager::new(self.bond_manager, &self.provider);
+        let bonds = contract
+            .bond(self.config.signer.get_address())
+            .call()
+            .await
+            .map_err(|e| Error::msg(format!("Failed to get bonds balance: {e}")))?;
+        Ok(bonds.balance)
+    }
+
+    pub async fn transfer_eth_from_l2_to_l1(
+        &self,
+        amount: u128,
+        dest_chain_id: u64,
+        preconfer_address: Address,
+        bridge_relayer_fee: u64,
+    ) -> Result<(), Error> {
+        info!(
+            "Transfer ETH from L2 to L1: srcChainId: {}, dstChainId: {}",
+            self.chain_id, dest_chain_id
+        );
+
+        let provider =
+            alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.taiko_geth_url)
+                .await?;
+
+        self.transfer_eth_from_l2_to_l1_with_provider(
+            provider,
+            amount,
+            dest_chain_id,
+            preconfer_address,
+            bridge_relayer_fee,
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn transfer_eth_from_l2_to_l1_with_provider(
+        &self,
+        _provider: DynProvider,
+        _amount: u128,
+        _dest_chain_id: u64,
+        _preconfer_address: Address,
+        _bridge_relayer_fee: u64,
+    ) -> Result<(), Error> {
+        // TODO: implement the actual transfer logic
+        warn!("Implement bridge transfer logic here");
+        Ok(())
+    }
+}
+
+impl PreconferBondProvider for L2ExecutionLayer {
+    async fn get_preconfer_total_bonds(&self) -> Result<alloy::primitives::U256, Error> {
+        // Check TAIKO TOKEN balance
+        let bond_balance = self
+            .get_preconfer_deposited_bonds()
+            .await
+            .map_err(|e| Error::msg(format!("Failed to fetch bond balance: {e}")))?;
+
+        Ok(bond_balance)
     }
 }
