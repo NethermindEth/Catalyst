@@ -1,6 +1,5 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
-use super::super::config::GOLDEN_TOUCH_ADDRESS;
 use super::bindings::ShastaAnchor;
 use alloy::{
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
@@ -10,22 +9,41 @@ use alloy::{
     signers::Signature,
 };
 use anyhow::Error;
-use tracing::debug;
+use common::crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
+use common::shared::{alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon};
+use pacaya::l2::config::TaikoConfig;
+use tracing::{debug, info};
 
-pub struct ExecutionLayer {
+pub struct L2ExecutionLayer {
+    common: ExecutionLayerCommon,
     provider: DynProvider,
     shasta_anchor: ShastaAnchor::ShastaAnchorInstance<DynProvider>,
     chain_id: u64,
+    config: TaikoConfig,
 }
 
-impl ExecutionLayer {
-    pub fn new(provider: DynProvider, shasta_anchor_address: Address, chain_id: u64) -> Self {
-        let shasta_anchor = ShastaAnchor::new(shasta_anchor_address, provider.clone());
-        Self {
+impl L2ExecutionLayer {
+    pub async fn new(taiko_config: TaikoConfig) -> Result<Self, Error> {
+        let provider =
+            alloy_tools::create_alloy_provider_without_wallet(&taiko_config.taiko_geth_url).await?;
+
+        let chain_id = provider
+            .get_chain_id()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get chain ID: {}", e))?;
+        info!("L2 Chain ID: {}", chain_id);
+
+        let shasta_anchor = ShastaAnchor::new(taiko_config.taiko_anchor_address, provider.clone());
+
+        let common = ExecutionLayerCommon::new(provider.clone()).await?;
+
+        Ok(Self {
+            common,
             provider,
             shasta_anchor,
             chain_id,
-        }
+            config: taiko_config,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -92,9 +110,6 @@ impl ExecutionLayer {
     }
 
     fn sign_hash_deterministic(&self, hash: B256) -> Result<Signature, Error> {
-        crate::crypto::fixed_k_signer::sign_hash_deterministic(
-            super::super::config::GOLDEN_TOUCH_PRIVATE_KEY,
-            hash,
-        )
+        common::crypto::fixed_k_signer::sign_hash_deterministic(GOLDEN_TOUCH_PRIVATE_KEY, hash)
     }
 }

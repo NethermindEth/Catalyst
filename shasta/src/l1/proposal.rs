@@ -1,6 +1,8 @@
+// TODO remove allow dead_code when the module is used
+#![allow(dead_code)]
+
 use super::bindings::iinbox;
 use super::bindings::lib_manifest;
-use crate::{blob::constants::MAX_BLOB_DATA_SIZE, shared::l2_block::L2Block};
 use alloy::{
     consensus::Transaction,
     eips::Typed2718,
@@ -8,6 +10,7 @@ use alloy::{
     rlp::Encodable,
 };
 use anyhow::Error;
+use common::{blob::constants::MAX_BLOB_DATA_SIZE, shared::l2_block::L2Block};
 use flate2::{Compression, write::ZlibEncoder};
 use std::io::Write;
 
@@ -190,9 +193,9 @@ impl Proposal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared::l2_block::L2Block;
-    use crate::shared::l2_tx_lists::PreBuiltTxList;
     use alloy::primitives::{Address, Uint};
+    use common::shared::l2_block::L2Block;
+    use common::shared::l2_tx_lists::PreBuiltTxList;
 
     // Helper function to create a test L2 block with empty transactions
     fn create_test_l2_block(timestamp_sec: u64, num_transactions: usize) -> L2Block {

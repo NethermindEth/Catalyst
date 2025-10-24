@@ -33,7 +33,7 @@ pub struct Node {
     cancel_token: CancellationToken,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     chain_monitor: Arc<ChainMonitor>,
-    operator: Operator,
+    operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, Taiko>,
     batch_manager: BatchManager,
     verifier: Option<Verifier>,
     taiko: Arc<Taiko>,
@@ -59,7 +59,8 @@ impl Node {
         fork_info: ForkInfo,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
-            &ethereum_l1,
+            ethereum_l1.execution_layer.clone(),
+            ethereum_l1.slot_clock.clone(),
             taiko.clone(),
             config.handover_window_slots,
             config.handover_start_buffer_ms,
