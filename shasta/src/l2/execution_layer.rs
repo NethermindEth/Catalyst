@@ -82,7 +82,7 @@ impl L2ExecutionLayer {
             .anchorV4(
                 Anchor::ProposalParams {
                     proposalId: propose_input.core_state.nextProposalId,
-                    proposer: preconfer_address.clone(),
+                    proposer: *preconfer_address,
                     proverAuth: Bytes::new(), // no prover designation for now
                     bondInstructionsHash: FixedBytes::from([0u8; 32]),
                     bondInstructions: vec![],

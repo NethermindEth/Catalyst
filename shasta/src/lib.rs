@@ -113,8 +113,7 @@ pub async fn create_shasta_node(
             let l2_block = L2Block::new_from(
                 pending_tx_list,
                 std::time::SystemTime::now() // temp solution
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .duration_since(std::time::UNIX_EPOCH)?
                     .as_secs(),
             );
 
