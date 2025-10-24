@@ -13,6 +13,17 @@ pub struct ExecutionLayer {
 }
 
 impl ExecutionLayer {
+    /// Creates a formatted error message with chain ID prefix
+    pub fn chain_error(&self, message: &str, context: Option<&str>) -> Error {
+        match context {
+            Some(ctx) => Error::msg(format!(
+                "[chain id: {}] {}: {}",
+                self.chain_id, message, ctx
+            )),
+            None => Error::msg(format!("[chain id: {}] {}", self.chain_id, message)),
+        }
+    }
+
     pub async fn new(provider: DynProvider) -> Result<Self, Error> {
         debug!("Creating ExecutionLayer from provider");
         let chain_id = provider
@@ -47,10 +58,10 @@ impl ExecutionLayer {
             .client()
             .request("eth_getTransactionCount", (account, block))
             .await
-            .map_err(|e| Error::msg(format!("Failed to get nonce: {e}")))?;
+            .map_err(|e| self.chain_error("Failed to get nonce", Some(&e.to_string())))?;
 
         u64::from_str_radix(nonce_str.trim_start_matches("0x"), 16)
-            .map_err(|e| Error::msg(format!("Failed to convert nonce: {e}")))
+            .map_err(|e| self.chain_error("Failed to convert nonce", Some(&e.to_string())))
     }
 
     pub async fn get_account_balance(
@@ -66,8 +77,15 @@ impl ExecutionLayer {
             .provider
             .get_block_by_number(BlockNumberOrTag::Number(number))
             .await
-            .map_err(|e| Error::msg(format!("Failed to get block by number ({number}): {e}")))?
-            .ok_or(anyhow::anyhow!("Failed to get block by number ({number})"))?;
+            .map_err(|e| {
+                self.chain_error(
+                    &format!("Failed to get block by number ({number})"),
+                    Some(&e.to_string()),
+                )
+            })?
+            .ok_or_else(|| {
+                self.chain_error(&format!("Failed to get block by number ({})", number), None)
+            })?;
         Ok(block.header.state_root)
     }
 
@@ -79,10 +97,12 @@ impl ExecutionLayer {
             .provider
             .get_block_by_number(block_number_or_tag)
             .await?
-            .ok_or(anyhow::anyhow!(
-                "Failed to get block by number ({})",
-                block_number_or_tag
-            ))?;
+            .ok_or_else(|| {
+                self.chain_error(
+                    &format!("Failed to get block by number ({})", block_number_or_tag),
+                    None,
+                )
+            })?;
         Ok(block.header.timestamp)
     }
 
@@ -95,13 +115,14 @@ impl ExecutionLayer {
         self.provider
             .get_logs(&filter)
             .await
-            .map_err(|e| Error::msg(format!("Failed to get logs: {e}")))
+            .map_err(|e| self.chain_error("Failed to get logs", Some(&e.to_string())))
     }
 
     pub async fn get_block_hash(&self, number: u64) -> Result<B256, Error> {
         let block = self
             .get_block_header(BlockNumberOrTag::Number(number))
-            .await?;
+            .await
+            .map_err(|e| self.chain_error("Failed to get block hash", Some(&e.to_string())))?;
         Ok(block.header.hash)
     }
 
@@ -109,17 +130,8 @@ impl ExecutionLayer {
         self.provider
             .get_block_by_number(block)
             .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "[chain_id: {}]  Failed to get  block header: {}",
-                    self.chain_id,
-                    e
-                )
-            })?
-            .ok_or(anyhow::anyhow!(
-                "[chain_id: {}] Failed to get block header",
-                self.chain_id
-            ))
+            .map_err(|e| self.chain_error("Failed to get block header", Some(&e.to_string())))?
+            .ok_or_else(|| self.chain_error("Failed to get block header", None))
     }
 
     pub async fn get_latest_block_with_txs(&self) -> Result<RpcBlock, Error> {
@@ -127,26 +139,13 @@ impl ExecutionLayer {
             .get_block_by_number(BlockNumberOrTag::Latest)
             .full()
             .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "[chain_id: {}]  Failed to get latest block: {}",
-                    self.chain_id,
-                    e
-                )
-            })?
-            .ok_or(anyhow::anyhow!(
-                "[chain_id: {}]  Failed to get latest block",
-                self.chain_id
-            ))
+            .map_err(|e| self.chain_error("Failed to get latest block", Some(&e.to_string())))?
+            .ok_or_else(|| self.chain_error("Failed to get latest block", None))
     }
 
     pub async fn get_latest_block_id(&self) -> Result<u64, Error> {
         self.provider.get_block_number().await.map_err(|e| {
-            anyhow::anyhow!(
-                "[chain_id: {}] Failed to get latest block number: {}",
-                self.chain_id,
-                e
-            )
+            self.chain_error("Failed to get latest block number", Some(&e.to_string()))
         })
     }
 
@@ -165,18 +164,13 @@ impl ExecutionLayer {
 
         block_by_number
             .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "[chain_id: {}]  Failed to get block by number: {}",
-                    self.chain_id,
-                    e
+            .map_err(|e| self.chain_error("Failed to get block by number", Some(&e.to_string())))?
+            .ok_or_else(|| {
+                self.chain_error(
+                    &format!("Failed to get L2 block {}: value was None", number),
+                    None,
                 )
-            })?
-            .ok_or(anyhow::anyhow!(
-                "[chain_id: {}]  Failed to get L2 block {}: value was None",
-                self.chain_id,
-                number
-            ))
+            })
     }
 
     pub async fn get_transaction_by_hash(
@@ -187,15 +181,8 @@ impl ExecutionLayer {
             .get_transaction_by_hash(hash)
             .await
             .map_err(|e| {
-                anyhow::anyhow!(
-                    "[chain_id: {}] Failed to get L2 transaction by hash: {}",
-                    self.chain_id,
-                    e
-                )
+                self.chain_error("Failed to get L2 transaction by hash", Some(&e.to_string()))
             })?
-            .ok_or(anyhow::anyhow!(
-                "[chain_id: {}] Failed to get transaction: value is None",
-                self.chain_id
-            ))
+            .ok_or_else(|| self.chain_error("Failed to get transaction: value is None", None))
     }
 }

@@ -27,7 +27,14 @@ sol! {
     }
 
     #[sol(rpc)]
-    abstract contract ShastaAnchor {
+    contract Anchor {
+        struct ProverAuth {
+            uint48 proposalId; // The proposal ID this auth is for
+            address proposer; // The original proposer address
+            uint256 provingFee; // Fee (Wei) that prover will receive
+            bytes signature; // ECDSA signature from the designated prover
+        }
+
         struct State {
             bytes32 bondInstructionsHash; // Latest known bond instructions hash
             uint48 anchorBlockNumber; // Latest L1 block number anchored to L2
@@ -37,23 +44,29 @@ sol! {
                 // preconfer can submit preconf-ed blocks to the L2 network.
         }
 
-        function updateState(
-            // Proposal level fields - define the overall batch
-            uint48 _proposalId,
-            address _proposer,
-            bytes calldata _proverAuth,
-            bytes32 _bondInstructionsHash,
-            LibBonds.BondInstruction[] calldata _bondInstructions,
-            // Block level fields - specific to this block in the proposal
-            uint16 _blockIndex,
-            uint48 _anchorBlockNumber,
-            bytes32 _anchorBlockHash,
-            bytes32 _anchorStateRoot,
-            uint48 _endOfSubmissionWindowTimestamp
+        /// @notice Proposal-level data that applies to the entire batch of blocks.
+        struct ProposalParams {
+            uint48 proposalId; // Unique identifier of the proposal
+            address proposer; // Address of the entity that proposed this batch
+            bytes proverAuth; // Encoded ProverAuth for prover designation
+            bytes32 bondInstructionsHash; // Expected hash of bond instructions
+            LibBonds.BondInstruction[] bondInstructions; // Bond credit instructions to process
+        }
+
+        /// @notice Block-level data specific to a single block within a proposal.
+        struct BlockParams {
+            uint16 blockIndex; // Current block index within the proposal (0-based)
+            uint48 anchorBlockNumber; // L1 block number to anchor (0 to skip)
+            bytes32 anchorBlockHash; // L1 block hash at anchorBlockNumber
+            bytes32 anchorStateRoot; // L1 state root at anchorBlockNumber
+        }
+
+        function anchorV4(
+            ProposalParams calldata _proposalParams,
+            BlockParams calldata _blockParams
         )
             external
-            onlyGoldenTouch
-            nonReentrant
-            returns (State memory previousState_, State memory newState_);
+            onlyValidSender
+            nonReentrant;
     }
 }
