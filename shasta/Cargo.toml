@@ -26,6 +26,7 @@ jsonrpsee = { workspace = true }
 jsonwebtoken = { workspace = true }
 k256 = { workspace = true }
 lazy_static = { workspace = true }
+pacaya = { workspace = true }
 prometheus = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

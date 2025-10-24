@@ -1,6 +1,5 @@
 pub mod batch_manager;
 pub mod config;
-mod l2_head_verifier;
 mod operator;
 mod verifier;
 
@@ -9,8 +8,7 @@ use crate::{
     l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
     metrics::Metrics,
-    node::l2_head_verifier::L2HeadVerifier,
-    shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
+    shared::{head_verifier::HeadVerifier, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
 };
 use anyhow::Error;
 use batch_manager::{BatchManager, config::BatchBuilderConfig};
@@ -35,14 +33,14 @@ pub struct Node {
     cancel_token: CancellationToken,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     chain_monitor: Arc<ChainMonitor>,
-    operator: Operator,
+    operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, Taiko>,
     batch_manager: BatchManager,
     verifier: Option<Verifier>,
     taiko: Arc<Taiko>,
     transaction_error_channel: Receiver<TransactionError>,
     metrics: Arc<Metrics>,
     watchdog: common_utils::watchdog::Watchdog,
-    head_verifier: L2HeadVerifier,
+    head_verifier: HeadVerifier,
     config: NodeConfig,
     fork_info: ForkInfo,
 }
@@ -61,7 +59,8 @@ impl Node {
         fork_info: ForkInfo,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
-            &ethereum_l1,
+            ethereum_l1.execution_layer.clone(),
+            ethereum_l1.slot_clock.clone(),
             taiko.clone(),
             config.handover_window_slots,
             config.handover_start_buffer_ms,
@@ -87,7 +86,7 @@ impl Node {
             "Setup build_default_kzg_settings in {} milliseconds",
             start.elapsed().as_millis()
         );
-        let head_verifier = L2HeadVerifier::new();
+        let head_verifier = HeadVerifier::default();
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
             ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
