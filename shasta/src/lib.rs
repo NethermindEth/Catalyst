@@ -27,7 +27,9 @@ pub async fn create_shasta_node(
     info!("Creating Shasta node");
 
     if !config.disable_bridging {
-        return Err(anyhow::anyhow!("Bridging is not implemented. Exiting Shasta node creation."));
+        return Err(anyhow::anyhow!(
+            "Bridging is not implemented. Exiting Shasta node creation."
+        ));
     }
 
     let shasta_config = ShastaConfig::read_env_variables();

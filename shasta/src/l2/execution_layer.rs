@@ -94,7 +94,7 @@ impl L2ExecutionLayer {
         };
         // TODO: implement
         let block_params = BlockParams {
-            blockIndex: l2_block_number.try_into()?,
+            blockIndex: l2_block_number,
             anchorBlockNumber: anchor_block_id.try_into()?,
             anchorBlockHash: B256::ZERO, // anchor_block_hash,
             anchorStateRoot: anchor_state_root,
