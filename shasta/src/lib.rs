@@ -5,11 +5,14 @@ use crate::{event_indexer::EventIndexer, utils::config::ShastaConfig};
 #[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
 mod node;
 #[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
+mod node;
+#[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
 mod utils;
 
 mod l1;
 mod l2;
 
+use crate::utils::config::ShastaConfig;
 use anyhow::Error;
 use common::l1::{self as common_l1};
 use common::{config::Config, config::ConfigTrait, metrics::Metrics};
