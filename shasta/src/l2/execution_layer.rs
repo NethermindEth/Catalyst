@@ -1,8 +1,6 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
-use crate::l2::bindings::{
-    BondManager,
-};
+use crate::l2::bindings::BondManager;
 
 use super::bindings::Anchor;
 use alloy::{
