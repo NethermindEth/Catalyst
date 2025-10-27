@@ -17,7 +17,6 @@ sol!(
 );
 
 sol! {
-
     library LibBonds {
         enum BondType {
             NONE,

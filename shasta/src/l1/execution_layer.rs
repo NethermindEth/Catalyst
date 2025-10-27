@@ -1,6 +1,7 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
 
+use crate::l1::config::ContractAddresses;
 use alloy::{eips::BlockNumberOrTag, primitives::Address, providers::DynProvider};
 use anyhow::{Error, anyhow};
 use common::{
@@ -17,6 +18,8 @@ use common::{
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 
+use super::bindings::iinbox;
+
 use super::config::EthereumL1Config;
 
 pub struct ExecutionLayer {
@@ -27,6 +30,7 @@ pub struct ExecutionLayer {
     pub transaction_monitor: TransactionMonitor,
     metrics: Arc<Metrics>,
     extra_gas_percentage: u64,
+    contract_addresses: ContractAddresses,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -57,6 +61,22 @@ impl ELTrait for ExecutionLayer {
         .await
         .map_err(|e| Error::msg(format!("Failed to create TransactionMonitor: {e}")))?;
 
+        let shasta_inbox = iinbox::IInbox::new(
+            specific_config.shasta_inbox,
+            provider.clone(),
+        );
+        let shasta_config = shasta_inbox
+            .getConfig()
+            .call()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to call getConfig for Inbox: {e}"))?;
+
+        let contract_addresses = ContractAddresses {
+            shasta_inbox: specific_config.shasta_inbox,
+            codec: shasta_config.codec,
+            proposer_checker: shasta_config.proposerChecker,
+        };
+
         Ok(Self {
             common,
             provider,
@@ -65,6 +85,7 @@ impl ELTrait for ExecutionLayer {
             transaction_monitor,
             metrics,
             extra_gas_percentage: common_config.extra_gas_percentage,
+            contract_addresses,
         })
     }
 

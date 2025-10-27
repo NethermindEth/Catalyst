@@ -125,11 +125,16 @@ pub mod iinbox {
     }
 
 
+    #[sol(rpc)]
     interface IInbox {
         /// @notice Configuration struct for Inbox constructor parameters
         struct Config {
+            /// @notice The codec used for encoding and hashing
+            address codec;
             /// @notice The token used for bonds
             address bondToken;
+            /// @notice The signal service contract address
+            address checkpointStore;
             /// @notice The proof verifier contract
             address proofVerifier;
             /// @notice The proposer checker contract
@@ -150,11 +155,17 @@ pub mod iinbox {
             /// if they are due
             uint256 minForcedInclusionCount;
             /// @notice The delay for forced inclusions measured in seconds
-            uint64 forcedInclusionDelay;
+            uint16 forcedInclusionDelay;
             /// @notice The fee for forced inclusions in Gwei
             uint64 forcedInclusionFeeInGwei;
-            /// @notice The maximum number of checkpoints to store in ring buffer
-            uint16 maxCheckpointHistory;
+            /// @notice The minimum delay between checkpoints in seconds
+            /// @dev Must be less than or equal to finalization grace period
+            uint16 minCheckpointDelay;
+            /// @notice The multiplier to determine when a forced inclusion is too old so that proposing
+            /// becomes permissionless
+            uint8 permissionlessInclusionMultiplier;
+            /// @notice Version identifier for composite key generation
+            uint16 compositeKeyVersion;
         }
 
         /// @notice Represents a source of derivation data within a Derivation
@@ -315,7 +326,6 @@ pub mod iinbox {
         // ---------------------------------------------------------------
         // External Transactional Functions
         // ---------------------------------------------------------------
-
         /// @notice Proposes new proposals of L2 blocks.
         /// @param _lookahead The data to post a new lookahead (currently unused).
         /// @param _data The encoded ProposeInput struct.
