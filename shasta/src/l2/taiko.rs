@@ -217,7 +217,7 @@ impl Taiko {
         ))
     }
 
-    // TODO fix taht function
+    // TODO fix that function
     #[allow(clippy::too_many_arguments)]
     pub async fn advance_head_to_new_l2_block(
         &self,

@@ -152,7 +152,7 @@ impl Node {
             Ok(_info) => Ok(OperatorStatus::new(true, false, true, false, false)), // self.operator.get_status(info).await,
             Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
         };
-        // TODO use propper number of batches ready to send
+        // TODO use proper number of batches ready to send
         let batches_ready_to_send = 0; // self.batch_manager.get_number_of_batches_ready_to_send();
         let pending_tx_list = match &l2_slot_info {
             Ok(info) => {
@@ -166,7 +166,7 @@ impl Node {
             &current_status,
             &pending_tx_list,
             &l2_slot_info,
-            // TODO use propper number of batches
+            // TODO use proper number of batches
             //self.batch_manager.get_number_of_batches(),
             0,
         )?;
