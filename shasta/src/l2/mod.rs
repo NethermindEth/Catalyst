@@ -1,5 +1,6 @@
 mod bindings;
 pub mod execution_layer;
+pub mod taiko;
 
 use crate::event_indexer::EventIndexer;
 use crate::l2::execution_layer::L2ExecutionLayer;

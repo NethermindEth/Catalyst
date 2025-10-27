@@ -2,6 +2,20 @@
 
 use alloy::sol;
 
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    BondManager,
+    "src/l2/abi/BondManager.json"
+);
+
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    Bridge,
+    "src/l2/abi/Bridge.json"
+);
+
 sol! {
 
     library LibBonds {
@@ -60,6 +74,8 @@ sol! {
             bytes32 anchorBlockHash; // L1 block hash at anchorBlockNumber
             bytes32 anchorStateRoot; // L1 state root at anchorBlockNumber
         }
+
+        address public bondManager;
 
         function anchorV4(
             ProposalParams calldata _proposalParams,

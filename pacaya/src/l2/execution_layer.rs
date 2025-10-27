@@ -224,7 +224,7 @@ impl L2ExecutionLayer {
             );
         } else if let Some(block_number) = receipt.block_number() {
             return Err(anyhow::anyhow!(
-                crate::shared::alloy_tools::check_for_revert_reason(
+                common::shared::alloy_tools::check_for_revert_reason(
                     &provider,
                     tx_hash,
                     block_number
