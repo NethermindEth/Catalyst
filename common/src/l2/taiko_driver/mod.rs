@@ -1,7 +1,7 @@
 mod config;
 pub mod models;
 mod operation_type;
-mod stauts_provider_trait;
+mod status_provider_trait;
 
 use crate::{metrics::Metrics, utils::rpc_client::HttpRPCClient};
 use anyhow::Error;
@@ -9,7 +9,7 @@ pub use config::TaikoDriverConfig;
 use models::{BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, TaikoStatus};
 pub use operation_type::OperationType;
 use serde_json::Value;
-pub use stauts_provider_trait::StatusProvider;
+pub use status_provider_trait::StatusProvider;
 use std::sync::Arc;
 use std::time::Duration;
 
