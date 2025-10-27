@@ -10,18 +10,28 @@ use alloy::{
 use anyhow::Error;
 use common::{
     l1::slot_clock::SlotClock,
-    l2::engine::L2Engine,
     l2::{
-        taiko_driver::{TaikoDriver, TaikoDriverConfig, models::TaikoStatus},
+        engine::L2Engine,
+        taiko_driver::{
+            OperationType, TaikoDriver, TaikoDriverConfig,
+            models::{
+                BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData,
+                TaikoStatus,
+            },
+        },
         traits::Bridgeable,
     },
     metrics::Metrics,
-    shared::l2_tx_lists::PreBuiltTxList,
+    shared::{
+        l2_block::L2Block,
+        l2_slot_info::L2SlotInfo,
+        l2_tx_lists::{self, PreBuiltTxList},
+    },
 };
 use pacaya::l1::protocol_config::ProtocolConfig;
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
-use tracing::debug;
+use tracing::{debug, trace};
 
 pub struct Taiko {
     protocol_config: ProtocolConfig,
@@ -155,6 +165,118 @@ impl Taiko {
 
     pub async fn get_status(&self) -> Result<TaikoStatus, Error> {
         self.driver.get_status().await
+    }
+
+    pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfo, Error> {
+        self.get_l2_slot_info_by_parent_block(BlockNumberOrTag::Latest)
+            .await
+    }
+
+    pub async fn get_l2_slot_info_by_parent_block(
+        &self,
+        block: BlockNumberOrTag,
+    ) -> Result<L2SlotInfo, Error> {
+        let l2_slot_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
+        let (parent_id, parent_hash, parent_gas_used) =
+            self.get_l2_block_id_hash_and_gas_used(block).await?;
+
+        // Safe conversion with overflow check
+        let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
+            anyhow::anyhow!("parent_gas_used {} exceeds u32 max value", parent_gas_used)
+        })?;
+
+        // TODO fix it
+        /*
+        let base_fee_config = self.get_base_fee_config();
+
+        let base_fee = self
+            .get_base_fee(
+                parent_hash,
+                parent_gas_used_u32,
+                base_fee_config,
+                l2_slot_timestamp,
+            )
+            .await?;
+        */
+        let base_fee: u64 = 25000000;
+
+        trace!(
+            timestamp = %l2_slot_timestamp,
+            parent_hash = %parent_hash,
+            parent_gas_used = %parent_gas_used_u32,
+            base_fee = %base_fee,
+            "L2 slot info"
+        );
+
+        Ok(L2SlotInfo::new(
+            base_fee,
+            l2_slot_timestamp,
+            parent_id,
+            parent_hash,
+            parent_gas_used_u32,
+        ))
+    }
+
+    // TODO fix taht function
+    #[allow(clippy::too_many_arguments)]
+    pub async fn advance_head_to_new_l2_block(
+        &self,
+        l2_block: L2Block,
+        anchor_origin_height: u64,
+        anchor_block_state_root: B256,
+        anchor_block_hash: B256,
+        l2_slot_info: &L2SlotInfo,
+        end_of_sequencing: bool,
+        is_forced_inclusion: bool,
+        operation_type: OperationType,
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+        tracing::debug!(
+            "Submitting new L2 block to the Taiko driver with {} txs",
+            l2_block.prebuilt_tx_list.tx_list.len()
+        );
+
+        let sharing_pctg = 0; // TODO
+
+        let anchor_tx = self
+            .l2_execution_layer
+            .construct_anchor_tx(
+                &self.l2_execution_layer.config.signer.get_address(), // TODO fix
+                u16::try_from(l2_slot_info.parent_id() + 1)?,
+                *l2_slot_info.parent_hash(),
+                anchor_origin_height,
+                anchor_block_hash,
+                anchor_block_state_root,
+                l2_slot_info.base_fee(),
+                1, // TODO proposal id
+            )
+            .await?;
+        let tx_list = std::iter::once(anchor_tx)
+            .chain(l2_block.prebuilt_tx_list.tx_list.into_iter())
+            .collect::<Vec<_>>();
+
+        let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
+        let extra_data = vec![sharing_pctg];
+
+        let executable_data = ExecutableData {
+            base_fee_per_gas: l2_slot_info.base_fee(),
+            block_number: l2_slot_info.parent_id() + 1,
+            extra_data: format!("0x{:0>64}", hex::encode(extra_data)),
+            fee_recipient: self.coinbase.clone(),
+            gas_limit: 241_000_000u64,
+            parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
+            timestamp: l2_block.timestamp_sec,
+            transactions: format!("0x{}", hex::encode(tx_list_bytes)),
+        };
+
+        let request_body = BuildPreconfBlockRequestBody {
+            executable_data,
+            end_of_sequencing,
+            is_forced_inclusion,
+        };
+
+        self.driver
+            .preconf_blocks(request_body, operation_type)
+            .await
     }
 }
 

@@ -1,3 +1,4 @@
+#![allow(dead_code)] // TODO: remove this once we have a used event_indexer field
 use alloy::{eips::BlockNumberOrTag, primitives::Address, transports::http::reqwest::Url};
 use anyhow::Error;
 use std::{str::FromStr, sync::Arc};
@@ -8,7 +9,6 @@ use taiko_event_indexer::{
 use taiko_rpc::SubscriptionSource;
 use tracing::debug;
 
-#[allow(dead_code)] // TODO: remove this once we have a used event_indexer field
 pub struct EventIndexer {
     indexer: Arc<ShastaEventIndexer>,
 }

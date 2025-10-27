@@ -1,6 +1,6 @@
 pub mod batch_manager;
 pub mod config;
-mod operator;
+pub mod operator;
 mod verifier;
 
 use crate::{
