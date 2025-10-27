@@ -15,7 +15,7 @@ use batch_manager::{BatchManager, config::BatchBuilderConfig};
 use common::{
     fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, traits::PreconferProvider, transaction_error::TransactionError},
-    l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
+    l2::taiko_driver::{OperationType, TaikoDriver, models::BuildPreconfBlockResponse},
     utils as common_utils,
 };
 use config::NodeConfig;
@@ -33,7 +33,7 @@ pub struct Node {
     cancel_token: CancellationToken,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     chain_monitor: Arc<ChainMonitor>,
-    operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, Taiko>,
+    operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
     batch_manager: BatchManager,
     verifier: Option<Verifier>,
     taiko: Arc<Taiko>,
@@ -61,7 +61,7 @@ impl Node {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
             ethereum_l1.slot_clock.clone(),
-            taiko.clone(),
+            taiko.get_driver(),
             config.handover_window_slots,
             config.handover_start_buffer_ms,
             config.simulate_not_submitting_at_the_end_of_epoch,
