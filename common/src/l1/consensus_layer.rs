@@ -148,7 +148,7 @@ pub mod tests {
         assert_eq!(slot, 4269575);
     }
 
-    pub async fn setup_server() -> mockito::ServerGuard {
+    async fn setup_server() -> mockito::ServerGuard {
         let mut server = mockito::Server::new_async().await;
         server
             .mock("GET", "/eth/v1/beacon/genesis")
@@ -162,7 +162,7 @@ pub mod tests {
             .create();
         server
             .mock("GET", "/eth/v1/validator/duties/proposer/1")
-            .with_body(include_str!("lookahead_test_response.json"))
+            .with_body(include_str!("test_data/lookahead_test_response.json"))
             .create();
 
         server

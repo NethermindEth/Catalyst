@@ -35,6 +35,36 @@ async fn blob_to_vec<T: ELTrait>(
     tx_list_offset: u32,
     tx_list_size: u32,
 ) -> Result<Vec<u8>, Error> {
+    let result: Vec<u8> = if ethereum_l1.blob_indexer.is_some() {
+        get_data_from_block_indexer(ethereum_l1.clone(), blob_hash).await?
+    } else {
+        get_data_from_consensus_layer(ethereum_l1.clone(), block, blob_hash).await?
+    };
+
+    let tx_list_left: usize = tx_list_offset.try_into()?;
+    let tx_list_right: usize = tx_list_left + usize::try_from(tx_list_size)?;
+
+    if tx_list_right > result.len() {
+        return Err(anyhow::anyhow!(
+            "Invalid tx list offset or size: tx_list_offset {} tx_list_size {} blob_data_size {}",
+            tx_list_offset,
+            tx_list_size,
+            result.len()
+        ));
+    }
+
+    let result = result[tx_list_left..tx_list_right].to_vec();
+
+    Ok(result)
+}
+
+async fn get_data_from_consensus_layer<T: ELTrait>(
+    ethereum_l1: Arc<EthereumL1<T>>,
+    block: u64,
+    blob_hash: Vec<B256>,
+) -> Result<Vec<u8>, Error> {
+    let mut result: Vec<u8> = Vec::new();
+
     let timestamp = ethereum_l1
         .execution_layer
         .common()
@@ -44,8 +74,6 @@ async fn blob_to_vec<T: ELTrait>(
         .slot_clock
         .slot_of(Duration::from_secs(timestamp))?;
     let sidecars = ethereum_l1.consensus_layer.get_blob_sidecars(slot).await?;
-
-    let mut result: Vec<u8> = Vec::new();
 
     let sidecar_hashes: Vec<B256> = sidecars
         .data
@@ -63,19 +91,26 @@ async fn blob_to_vec<T: ELTrait>(
         }
     }
 
-    let tx_list_left: usize = tx_list_offset.try_into()?;
-    let tx_list_right: usize = tx_list_left + usize::try_from(tx_list_size)?;
+    Ok(result)
+}
 
-    if tx_list_right > result.len() {
-        return Err(anyhow::anyhow!(
-            "Invalid tx list offset or size: tx_list_offset {} tx_list_size {} blob_data_size {}",
-            tx_list_offset,
-            tx_list_size,
-            result.len()
-        ));
+async fn get_data_from_block_indexer<T: ELTrait>(
+    ethereum_l1: Arc<EthereumL1<T>>,
+    blob_hash: Vec<B256>,
+) -> Result<Vec<u8>, Error> {
+    let mut result: Vec<u8> = Vec::new();
+
+    let blob_indexer = ethereum_l1
+        .blob_indexer
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Blob Indexer is not configured"))?
+        .clone();
+
+    for hash in blob_hash {
+        let blob = blob_indexer.get_blob(hash).await?;
+        let data = BlobDecoder::decode_blob(&blob)?;
+        result.extend(data);
     }
-
-    let result = result[tx_list_left..tx_list_right].to_vec();
 
     Ok(result)
 }
