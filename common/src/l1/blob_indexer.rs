@@ -76,10 +76,10 @@ impl BlobIndexer {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::crypto::kzg::{blob_to_kzg_commitment, compute_blob_kzg_proof};
-
     use super::*;
+    use crate::crypto::kzg::blob_to_kzg_commitment;
     use alloy::{consensus::EnvKzgSettings, eips::eip4844::kzg_to_versioned_hash};
+    use hex::FromHex;
     use tokio;
 
     #[tokio::test]
