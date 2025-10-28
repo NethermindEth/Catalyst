@@ -3,6 +3,7 @@ import web3
 import subprocess
 import json
 import os
+from forced_inclusion_store import forced_inclusion_store_is_empty
 
 def send_transaction(nonce : int, account, amount, eth_client, private_key):
     base_fee = eth_client.eth.get_block('latest')['baseFeePerGas']
@@ -49,9 +50,9 @@ def get_seconds_to_handover_window(beacon_client):
     else:
         return 0
 
-def wait_for_tx_to_be_included(eth_client, tx_hash):
+def wait_for_tx_to_be_included(eth_client, tx_hash, timeout=10):
     try:
-        receipt = eth_client.eth.wait_for_transaction_receipt(tx_hash, timeout=10)
+        receipt = eth_client.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
         if receipt.status == 1:
             return True
         else:
@@ -131,6 +132,7 @@ def send_n_txs_without_waiting(eth_client, private_key, n):
         send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
 
 def wait_for_batch_proposed_event(eth_client, taiko_inbox_address, from_block):
+    print(f"Waiting for BatchProposed event from block {from_block}")
     with open("../pacaya/src/l1/abi/ITaikoInbox.json") as f:
         abi = json.load(f)
 
@@ -155,6 +157,15 @@ def wait_for_batch_proposed_event(eth_client, taiko_inbox_address, from_block):
         time.sleep(1)
         wait_time += 1
 
+def wait_for_forced_inclusion_store_to_be_empty(l1_client, env_vars):
+    TIMEOUT = 300
+    i = 0
+    while not forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address):
+        if i >= TIMEOUT:
+            assert False, "Error: waited {} seconds for forced inclusion store to be empty".format(TIMEOUT)
+        time.sleep(1)
+        i += 1
+
 def print_batch_info(event):
     print("BatchProposed event detected:")
     print(f"  Batch ID: {event['args']['meta']['batchId']}")
@@ -162,7 +173,7 @@ def print_batch_info(event):
     print(f"  Proposed At: {event['args']['meta']['proposedAt']}")
     print(f"  Last Block ID: {event['args']['info']['lastBlockId']}")
     print(f"  Last Block Timestamp: {event['args']['info']['lastBlockTimestamp']}")
-    print(f"  Transaction Hash: {event['transactionHash'].hex}")
+    print(f"  Transaction Hash: {event['transactionHash'].hex()}")
     print(f"  Block Number: {event['blockNumber']}")
     print("---")
 
