@@ -602,11 +602,10 @@ impl BatchManager {
     }
 
     async fn calculate_anchor_block_id(&self) -> Result<u64, Error> {
-        // TODO: currently not available in IPacayaAnchorLegacy contract
-        // let height_from_last_batch = self
-        //     .taiko
-        //     .get_last_synced_anchor_block_id_from_taiko_anchor()
-        //     .await?;
+        let height_from_last_batch = self
+            .taiko
+            .get_last_synced_anchor_block_id_from_taiko_anchor()
+            .await?;
         let l1_height = self
             .ethereum_l1
             .execution_layer
