@@ -1,7 +1,10 @@
 //TODO: allow unused code until ProposalBuilder is used
 #![allow(unused)]
 
-use super::{bindings::iinbox, proposal::Proposal};
+use super::{
+    bindings::{ICodec, IInbox},
+    proposal::Proposal,
+};
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{Address, Bytes},
@@ -37,7 +40,7 @@ impl ProposalBuilder {
         let proposal = Proposal::build(l2_blocks, last_anchor_origin_height, coinbase)?;
         let blob_sidecar = common::blob::build_blob_sidecar(&proposal.blob_data)?;
 
-        let codec = iinbox::ICodec::new(self.codec_address, self.provider.clone());
+        let codec = ICodec::new(self.codec_address, self.provider.clone());
         let encoded_proposal_input = codec
             .encodeProposeInput(proposal.propose_input)
             .call()
@@ -47,7 +50,7 @@ impl ProposalBuilder {
             .with_from(from)
             .with_to(to)
             .with_blob_sidecar(blob_sidecar)
-            .with_call(&iinbox::IInbox::proposeCall {
+            .with_call(&IInbox::proposeCall {
                 _lookahead: Bytes::new(),
                 _data: encoded_proposal_input,
             });

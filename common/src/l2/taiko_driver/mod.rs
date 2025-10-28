@@ -1,6 +1,7 @@
 mod config;
 pub mod models;
 mod operation_type;
+mod status_provider_trait;
 
 use crate::{metrics::Metrics, utils::rpc_client::HttpRPCClient};
 use anyhow::Error;
@@ -8,6 +9,7 @@ pub use config::TaikoDriverConfig;
 use models::{BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, TaikoStatus};
 pub use operation_type::OperationType;
 use serde_json::Value;
+pub use status_provider_trait::StatusProvider;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -70,25 +72,6 @@ impl TaikoDriver {
         Ok(preconfirmed_block)
     }
 
-    pub async fn get_status(&self) -> Result<TaikoStatus, Error> {
-        const API_ENDPOINT: &str = "status";
-        let request_body = serde_json::json!({});
-
-        let response = self
-            .call_driver(
-                &self.status_rpc,
-                http::Method::GET,
-                API_ENDPOINT,
-                &request_body,
-                OperationType::Status,
-            )
-            .await?;
-
-        let status: TaikoStatus = serde_json::from_value(response)?;
-
-        Ok(status)
-    }
-
     async fn call_driver<T>(
         &self,
         client: &HttpRPCClient,
@@ -125,5 +108,26 @@ impl TaikoDriver {
                 Err(e)
             }
         }
+    }
+}
+
+impl StatusProvider for TaikoDriver {
+    async fn get_status(&self) -> Result<TaikoStatus, Error> {
+        const API_ENDPOINT: &str = "status";
+        let request_body = serde_json::json!({});
+
+        let response = self
+            .call_driver(
+                &self.status_rpc,
+                http::Method::GET,
+                API_ENDPOINT,
+                &request_body,
+                OperationType::Status,
+            )
+            .await?;
+
+        let status: TaikoStatus = serde_json::from_value(response)?;
+
+        Ok(status)
     }
 }
