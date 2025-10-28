@@ -1,4 +1,5 @@
 pub mod bindings;
+pub mod blob_indexer;
 pub mod config;
 pub mod consensus_layer;
 pub mod ethereum_l1;

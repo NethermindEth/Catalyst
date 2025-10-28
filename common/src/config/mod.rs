@@ -17,6 +17,7 @@ pub struct Config {
     // L1
     pub l1_rpc_urls: Vec<String>,
     pub l1_beacon_url: String,
+    pub blob_indexer_url: Option<String>,
     pub l1_slot_duration_sec: u64,
     pub l1_slots_per_epoch: u64,
     pub preconf_heartbeat_ms: u64,
@@ -346,6 +347,7 @@ impl Config {
                 .collect(),
             l1_beacon_url: std::env::var("L1_BEACON_URL")
                 .unwrap_or("http://127.0.0.1:4000".to_string()),
+            blob_indexer_url: std::env::var("BLOB_INDEXER_URL").ok(),
             web3signer_l1_url,
             web3signer_l2_url,
             l1_slot_duration_sec,
@@ -393,6 +395,7 @@ Taiko geth auth RPC URL: {},
 Taiko driver URL: {},
 L1 RPC URL: {},
 Consensus layer URL: {},
+Blob Indexer URL: {},
 Web3signer L1 URL: {},
 Web3signer L2 URL: {},
 L1 slot duration: {}s
@@ -446,6 +449,7 @@ fork switch l2 height: {:?}
                 None => String::new(),
             },
             config.l1_beacon_url,
+            config.blob_indexer_url.as_deref().unwrap_or("not set"),
             config.web3signer_l1_url.as_deref().unwrap_or("not set"),
             config.web3signer_l2_url.as_deref().unwrap_or("not set"),
             config.l1_slot_duration_sec,
