@@ -3,11 +3,11 @@ use std::sync::Arc;
 use anyhow::Error;
 use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
-    l2::taiko_driver::OperationType,
+    l2::taiko_driver::{OperationType, TaikoDriver},
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
     utils as common_utils,
 };
-use pacaya::node::config::NodeConfig;
+use pacaya::node::{config::NodeConfig, operator::Operator};
 use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
@@ -22,16 +22,26 @@ pub struct Node {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     taiko: Arc<Taiko>,
     watchdog: common_utils::watchdog::Watchdog,
+    operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
 }
 
 impl Node {
-    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         config: NodeConfig,
         cancel_token: CancellationToken,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
     ) -> Result<Self, Error> {
+        let operator = Operator::new(
+            ethereum_l1.execution_layer.clone(),
+            ethereum_l1.slot_clock.clone(),
+            taiko.get_driver(),
+            config.handover_window_slots,
+            config.handover_start_buffer_ms,
+            config.simulate_not_submitting_at_the_end_of_epoch,
+            cancel_token.clone(),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to create Operator: {}", e))?;
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
             ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
@@ -42,6 +52,7 @@ impl Node {
             ethereum_l1,
             taiko,
             watchdog,
+            operator,
         })
     }
 

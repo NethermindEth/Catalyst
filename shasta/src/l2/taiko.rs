@@ -14,10 +14,7 @@ use common::{
         engine::L2Engine,
         taiko_driver::{
             OperationType, TaikoDriver, TaikoDriverConfig,
-            models::{
-                BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData,
-                TaikoStatus,
-            },
+            models::{BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData},
         },
         traits::Bridgeable,
     },
@@ -36,7 +33,7 @@ use tracing::{debug, trace};
 pub struct Taiko {
     protocol_config: ProtocolConfig,
     l2_execution_layer: Arc<L2ExecutionLayer>,
-    driver: TaikoDriver,
+    driver: Arc<TaikoDriver>,
     slot_clock: Arc<SlotClock>,
     coinbase: String,
     l2_engine: L2Engine,
@@ -64,11 +61,15 @@ impl Taiko {
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
             ),
-            driver: TaikoDriver::new(&driver_config, metrics).await?,
+            driver: Arc::new(TaikoDriver::new(&driver_config, metrics).await?),
             slot_clock,
             coinbase: format!("0x{}", hex::encode(taiko_config.signer.get_address())),
             l2_engine,
         })
+    }
+
+    pub fn get_driver(&self) -> Arc<TaikoDriver> {
+        self.driver.clone()
     }
 
     pub fn l2_execution_layer(&self) -> Arc<L2ExecutionLayer> {
@@ -161,10 +162,6 @@ impl Taiko {
             .common()
             .get_block_hash(number)
             .await
-    }
-
-    pub async fn get_status(&self) -> Result<TaikoStatus, Error> {
-        self.driver.get_status().await
     }
 
     pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfo, Error> {
@@ -298,15 +295,5 @@ impl Bridgeable for Taiko {
         self.l2_execution_layer
             .transfer_eth_from_l2_to_l1(amount, dest_chain_id, address, bridge_relayer_fee)
             .await
-    }
-}
-
-pub trait PreconfDriver {
-    fn get_status(&self) -> impl std::future::Future<Output = Result<TaikoStatus, Error>> + Send;
-}
-
-impl PreconfDriver for Taiko {
-    async fn get_status(&self) -> Result<TaikoStatus, Error> {
-        Taiko::get_status(self).await
     }
 }

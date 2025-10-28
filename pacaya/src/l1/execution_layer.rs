@@ -1,3 +1,4 @@
+use super::PreconfOperator;
 use super::protocol_config::ProtocolConfig;
 use super::{
     bindings::{
@@ -434,18 +435,6 @@ impl ExecutionLayer {
     }
 }
 
-pub trait PreconfOperator {
-    fn is_operator_for_current_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
-    fn is_operator_for_next_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
-    fn is_preconf_router_specified_in_taiko_wrapper(
-        &self,
-    ) -> impl Future<Output = Result<bool, Error>> + Send;
-    fn get_l2_height_from_taiko_inbox(&self) -> impl Future<Output = Result<u64, Error>> + Send;
-    fn get_preconf_router_config(
-        &self,
-    ) -> impl Future<Output = Result<IPreconfRouter::Config, Error>> + Send;
-}
-
 impl PreconfOperator for ExecutionLayer {
     async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
         let operator = self.get_operator_for_current_epoch().await?;
@@ -471,7 +460,15 @@ impl PreconfOperator for ExecutionLayer {
         self.get_l2_height_from_taiko_inbox().await
     }
 
-    async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {
-        self.get_preconf_router_config().await
+    async fn get_handover_window_slots(&self) -> Result<u64, Error> {
+        match self.get_preconf_router_config().await {
+            Ok(router_config) => router_config.handOverSlots.try_into().map_err(|_| {
+                anyhow::anyhow!("Failed to convert handOverSlots from preconf router config")
+            }),
+            Err(e) => Err(anyhow::anyhow!(
+                "Failed to get preconf router config: {}",
+                e
+            )),
+        }
     }
 }
