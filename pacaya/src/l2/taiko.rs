@@ -265,10 +265,6 @@ impl Taiko {
             .await
     }
 
-    /*  pub async fn get_status(&self) -> Result<TaikoStatus, Error> {
-        self.driver.get_status().await
-    }*/
-
     fn get_base_fee_config(&self) -> BaseFeeConfig {
         BaseFeeConfig {
             adjustmentQuotient: self.protocol_config.get_base_fee_adjustment_quotient(),
