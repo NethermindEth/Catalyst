@@ -106,7 +106,6 @@ def beacon_client():
 
 @pytest.fixture(scope="session")
 def forced_inclusion_parameters(l1_client, env_vars):
-    print("****************** Checking forced inclusion parameters ******************")
     assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
     assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
     assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
