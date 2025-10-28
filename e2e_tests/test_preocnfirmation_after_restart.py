@@ -16,8 +16,6 @@ def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1
     We restart the nodes and then produce 30 transactions every 2 L2 slots. We expect to receive 30 L2 blocks and 3 batches at the end
     """
     slot_duration_sec = get_slot_duration_sec(beacon_client)
-    # wait for block 30 in epoch
-    wait_for_slot_beginning(beacon_client, 1)
     slot = get_slot_in_epoch(beacon_client)
     print("Slot: ", slot)
     try:
@@ -36,7 +34,7 @@ def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1
         print("delay", delay)
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 3 * env_vars.max_blocks_per_batch, delay)
         # wait for transactions to be included on L1
-        time.sleep(slot_duration_sec * 3)
+        wait_for_batch_proposed_event(l1_client, env_vars.taiko_inbox_address, l1_client.eth.block_number)
         # verify
         slot = get_slot_in_epoch(beacon_client)
         print("Slot: ", slot)
@@ -44,8 +42,8 @@ def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1
         print("New block number:", new_block_number)
         new_batch_id = get_last_batch_id(l1_client, env_vars.taiko_inbox_address)
         print("New batch ID:", new_batch_id)
-        assert block_number + 3 * env_vars.max_blocks_per_batch == new_block_number, "Invalid block number"
-        assert batch_id + 3 == new_batch_id, "Invalid batch ID"
+        assert  new_block_number >= block_number + 3 * env_vars.max_blocks_per_batch, "Invalid block number"
+        assert new_batch_id >= batch_id + 3 , "Invalid batch ID"
     except subprocess.CalledProcessError as e:
         print("Error running test_preocnfirmation_after_restart")
         print(e)

@@ -41,3 +41,6 @@ def forced_inclusion_store_is_empty(l1_client, forced_inclusion_address):
     tail = contract.functions.tail().call()
     print("Forced Inclusion head:", head, "tail: ", tail)
     return head == tail
+
+def check_empty_forced_inclusion_store(l1_client, env_vars):
+    assert forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address), "Forced inclusion store should be empty"
