@@ -626,8 +626,7 @@ impl BatchManager {
             };
 
         Ok(std::cmp::max(
-            // std::cmp::max(height_from_last_batch, l1_height_with_lag),
-            l1_height_with_lag,
+            std::cmp::max(height_from_last_batch, l1_height_with_lag),
             anchor_id_from_last_l2_block,
         ))
     }
