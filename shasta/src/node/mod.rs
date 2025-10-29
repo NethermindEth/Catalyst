@@ -7,14 +7,16 @@ use common::{
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
     utils as common_utils,
 };
+use pacaya::node::operator::Status as OperatorStatus;
 use pacaya::node::{config::NodeConfig, operator::Operator};
 use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use pacaya::node::operator::Status as OperatorStatus;
-
-use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
+use crate::{
+    l1::{event_indexer::EventIndexer, execution_layer::ExecutionLayer},
+    l2::taiko::Taiko,
+};
 
 pub struct Node {
     config: NodeConfig,
@@ -23,6 +25,7 @@ pub struct Node {
     taiko: Arc<Taiko>,
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
+    event_indexer: Arc<EventIndexer>,
 }
 
 impl Node {
@@ -31,6 +34,7 @@ impl Node {
         cancel_token: CancellationToken,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
+        event_indexer: Arc<EventIndexer>,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -53,6 +57,7 @@ impl Node {
             taiko,
             watchdog,
             operator,
+            event_indexer,
         })
     }
 

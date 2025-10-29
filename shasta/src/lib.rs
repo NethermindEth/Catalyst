@@ -1,4 +1,3 @@
-mod event_indexer;
 #[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
 mod node;
 #[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
@@ -7,7 +6,7 @@ mod utils;
 mod l1;
 mod l2;
 
-use crate::{event_indexer::EventIndexer, utils::config::ShastaConfig};
+use crate::{l1::event_indexer::EventIndexer, utils::config::ShastaConfig};
 use anyhow::Error;
 use common::funds_controller::FundsController;
 use common::l1::{self as common_l1};
@@ -36,18 +35,20 @@ pub async fn create_shasta_node(
     let shasta_config = ShastaConfig::read_env_variables();
     info!("Shasta config: {}", shasta_config);
 
-    let _event_indexer = EventIndexer::new(
-        config
-            .l1_rpc_urls
-            .first()
-            .expect("L1 RPC URL is required")
-            .clone(),
-        shasta_config.shasta_inbox.clone(),
-        config
-            .fork_switch_l2_height
-            .ok_or_else(|| anyhow::anyhow!("Fork switch L2 height is required"))?,
-    )
-    .await?;
+    let event_indexer = Arc::new(
+        EventIndexer::new(
+            config
+                .l1_rpc_urls
+                .first()
+                .expect("L1 RPC URL is required")
+                .clone(),
+            shasta_config.shasta_inbox.clone(),
+            config
+                .fork_switch_l2_height
+                .ok_or_else(|| anyhow::anyhow!("Fork switch L2 height is required"))?,
+        )
+        .await?,
+    );
 
     let (transaction_error_sender, _transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
@@ -97,6 +98,7 @@ pub async fn create_shasta_node(
         cancel_token.clone(),
         ethereum_l1.clone(),
         taiko.clone(),
+        event_indexer,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
