@@ -1,8 +1,9 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
 
-use super::bindings::iinbox;
-use super::bindings::lib_manifest;
+use super::bindings::{
+    BlockManifest, ICheckpointStore, IInbox, LibBlobs, ProposalManifest, SignedTransaction,
+};
 use alloy::{
     consensus::Transaction,
     eips::Typed2718,
@@ -16,7 +17,7 @@ use std::io::Write;
 
 pub struct Proposal {
     pub blob_data: Vec<u8>,
-    pub propose_input: iinbox::IInbox::ProposeInput,
+    pub propose_input: IInbox::ProposeInput,
 }
 
 impl Proposal {
@@ -34,8 +35,8 @@ impl Proposal {
         })
     }
 
-    fn construct_propose_input(num_blobs: u16) -> Result<iinbox::IInbox::ProposeInput, Error> {
-        let core_state = iinbox::IInbox::CoreState {
+    fn construct_propose_input(num_blobs: u16) -> Result<IInbox::ProposeInput, Error> {
+        let core_state = IInbox::CoreState {
             nextProposalId: Uint::<48, 1>::from(0),
             nextProposalBlockId: Uint::<48, 1>::from(0),
             lastFinalizedProposalId: Uint::<48, 1>::from(0),
@@ -44,19 +45,19 @@ impl Proposal {
         };
 
         // starting from first blob, don't need additional offset before actual data
-        let blob_reference = iinbox::LibBlobs::BlobReference {
+        let blob_reference = LibBlobs::BlobReference {
             blobStartIndex: 0u16,
             numBlobs: num_blobs,
             offset: Uint::<24, 1>::from(0),
         };
 
-        let checkpoint = iinbox::ICheckpointStore::Checkpoint {
+        let checkpoint = ICheckpointStore::Checkpoint {
             blockNumber: Uint::<48, 1>::from(0),
             blockHash: FixedBytes::from([0u8; 32]),
             stateRoot: FixedBytes::from([0u8; 32]),
         };
 
-        let propose_input = iinbox::IInbox::ProposeInput {
+        let propose_input = IInbox::ProposeInput {
             deadline: Uint::<48, 1>::from(0),
             coreState: core_state,
             parentProposals: vec![],
@@ -76,7 +77,7 @@ impl Proposal {
     ) -> Result<Vec<u8>, Error> {
         let mut blocks = Vec::with_capacity(l2_blocks.len());
         for l2_block in l2_blocks {
-            let block_manifest = lib_manifest::BlockManifest {
+            let block_manifest = BlockManifest {
                 timestamp: Uint::<48, 1>::from(l2_block.timestamp_sec),
                 coinbase,
                 anchorBlockNumber: Uint::<48, 1>::from(last_anchor_origin_height),
@@ -92,7 +93,7 @@ impl Proposal {
             blocks.push(block_manifest);
         }
 
-        let proposal_manifest = lib_manifest::ProposalManifest {
+        let proposal_manifest = ProposalManifest {
             proverAuthBytes: Bytes::new(), // Optional, left empty, not choosing specific prover
             blocks,
         };
@@ -109,7 +110,7 @@ impl Proposal {
 
     // RLP encode and zlib compress
     pub fn encode_and_compress_manifest(
-        proposal_manifest: &lib_manifest::ProposalManifest,
+        proposal_manifest: &ProposalManifest,
     ) -> Result<Vec<u8>, Error> {
         // First RLP encode the proposal manifest
         let mut buffer = Vec::<u8>::new();
@@ -147,7 +148,7 @@ impl Proposal {
 
     fn create_signed_transaction(
         transaction: &alloy::rpc::types::Transaction,
-    ) -> Result<lib_manifest::SignedTransaction, Error> {
+    ) -> Result<SignedTransaction, Error> {
         let access_list = if let Some(access_list) = transaction.access_list() {
             let mut buffer = Vec::new();
             access_list.encode(&mut buffer);
@@ -156,7 +157,7 @@ impl Proposal {
             Bytes::new()
         };
 
-        let signed_transaction = lib_manifest::SignedTransaction {
+        let signed_transaction = SignedTransaction {
             txType: transaction.inner.tx_type().ty(),
             chainId: transaction
                 .inner

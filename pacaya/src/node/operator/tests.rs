@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::l1::bindings::preconf_router::IPreconfRouter;
     use crate::node::operator::*;
     use alloy::primitives::B256;
-    use alloy::primitives::U256;
     use chrono::DateTime;
     use common::l1::slot_clock::Clock;
     use common::l2::taiko_driver::models;
@@ -48,10 +46,8 @@ mod tests {
             Ok(self.taiko_inbox_height)
         }
 
-        async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {
-            Ok(IPreconfRouter::Config {
-                handOverSlots: U256::from(self.handover_window_slots),
-            })
+        async fn get_handover_window_slots(&self) -> Result<u64, Error> {
+            Ok(self.handover_window_slots)
         }
     }
 
@@ -73,7 +69,7 @@ mod tests {
             Err(Error::from(anyhow::anyhow!("test error")))
         }
 
-        async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {
+        async fn get_handover_window_slots(&self) -> Result<u64, Error> {
             Err(Error::from(anyhow::anyhow!("test error")))
         }
     }
@@ -82,7 +78,7 @@ mod tests {
         end_of_sequencing_block_hash: B256,
     }
 
-    impl PreconfDriver for TaikoUnsyncedMock {
+    impl StatusProvider for TaikoUnsyncedMock {
         async fn get_status(&self) -> Result<models::TaikoStatus, Error> {
             Ok(models::TaikoStatus {
                 end_of_sequencing_block_hash: self.end_of_sequencing_block_hash,
@@ -94,7 +90,7 @@ mod tests {
     struct TaikoMock {
         end_of_sequencing_block_hash: B256,
     }
-    impl PreconfDriver for TaikoMock {
+    impl StatusProvider for TaikoMock {
         async fn get_status(&self) -> Result<models::TaikoStatus, Error> {
             Ok(models::TaikoStatus {
                 end_of_sequencing_block_hash: self.end_of_sequencing_block_hash,

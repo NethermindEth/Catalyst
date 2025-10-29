@@ -1,9 +1,9 @@
 mod status;
 mod tests;
 
-use crate::l1::execution_layer::PreconfOperator;
-use crate::l2::taiko::PreconfDriver;
+use crate::l1::PreconfOperator;
 use anyhow::Error;
+use common::l2::taiko_driver::StatusProvider;
 use common::{
     l1::slot_clock::{Clock, SlotClock},
     l2::taiko_driver::models::TaikoStatus,
@@ -15,7 +15,7 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
-pub struct Operator<T: PreconfOperator, U: Clock, V: PreconfDriver> {
+pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     execution_layer: Arc<T>,
     slot_clock: Arc<SlotClock<U>>,
     taiko: Arc<V>,
@@ -34,7 +34,7 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: PreconfDriver> {
 
 const OPERATOR_TRANSITION_SLOTS: u64 = 2;
 
-impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
+impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
     pub fn new(
         execution_layer: Arc<T>,
         slot_clock: Arc<SlotClock<U>>,
@@ -318,11 +318,8 @@ impl<T: PreconfOperator, U: Clock, V: PreconfDriver> Operator<T, U, V> {
     }
 
     async fn get_handover_window_slots(&self) -> u64 {
-        match self.execution_layer.get_preconf_router_config().await {
-            Ok(router_config) => router_config.handOverSlots.try_into().unwrap_or_else(|_| {
-                warn!("Failed to convert handOverSlots from preconf router config, using default handover window slots");
-                self.handover_window_slots_default
-            }),
+        match self.execution_layer.get_handover_window_slots().await {
+            Ok(router_config) => router_config,
             Err(e) => {
                 warn!(
                     "Failed to get preconf router config, using default handover window slots: {}",

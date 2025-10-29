@@ -17,7 +17,6 @@ use common::{
     l1::traits::PreconferBondProvider,
 };
 use pacaya::l2::config::TaikoConfig;
-use taiko_event_indexer::interface::ShastaProposeInput;
 use tracing::{debug, info, warn};
 
 pub struct L2ExecutionLayer {
@@ -26,7 +25,7 @@ pub struct L2ExecutionLayer {
     shasta_anchor: Anchor::AnchorInstance<DynProvider>,
     bond_manager: Address,
     chain_id: u64,
-    config: TaikoConfig,
+    pub config: TaikoConfig,
 }
 
 impl L2ExecutionLayer {
@@ -74,7 +73,7 @@ impl L2ExecutionLayer {
         anchor_block_hash: B256,
         anchor_state_root: B256,
         base_fee: u64,
-        propose_input: ShastaProposeInput,
+        proposal_id: u64,
     ) -> Result<Transaction, Error> {
         debug!(
             "Constructing anchor transaction for block number: {}",
@@ -94,7 +93,7 @@ impl L2ExecutionLayer {
             .shasta_anchor
             .anchorV4(
                 Anchor::ProposalParams {
-                    proposalId: propose_input.core_state.nextProposalId,
+                    proposalId: proposal_id.try_into()?,
                     proposer: *preconfer_address,
                     proverAuth: Bytes::new(), // no prover designation for now
                     bondInstructionsHash: FixedBytes::from([0u8; 32]),

@@ -4,12 +4,11 @@ use tracing::warn;
 #[derive(Debug, Clone)]
 pub struct L1ContractAddresses {
     pub shasta_inbox: String,
-    pub codec_address: String,
 }
 
 #[derive(Debug, Clone)]
 pub struct ShastaConfig {
-    pub contract_addresses: L1ContractAddresses,
+    pub shasta_inbox: String,
 }
 
 impl ConfigTrait for ShastaConfig {
@@ -26,20 +25,15 @@ impl ConfigTrait for ShastaConfig {
         };
 
         let shasta_inbox = read_contract_address("SHASTA_INBOX_ADDRESS", "ShastaInbox");
-        let codec_address = read_contract_address("CODEC_ADDRESS", "Codec");
-        let contract_addresses = L1ContractAddresses {
-            shasta_inbox,
-            codec_address,
-        };
 
-        ShastaConfig { contract_addresses }
+        ShastaConfig { shasta_inbox }
     }
 }
 
 use std::fmt;
 impl fmt::Display for ShastaConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Contract addresses: {:#?}", self.contract_addresses)?;
+        writeln!(f, "Shasta inbox: {:#?}", self.shasta_inbox)?;
         Ok(())
     }
 }
