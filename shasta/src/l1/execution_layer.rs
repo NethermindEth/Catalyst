@@ -18,9 +18,15 @@ use common::{
 use pacaya::l1::PreconfOperator;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
+use common::shared::l2_block::L2Block;
+use alloy::primitives::Bytes;
 
 use super::bindings::IInbox;
 use super::bindings::IPreconfWhitelist;
+use super::proposal_tx_builder::ProposalBuilder;
+use super::event_indexer::EventIndexer;
+
+use tracing::{info};
 
 use super::config::EthereumL1Config;
 
@@ -172,6 +178,47 @@ impl PreconfOperator for ExecutionLayer {
 
 impl ExecutionLayer {
     pub async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
-        Ok(1) // TODO Placeholder implementation
+        Ok(1) // TODO Placeholder implementation / get from event indexer
+    }
+
+    pub async fn send_batch_to_l1(
+        &self,
+        l2_blocks: Vec<L2Block>,
+        anchor_block_number: u64,
+        coinbase: Address,
+        num_forced_inclusion: u8,
+        event_indexer: Arc<EventIndexer>,
+    ) -> Result<(), Error> {
+
+        info!(
+            "📦 Proposing with {} blocks | num_forced_inclusion: {}",
+            l2_blocks.len(),
+            num_forced_inclusion,
+        );
+
+        // Build propose transaction
+        // TODO fill extra gas percentege from config
+        let builder = ProposalBuilder::new(self.provider.clone(), 10);
+        let tx = builder
+            .build_propose_tx(
+                l2_blocks,
+                anchor_block_number,
+                coinbase,
+                self.preconfer_address,
+                self.contract_addresses.shasta_inbox,
+                Bytes::new(),// TODO fill prover_auth_bytes
+                event_indexer,
+                num_forced_inclusion,
+            )
+            .await?;
+
+        let pending_nonce = self.get_preconfer_nonce_pending().await?;
+        // Spawn a monitor for this transaction
+        self.transaction_monitor
+            .monitor_new_transaction(tx, pending_nonce)
+            .await
+            .map_err(|e| Error::msg(format!("Sending batch to L1 failed: {e}")))?;
+
+        Ok(())
     }
 }

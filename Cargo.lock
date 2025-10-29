@@ -543,6 +543,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-hardforks"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52ffa71f397f89c72a27d9c7e3340eed7981a18df9a257dd16b835ef7f53aef6"
+dependencies = [
+ "alloy-chains",
+ "alloy-eip2124",
+ "alloy-primitives",
+ "auto_impl",
+ "dyn-clone",
+]
+
+[[package]]
 name = "alloy-json-abi"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1808,7 +1821,7 @@ dependencies = [
 [[package]]
 name = "bindings"
 version = "0.1.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=b11cec492e8f91a7e0aa41f76a906620e3618523#b11cec492e8f91a7e0aa41f76a906620e3618523"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=393824947574c5cb9facb116c5c8a5778b919c20#393824947574c5cb9facb116c5c8a5778b919c20"
 dependencies = [
  "alloy",
  "serde",
@@ -3345,7 +3358,7 @@ dependencies = [
 [[package]]
 name = "event-indexer"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=b11cec492e8f91a7e0aa41f76a906620e3618523#b11cec492e8f91a7e0aa41f76a906620e3618523"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=393824947574c5cb9facb116c5c8a5778b919c20#393824947574c5cb9facb116c5c8a5778b919c20"
 dependencies = [
  "alloy",
  "alloy-contract",
@@ -3501,6 +3514,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc5a4e564e38c699f2880d3fda590bedc2e69f3f84cd48b457bd892ce61d0aa9"
 dependencies = [
  "crc32fast",
+ "libz-sys",
  "miniz_oxide",
 ]
 
@@ -6597,6 +6611,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.106",
+]
+
+[[package]]
+name = "protocol"
+version = "2.0.0"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=393824947574c5cb9facb116c5c8a5778b919c20#393824947574c5cb9facb116c5c8a5778b919c20"
+dependencies = [
+ "alloy",
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-hardforks 0.4.2",
+ "alloy-rlp",
+ "anyhow",
+ "flate2",
+ "serde",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -9858,7 +9888,7 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 [[package]]
 name = "rpc"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=b11cec492e8f91a7e0aa41f76a906620e3618523#b11cec492e8f91a7e0aa41f76a906620e3618523"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=393824947574c5cb9facb116c5c8a5778b919c20#393824947574c5cb9facb116c5c8a5778b919c20"
 dependencies = [
  "alethia-reth-evm",
  "alethia-reth-primitives",
@@ -10527,6 +10557,7 @@ dependencies = [
  "mockito",
  "pacaya",
  "prometheus",
+ "protocol",
  "reqwest",
  "rpc",
  "serde",

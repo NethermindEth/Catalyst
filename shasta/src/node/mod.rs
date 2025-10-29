@@ -1,3 +1,4 @@
+pub mod proposal_manager;
 use std::sync::Arc;
 
 use anyhow::Error;
@@ -13,6 +14,8 @@ use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
+use proposal_manager::BatchManager;
+use crate::metrics::Metrics;
 use crate::{
     l1::{event_indexer::EventIndexer, execution_layer::ExecutionLayer},
     l2::taiko::Taiko,
@@ -26,6 +29,8 @@ pub struct Node {
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
     event_indexer: Arc<EventIndexer>,
+    metrics: Arc<Metrics>,
+    proposal_manager: BatchManager, //TODO
 }
 
 impl Node {
@@ -35,6 +40,8 @@ impl Node {
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
         event_indexer: Arc<EventIndexer>,
+        metrics: Arc<Metrics>,
+        batch_builder_config: proposal_manager::config::BatchBuilderConfig,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -50,6 +57,18 @@ impl Node {
             cancel_token.clone(),
             ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
         );
+
+        let proposal_manager = BatchManager::new( //TODO
+            config.l1_height_lag,
+            batch_builder_config,
+            ethereum_l1.clone(),
+            taiko.clone(),
+            metrics.clone(),
+            cancel_token.clone(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;
+
         Ok(Self {
             config,
             cancel_token,
@@ -58,6 +77,8 @@ impl Node {
             watchdog,
             operator,
             event_indexer,
+            metrics,
+            proposal_manager,
         })
     }
 

@@ -34,6 +34,10 @@ impl EventIndexer {
         Ok(Self { indexer })
     }
 
+    pub fn get_indexer(&self) -> Arc<ShastaEventIndexer> {
+        self.indexer.clone()
+    }
+
     pub fn get_propose_input(&self) -> Option<ShastaProposeInput> {
         let propose_input = self.indexer.read_shasta_propose_input();
         self.debug_propose_input(&propose_input);
