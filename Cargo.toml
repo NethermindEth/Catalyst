@@ -80,8 +80,8 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
 shasta = { path = "shasta" }
 
-taiko_event_indexer = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "b11cec492e8f91a7e0aa41f76a906620e3618523", package = "event-indexer", version = "2.0.0" }
-taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "b11cec492e8f91a7e0aa41f76a906620e3618523", package = "rpc", version = "2.0.0" }
+taiko_event_indexer = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "311ed4e1a28ecf76490687a58f0a6f46b879b59c", package = "event-indexer", version = "2.0.0" }
+taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "311ed4e1a28ecf76490687a58f0a6f46b879b59c", package = "rpc", version = "2.0.0" }
 tiny-keccak = { version = "2.0", default-features = false }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }

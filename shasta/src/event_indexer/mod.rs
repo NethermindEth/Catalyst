@@ -1,4 +1,4 @@
-use alloy::{eips::BlockNumberOrTag, primitives::Address, transports::http::reqwest::Url};
+use alloy::{primitives::Address, transports::http::reqwest::Url};
 use anyhow::Error;
 use std::{str::FromStr, sync::Arc};
 use taiko_event_indexer::{
@@ -14,20 +14,14 @@ pub struct EventIndexer {
 }
 
 impl EventIndexer {
-    pub async fn new(
-        l1_ws_rpc_url: String,
-        inbox_contract_address: String,
-        shasta_height: u64,
-    ) -> Result<Self, Error> {
+    pub async fn new(l1_ws_rpc_url: String, inbox_contract_address: String) -> Result<Self, Error> {
         let config = ShastaEventIndexerConfig {
             l1_subscription_source: SubscriptionSource::Ws(Url::from_str(l1_ws_rpc_url.as_str())?),
             inbox_address: Address::from_str(&inbox_contract_address)?,
         };
 
         let indexer = ShastaEventIndexer::new(config).await?;
-        indexer
-            .clone()
-            .spawn(BlockNumberOrTag::Number(shasta_height));
+        indexer.clone().spawn();
         debug!("Spawned Shasta event indexer");
         indexer.wait_historical_indexing_finished().await;
 

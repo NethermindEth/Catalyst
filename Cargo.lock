@@ -543,6 +543,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-hardforks"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52ffa71f397f89c72a27d9c7e3340eed7981a18df9a257dd16b835ef7f53aef6"
+dependencies = [
+ "alloy-chains",
+ "alloy-eip2124",
+ "alloy-primitives",
+ "auto_impl",
+ "dyn-clone",
+]
+
+[[package]]
 name = "alloy-json-abi"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1807,8 +1820,8 @@ dependencies = [
 
 [[package]]
 name = "bindings"
-version = "0.1.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=b11cec492e8f91a7e0aa41f76a906620e3618523#b11cec492e8f91a7e0aa41f76a906620e3618523"
+version = "2.0.0"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=311ed4e1a28ecf76490687a58f0a6f46b879b59c#311ed4e1a28ecf76490687a58f0a6f46b879b59c"
 dependencies = [
  "alloy",
  "serde",
@@ -3345,7 +3358,7 @@ dependencies = [
 [[package]]
 name = "event-indexer"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=b11cec492e8f91a7e0aa41f76a906620e3618523#b11cec492e8f91a7e0aa41f76a906620e3618523"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=311ed4e1a28ecf76490687a58f0a6f46b879b59c#311ed4e1a28ecf76490687a58f0a6f46b879b59c"
 dependencies = [
  "alloy",
  "alloy-contract",
@@ -3361,7 +3374,7 @@ dependencies = [
  "dashmap 6.1.0",
  "event-scanner",
  "metrics",
- "rpc",
+ "protocol",
  "thiserror 2.0.17",
  "tokio",
  "tokio-retry",
@@ -3382,9 +3395,9 @@ dependencies = [
 
 [[package]]
 name = "event-scanner"
-version = "0.3.0-alpha"
+version = "0.4.0-alpha"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c71056781add57aae7d7761cf48bf99a14bd47adcecd2dfddc48dba0a78928c"
+checksum = "c6ae8ecb83aedc270b94a1636a59e7ca8af4c88dccfdaddfe4383b834b88974c"
 dependencies = [
  "alloy",
  "alloy-node-bindings",
@@ -3397,7 +3410,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-subscriber 0.3.20",
 ]
 
 [[package]]
@@ -3501,6 +3513,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc5a4e564e38c699f2880d3fda590bedc2e69f3f84cd48b457bd892ce61d0aa9"
 dependencies = [
  "crc32fast",
+ "libz-sys",
  "miniz_oxide",
 ]
 
@@ -6597,6 +6610,25 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.106",
+]
+
+[[package]]
+name = "protocol"
+version = "2.0.0"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=311ed4e1a28ecf76490687a58f0a6f46b879b59c#311ed4e1a28ecf76490687a58f0a6f46b879b59c"
+dependencies = [
+ "alloy",
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-hardforks 0.4.2",
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rlp",
+ "anyhow",
+ "event-scanner",
+ "flate2",
+ "serde",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -9858,7 +9890,7 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 [[package]]
 name = "rpc"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=b11cec492e8f91a7e0aa41f76a906620e3618523#b11cec492e8f91a7e0aa41f76a906620e3618523"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=311ed4e1a28ecf76490687a58f0a6f46b879b59c#311ed4e1a28ecf76490687a58f0a6f46b879b59c"
 dependencies = [
  "alethia-reth-evm",
  "alethia-reth-primitives",
@@ -9880,6 +9912,7 @@ dependencies = [
  "hyper 1.7.0",
  "hyper-util",
  "once_cell",
+ "protocol",
  "reqwest",
  "serde",
  "serde_json",
@@ -11612,17 +11645,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tracing-log"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3"
-dependencies = [
- "log",
- "once_cell",
- "tracing-core",
-]
-
-[[package]]
 name = "tracing-logfmt"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11666,11 +11688,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sharded-slab",
- "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
- "tracing-log",
  "tracing-serde",
 ]
 

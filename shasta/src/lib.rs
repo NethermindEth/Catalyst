@@ -43,9 +43,6 @@ pub async fn create_shasta_node(
             .expect("L1 RPC URL is required")
             .clone(),
         shasta_config.contract_addresses.shasta_inbox.clone(),
-        config
-            .fork_switch_l2_height
-            .ok_or_else(|| anyhow::anyhow!("Fork switch L2 height is required"))?,
     )
     .await?;
 
