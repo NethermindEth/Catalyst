@@ -139,7 +139,7 @@ impl Proposal {
         //     parent_gas_limit * (10000 - BLOCK_GAS_LIMIT_MAX_CHANGE) / 10000,
         //     MIN_BLOCK_GAS_LIMIT,
         // );
-        // let  upperBound = parent_gas_limit * (10000 + BLOCK_GAS_LIMIT_MAX_CHANGE) / 10000;
+        // let upper_bound = parent_gas_limit * (10000 + BLOCK_GAS_LIMIT_MAX_CHANGE) / 10000;
 
         // TODO returning 0 until we have parent gas limit to enable above calculation
         0
