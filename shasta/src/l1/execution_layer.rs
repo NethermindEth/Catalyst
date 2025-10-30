@@ -21,7 +21,7 @@ use tokio::sync::mpsc::Sender;
 use common::shared::l2_block::L2Block;
 use alloy::primitives::Bytes;
 
-use super::bindings::IInbox;
+use taiko_bindings::i_inbox::IInbox;
 use super::bindings::IPreconfWhitelist;
 use super::proposal_tx_builder::ProposalBuilder;
 use super::event_indexer::EventIndexer;
@@ -198,7 +198,7 @@ impl ExecutionLayer {
 
         // Build propose transaction
         // TODO fill extra gas percentege from config
-        let builder = ProposalBuilder::new(self.provider.clone(), 10);
+        let builder = ProposalBuilder::new(self.provider.clone(), self.contract_addresses.codec, 10);
         let tx = builder
             .build_propose_tx(
                 l2_blocks,

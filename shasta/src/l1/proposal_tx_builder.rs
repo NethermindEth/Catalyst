@@ -2,12 +2,13 @@
 #![allow(unused)]
 
 use super::{
-    bindings::{ICodec, IInbox, LibBlobs},
     event_indexer::EventIndexer,
 };
+use taiko_bindings::codec_optimized::{CodecOptimized::CodecOptimizedInstance, IInbox::{ProposeInput}, LibBlobs::BlobReference};
+use taiko_bindings::i_inbox::IInbox;
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
-    primitives::{Address, Bytes},
+    primitives::{Address, Bytes, aliases::{U24,U48}},
     providers::{DynProvider, Provider},
     rpc::types::TransactionRequest,
 };
@@ -25,13 +26,15 @@ use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::Transaction
 
 pub struct ProposalBuilder {
     provider: DynProvider,
+    codec_address: Address,
     extra_gas_percentage: u64,
 }
 
 impl ProposalBuilder {
-    pub fn new(provider: DynProvider, extra_gas_percentage: u64) -> Self {
+    pub fn new(provider: DynProvider, codec_address: Address, extra_gas_percentage: u64) -> Self {
         Self {
             provider,
+            codec_address,
             extra_gas_percentage,
         }
     }
@@ -149,22 +152,28 @@ impl ProposalBuilder {
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
         let sidecar = common::blob::build_blob_sidecar(&manifest_data)?;
-        //TODO align types
+
         // Build the propose input.
-        /*let input = ProposeInput {
-            deadline: 0,
+        let input = ProposeInput {
+            deadline: U48::ZERO,
             coreState: cached_input_params.core_state,
             parentProposals: cached_input_params.proposals,
             blobReference: BlobReference {
                 blobStartIndex: 0,
-                numBlobs: sidecar.blobs.len() as u16,
-                offset: 0,
+                numBlobs: sidecar.blobs.len().try_into()?,
+                offset: U24::ZERO,
             },
             transitionRecords: cached_input_params.transition_records,
             checkpoint: cached_input_params.checkpoint,
             numForcedInclusions: num_forced_inclusion,
         };
-        */
+
+        let codec = CodecOptimizedInstance::new(self.codec_address, self.provider.clone());
+        let encoded_proposal_input = codec
+            .encodeProposeInput(input)
+            .call()
+            .await?;
+
         let tx = TransactionRequest::default()
             .with_from(from)
             .with_to(to)

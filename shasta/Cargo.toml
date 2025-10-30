@@ -39,6 +39,7 @@ warp = { workspace = true }
 taiko_event_indexer = { workspace = true }
 taiko_rpc = { workspace = true }
 taiko_protocol = { workspace = true }
+taiko_bindings = { workspace = true }
 
 [dev-dependencies]
 mockito = { workspace = true }
