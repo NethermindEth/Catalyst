@@ -1,6 +1,3 @@
-//TODO: allow unused code until ProposalBuilder is used
-#![allow(unused)]
-
 use super::event_indexer::EventIndexer;
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
@@ -25,13 +22,13 @@ use alloy_json_rpc::RpcError;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use tracing::{info, warn};
 
-pub struct ProposalBuilder {
+pub struct ProposalTxBuilder {
     provider: DynProvider,
     codec_address: Address,
     extra_gas_percentage: u64,
 }
 
-impl ProposalBuilder {
+impl ProposalTxBuilder {
     pub fn new(provider: DynProvider, codec_address: Address, extra_gas_percentage: u64) -> Self {
         Self {
             provider,
@@ -94,15 +91,6 @@ impl ProposalBuilder {
             }
         };
 
-        // Get blob count
-        let blob_count = tx_blob
-            .sidecar
-            .as_ref()
-            .map_or(0, |sidecar| sidecar.blobs.len() as u64);
-
-        // Calculate the cost of the eip4844 transaction
-        let eip4844_cost = fees_per_gas.get_eip4844_cost(blob_count, tx_blob_gas).await;
-
         // Update gas params for eip4844 transaction
         let tx_blob = fees_per_gas.update_eip4844(tx_blob, tx_blob_gas);
 
@@ -142,7 +130,12 @@ impl ProposalBuilder {
                 anchor_block_number,
                 gas_limit: 0, /* Use 0 for gas limit as it will be set as its parent's gas
                                * limit during derivation. */
-                transactions: vec![], // TODO convert txs //l2_block.prebuilt_tx_list.tx_list.clone(),
+                transactions: l2_block
+                    .prebuilt_tx_list
+                    .tx_list
+                    .iter()
+                    .map(|tx| tx.clone().into())
+                    .collect(),
             });
         }
 
@@ -184,7 +177,7 @@ impl ProposalBuilder {
             .with_blob_sidecar(sidecar)
             .with_call(&IInbox::proposeCall {
                 _lookahead: Bytes::new(),
-                _data: Bytes::new(),
+                _data: encoded_proposal_input,
             });
 
         Ok(tx)
