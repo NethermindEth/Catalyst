@@ -201,10 +201,7 @@ impl Taiko {
         ))
     }
 
-    async fn get_base_fee(
-        &self,
-        block: BlockNumberOrTag,
-    ) -> Result<u64, Error> {
+    async fn get_base_fee(&self, block: BlockNumberOrTag) -> Result<u64, Error> {
         let parent_block = self
             .l2_execution_layer
             .common()
@@ -224,9 +221,15 @@ impl Taiko {
             .header
             .timestamp();
 
+        let timestamp_diff = parent_block
+            .header
+            .timestamp()
+            .checked_sub(grandparent_timestamp)
+            .ok_or_else(|| anyhow::anyhow!("Timestamp underflow occurred"))?;
+
         let base_fee = taiko_alethia_reth::eip4396::calculate_next_block_eip4396_base_fee(
             &parent_block.header.inner,
-            parent_block.header.timestamp() - grandparent_timestamp,
+            timestamp_diff,
         );
 
         Ok(base_fee)
