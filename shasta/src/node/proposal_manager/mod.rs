@@ -19,6 +19,14 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+use crate::utils::proposal::BondInstructionData;
+use alloy::primitives::{Address, B256, U256};
+use taiko_bindings::{
+    anchor::LibBonds::BondInstruction,
+    codec_optimized::LibBonds::BondInstruction as CodecBondInstruction,
+};
+use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
+
 pub struct BatchManager {
     batch_builder: BatchBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
@@ -26,6 +34,7 @@ pub struct BatchManager {
     l1_height_lag: u64,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
+    event_indexer: Arc<EventIndexer>,
 }
 
 impl BatchManager {
@@ -36,6 +45,7 @@ impl BatchManager {
         taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
+        event_indexer: Arc<EventIndexer>,
     ) -> Result<Self, Error> {
         info!(
             "Batch builder config:\n\
@@ -62,19 +72,19 @@ impl BatchManager {
             l1_height_lag,
             metrics,
             cancel_token,
+            event_indexer,
         })
     }
 
     pub async fn try_submit_oldest_batch(
         &mut self,
         submit_only_full_batches: bool,
-        event_indexer: Arc<EventIndexer>,
     ) -> Result<(), Error> {
         self.batch_builder
             .try_submit_oldest_batch(
                 self.ethereum_l1.clone(),
                 submit_only_full_batches,
-                event_indexer,
+                self.event_indexer.clone(),
             )
             .await
     }
@@ -181,12 +191,46 @@ impl BatchManager {
         }
     }
 
+    async fn get_bond_instructions(&self, proposal_id: u64) -> Result<BondInstructionData, Error> {
+        if proposal_id <= BOND_PROCESSING_DELAY {
+            // TODO Get value from genesis
+            // https://github.com/taikoxyz/taiko-mono/blob/1ce709490ae2107d53db664409b56476f730c46f/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/pipeline/mod.rs#L166
+            //return Ok(BondInstructionData {
+            //    instructions: Vec::new(),
+            //    hash: state.bond_instructions_hash,
+            //});
+            return Ok(BondInstructionData::new(Vec::new(), B256::ZERO));
+        }
+
+        let target_id = proposal_id - BOND_PROCESSING_DELAY;
+        let target_payload = self
+            .event_indexer
+            .get_indexer()
+            .get_proposal_by_id(U256::from(target_id))
+            .ok_or_else(|| anyhow::anyhow!("Can't get bond instruction from event_indexer"))?;
+        let target_hash =
+            B256::from_slice(target_payload.core_state.bondInstructionsHash.as_slice());
+        let instructions = target_payload
+            .bond_instructions
+            .into_iter()
+            .map(|instruction: CodecBondInstruction| BondInstruction {
+                proposalId: instruction.proposalId,
+                bondType: instruction.bondType,
+                payer: instruction.payer,
+                payee: instruction.payee,
+            })
+            .collect();
+
+        Ok(BondInstructionData::new(instructions, target_hash))
+    }
+
     async fn create_new_batch(&mut self) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
         let anchor_block_info = AnchorBlockInfo::new(
             &self.ethereum_l1.execution_layer.common(),
             self.l1_height_lag,
-        ).await?;
+        )
+        .await?;
 
         let proposal_id =
             if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
@@ -195,17 +239,13 @@ impl BatchManager {
                 // TODO get from L2 anchor tx
                 1
             };
-
-        // TODO get bond_instructions_hash from event indexer
-        let bond_instructions_hash = Default::default();
+        // Get bond instructions for the proposal
+        let bond_instructions = self.get_bond_instructions(proposal_id).await?;
 
         let anchor_block_id = anchor_block_info.id();
         // Create new batch
-        self.batch_builder.create_new_batch(
-            proposal_id,
-            anchor_block_info,
-            bond_instructions_hash,
-        );
+        self.batch_builder
+            .create_new_batch(proposal_id, anchor_block_info, bond_instructions);
 
         Ok(anchor_block_id)
     }

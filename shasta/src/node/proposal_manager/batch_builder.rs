@@ -4,14 +4,13 @@ use crate::l1::event_indexer::EventIndexer;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
-    utils::proposal::Proposal,
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
+    utils::proposal::{BondInstructionData, Proposal},
 };
 use alloy::primitives::{Address, B256};
 use anyhow::Error;
 use common::l1::{
     ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError,
-
 };
 use common::shared::anchor_block_info::AnchorBlockInfo;
 use pacaya::node::batch_manager::config::BatchBuilderConfig;
@@ -106,7 +105,7 @@ impl BatchBuilder {
         &mut self,
         id: u64,
         anchor_block: AnchorBlockInfo,
-        bond_instructions_hash: B256,
+        bond_instructions: BondInstructionData,
     ) {
         self.finalize_current_batch();
 
@@ -119,7 +118,7 @@ impl BatchBuilder {
             anchor_block_timestamp_sec: anchor_block.timestamp_sec(),
             anchor_block_hash: anchor_block.hash(),
             anchor_state_root: anchor_block.state_root(),
-            bond_instructions_hash,
+            bond_instructions,
             num_forced_inclusion: 0,
         });
     }
@@ -128,11 +127,12 @@ impl BatchBuilder {
         self.current_proposal = None;
     }
 
+    // TODO use simple function to create proposal
     pub fn create_new_batch_and_add_l2_block(
         &mut self,
         id: u64,
         anchor_block: AnchorBlockInfo,
-        bond_instructions_hash: B256,
+        bond_instructions: BondInstructionData,
         l2_block: L2Block,
         coinbase: Option<Address>,
     ) {
@@ -146,7 +146,7 @@ impl BatchBuilder {
             anchor_block_timestamp_sec: anchor_block.timestamp_sec(),
             anchor_block_hash: anchor_block.hash(),
             anchor_state_root: anchor_block.state_root(),
-            bond_instructions_hash,
+            bond_instructions,
             num_forced_inclusion: 0,
         });
     }

@@ -11,15 +11,10 @@ pub struct AnchorBlockInfo {
 
 impl AnchorBlockInfo {
     pub async fn new(execution_layer: &ExecutionLayer, l1_height_lag: u64) -> Result<Self, Error> {
-        let id = Self::calculate_anchor_block_id(execution_layer, l1_height_lag)
-            .await?;
-        let timestamp_sec = execution_layer
-            .get_block_timestamp_by_number(id)
-            .await?;
+        let id = Self::calculate_anchor_block_id(execution_layer, l1_height_lag).await?;
+        let timestamp_sec = execution_layer.get_block_timestamp_by_number(id).await?;
         let hash = execution_layer.get_block_hash(id).await?;
-        let state_root = execution_layer
-            .get_block_state_root_by_number(id)
-            .await?;
+        let state_root = execution_layer.get_block_state_root_by_number(id).await?;
         Ok(Self {
             id,
             timestamp_sec,

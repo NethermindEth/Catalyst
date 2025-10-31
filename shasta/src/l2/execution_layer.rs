@@ -2,7 +2,6 @@
 #![allow(dead_code)]
 use crate::l2::bindings::BondManager;
 
-use super::bindings::Anchor;
 use alloy::{
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
     primitives::{Address, B256, Bytes, FixedBytes},
@@ -18,10 +17,10 @@ use common::{
     shared::l2_slot_info::L2SlotInfo,
 };
 use pacaya::l2::config::TaikoConfig;
+use taiko_bindings::anchor::Anchor;
 use tracing::{debug, info, warn};
 
 use crate::utils::proposal::Proposal;
-
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -95,8 +94,12 @@ impl L2ExecutionLayer {
                     proposalId: proposal.id.try_into()?,
                     proposer: self.config.signer.get_address(),
                     proverAuth: Bytes::new(), // no prover designation for now
-                    bondInstructionsHash: proposal.bond_instructions_hash,
-                    bondInstructions: vec![], // TODO
+                    bondInstructionsHash: proposal.bond_instructions.hash(),
+                    bondInstructions: if proposal.has_only_one_block() {
+                        proposal.bond_instructions.instructions().clone()
+                    } else {
+                        Vec::new()
+                    },
                 },
                 Anchor::BlockParams {
                     blockIndex: l2_block_number,

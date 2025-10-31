@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use super::execution_layer::L2ExecutionLayer;
+use crate::utils::proposal::Proposal;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
@@ -29,7 +30,6 @@ use pacaya::l1::protocol_config::ProtocolConfig;
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use tracing::{debug, trace};
-use crate::utils::proposal::Proposal;
 
 pub struct Taiko {
     protocol_config: ProtocolConfig,
@@ -257,13 +257,7 @@ impl Taiko {
 
         let anchor_tx = self
             .l2_execution_layer
-            .construct_anchor_tx(
-                proposal,
-                l2_slot_info,
-                //u16::try_from(l2_slot_info.parent_id() + 1)?,
-                //*l2_slot_info.parent_hash(),
-                //l2_slot_info.base_fee(),
-            )
+            .construct_anchor_tx(proposal, l2_slot_info)
             .await?;
         let tx_list = std::iter::once(anchor_tx)
             .chain(proposal.get_last_block_tx_list_copy()?.into_iter())

@@ -15,7 +15,7 @@ sol!(
     Bridge,
     "src/l2/abi/Bridge.json"
 );
-
+/*
 sol! {
     library LibBonds {
         enum BondType {
@@ -85,3 +85,4 @@ sol! {
             nonReentrant;
     }
 }
+*/

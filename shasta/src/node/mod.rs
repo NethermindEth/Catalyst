@@ -67,6 +67,7 @@ impl Node {
             taiko.clone(),
             metrics.clone(),
             cancel_token.clone(),
+            event_indexer.clone(),
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;
@@ -180,10 +181,7 @@ impl Node {
             if self.has_verified_unproposed_batches().await?
                 && let Err(err) = self
                     .proposal_manager
-                    .try_submit_oldest_batch(
-                        current_status.is_preconfer(),
-                        self.event_indexer.clone(),
-                    )
+                    .try_submit_oldest_batch(current_status.is_preconfer())
                     .await
             {
                 if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
