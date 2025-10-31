@@ -182,20 +182,7 @@ impl Taiko {
             anyhow::anyhow!("parent_gas_used {} exceeds u32 max value", parent_gas_used)
         })?;
 
-        // TODO fix it
-        /*
-        let base_fee_config = self.get_base_fee_config();
-
-        let base_fee = self
-            .get_base_fee(
-                parent_hash,
-                parent_gas_used_u32,
-                base_fee_config,
-                l2_slot_timestamp,
-            )
-            .await?;
-        */
-        let base_fee: u64 = 25000000;
+        let base_fee: u64 = self.get_base_fee(block, l2_slot_timestamp).await?;
 
         trace!(
             timestamp = %l2_slot_timestamp,
@@ -212,6 +199,33 @@ impl Taiko {
             parent_hash,
             parent_gas_used_u32,
         ))
+    }
+
+    async fn get_base_fee(
+        &self,
+        block: BlockNumberOrTag,
+        l2_slot_timestamp: u64,
+    ) -> Result<u64, Error> {
+        let block = self
+            .l2_execution_layer
+            .common()
+            .get_block_header(block)
+            .await?;
+
+        if l2_slot_timestamp < block.header.timestamp() {
+            return Err(anyhow::anyhow!(
+                "L2 slot timestamp {} is earlier than parent block timestamp {}",
+                l2_slot_timestamp,
+                block.header.timestamp()
+            ));
+        }
+
+        let base_fee = taiko_alethia_reth::eip4396::calculate_next_block_eip4396_base_fee(
+            &block.header.inner,
+            l2_slot_timestamp - block.header.timestamp(),
+        );
+
+        Ok(base_fee)
     }
 
     // TODO fix that function
