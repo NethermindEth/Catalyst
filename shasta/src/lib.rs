@@ -16,6 +16,7 @@ use common::l2::engine::{L2Engine, L2EngineConfig};
 use common::{config::Config, config::ConfigTrait};
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -100,7 +101,7 @@ pub async fn create_shasta_node(
 
     let max_anchor_height_offset = 64; // TODO fetch actual max from protocol config
 
-    let batch_builder_config = node::proposal_manager::config::BatchBuilderConfig {
+    let batch_builder_config = BatchBuilderConfig {
         max_bytes_size_of_batch: config.max_bytes_size_of_batch,
         max_blocks_per_batch,
         l1_slot_duration_sec: config.l1_slot_duration_sec,

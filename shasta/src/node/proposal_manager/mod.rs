@@ -1,6 +1,4 @@
-pub mod batch;
 mod batch_builder;
-pub mod config;
 
 use crate::l1::event_indexer::EventIndexer;
 use crate::{
@@ -14,8 +12,9 @@ use batch_builder::BatchBuilder;
 use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
     l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
+    shared::anchor_block_info::AnchorBlockInfo,
 };
-use config::BatchBuilderConfig;
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -155,25 +154,14 @@ impl BatchManager {
         end_of_sequencing: bool,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        let anchor_block_id = self
+        let proposal = self
             .batch_builder
-            .add_l2_block_and_get_current_anchor_block_id(l2_block.clone())?;
+            .add_l2_block_and_get_current_proposal(l2_block.clone())?;
 
         match self
             .taiko
             .advance_head_to_new_l2_block(
-                l2_block,
-                anchor_block_id,
-                self.ethereum_l1
-                    .execution_layer
-                    .common()
-                    .get_block_state_root_by_number(anchor_block_id)
-                    .await?,
-                self.ethereum_l1
-                    .execution_layer
-                    .common()
-                    .get_block_hash(anchor_block_id)
-                    .await?,
+                proposal,
                 l2_slot_info,
                 end_of_sequencing,
                 false,
@@ -195,17 +183,29 @@ impl BatchManager {
 
     async fn create_new_batch(&mut self) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
-        let anchor_block_id = self.calculate_anchor_block_id().await?;
-        let anchor_block_timestamp_sec = self
-            .ethereum_l1
-            .execution_layer
-            .common()
-            .get_block_timestamp_by_number(anchor_block_id)
-            .await?;
+        let anchor_block_info = AnchorBlockInfo::new(
+            &self.ethereum_l1.execution_layer.common(),
+            self.l1_height_lag,
+        ).await?;
 
+        let proposal_id =
+            if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
+                current_proposal_id + 1
+            } else {
+                // TODO get from L2 anchor tx
+                1
+            };
+
+        // TODO get bond_instructions_hash from event indexer
+        let bond_instructions_hash = Default::default();
+
+        let anchor_block_id = anchor_block_info.id();
         // Create new batch
-        self.batch_builder
-            .create_new_batch(anchor_block_id, anchor_block_timestamp_sec);
+        self.batch_builder.create_new_batch(
+            proposal_id,
+            anchor_block_info,
+            bond_instructions_hash,
+        );
 
         Ok(anchor_block_id)
     }

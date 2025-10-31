@@ -19,6 +19,7 @@ use crate::{
     l1::{event_indexer::EventIndexer, execution_layer::ExecutionLayer},
     l2::taiko::Taiko,
 };
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use proposal_manager::BatchManager;
 
 pub struct Node {
@@ -41,7 +42,7 @@ impl Node {
         taiko: Arc<Taiko>,
         event_indexer: Arc<EventIndexer>,
         metrics: Arc<Metrics>,
-        batch_builder_config: proposal_manager::config::BatchBuilderConfig,
+        batch_builder_config: BatchBuilderConfig,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),

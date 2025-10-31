@@ -15,9 +15,13 @@ use common::shared::{alloy_tools, execution_layer::ExecutionLayer as ExecutionLa
 use common::{
     crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY},
     l1::traits::PreconferBondProvider,
+    shared::l2_slot_info::L2SlotInfo,
 };
 use pacaya::l2::config::TaikoConfig;
 use tracing::{debug, info, warn};
+
+use crate::utils::proposal::Proposal;
+
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -66,15 +70,10 @@ impl L2ExecutionLayer {
     #[allow(clippy::too_many_arguments)]
     pub async fn construct_anchor_tx(
         &self,
-        preconfer_address: &Address,
-        l2_block_number: u16,
-        parent_hash: B256,
-        anchor_block_id: u64,
-        anchor_block_hash: B256,
-        anchor_state_root: B256,
-        base_fee: u64,
-        proposal_id: u64,
+        proposal: &Proposal,
+        l2_slot_info: &L2SlotInfo,
     ) -> Result<Transaction, Error> {
+        let l2_block_number: u16 = u16::try_from(l2_slot_info.parent_id() + 1)?;
         debug!(
             "Constructing anchor transaction for block number: {}",
             l2_block_number
@@ -82,7 +81,7 @@ impl L2ExecutionLayer {
         let nonce = self
             .provider
             .get_transaction_count(GOLDEN_TOUCH_ADDRESS)
-            .block_id(parent_hash.into())
+            .block_id((*l2_slot_info.parent_hash()).into())
             .await
             .map_err(|e| {
                 self.common
@@ -93,21 +92,21 @@ impl L2ExecutionLayer {
             .shasta_anchor
             .anchorV4(
                 Anchor::ProposalParams {
-                    proposalId: proposal_id.try_into()?,
-                    proposer: *preconfer_address,
+                    proposalId: proposal.id.try_into()?,
+                    proposer: self.config.signer.get_address(),
                     proverAuth: Bytes::new(), // no prover designation for now
-                    bondInstructionsHash: FixedBytes::from([0u8; 32]),
-                    bondInstructions: vec![],
+                    bondInstructionsHash: proposal.bond_instructions_hash,
+                    bondInstructions: vec![], // TODO
                 },
                 Anchor::BlockParams {
                     blockIndex: l2_block_number,
-                    anchorBlockNumber: anchor_block_id.try_into()?,
-                    anchorBlockHash: anchor_block_hash,
-                    anchorStateRoot: anchor_state_root,
+                    anchorBlockNumber: proposal.anchor_block_id.try_into()?,
+                    anchorBlockHash: proposal.anchor_block_hash,
+                    anchorStateRoot: proposal.anchor_state_root,
                 },
             )
             .gas(1_000_000) // value expected by Taiko
-            .max_fee_per_gas(u128::from(base_fee)) // value expected by Taiko
+            .max_fee_per_gas(u128::from(l2_slot_info.base_fee())) // value expected by Taiko
             .max_priority_fee_per_gas(0) // value expected by Taiko
             .nonce(nonce)
             .chain_id(self.chain_id);
