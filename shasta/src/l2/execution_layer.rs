@@ -3,6 +3,7 @@
 use crate::l2::bindings::BondManager;
 
 use alloy::{
+    consensus::Transaction as AnchorTransaction,
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
     primitives::{Address, B256, Bytes, FixedBytes},
     providers::{DynProvider, Provider},
@@ -193,6 +194,42 @@ impl L2ExecutionLayer {
         // TODO: implement the actual transfer logic
         warn!("Implement bridge transfer logic here");
         Ok(())
+    }
+
+    pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
+        let block = self.common.get_latest_block_with_txs().await?;
+        let (anchor_tx, _) = match block.transactions.as_transactions() {
+            Some(txs) => txs
+                .split_first()
+                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block"))?,
+            None => return Err(anyhow::anyhow!("No transactions in block")),
+        };
+
+        Self::decode_proposal_id_from_tx_data(anchor_tx.input())
+    }
+
+    pub fn decode_proposal_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+        Ok(tx_data._proposalParams.proposalId.to::<u64>())
+    }
+
+    pub async fn get_last_synced_bond_instruction_hash_from_geth(&self) -> Result<B256, Error> {
+        let block = self.common.get_latest_block_with_txs().await?;
+        let (anchor_tx, _) = match block.transactions.as_transactions() {
+            Some(txs) => txs
+                .split_first()
+                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block"))?,
+            None => return Err(anyhow::anyhow!("No transactions in block")),
+        };
+
+        Self::decode_bond_instruction_hash_from_tx_data(anchor_tx.input())
+    }
+
+    pub fn decode_bond_instruction_hash_from_tx_data(data: &[u8]) -> Result<B256, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+        Ok(tx_data._proposalParams.bondInstructionsHash)
     }
 }
 

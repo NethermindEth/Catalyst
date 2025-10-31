@@ -193,13 +193,12 @@ impl BatchManager {
 
     async fn get_bond_instructions(&self, proposal_id: u64) -> Result<BondInstructionData, Error> {
         if proposal_id <= BOND_PROCESSING_DELAY {
-            // TODO Get value from genesis
-            // https://github.com/taikoxyz/taiko-mono/blob/1ce709490ae2107d53db664409b56476f730c46f/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/pipeline/mod.rs#L166
-            //return Ok(BondInstructionData {
-            //    instructions: Vec::new(),
-            //    hash: state.bond_instructions_hash,
-            //});
-            return Ok(BondInstructionData::new(Vec::new(), B256::ZERO));
+            let hash = self
+                .taiko
+                .l2_execution_layer()
+                .get_last_synced_bond_instruction_hash_from_geth()
+                .await?;
+            return Ok(BondInstructionData::new(Vec::new(), hash));
         }
 
         let target_id = proposal_id - BOND_PROCESSING_DELAY;
@@ -236,8 +235,13 @@ impl BatchManager {
             if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
                 current_proposal_id + 1
             } else {
-                // TODO get from L2 anchor tx
-                1
+                // get from l2
+                &self
+                    .taiko
+                    .l2_execution_layer()
+                    .get_last_synced_proposal_id_from_geth()
+                    .await?
+                    + 1
             };
         // Get bond instructions for the proposal
         let bond_instructions = self.get_bond_instructions(proposal_id).await?;
