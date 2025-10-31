@@ -182,20 +182,7 @@ impl Taiko {
             anyhow::anyhow!("parent_gas_used {} exceeds u32 max value", parent_gas_used)
         })?;
 
-        // TODO fix it
-        /*
-        let base_fee_config = self.get_base_fee_config();
-
-        let base_fee = self
-            .get_base_fee(
-                parent_hash,
-                parent_gas_used_u32,
-                base_fee_config,
-                l2_slot_timestamp,
-            )
-            .await?;
-        */
-        let base_fee: u64 = 25000000;
+        let base_fee: u64 = self.get_base_fee(block).await?;
 
         trace!(
             timestamp = %l2_slot_timestamp,
@@ -212,6 +199,40 @@ impl Taiko {
             parent_hash,
             parent_gas_used_u32,
         ))
+    }
+
+    async fn get_base_fee(&self, block: BlockNumberOrTag) -> Result<u64, Error> {
+        let parent_block = self
+            .l2_execution_layer
+            .common()
+            .get_block_header(block)
+            .await?;
+
+        if parent_block.header.number() == 0 {
+            return Ok(taiko_alethia_reth::eip4396::SHASTA_INITIAL_BASE_FEE);
+        }
+
+        let grandparent_number = parent_block.header.number() - 1;
+        let grandparent_timestamp = self
+            .l2_execution_layer
+            .common()
+            .get_block_header(BlockNumberOrTag::Number(grandparent_number))
+            .await?
+            .header
+            .timestamp();
+
+        let timestamp_diff = parent_block
+            .header
+            .timestamp()
+            .checked_sub(grandparent_timestamp)
+            .ok_or_else(|| anyhow::anyhow!("Timestamp underflow occurred"))?;
+
+        let base_fee = taiko_alethia_reth::eip4396::calculate_next_block_eip4396_base_fee(
+            &parent_block.header.inner,
+            timestamp_diff,
+        );
+
+        Ok(base_fee)
     }
 
     // TODO fix that function
