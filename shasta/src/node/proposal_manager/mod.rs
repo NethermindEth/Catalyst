@@ -2,11 +2,10 @@ pub mod batch;
 mod batch_builder;
 pub mod config;
 
+use crate::l1::event_indexer::EventIndexer;
 use crate::{
     l1::execution_layer::ExecutionLayer,
-    l2::{
-        taiko::{Taiko},
-    },
+    l2::taiko::Taiko,
     metrics::Metrics,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
 };
@@ -19,7 +18,7 @@ use common::{
 use config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use tracing::{ error, info};
+use tracing::{error, info};
 
 pub struct BatchManager {
     batch_builder: BatchBuilder,
@@ -67,6 +66,19 @@ impl BatchManager {
         })
     }
 
+    pub async fn try_submit_oldest_batch(
+        &mut self,
+        submit_only_full_batches: bool,
+        event_indexer: Arc<EventIndexer>,
+    ) -> Result<(), Error> {
+        self.batch_builder
+            .try_submit_oldest_batch(
+                self.ethereum_l1.clone(),
+                submit_only_full_batches,
+                event_indexer,
+            )
+            .await
+    }
 
     pub async fn preconfirm_block(
         &mut self,
@@ -135,7 +147,6 @@ impl BatchManager {
 
         Ok(preconfed_block)
     }
-
 
     async fn add_new_l2_block_to_batch(
         &mut self,
@@ -209,13 +220,10 @@ impl BatchManager {
             .await?;
         let l1_height_with_lag = l1_height - self.l1_height_lag;
 
-        Ok(
-            l1_height_with_lag,
-        )
+        Ok(l1_height_with_lag)
     }
 
     fn remove_last_l2_block(&mut self) {
         self.batch_builder.remove_last_l2_block();
     }
-
 }

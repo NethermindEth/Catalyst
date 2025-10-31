@@ -1,6 +1,7 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use super::config::{BatchesToSend, ForcedInclusionBatch};
+use crate::l1::event_indexer::EventIndexer;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
@@ -13,7 +14,6 @@ use common::l1::{
     ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError,
 };
 use tracing::{debug, error, trace, warn};
-use crate::l1::event_indexer::EventIndexer;
 
 pub struct BatchBuilder {
     config: BatchBuilderConfig,
@@ -335,7 +335,7 @@ impl BatchBuilder {
                     batch.anchor_block_id,
                     batch.coinbase,
                     0, // TODO fill num_forced_inclusion
-                    event_indexer
+                    event_indexer,
                 )
                 .await
             {

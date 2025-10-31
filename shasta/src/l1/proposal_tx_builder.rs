@@ -1,28 +1,29 @@
 //TODO: allow unused code until ProposalBuilder is used
 #![allow(unused)]
 
-use super::{
-    event_indexer::EventIndexer,
-};
-use taiko_bindings::codec_optimized::{CodecOptimized::CodecOptimizedInstance, IInbox::{ProposeInput}, LibBlobs::BlobReference};
-use taiko_bindings::i_inbox::IInbox;
+use super::event_indexer::EventIndexer;
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
-    primitives::{Address, Bytes, aliases::{U24,U48}},
+    primitives::{
+        Address, Bytes,
+        aliases::{U24, U48},
+    },
     providers::{DynProvider, Provider},
     rpc::types::TransactionRequest,
 };
 use anyhow::Error;
 use common::shared::l2_block::L2Block;
 use std::sync::Arc;
-
-use taiko_protocol::shasta::manifest::{
-    BlockManifest, DerivationSourceManifest, ProposalManifest,
+use taiko_bindings::codec_optimized::{
+    CodecOptimized::CodecOptimizedInstance, IInbox::ProposeInput, LibBlobs::BlobReference,
 };
+use taiko_bindings::i_inbox::IInbox;
 
-use tracing::{info,warn};
+use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest, ProposalManifest};
+
 use alloy_json_rpc::RpcError;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
+use tracing::{info, warn};
 
 pub struct ProposalBuilder {
     provider: DynProvider,
@@ -39,7 +40,9 @@ impl ProposalBuilder {
         }
     }
 
-    pub async fn build_propose_tx(&self,
+    #[allow(clippy::too_many_arguments)]
+    pub async fn build_propose_tx(
+        &self,
         l2_blocks: Vec<L2Block>,
         anchor_block_number: u64,
         coinbase: Address,
@@ -49,17 +52,18 @@ impl ProposalBuilder {
         event_indexer: Arc<EventIndexer>,
         num_forced_inclusion: u8,
     ) -> Result<TransactionRequest, Error> {
-        let tx_blob = self.build_propose_blob(
-            l2_blocks,
-            anchor_block_number,
-            coinbase,
-            from,
-            to,
-            prover_auth_bytes,
-            event_indexer,
-            num_forced_inclusion,
-        )
-        .await?;
+        let tx_blob = self
+            .build_propose_blob(
+                l2_blocks,
+                anchor_block_number,
+                coinbase,
+                from,
+                to,
+                prover_auth_bytes,
+                event_indexer,
+                num_forced_inclusion,
+            )
+            .await?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
             Ok(gas) => gas,
             Err(e) => {
@@ -105,7 +109,8 @@ impl ProposalBuilder {
         Ok(tx_blob)
     }
 
-    pub async fn  build_propose_blob(
+    #[allow(clippy::too_many_arguments)]
+    pub async fn build_propose_blob(
         &self,
         l2_blocks: Vec<L2Block>,
         anchor_block_number: u64,
@@ -116,7 +121,6 @@ impl ProposalBuilder {
         event_indexer: Arc<EventIndexer>,
         num_forced_inclusion: u8,
     ) -> Result<TransactionRequest, Error> {
-
         // Read cached propose input params from the event indexer.
         let cached_input_params = event_indexer
             .get_propose_input()
@@ -133,22 +137,25 @@ impl ProposalBuilder {
         for l2_block in &l2_blocks {
             // Build the block manifests.
             block_manifests.push(BlockManifest {
-                    timestamp: l2_block.timestamp_sec,
-                    coinbase,
-                    anchor_block_number,
-                    gas_limit: 0, /* Use 0 for gas limit as it will be set as its parent's gas
-                                   * limit during derivation. */
-                    transactions: vec![]// TODO convert txs //l2_block.prebuilt_tx_list.tx_list.clone(),
+                timestamp: l2_block.timestamp_sec,
+                coinbase,
+                anchor_block_number,
+                gas_limit: 0, /* Use 0 for gas limit as it will be set as its parent's gas
+                               * limit during derivation. */
+                transactions: vec![], // TODO convert txs //l2_block.prebuilt_tx_list.tx_list.clone(),
             });
         }
 
         // Build the proposal manifest.
         let manifest = ProposalManifest {
             prover_auth_bytes,
-            sources: vec![DerivationSourceManifest { blocks: block_manifests }],
+            sources: vec![DerivationSourceManifest {
+                blocks: block_manifests,
+            }],
         };
 
-        let manifest_data = manifest.encode_and_compress()
+        let manifest_data = manifest
+            .encode_and_compress()
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
         let sidecar = common::blob::build_blob_sidecar(&manifest_data)?;
@@ -169,10 +176,7 @@ impl ProposalBuilder {
         };
 
         let codec = CodecOptimizedInstance::new(self.codec_address, self.provider.clone());
-        let encoded_proposal_input = codec
-            .encodeProposeInput(input)
-            .call()
-            .await?;
+        let encoded_proposal_input = codec.encodeProposeInput(input).call().await?;
 
         let tx = TransactionRequest::default()
             .with_from(from)

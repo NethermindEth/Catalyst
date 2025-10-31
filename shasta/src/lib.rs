@@ -8,12 +8,7 @@ mod l2;
 
 use crate::{l1::event_indexer::EventIndexer, utils::config::ShastaConfig};
 use anyhow::Error;
-use common::{
-    shared,
-    metrics,
-    l1::{
-        traits::{PreconferProvider},}
-};
+use common::{l1::traits::PreconferProvider, metrics, shared};
 
 use common::funds_controller::FundsController;
 use common::l1::{self as common_l1};

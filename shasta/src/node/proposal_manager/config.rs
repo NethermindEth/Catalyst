@@ -1,6 +1,6 @@
 use super::batch::Batch;
-use pacaya::l1::bindings::BatchParams; //TODO
 use alloy::primitives::Address;
+use pacaya::l1::bindings::BatchParams; //TODO
 use std::collections::VecDeque;
 
 pub type ForcedInclusionBatch = Option<BatchParams>;
