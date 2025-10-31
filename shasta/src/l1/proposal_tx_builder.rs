@@ -1,6 +1,3 @@
-//TODO: allow unused code until ProposalBuilder is used
-#![allow(unused)]
-
 use super::event_indexer::EventIndexer;
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
@@ -94,15 +91,6 @@ impl ProposalTxBuilder {
             }
         };
 
-        // Get blob count
-        let blob_count = tx_blob
-            .sidecar
-            .as_ref()
-            .map_or(0, |sidecar| sidecar.blobs.len() as u64);
-
-        // Calculate the cost of the eip4844 transaction
-        let eip4844_cost = fees_per_gas.get_eip4844_cost(blob_count, tx_blob_gas).await;
-
         // Update gas params for eip4844 transaction
         let tx_blob = fees_per_gas.update_eip4844(tx_blob, tx_blob_gas);
 
@@ -189,7 +177,7 @@ impl ProposalTxBuilder {
             .with_blob_sidecar(sidecar)
             .with_call(&IInbox::proposeCall {
                 _lookahead: Bytes::new(),
-                _data: Bytes::new(),
+                _data: encoded_proposal_input,
             });
 
         Ok(tx)
