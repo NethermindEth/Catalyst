@@ -25,13 +25,13 @@ use alloy_json_rpc::RpcError;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use tracing::{info, warn};
 
-pub struct ProposalBuilder {
+pub struct ProposalTxBuilder {
     provider: DynProvider,
     codec_address: Address,
     extra_gas_percentage: u64,
 }
 
-impl ProposalBuilder {
+impl ProposalTxBuilder {
     pub fn new(provider: DynProvider, codec_address: Address, extra_gas_percentage: u64) -> Self {
         Self {
             provider,
@@ -142,7 +142,12 @@ impl ProposalBuilder {
                 anchor_block_number,
                 gas_limit: 0, /* Use 0 for gas limit as it will be set as its parent's gas
                                * limit during derivation. */
-                transactions: vec![], // TODO convert txs //l2_block.prebuilt_tx_list.tx_list.clone(),
+                transactions: l2_block
+                    .prebuilt_tx_list
+                    .tx_list
+                    .iter()
+                    .map(|tx| tx.clone().into())
+                    .collect(),
             });
         }
 

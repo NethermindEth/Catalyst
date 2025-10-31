@@ -23,7 +23,7 @@ use tokio::sync::mpsc::Sender;
 
 use super::bindings::IPreconfWhitelist;
 use super::event_indexer::EventIndexer;
-use super::proposal_tx_builder::ProposalBuilder;
+use super::proposal_tx_builder::ProposalTxBuilder;
 use taiko_bindings::i_inbox::IInbox;
 
 use tracing::info;
@@ -199,7 +199,7 @@ impl ExecutionLayer {
         // Build propose transaction
         // TODO fill extra gas percentege from config
         let builder =
-            ProposalBuilder::new(self.provider.clone(), self.contract_addresses.codec, 10);
+            ProposalTxBuilder::new(self.provider.clone(), self.contract_addresses.codec, 10);
         let tx = builder
             .build_propose_tx(
                 l2_blocks,
