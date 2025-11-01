@@ -1,6 +1,5 @@
 mod batch_builder;
 
-use crate::l1::event_indexer::EventIndexer;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
@@ -20,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::utils::proposal::BondInstructionData;
-use alloy::primitives::{Address, B256, U256};
+use alloy::primitives::{B256, U256};
 use taiko_bindings::{
     anchor::LibBonds::BondInstruction,
     codec_optimized::LibBonds::BondInstruction as CodecBondInstruction,
@@ -34,7 +33,6 @@ pub struct BatchManager {
     l1_height_lag: u64,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
-    event_indexer: Arc<EventIndexer>,
 }
 
 impl BatchManager {
@@ -45,7 +43,6 @@ impl BatchManager {
         taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
-        event_indexer: Arc<EventIndexer>,
     ) -> Result<Self, Error> {
         info!(
             "Batch builder config:\n\
@@ -72,7 +69,6 @@ impl BatchManager {
             l1_height_lag,
             metrics,
             cancel_token,
-            event_indexer,
         })
     }
 
@@ -81,11 +77,7 @@ impl BatchManager {
         submit_only_full_batches: bool,
     ) -> Result<(), Error> {
         self.batch_builder
-            .try_submit_oldest_batch(
-                self.ethereum_l1.clone(),
-                submit_only_full_batches,
-                self.event_indexer.clone(),
-            )
+            .try_submit_oldest_batch(self.ethereum_l1.clone(), submit_only_full_batches)
             .await
     }
 
@@ -203,6 +195,8 @@ impl BatchManager {
 
         let target_id = proposal_id - BOND_PROCESSING_DELAY;
         let target_payload = self
+            .ethereum_l1
+            .execution_layer
             .event_indexer
             .get_indexer()
             .get_proposal_by_id(U256::from(target_id))
@@ -226,7 +220,7 @@ impl BatchManager {
     async fn create_new_batch(&mut self) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
         let anchor_block_info = AnchorBlockInfo::new(
-            &self.ethereum_l1.execution_layer.common(),
+            self.ethereum_l1.execution_layer.common(),
             self.l1_height_lag,
         )
         .await?;

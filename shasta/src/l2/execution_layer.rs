@@ -5,7 +5,7 @@ use crate::l2::bindings::BondManager;
 use alloy::{
     consensus::Transaction as AnchorTransaction,
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
-    primitives::{Address, B256, Bytes, FixedBytes},
+    primitives::{Address, B256, Bytes},
     providers::{DynProvider, Provider},
     rpc::types::Transaction,
     signers::Signature,

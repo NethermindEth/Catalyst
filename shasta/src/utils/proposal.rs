@@ -1,9 +1,6 @@
 use crate::shared::l2_block::L2Block;
-use crate::shared::l2_tx_lists::encode_and_compress;
 use alloy::primitives::{Address, B256};
-use std::time::Instant;
 use taiko_bindings::anchor::LibBonds::BondInstruction;
-use tracing::{debug, warn};
 
 #[derive(Default, Clone)]
 pub struct BondInstructionData {

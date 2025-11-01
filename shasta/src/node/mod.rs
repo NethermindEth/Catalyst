@@ -15,10 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::metrics::Metrics;
-use crate::{
-    l1::{event_indexer::EventIndexer, execution_layer::ExecutionLayer},
-    l2::taiko::Taiko,
-};
+use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
 use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use proposal_manager::BatchManager;
 
@@ -29,7 +26,6 @@ pub struct Node {
     taiko: Arc<Taiko>,
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
-    event_indexer: Arc<EventIndexer>,
     metrics: Arc<Metrics>,
     proposal_manager: BatchManager, //TODO
 }
@@ -40,7 +36,6 @@ impl Node {
         cancel_token: CancellationToken,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
-        event_indexer: Arc<EventIndexer>,
         metrics: Arc<Metrics>,
         batch_builder_config: BatchBuilderConfig,
     ) -> Result<Self, Error> {
@@ -67,7 +62,6 @@ impl Node {
             taiko.clone(),
             metrics.clone(),
             cancel_token.clone(),
-            event_indexer.clone(),
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;
@@ -79,7 +73,6 @@ impl Node {
             taiko,
             watchdog,
             operator,
-            event_indexer,
             metrics,
             proposal_manager,
         })

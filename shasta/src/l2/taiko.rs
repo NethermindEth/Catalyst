@@ -21,7 +21,6 @@ use common::{
     },
     metrics::Metrics,
     shared::{
-        l2_block::L2Block,
         l2_slot_info::L2SlotInfo,
         l2_tx_lists::{self, PreBuiltTxList},
     },

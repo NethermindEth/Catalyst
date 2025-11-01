@@ -6,7 +6,7 @@ mod utils;
 mod l1;
 mod l2;
 
-use crate::{l1::event_indexer::EventIndexer, utils::config::ShastaConfig};
+use crate::utils::config::ShastaConfig;
 use anyhow::Error;
 use common::{l1::traits::PreconferProvider, metrics, shared};
 
@@ -37,18 +37,6 @@ pub async fn create_shasta_node(
 
     let shasta_config = ShastaConfig::read_env_variables();
     info!("Shasta config: {}", shasta_config);
-
-    let event_indexer = Arc::new(
-        EventIndexer::new(
-            config
-                .l1_rpc_urls
-                .first()
-                .expect("L1 RPC URL is required")
-                .clone(),
-            shasta_config.shasta_inbox.clone(),
-        )
-        .await?,
-    );
 
     let (transaction_error_sender, _transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
@@ -118,7 +106,6 @@ pub async fn create_shasta_node(
         cancel_token.clone(),
         ethereum_l1.clone(),
         taiko.clone(),
-        event_indexer,
         metrics.clone(),
         batch_builder_config,
     )

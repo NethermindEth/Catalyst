@@ -1,20 +1,19 @@
 use std::{collections::VecDeque, sync::Arc};
 
-use crate::l1::event_indexer::EventIndexer;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
     utils::proposal::{BondInstructionData, Proposal},
 };
-use alloy::primitives::{Address, B256};
+use alloy::primitives::Address;
 use anyhow::Error;
 use common::l1::{
     ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError,
 };
 use common::shared::anchor_block_info::AnchorBlockInfo;
 use pacaya::node::batch_manager::config::BatchBuilderConfig;
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, trace, warn};
 
 pub struct BatchBuilder {
     config: BatchBuilderConfig,
@@ -280,7 +279,6 @@ impl BatchBuilder {
         &mut self,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         submit_only_full_batches: bool,
-        event_indexer: Arc<EventIndexer>,
     ) -> Result<(), Error> {
         if self.current_proposal.is_some()
             && (!submit_only_full_batches
@@ -330,8 +328,7 @@ impl BatchBuilder {
                     batch.l2_blocks.clone(),
                     batch.anchor_block_id,
                     batch.coinbase,
-                    0, // TODO fill num_forced_inclusion
-                    event_indexer,
+                    batch.num_forced_inclusion,
                 )
                 .await
             {
