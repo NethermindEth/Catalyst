@@ -6,7 +6,7 @@ mod utils;
 mod l1;
 mod l2;
 
-use crate::{l1::event_indexer::EventIndexer, utils::config::ShastaConfig};
+use crate::utils::config::ShastaConfig;
 use anyhow::Error;
 use common::{l1::traits::PreconferProvider, metrics, shared};
 
@@ -16,6 +16,7 @@ use common::l2::engine::{L2Engine, L2EngineConfig};
 use common::{config::Config, config::ConfigTrait};
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -36,18 +37,6 @@ pub async fn create_shasta_node(
 
     let shasta_config = ShastaConfig::read_env_variables();
     info!("Shasta config: {}", shasta_config);
-
-    let event_indexer = Arc::new(
-        EventIndexer::new(
-            config
-                .l1_rpc_urls
-                .first()
-                .expect("L1 RPC URL is required")
-                .clone(),
-            shasta_config.shasta_inbox.clone(),
-        )
-        .await?,
-    );
 
     let (transaction_error_sender, _transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
@@ -100,7 +89,7 @@ pub async fn create_shasta_node(
 
     let max_anchor_height_offset = 64; // TODO fetch actual max from protocol config
 
-    let batch_builder_config = node::proposal_manager::config::BatchBuilderConfig {
+    let batch_builder_config = BatchBuilderConfig {
         max_bytes_size_of_batch: config.max_bytes_size_of_batch,
         max_blocks_per_batch,
         l1_slot_duration_sec: config.l1_slot_duration_sec,
@@ -117,7 +106,6 @@ pub async fn create_shasta_node(
         cancel_token.clone(),
         ethereum_l1.clone(),
         taiko.clone(),
-        event_indexer,
         metrics.clone(),
         batch_builder_config,
     )

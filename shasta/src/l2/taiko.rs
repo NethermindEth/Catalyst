@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use super::execution_layer::L2ExecutionLayer;
+use crate::utils::proposal::Proposal;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
@@ -20,7 +21,6 @@ use common::{
     },
     metrics::Metrics,
     shared::{
-        l2_block::L2Block,
         l2_slot_info::L2SlotInfo,
         l2_tx_lists::{self, PreBuiltTxList},
     },
@@ -239,10 +239,7 @@ impl Taiko {
     #[allow(clippy::too_many_arguments)]
     pub async fn advance_head_to_new_l2_block(
         &self,
-        l2_block: L2Block,
-        anchor_origin_height: u64,
-        anchor_block_state_root: B256,
-        anchor_block_hash: B256,
+        proposal: &Proposal,
         l2_slot_info: &L2SlotInfo,
         end_of_sequencing: bool,
         is_forced_inclusion: bool,
@@ -250,26 +247,19 @@ impl Taiko {
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         tracing::debug!(
             "Submitting new L2 block to the Taiko driver with {} txs",
-            l2_block.prebuilt_tx_list.tx_list.len()
+            proposal.get_last_block_tx_len()?
         );
+
+        let timestamp = proposal.get_last_block_timestamp()?;
 
         let sharing_pctg = 0; // TODO
 
         let anchor_tx = self
             .l2_execution_layer
-            .construct_anchor_tx(
-                &self.l2_execution_layer.config.signer.get_address(), // TODO fix
-                u16::try_from(l2_slot_info.parent_id() + 1)?,
-                *l2_slot_info.parent_hash(),
-                anchor_origin_height,
-                anchor_block_hash,
-                anchor_block_state_root,
-                l2_slot_info.base_fee(),
-                1, // TODO proposal id
-            )
+            .construct_anchor_tx(proposal, l2_slot_info)
             .await?;
         let tx_list = std::iter::once(anchor_tx)
-            .chain(l2_block.prebuilt_tx_list.tx_list.into_iter())
+            .chain(proposal.get_last_block_tx_list_copy()?.into_iter())
             .collect::<Vec<_>>();
 
         let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
@@ -279,10 +269,10 @@ impl Taiko {
             base_fee_per_gas: l2_slot_info.base_fee(),
             block_number: l2_slot_info.parent_id() + 1,
             extra_data: format!("0x{:0>64}", hex::encode(extra_data)),
-            fee_recipient: self.coinbase.clone(),
+            fee_recipient: proposal.coinbase.to_string(),
             gas_limit: 241_000_000u64,
             parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
-            timestamp: l2_block.timestamp_sec,
+            timestamp,
             transactions: format!("0x{}", hex::encode(tx_list_bytes)),
         };
 

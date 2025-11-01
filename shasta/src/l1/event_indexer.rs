@@ -14,17 +14,20 @@ pub struct EventIndexer {
 }
 
 impl EventIndexer {
-    pub async fn new(l1_ws_rpc_url: String, inbox_contract_address: String) -> Result<Self, Error> {
+    pub async fn new(
+        l1_ws_rpc_url: String,
+        inbox_contract_address: Address,
+    ) -> Result<Self, Error> {
         let config = ShastaEventIndexerConfig {
             l1_subscription_source: SubscriptionSource::Ws(Url::from_str(l1_ws_rpc_url.as_str())?),
-            inbox_address: Address::from_str(&inbox_contract_address)?,
+            inbox_address: inbox_contract_address,
         };
 
         let indexer = ShastaEventIndexer::new(config).await?;
         indexer.clone().spawn();
-        debug!("Spawned Shasta event indexer");
+        debug!("event indexer: Spawned Shasta");
         indexer.wait_historical_indexing_finished().await;
-
+        debug!("event indexer: historical indexing finished");
         Ok(Self { indexer })
     }
 

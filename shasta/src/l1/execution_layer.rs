@@ -39,6 +39,7 @@ pub struct ExecutionLayer {
     metrics: Arc<Metrics>,
     extra_gas_percentage: u64,
     contract_addresses: ContractAddresses,
+    pub event_indexer: Arc<EventIndexer>,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -82,6 +83,18 @@ impl ELTrait for ExecutionLayer {
             proposer_checker: shasta_config.proposerChecker,
         };
 
+        let event_indexer = Arc::new(
+            EventIndexer::new(
+                common_config
+                    .execution_rpc_urls
+                    .first()
+                    .expect("L1 RPC URL is required")
+                    .clone(),
+                specific_config.shasta_inbox,
+            )
+            .await?,
+        );
+
         Ok(Self {
             common,
             provider,
@@ -91,6 +104,7 @@ impl ELTrait for ExecutionLayer {
             metrics,
             extra_gas_percentage: common_config.extra_gas_percentage,
             contract_addresses,
+            event_indexer,
         })
     }
 
@@ -188,7 +202,6 @@ impl ExecutionLayer {
         anchor_block_number: u64,
         coinbase: Address,
         num_forced_inclusion: u8,
-        event_indexer: Arc<EventIndexer>,
     ) -> Result<(), Error> {
         info!(
             "📦 Proposing with {} blocks | num_forced_inclusion: {}",
@@ -208,7 +221,7 @@ impl ExecutionLayer {
                 self.preconfer_address,
                 self.contract_addresses.shasta_inbox,
                 Bytes::new(), // TODO fill prover_auth_bytes
-                event_indexer,
+                self.event_indexer.clone(),
                 num_forced_inclusion,
             )
             .await?;

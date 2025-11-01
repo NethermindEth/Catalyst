@@ -15,10 +15,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 use crate::metrics::Metrics;
-use crate::{
-    l1::{event_indexer::EventIndexer, execution_layer::ExecutionLayer},
-    l2::taiko::Taiko,
-};
+use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use proposal_manager::BatchManager;
 
 pub struct Node {
@@ -28,7 +26,6 @@ pub struct Node {
     taiko: Arc<Taiko>,
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
-    event_indexer: Arc<EventIndexer>,
     metrics: Arc<Metrics>,
     proposal_manager: BatchManager, //TODO
 }
@@ -39,9 +36,8 @@ impl Node {
         cancel_token: CancellationToken,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
-        event_indexer: Arc<EventIndexer>,
         metrics: Arc<Metrics>,
-        batch_builder_config: proposal_manager::config::BatchBuilderConfig,
+        batch_builder_config: BatchBuilderConfig,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -77,7 +73,6 @@ impl Node {
             taiko,
             watchdog,
             operator,
-            event_indexer,
             metrics,
             proposal_manager,
         })
@@ -179,10 +174,7 @@ impl Node {
             if self.has_verified_unproposed_batches().await?
                 && let Err(err) = self
                     .proposal_manager
-                    .try_submit_oldest_batch(
-                        current_status.is_preconfer(),
-                        self.event_indexer.clone(),
-                    )
+                    .try_submit_oldest_batch(current_status.is_preconfer())
                     .await
             {
                 if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
