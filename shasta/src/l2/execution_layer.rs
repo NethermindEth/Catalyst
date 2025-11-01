@@ -73,10 +73,9 @@ impl L2ExecutionLayer {
         proposal: &Proposal,
         l2_slot_info: &L2SlotInfo,
     ) -> Result<Transaction, Error> {
-        let l2_block_number: u16 = u16::try_from(l2_slot_info.parent_id() + 1)?;
         debug!(
             "Constructing anchor transaction for block number: {}",
-            l2_block_number
+            l2_slot_info.parent_id() + 1
         );
         let nonce = self
             .provider
@@ -103,7 +102,6 @@ impl L2ExecutionLayer {
                     },
                 },
                 Anchor::BlockParams {
-                    blockIndex: l2_block_number,
                     anchorBlockNumber: proposal.anchor_block_id.try_into()?,
                     anchorBlockHash: proposal.anchor_block_hash,
                     anchorStateRoot: proposal.anchor_state_root,

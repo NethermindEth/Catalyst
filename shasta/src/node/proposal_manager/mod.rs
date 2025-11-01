@@ -250,6 +250,7 @@ impl BatchManager {
 
     async fn calculate_anchor_block_id(&self) -> Result<u64, Error> {
         // TODO get anchor from l2
+        // TODO implement MIN_ANCHOR_OFFSET
         let l1_height = self
             .ethereum_l1
             .execution_layer
