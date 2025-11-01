@@ -38,7 +38,7 @@ pub struct Proposal {
 
 impl Proposal {
     pub fn compress(&mut self) {
-        // TODO implement propper compression
+        // TODO implement proper compression
     }
 
     pub fn get_last_block_timestamp(&self) -> Result<u64, anyhow::Error> {
