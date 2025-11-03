@@ -1,10 +1,11 @@
+pub mod proposal_manager;
 use std::sync::Arc;
 
 use anyhow::Error;
 use common::{
-    l1::{ethereum_l1::EthereumL1, traits::ELTrait},
-    l2::taiko_driver::{OperationType, TaikoDriver},
-    shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
+    l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
+    l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
+    shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
     utils as common_utils,
 };
 use pacaya::node::operator::Status as OperatorStatus;
@@ -13,10 +14,10 @@ use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use crate::{
-    l1::{event_indexer::EventIndexer, execution_layer::ExecutionLayer},
-    l2::taiko::Taiko,
-};
+use crate::metrics::Metrics;
+use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
+use proposal_manager::BatchManager;
 
 pub struct Node {
     config: NodeConfig,
@@ -25,7 +26,8 @@ pub struct Node {
     taiko: Arc<Taiko>,
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
-    event_indexer: Arc<EventIndexer>,
+    metrics: Arc<Metrics>,
+    proposal_manager: BatchManager, //TODO
 }
 
 impl Node {
@@ -34,7 +36,8 @@ impl Node {
         cancel_token: CancellationToken,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
-        event_indexer: Arc<EventIndexer>,
+        metrics: Arc<Metrics>,
+        batch_builder_config: BatchBuilderConfig,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -50,6 +53,19 @@ impl Node {
             cancel_token.clone(),
             ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
         );
+
+        let proposal_manager = BatchManager::new(
+            //TODO
+            config.l1_height_lag,
+            batch_builder_config,
+            ethereum_l1.clone(),
+            taiko.clone(),
+            metrics.clone(),
+            cancel_token.clone(),
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;
+
         Ok(Self {
             config,
             cancel_token,
@@ -57,7 +73,8 @@ impl Node {
             taiko,
             watchdog,
             operator,
-            event_indexer,
+            metrics,
+            proposal_manager,
         })
     }
 
@@ -106,56 +123,89 @@ impl Node {
         }
     }
 
+    async fn preconfirm_block(
+        &mut self,
+        pending_tx_list: Option<PreBuiltTxList>,
+        l2_slot_info: &L2SlotInfo,
+        end_of_sequencing: bool,
+        allow_forced_inclusion: bool,
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+        let result = self
+            .proposal_manager
+            .preconfirm_block(
+                pending_tx_list,
+                l2_slot_info,
+                end_of_sequencing,
+                allow_forced_inclusion,
+            )
+            .await?;
+        Ok(result)
+    }
+
     async fn main_block_preconfirmation_step(&mut self) -> Result<(), Error> {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
 
         // TODO preconfirmation
-        if current_status.is_preconfer()
-            && let Some(pending_tx_list) = pending_tx_list
-        {
-            let l2_block = L2Block::new_from(
-                pending_tx_list,
-                std::time::SystemTime::now() // temp solution
-                    .duration_since(std::time::UNIX_EPOCH)?
-                    .as_secs(),
-            );
-            let anchor_height = self
-                .ethereum_l1
-                .execution_layer
-                .common()
-                .get_latest_block_id()
-                .await?
-                - self.config.l1_height_lag;
-
-            let anchor_hash = self
-                .ethereum_l1
-                .execution_layer
-                .common()
-                .get_block_hash(anchor_height)
-                .await?;
-
-            let anchor_block_state_root = self
-                .ethereum_l1
-                .execution_layer
-                .common()
-                .get_block_state_root_by_number(anchor_height)
-                .await?;
-
-            self.taiko
-                .advance_head_to_new_l2_block(
-                    l2_block,
-                    anchor_height,
-                    anchor_block_state_root,
-                    anchor_hash,
+        if current_status.is_preconfer() && current_status.is_driver_synced() {
+            let _preconfed_block = self
+                .preconfirm_block(
+                    pending_tx_list,
                     &l2_slot_info,
-                    false,
-                    false,
-                    OperationType::Preconfirm,
+                    current_status.is_end_of_sequencing(),
+                    false, // TODO preconf FI
                 )
                 .await?;
+
+            // TODO fix verification
+            // self.verify_preconfed_block(preconfed_block).await?;
         }
 
+        // TODO Get the transaction status before checking the error channel
+        // to avoid race condition
+        let transaction_in_progress = self
+            .ethereum_l1
+            .execution_layer
+            .is_transaction_in_progress()
+            .await?;
+
+        if current_status.is_submitter() && !transaction_in_progress {
+            // first check verifier
+            if self.has_verified_unproposed_batches().await?
+                && let Err(err) = self
+                    .proposal_manager
+                    .try_submit_oldest_batch(current_status.is_preconfer())
+                    .await
+            {
+                if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
+                    self.handle_transaction_error(
+                        transaction_error,
+                        &current_status,
+                        &l2_slot_info,
+                    )
+                    .await?;
+                }
+                return Err(err);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Returns true if the operation succeeds
+    async fn has_verified_unproposed_batches(&mut self) -> Result<bool, Error> {
+        // TODO implement proper verification
+        Ok(true)
+    }
+
+    // TODO handle transaction error properly
+    async fn handle_transaction_error(
+        &mut self,
+        error: &TransactionError,
+        _current_status: &OperatorStatus,
+        _l2_slot_info: &L2SlotInfo,
+    ) -> Result<(), Error> {
+        info!("Handling transaction error: {error}");
         Ok(())
     }
 

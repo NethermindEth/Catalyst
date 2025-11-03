@@ -1,4 +1,5 @@
 pub mod alloy_tools;
+pub mod anchor_block_info;
 pub mod execution_layer;
 pub mod head_verifier;
 pub mod l2_block;

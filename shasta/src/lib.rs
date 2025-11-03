@@ -6,14 +6,17 @@ mod utils;
 mod l1;
 mod l2;
 
-use crate::{l1::event_indexer::EventIndexer, utils::config::ShastaConfig};
+use crate::utils::config::ShastaConfig;
 use anyhow::Error;
+use common::{l1::traits::PreconferProvider, metrics, shared};
+
 use common::funds_controller::FundsController;
 use common::l1::{self as common_l1};
 use common::l2::engine::{L2Engine, L2EngineConfig};
-use common::{config::Config, config::ConfigTrait, metrics::Metrics};
+use common::{config::Config, config::ConfigTrait};
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -21,7 +24,7 @@ use tracing::info;
 
 pub async fn create_shasta_node(
     config: Config,
-    metrics: Arc<Metrics>,
+    metrics: Arc<metrics::Metrics>,
     cancel_token: CancellationToken,
 ) -> Result<(), Error> {
     info!("Creating Shasta node");
@@ -34,21 +37,6 @@ pub async fn create_shasta_node(
 
     let shasta_config = ShastaConfig::read_env_variables();
     info!("Shasta config: {}", shasta_config);
-
-    let event_indexer = Arc::new(
-        EventIndexer::new(
-            config
-                .l1_rpc_urls
-                .first()
-                .expect("L1 RPC URL is required")
-                .clone(),
-            shasta_config.shasta_inbox.clone(),
-            config
-                .fork_switch_l2_height
-                .ok_or_else(|| anyhow::anyhow!("Fork switch L2 height is required"))?,
-        )
-        .await?,
-    );
 
     let (transaction_error_sender, _transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
@@ -93,12 +81,33 @@ pub async fn create_shasta_node(
         simulate_not_submitting_at_the_end_of_epoch: false,
     };
 
+    let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
+        5 // TODO fetch actual max from protocol config
+    } else {
+        config.max_blocks_per_batch
+    };
+
+    let max_anchor_height_offset = 64; // TODO fetch actual max from protocol config
+
+    let batch_builder_config = BatchBuilderConfig {
+        max_bytes_size_of_batch: config.max_bytes_size_of_batch,
+        max_blocks_per_batch,
+        l1_slot_duration_sec: config.l1_slot_duration_sec,
+        max_time_shift_between_blocks_sec: config.max_time_shift_between_blocks_sec,
+        max_anchor_height_offset: max_anchor_height_offset
+            - config.max_anchor_height_offset_reduction,
+        default_coinbase: ethereum_l1.execution_layer.get_preconfer_alloy_address(),
+        preconf_min_txs: config.preconf_min_txs,
+        preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
+    };
+
     let node = Node::new(
         node_config,
         cancel_token.clone(),
         ethereum_l1.clone(),
         taiko.clone(),
-        event_indexer,
+        metrics.clone(),
+        batch_builder_config,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
