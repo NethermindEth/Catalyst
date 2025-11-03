@@ -1,6 +1,7 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
 
+use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
 use alloy::primitives::Bytes;
 use alloy::{eips::BlockNumberOrTag, primitives::Address, providers::DynProvider};
@@ -238,5 +239,21 @@ impl ExecutionLayer {
 
     pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {
         self.transaction_monitor.is_transaction_in_progress().await
+    }
+
+    pub async fn fetch_protocol_config(&self) -> Result<ProtocolConfig, Error> {
+        let shasta_inbox = IInbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
+        let shasta_config = shasta_inbox
+            .getConfig()
+            .call()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to call getConfig for Inbox: {e}"))?;
+
+        info!(
+            "Shasta config: basefeeSharingPctg: {}",
+            shasta_config.basefeeSharingPctg,
+        );
+
+        Ok(ProtocolConfig::from(&shasta_config))
     }
 }

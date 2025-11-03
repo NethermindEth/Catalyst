@@ -59,11 +59,11 @@ pub async fn create_shasta_node(
         taiko_config.signer.get_address(),
     )?)
     .map_err(|e| anyhow::anyhow!("Failed to create L2Engine: {}", e))?;
+    let protocol_config = ethereum_l1.execution_layer.fetch_protocol_config().await?;
 
     let taiko = crate::l2::taiko::Taiko::new(
         ethereum_l1.slot_clock.clone(),
-        // TODO fetch actual protocol config
-        pacaya::l1::protocol_config::ProtocolConfig::default(),
+        protocol_config,
         metrics.clone(),
         taiko_config,
         l2_engine,
