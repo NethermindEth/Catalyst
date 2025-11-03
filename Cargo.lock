@@ -79,9 +79,9 @@ name = "alethia-reth-block"
 version = "0.1.0"
 source = "git+https://github.com/taikoxyz/alethia-reth?branch=main#a9f7cfee9fc6d950eee54628786c808bcf313cf6"
 dependencies = [
- "alethia-reth-chainspec",
- "alethia-reth-evm",
- "alethia-reth-primitives",
+ "alethia-reth-chainspec 0.1.0",
+ "alethia-reth-evm 0.1.0",
+ "alethia-reth-primitives 0.1.0",
  "alloy-consensus",
  "alloy-eips",
  "alloy-evm",
@@ -125,13 +125,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "alethia-reth-chainspec"
+version = "0.5.0"
+source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=361bbdfe9028477ccd1bf95ac9d16c46a7cc6337#361bbdfe9028477ccd1bf95ac9d16c46a7cc6337"
+dependencies = [
+ "alloy-chains",
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-genesis",
+ "alloy-hardforks 0.3.5",
+ "alloy-primitives",
+ "auto_impl",
+ "eyre",
+ "reth",
+ "reth-cli",
+ "reth-ethereum-forks",
+ "reth-evm",
+ "reth-network-peers",
+ "reth-trie-common",
+ "serde_json",
+]
+
+[[package]]
 name = "alethia-reth-consensus"
 version = "0.1.0"
 source = "git+https://github.com/taikoxyz/alethia-reth?branch=main#a9f7cfee9fc6d950eee54628786c808bcf313cf6"
 dependencies = [
- "alethia-reth-chainspec",
- "alethia-reth-evm",
- "alethia-reth-primitives",
+ "alethia-reth-chainspec 0.1.0",
+ "alethia-reth-evm 0.1.0",
+ "alethia-reth-primitives 0.1.0",
+ "alloy-consensus",
+ "alloy-hardforks 0.3.5",
+ "alloy-primitives",
+ "alloy-sol-types",
+ "eyre",
+ "reth",
+ "reth-ethereum",
+ "reth-node-api",
+ "reth-node-builder",
+ "reth-primitives-traits",
+ "reth-provider",
+ "tracing",
+]
+
+[[package]]
+name = "alethia-reth-consensus"
+version = "0.5.0"
+source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=361bbdfe9028477ccd1bf95ac9d16c46a7cc6337#361bbdfe9028477ccd1bf95ac9d16c46a7cc6337"
+dependencies = [
+ "alethia-reth-chainspec 0.5.0",
+ "alethia-reth-evm 0.5.0",
+ "alethia-reth-primitives 0.5.0",
  "alloy-consensus",
  "alloy-hardforks 0.3.5",
  "alloy-primitives",
@@ -151,7 +195,7 @@ name = "alethia-reth-db"
 version = "0.1.0"
 source = "git+https://github.com/taikoxyz/alethia-reth?branch=main#a9f7cfee9fc6d950eee54628786c808bcf313cf6"
 dependencies = [
- "alethia-reth-primitives",
+ "alethia-reth-primitives 0.1.0",
  "alloy-primitives",
  "alloy-rlp",
  "reth",
@@ -182,11 +226,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "alethia-reth-evm"
+version = "0.5.0"
+source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=361bbdfe9028477ccd1bf95ac9d16c46a7cc6337#361bbdfe9028477ccd1bf95ac9d16c46a7cc6337"
+dependencies = [
+ "alloy-evm",
+ "alloy-primitives",
+ "reth",
+ "reth-ethereum",
+ "reth-ethereum-engine-primitives",
+ "reth-evm",
+ "reth-evm-ethereum",
+ "reth-primitives-traits",
+ "reth-provider",
+ "reth-revm",
+ "revm-database-interface",
+ "tracing",
+]
+
+[[package]]
 name = "alethia-reth-primitives"
 version = "0.1.0"
 source = "git+https://github.com/taikoxyz/alethia-reth?branch=main#a9f7cfee9fc6d950eee54628786c808bcf313cf6"
 dependencies = [
- "alethia-reth-chainspec",
+ "alethia-reth-chainspec 0.1.0",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rpc-types-engine",
+ "alloy-rpc-types-eth",
+ "alloy-serde",
+ "reth",
+ "reth-engine-local",
+ "reth-ethereum",
+ "reth-ethereum-engine-primitives",
+ "reth-node-api",
+ "reth-payload-primitives",
+ "reth-primitives-traits",
+ "serde",
+ "serde_with",
+ "sha2 0.10.9",
+ "tracing",
+]
+
+[[package]]
+name = "alethia-reth-primitives"
+version = "0.5.0"
+source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=361bbdfe9028477ccd1bf95ac9d16c46a7cc6337#361bbdfe9028477ccd1bf95ac9d16c46a7cc6337"
+dependencies = [
+ "alethia-reth-chainspec 0.5.0",
  "alloy-primitives",
  "alloy-rlp",
  "alloy-rpc-types-engine",
@@ -211,11 +298,11 @@ version = "0.1.0"
 source = "git+https://github.com/taikoxyz/alethia-reth?branch=main#a9f7cfee9fc6d950eee54628786c808bcf313cf6"
 dependencies = [
  "alethia-reth-block",
- "alethia-reth-chainspec",
- "alethia-reth-consensus",
+ "alethia-reth-chainspec 0.1.0",
+ "alethia-reth-consensus 0.1.0",
  "alethia-reth-db",
- "alethia-reth-evm",
- "alethia-reth-primitives",
+ "alethia-reth-evm 0.1.0",
+ "alethia-reth-primitives 0.1.0",
  "alloy-consensus",
  "alloy-eips",
  "alloy-hardforks 0.3.5",
@@ -1821,7 +1908,7 @@ dependencies = [
 [[package]]
 name = "bindings"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=35a5a287e148f11598baa8229a39f84bf731f49f#35a5a287e148f11598baa8229a39f84bf731f49f"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1ce709490ae2107d53db664409b56476f730c46f#1ce709490ae2107d53db664409b56476f730c46f"
 dependencies = [
  "alloy",
  "serde",
@@ -3358,7 +3445,7 @@ dependencies = [
 [[package]]
 name = "event-indexer"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=35a5a287e148f11598baa8229a39f84bf731f49f#35a5a287e148f11598baa8229a39f84bf731f49f"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1ce709490ae2107d53db664409b56476f730c46f#1ce709490ae2107d53db664409b56476f730c46f"
 dependencies = [
  "alloy",
  "alloy-contract",
@@ -6615,7 +6702,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=35a5a287e148f11598baa8229a39f84bf731f49f#35a5a287e148f11598baa8229a39f84bf731f49f"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1ce709490ae2107d53db664409b56476f730c46f#1ce709490ae2107d53db664409b56476f730c46f"
 dependencies = [
  "alloy",
  "alloy-consensus",
@@ -9890,10 +9977,10 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 [[package]]
 name = "rpc"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=35a5a287e148f11598baa8229a39f84bf731f49f#35a5a287e148f11598baa8229a39f84bf731f49f"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1ce709490ae2107d53db664409b56476f730c46f#1ce709490ae2107d53db664409b56476f730c46f"
 dependencies = [
- "alethia-reth-evm",
- "alethia-reth-primitives",
+ "alethia-reth-evm 0.1.0",
+ "alethia-reth-primitives 0.1.0",
  "alethia-reth-rpc",
  "alloy",
  "alloy-contract",
@@ -10537,6 +10624,7 @@ dependencies = [
 name = "shasta"
 version = "1.21.7"
 dependencies = [
+ "alethia-reth-consensus 0.5.0",
  "alloy",
  "alloy-json-rpc",
  "alloy-rlp",
