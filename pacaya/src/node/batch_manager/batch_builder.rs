@@ -65,6 +65,7 @@ impl BatchBuilder {
             };
 
             let mut new_total_bytes = batch.total_bytes + l2_block.prebuilt_tx_list.bytes_length;
+
             if !self.config.is_within_bytes_limit(new_total_bytes) {
                 // first compression, compressing the batch without the new L2 block
                 batch.compress();
