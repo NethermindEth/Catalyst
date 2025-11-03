@@ -20,10 +20,6 @@ use tracing::{error, info};
 
 use crate::utils::proposal::BondInstructionData;
 use alloy::primitives::{B256, U256};
-use taiko_bindings::{
-    anchor::LibBonds::BondInstruction,
-    codec_optimized::LibBonds::BondInstruction as CodecBondInstruction,
-};
 use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
 
 pub struct BatchManager {
@@ -203,18 +199,11 @@ impl BatchManager {
             .ok_or_else(|| anyhow::anyhow!("Can't get bond instruction from event_indexer"))?;
         let target_hash =
             B256::from_slice(target_payload.core_state.bondInstructionsHash.as_slice());
-        let instructions = target_payload
-            .bond_instructions
-            .into_iter()
-            .map(|instruction: CodecBondInstruction| BondInstruction {
-                proposalId: instruction.proposalId,
-                bondType: instruction.bondType,
-                payer: instruction.payer,
-                payee: instruction.payee,
-            })
-            .collect();
 
-        Ok(BondInstructionData::new(instructions, target_hash))
+        Ok(BondInstructionData::new(
+            target_payload.bond_instructions,
+            target_hash,
+        ))
     }
 
     async fn create_new_batch(&mut self) -> Result<u64, Error> {
