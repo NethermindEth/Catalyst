@@ -49,8 +49,8 @@ discv5 = { version = "0.9.1", default-features = false, features = ["libp2p"] }
 dotenvy = { version = "0.15", default-features = false }
 ecdsa = { version = "0.16", default-features = false }
 elliptic-curve = { version = "0.13", default-features = false }
-flate2 = { version = "1.1", default-features = false, features = [
-    "rust_backend",
+flate2 = { version = "1.0", default-features = false, features = [
+    "zlib",
 ] }
 futures = { version = "0.3.31", default-features = false }
 futures-util = { version = "0.3", default-features = false }
