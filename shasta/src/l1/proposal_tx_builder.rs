@@ -16,7 +16,7 @@ use taiko_bindings::codec_optimized::{
 };
 use taiko_bindings::i_inbox::IInbox;
 
-use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest, ProposalManifest};
+use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 
 use alloy_json_rpc::RpcError;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
@@ -140,11 +140,9 @@ impl ProposalTxBuilder {
         }
 
         // Build the proposal manifest.
-        let manifest = ProposalManifest {
+        let manifest = DerivationSourceManifest {
             prover_auth_bytes,
-            sources: vec![DerivationSourceManifest {
-                blocks: block_manifests,
-            }],
+            blocks: block_manifests,
         };
 
         let manifest_data = manifest
