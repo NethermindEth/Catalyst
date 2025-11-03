@@ -312,3 +312,16 @@ impl Bridgeable for Taiko {
             .await
     }
 }
+
+mod tests {
+    #[test]
+    fn test_encode_extra_data() {
+        use super::Taiko;
+
+        let extra_data = Taiko::encode_extra_data(30, true);
+        assert_eq!(extra_data, 0b00011110_00000001);
+
+        let extra_data = Taiko::encode_extra_data(50, false);
+        assert_eq!(extra_data, 0b00110010_00000000);
+    }
+}
