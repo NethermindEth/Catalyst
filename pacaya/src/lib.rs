@@ -19,7 +19,7 @@ mod chain_monitor;
 mod forced_inclusion;
 pub mod l1;
 pub mod l2;
-mod node;
+pub mod node;
 pub mod utils;
 
 pub async fn create_pacaya_node(

@@ -2,10 +2,10 @@
 #![allow(dead_code)]
 use crate::l2::bindings::BondManager;
 
-use super::bindings::Anchor;
 use alloy::{
+    consensus::Transaction as AnchorTransaction,
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
-    primitives::{Address, B256, Bytes, FixedBytes},
+    primitives::{Address, B256, Bytes},
     providers::{DynProvider, Provider},
     rpc::types::Transaction,
     signers::Signature,
@@ -15,10 +15,13 @@ use common::shared::{alloy_tools, execution_layer::ExecutionLayer as ExecutionLa
 use common::{
     crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY},
     l1::traits::PreconferBondProvider,
+    shared::l2_slot_info::L2SlotInfo,
 };
 use pacaya::l2::config::TaikoConfig;
-use taiko_event_indexer::interface::ShastaProposeInput;
+use taiko_bindings::anchor::Anchor;
 use tracing::{debug, info, warn};
+
+use crate::utils::proposal::Proposal;
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -26,7 +29,7 @@ pub struct L2ExecutionLayer {
     shasta_anchor: Anchor::AnchorInstance<DynProvider>,
     bond_manager: Address,
     chain_id: u64,
-    config: TaikoConfig,
+    pub config: TaikoConfig,
 }
 
 impl L2ExecutionLayer {
@@ -67,23 +70,17 @@ impl L2ExecutionLayer {
     #[allow(clippy::too_many_arguments)]
     pub async fn construct_anchor_tx(
         &self,
-        preconfer_address: &Address,
-        l2_block_number: u16,
-        parent_hash: B256,
-        anchor_block_id: u64,
-        anchor_block_hash: B256,
-        anchor_state_root: B256,
-        base_fee: u64,
-        propose_input: ShastaProposeInput,
+        proposal: &Proposal,
+        l2_slot_info: &L2SlotInfo,
     ) -> Result<Transaction, Error> {
         debug!(
             "Constructing anchor transaction for block number: {}",
-            l2_block_number
+            l2_slot_info.parent_id() + 1
         );
         let nonce = self
             .provider
             .get_transaction_count(GOLDEN_TOUCH_ADDRESS)
-            .block_id(parent_hash.into())
+            .block_id((*l2_slot_info.parent_hash()).into())
             .await
             .map_err(|e| {
                 self.common
@@ -94,21 +91,24 @@ impl L2ExecutionLayer {
             .shasta_anchor
             .anchorV4(
                 Anchor::ProposalParams {
-                    proposalId: propose_input.core_state.nextProposalId,
-                    proposer: *preconfer_address,
+                    proposalId: proposal.id.try_into()?,
+                    proposer: self.config.signer.get_address(),
                     proverAuth: Bytes::new(), // no prover designation for now
-                    bondInstructionsHash: FixedBytes::from([0u8; 32]),
-                    bondInstructions: vec![],
+                    bondInstructionsHash: proposal.bond_instructions.hash(),
+                    bondInstructions: if proposal.has_only_one_block() {
+                        proposal.bond_instructions.instructions().clone()
+                    } else {
+                        Vec::new()
+                    },
                 },
                 Anchor::BlockParams {
-                    blockIndex: l2_block_number,
-                    anchorBlockNumber: anchor_block_id.try_into()?,
-                    anchorBlockHash: anchor_block_hash,
-                    anchorStateRoot: anchor_state_root,
+                    anchorBlockNumber: proposal.anchor_block_id.try_into()?,
+                    anchorBlockHash: proposal.anchor_block_hash,
+                    anchorStateRoot: proposal.anchor_state_root,
                 },
             )
             .gas(1_000_000) // value expected by Taiko
-            .max_fee_per_gas(u128::from(base_fee)) // value expected by Taiko
+            .max_fee_per_gas(u128::from(l2_slot_info.base_fee())) // value expected by Taiko
             .max_priority_fee_per_gas(0) // value expected by Taiko
             .nonce(nonce)
             .chain_id(self.chain_id);
@@ -192,6 +192,42 @@ impl L2ExecutionLayer {
         // TODO: implement the actual transfer logic
         warn!("Implement bridge transfer logic here");
         Ok(())
+    }
+
+    pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
+        let block = self.common.get_latest_block_with_txs().await?;
+        let (anchor_tx, _) = match block.transactions.as_transactions() {
+            Some(txs) => txs
+                .split_first()
+                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block"))?,
+            None => return Err(anyhow::anyhow!("No transactions in block")),
+        };
+
+        Self::decode_proposal_id_from_tx_data(anchor_tx.input())
+    }
+
+    pub fn decode_proposal_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+        Ok(tx_data._proposalParams.proposalId.to::<u64>())
+    }
+
+    pub async fn get_last_synced_bond_instruction_hash_from_geth(&self) -> Result<B256, Error> {
+        let block = self.common.get_latest_block_with_txs().await?;
+        let (anchor_tx, _) = match block.transactions.as_transactions() {
+            Some(txs) => txs
+                .split_first()
+                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block"))?,
+            None => return Err(anyhow::anyhow!("No transactions in block")),
+        };
+
+        Self::decode_bond_instruction_hash_from_tx_data(anchor_tx.input())
+    }
+
+    pub fn decode_bond_instruction_hash_from_tx_data(data: &[u8]) -> Result<B256, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+        Ok(tx_data._proposalParams.bondInstructionsHash)
     }
 }
 

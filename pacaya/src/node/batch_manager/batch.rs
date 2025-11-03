@@ -90,6 +90,6 @@ mod tests {
 
         batch.compress();
 
-        assert_eq!(batch.total_bytes, 249);
+        assert_eq!(batch.total_bytes, 210);
     }
 }

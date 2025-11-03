@@ -12,7 +12,7 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.21.6"
+version = "1.21.7"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -49,8 +49,8 @@ discv5 = { version = "0.9.1", default-features = false, features = ["libp2p"] }
 dotenvy = { version = "0.15", default-features = false }
 ecdsa = { version = "0.16", default-features = false }
 elliptic-curve = { version = "0.13", default-features = false }
-flate2 = { version = "1.1", default-features = false, features = [
-    "rust_backend",
+flate2 = { version = "1.0", default-features = false, features = [
+    "zlib",
 ] }
 futures = { version = "0.3.31", default-features = false }
 futures-util = { version = "0.3", default-features = false }
@@ -80,8 +80,11 @@ serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
 shasta = { path = "shasta" }
 
-taiko_event_indexer = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "b11cec492e8f91a7e0aa41f76a906620e3618523", package = "event-indexer", version = "2.0.0" }
-taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "b11cec492e8f91a7e0aa41f76a906620e3618523", package = "rpc", version = "2.0.0" }
+taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "361bbdfe9028477ccd1bf95ac9d16c46a7cc6337", package = "alethia-reth-consensus", version = "0.5.0" }
+taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "1ce709490ae2107d53db664409b56476f730c46f", package = "bindings", version = "2.0.0" }
+taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "1ce709490ae2107d53db664409b56476f730c46f", package = "protocol", version = "2.0.0" }
+taiko_event_indexer = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "1ce709490ae2107d53db664409b56476f730c46f", package = "event-indexer", version = "2.0.0" }
+taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "1ce709490ae2107d53db664409b56476f730c46f", package = "rpc", version = "2.0.0" }
 tiny-keccak = { version = "2.0", default-features = false }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }

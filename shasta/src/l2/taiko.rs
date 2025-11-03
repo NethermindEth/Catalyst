@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use super::execution_layer::L2ExecutionLayer;
+use crate::utils::proposal::Proposal;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
@@ -10,23 +11,29 @@ use alloy::{
 use anyhow::Error;
 use common::{
     l1::slot_clock::SlotClock,
-    l2::engine::L2Engine,
     l2::{
-        taiko_driver::{TaikoDriver, TaikoDriverConfig, models::TaikoStatus},
+        engine::L2Engine,
+        taiko_driver::{
+            OperationType, TaikoDriver, TaikoDriverConfig,
+            models::{BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData},
+        },
         traits::Bridgeable,
     },
     metrics::Metrics,
-    shared::l2_tx_lists::PreBuiltTxList,
+    shared::{
+        l2_slot_info::L2SlotInfo,
+        l2_tx_lists::{self, PreBuiltTxList},
+    },
 };
 use pacaya::l1::protocol_config::ProtocolConfig;
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
-use tracing::debug;
+use tracing::{debug, trace};
 
 pub struct Taiko {
     protocol_config: ProtocolConfig,
     l2_execution_layer: Arc<L2ExecutionLayer>,
-    driver: TaikoDriver,
+    driver: Arc<TaikoDriver>,
     slot_clock: Arc<SlotClock>,
     coinbase: String,
     l2_engine: L2Engine,
@@ -54,11 +61,15 @@ impl Taiko {
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
             ),
-            driver: TaikoDriver::new(&driver_config, metrics).await?,
+            driver: Arc::new(TaikoDriver::new(&driver_config, metrics).await?),
             slot_clock,
             coinbase: format!("0x{}", hex::encode(taiko_config.signer.get_address())),
             l2_engine,
         })
+    }
+
+    pub fn get_driver(&self) -> Arc<TaikoDriver> {
+        self.driver.clone()
     }
 
     pub fn l2_execution_layer(&self) -> Arc<L2ExecutionLayer> {
@@ -153,8 +164,127 @@ impl Taiko {
             .await
     }
 
-    pub async fn get_status(&self) -> Result<TaikoStatus, Error> {
-        self.driver.get_status().await
+    pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfo, Error> {
+        self.get_l2_slot_info_by_parent_block(BlockNumberOrTag::Latest)
+            .await
+    }
+
+    pub async fn get_l2_slot_info_by_parent_block(
+        &self,
+        block: BlockNumberOrTag,
+    ) -> Result<L2SlotInfo, Error> {
+        let l2_slot_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
+        let (parent_id, parent_hash, parent_gas_used) =
+            self.get_l2_block_id_hash_and_gas_used(block).await?;
+
+        // Safe conversion with overflow check
+        let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
+            anyhow::anyhow!("parent_gas_used {} exceeds u32 max value", parent_gas_used)
+        })?;
+
+        let base_fee: u64 = self.get_base_fee(block).await?;
+
+        trace!(
+            timestamp = %l2_slot_timestamp,
+            parent_hash = %parent_hash,
+            parent_gas_used = %parent_gas_used_u32,
+            base_fee = %base_fee,
+            "L2 slot info"
+        );
+
+        Ok(L2SlotInfo::new(
+            base_fee,
+            l2_slot_timestamp,
+            parent_id,
+            parent_hash,
+            parent_gas_used_u32,
+        ))
+    }
+
+    async fn get_base_fee(&self, block: BlockNumberOrTag) -> Result<u64, Error> {
+        let parent_block = self
+            .l2_execution_layer
+            .common()
+            .get_block_header(block)
+            .await?;
+
+        if parent_block.header.number() == 0 {
+            return Ok(taiko_alethia_reth::eip4396::SHASTA_INITIAL_BASE_FEE);
+        }
+
+        let grandparent_number = parent_block.header.number() - 1;
+        let grandparent_timestamp = self
+            .l2_execution_layer
+            .common()
+            .get_block_header(BlockNumberOrTag::Number(grandparent_number))
+            .await?
+            .header
+            .timestamp();
+
+        let timestamp_diff = parent_block
+            .header
+            .timestamp()
+            .checked_sub(grandparent_timestamp)
+            .ok_or_else(|| anyhow::anyhow!("Timestamp underflow occurred"))?;
+
+        let base_fee = taiko_alethia_reth::eip4396::calculate_next_block_eip4396_base_fee(
+            &parent_block.header.inner,
+            timestamp_diff,
+        );
+
+        Ok(base_fee)
+    }
+
+    // TODO fix that function
+    #[allow(clippy::too_many_arguments)]
+    pub async fn advance_head_to_new_l2_block(
+        &self,
+        proposal: &Proposal,
+        l2_slot_info: &L2SlotInfo,
+        end_of_sequencing: bool,
+        is_forced_inclusion: bool,
+        operation_type: OperationType,
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+        tracing::debug!(
+            "Submitting new L2 block to the Taiko driver with {} txs",
+            proposal.get_last_block_tx_len()?
+        );
+
+        let timestamp = proposal.get_last_block_timestamp()?;
+
+        let sharing_pctg = 0; // TODO
+
+        let anchor_tx = self
+            .l2_execution_layer
+            .construct_anchor_tx(proposal, l2_slot_info)
+            .await?;
+        let tx_list = std::iter::once(anchor_tx)
+            .chain(proposal.get_last_block_tx_list_copy()?.into_iter())
+            .collect::<Vec<_>>();
+
+        let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
+        let extra_data = vec![sharing_pctg];
+
+        let executable_data = ExecutableData {
+            base_fee_per_gas: l2_slot_info.base_fee(),
+            block_number: l2_slot_info.parent_id() + 1,
+            extra_data: format!("0x{:0>64}", hex::encode(extra_data)),
+            fee_recipient: proposal.coinbase.to_string(),
+            gas_limit: 241_000_000u64,
+            parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
+            timestamp,
+            transactions: format!("0x{}", hex::encode(tx_list_bytes)),
+        };
+
+        let request_body = BuildPreconfBlockRequestBody {
+            executable_data,
+            end_of_sequencing,
+            is_forced_inclusion,
+        };
+
+        self.driver
+            .preconf_blocks(request_body, operation_type)
+            .await
     }
 }
 
@@ -176,15 +306,5 @@ impl Bridgeable for Taiko {
         self.l2_execution_layer
             .transfer_eth_from_l2_to_l1(amount, dest_chain_id, address, bridge_relayer_fee)
             .await
-    }
-}
-
-pub trait PreconfDriver {
-    fn get_status(&self) -> impl std::future::Future<Output = Result<TaikoStatus, Error>> + Send;
-}
-
-impl PreconfDriver for Taiko {
-    async fn get_status(&self) -> Result<TaikoStatus, Error> {
-        Taiko::get_status(self).await
     }
 }
