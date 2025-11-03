@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use super::execution_layer::L2ExecutionLayer;
+use crate::l1::protocol_config::ProtocolConfig;
 use crate::utils::proposal::Proposal;
 use alloy::{
     consensus::BlockHeader,
@@ -25,7 +26,6 @@ use common::{
         l2_tx_lists::{self, PreBuiltTxList},
     },
 };
-use pacaya::l1::protocol_config::ProtocolConfig;
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use tracing::{debug, trace};
@@ -85,7 +85,7 @@ impl Taiko {
             .get_pending_l2_tx_list(
                 base_fee,
                 batches_ready_to_send,
-                self.get_protocol_config().get_block_max_gas_limit(),
+                15000000, // TODO fix gas limit
             )
             .await
     }
@@ -252,8 +252,6 @@ impl Taiko {
 
         let timestamp = proposal.get_last_block_timestamp()?;
 
-        let sharing_pctg = 0; // TODO
-
         let anchor_tx = self
             .l2_execution_layer
             .construct_anchor_tx(proposal, l2_slot_info)
@@ -263,12 +261,14 @@ impl Taiko {
             .collect::<Vec<_>>();
 
         let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
-        let extra_data = vec![sharing_pctg];
+
+        let sharing_pctg = self.protocol_config.get_basefee_sharing_pctg();
+        let extra_data = Self::encode_extra_data(sharing_pctg, false);
 
         let executable_data = ExecutableData {
             base_fee_per_gas: l2_slot_info.base_fee(),
             block_number: l2_slot_info.parent_id() + 1,
-            extra_data: format!("0x{:0>64}", hex::encode(extra_data)),
+            extra_data: format!("0x{:0>64x}", extra_data),
             fee_recipient: proposal.coinbase.to_string(),
             gas_limit: 241_000_000u64,
             parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
@@ -285,6 +285,10 @@ impl Taiko {
         self.driver
             .preconf_blocks(request_body, operation_type)
             .await
+    }
+
+    fn encode_extra_data(basefee_sharing_pctg: u8, is_low_bond_proposal: bool) -> u16 {
+        u16::from(basefee_sharing_pctg) << 8 | u16::from(is_low_bond_proposal)
     }
 }
 
@@ -306,5 +310,18 @@ impl Bridgeable for Taiko {
         self.l2_execution_layer
             .transfer_eth_from_l2_to_l1(amount, dest_chain_id, address, bridge_relayer_fee)
             .await
+    }
+}
+
+mod tests {
+    #[test]
+    fn test_encode_extra_data() {
+        use super::Taiko;
+
+        let extra_data = Taiko::encode_extra_data(30, true);
+        assert_eq!(extra_data, 0b00011110_00000001);
+
+        let extra_data = Taiko::encode_extra_data(50, false);
+        assert_eq!(extra_data, 0b00110010_00000000);
     }
 }
