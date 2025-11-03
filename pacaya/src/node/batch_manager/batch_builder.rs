@@ -65,7 +65,6 @@ impl BatchBuilder {
             };
 
             let mut new_total_bytes = batch.total_bytes + l2_block.prebuilt_tx_list.bytes_length;
-
             if !self.config.is_within_bytes_limit(new_total_bytes) {
                 // first compression, compressing the batch without the new L2 block
                 batch.compress();
@@ -634,24 +633,24 @@ mod tests {
     }
 
     #[test]
-    fn test_can_not_consume_l2_block_with_compression() {
-        let (res, total_bytes) = test_can_consume_l2_block(366);
-        assert!(!res);
-        assert_eq!(total_bytes, 242);
-    }
-
-    #[test]
     fn test_can_consume_l2_block_with_single_compression() {
-        let (res, total_bytes) = test_can_consume_l2_block(378);
+        let (res, total_bytes) = test_can_consume_l2_block(339);
         assert!(res);
-        assert_eq!(total_bytes, 242);
+        assert_eq!(total_bytes, 203);
     }
 
     #[test]
     fn test_can_consume_l2_block_with_double_compression() {
-        let (res, total_bytes) = test_can_consume_l2_block(367);
+        let (res, total_bytes) = test_can_consume_l2_block(330);
         assert!(res);
-        assert_eq!(total_bytes, 242);
+        assert_eq!(total_bytes, 203);
+    }
+
+    #[test]
+    fn test_can_not_consume_l2_block_with_compression() {
+        let (res, total_bytes) = test_can_consume_l2_block(329);
+        assert!(!res);
+        assert_eq!(total_bytes, 203);
     }
 
     #[test]
