@@ -17,8 +17,8 @@ Based on what Gattaca is using, it can change based on experiments.
 - **`HANDOVER_WINDOW_SLOTS` : 4**
 - **`HANDOVER_START_BUFFER_MS` : 6000ms**
 - **`DEFAULT_ANCHOR_ID_LAG` : 4**
-- **`PRECONF_MIN_TXS` : 3**
-- **`PRECONF_MAX_SKIPPED_L2_SLOTS` : 2**
+- **`PRECONF_MIN_TXS` : 6**
+- **`PRECONF_MAX_SKIPPED_L2_SLOTS` : 3**
 
 ## Timeline Diagram
 
