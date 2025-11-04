@@ -4,7 +4,7 @@ pub mod operator;
 mod verifier;
 
 use crate::{
-    chain_monitor::ChainMonitor,
+    chain_monitor::PacayaChainMonitor,
     l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
     metrics::Metrics,
@@ -32,7 +32,7 @@ use verifier::{VerificationResult, Verifier};
 pub struct Node {
     cancel_token: CancellationToken,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-    chain_monitor: Arc<ChainMonitor>,
+    chain_monitor: Arc<PacayaChainMonitor>,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
     batch_manager: BatchManager,
     verifier: Option<Verifier>,
@@ -51,7 +51,7 @@ impl Node {
         cancel_token: CancellationToken,
         taiko: Arc<Taiko>,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-        chain_monitor: Arc<ChainMonitor>,
+        chain_monitor: Arc<PacayaChainMonitor>,
         transaction_error_channel: Receiver<TransactionError>,
         metrics: Arc<Metrics>,
         config: NodeConfig,
