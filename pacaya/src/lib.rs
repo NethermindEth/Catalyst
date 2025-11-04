@@ -91,7 +91,7 @@ pub async fn create_pacaya_node(
     };
 
     let chain_monitor = Arc::new(
-        chain_monitor::ChainMonitor::new(
+        chain_monitor::PacayaChainMonitor::new(
             config
                 .l1_rpc_urls
                 .first()
@@ -100,13 +100,15 @@ pub async fn create_pacaya_node(
             config.taiko_geth_rpc_url.clone(),
             pacaya_config.contract_addresses.taiko_inbox.clone(),
             cancel_token.clone(),
+            "BatchProposed",
+            chain_monitor::print_batch_proposed_info,
         )
-        .map_err(|e| anyhow::anyhow!("Failed to create ChainMonitor: {}", e))?,
+        .map_err(|e| anyhow::anyhow!("Failed to create PacayaChainMonitor: {}", e))?,
     );
     chain_monitor
         .start()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to start ChainMonitor: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to start PacayaChainMonitor: {}", e))?;
 
     let handover_window_slots = get_handover_window_slots(&ethereum_l1.execution_layer)
         .await
