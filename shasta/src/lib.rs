@@ -115,12 +115,12 @@ pub async fn create_shasta_node(
             "Proposed",
             chain_monitor::print_proposed_info,
         )
-        .map_err(|e| anyhow::anyhow!("Failed to create PacayaChainMonitor: {}", e))?,
+        .map_err(|e| anyhow::anyhow!("Failed to create ShastaChainMonitor: {}", e))?,
     );
     chain_monitor
         .start()
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to start PacayaChainMonitor: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to start ShastaChainMonitor: {}", e))?;
 
     let node = Node::new(
         node_config,
