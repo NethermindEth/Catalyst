@@ -1,3 +1,4 @@
+mod chain_monitor;
 #[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
 mod node;
 #[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
@@ -100,6 +101,26 @@ pub async fn create_shasta_node(
         preconf_min_txs: config.preconf_min_txs,
         preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
     };
+
+    let chain_monitor = Arc::new(
+        chain_monitor::ShastaChainMonitor::new(
+            config
+                .l1_rpc_urls
+                .first()
+                .expect("L1 RPC URL is required")
+                .clone(),
+            config.taiko_geth_rpc_url.clone(),
+            shasta_config.shasta_inbox.clone(),
+            cancel_token.clone(),
+            "Proposed",
+            chain_monitor::print_proposed_info,
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to create PacayaChainMonitor: {}", e))?,
+    );
+    chain_monitor
+        .start()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to start PacayaChainMonitor: {}", e))?;
 
     let node = Node::new(
         node_config,
