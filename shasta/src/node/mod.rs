@@ -214,8 +214,7 @@ impl Node {
     ) -> Result<(L2SlotInfo, OperatorStatus, Option<PreBuiltTxList>), Error> {
         let l2_slot_info = self.taiko.get_l2_slot_info().await;
         let current_status = match &l2_slot_info {
-            // TODO fix operator status
-            Ok(_info) => Ok(OperatorStatus::new(true, false, true, false, false)), // self.operator.get_status(info).await,
+            Ok(info) => self.operator.get_status(info).await,
             Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
         };
         // TODO use proper number of batches ready to send
