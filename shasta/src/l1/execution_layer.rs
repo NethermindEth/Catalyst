@@ -181,9 +181,9 @@ impl PreconfOperator for ExecutionLayer {
 
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
         // TODO
-        // We can't get L2 height directly from Inbox in Shasta:
-        // To retrieve the L2 height from L1, we need to get proposal id for the event indexer
-        // and then call taiko_lastBlockIdByBatchId on Geth
+        // Retrieving the L2 height directly from the Inbox is not supported in Shasta.
+        // To obtain the L2 height, we need to first fetch the proposal ID using the event indexer.
+        // After that, we can call `taiko_lastBlockIdByBatchId` on the L2 Taiko-Geth.
         Ok(0)
     }
 
