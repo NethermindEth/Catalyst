@@ -21,7 +21,6 @@ class EnvVars:
     forced_inclusion_store_address: str
     preconf_min_txs: int
     preconf_heartbeat_ms: int
-    l2_private_key: str
     max_blocks_per_batch: int
 
     @classmethod
@@ -56,10 +55,6 @@ class EnvVars:
         if not preconf_heartbeat_ms:
             raise Exception("Environment variable PRECONF_HEARTBEAT_MS not set")
 
-        l2_private_key = os.getenv("L2_PRIVATE_KEY")
-        if not l2_private_key:
-            raise Exception("Environment variable L2_PRIVATE_KEY not set")
-
         max_blocks_per_batch = int(os.getenv("MAX_BLOCKS_PER_BATCH", "0"))
         if not max_blocks_per_batch:
             raise Exception("Environment variable MAX_BLOCKS_PER_BATCH not set")
@@ -72,7 +67,6 @@ class EnvVars:
             forced_inclusion_store_address=forced_inclusion_store_address,
             preconf_min_txs=preconf_min_txs,
             preconf_heartbeat_ms=preconf_heartbeat_ms,
-            l2_private_key=l2_private_key,
             max_blocks_per_batch=max_blocks_per_batch,
         )
 
@@ -108,7 +102,6 @@ def beacon_client():
 def forced_inclusion_parameters(l1_client, env_vars):
     assert env_vars.max_blocks_per_batch <= 10, "max_blocks_per_batch should be <= 10"
     assert env_vars.preconf_min_txs == 1, "preconf_min_txs should be 1"
-    assert env_vars.l2_private_key != env_vars.l2_prefunded_priv_key, "l2_private_key should not be the same as l2_prefunded_priv_key"
     check_empty_forced_inclusion_store(l1_client, env_vars)
 
 @pytest.fixture
