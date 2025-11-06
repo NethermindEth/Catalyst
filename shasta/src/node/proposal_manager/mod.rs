@@ -199,7 +199,8 @@ impl BatchManager {
             .ok_or_else(|| anyhow::anyhow!("Can't get bond instruction from event indexer"))?;
 
         // Extract the bond instructions hash
-        let target_hash = B256::from_slice(target_payload.core_state.bondInstructionsHash.as_slice());
+        let target_hash =
+            B256::from_slice(target_payload.core_state.bondInstructionsHash.as_slice());
 
         // Use empty instructions if within the processing delay window, otherwise use actual instructions
         let bond_instructions = if proposal_id <= BOND_PROCESSING_DELAY {
