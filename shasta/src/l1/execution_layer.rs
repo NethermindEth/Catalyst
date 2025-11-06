@@ -180,7 +180,11 @@ impl PreconfOperator for ExecutionLayer {
     }
 
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
-        self.get_l2_height_from_l1().await
+        // TODO
+        // We can't get L2 height directly from Inbox in Shasta:
+        // To retrieve the L2 height from L1, we need to get proposal id for the event indexer
+        // and then call taiko_lastBlockIdByBatchId on Geth
+        Ok(0)
     }
 
     async fn get_handover_window_slots(&self) -> Result<u64, Error> {
@@ -193,15 +197,6 @@ impl PreconfOperator for ExecutionLayer {
 }
 
 impl ExecutionLayer {
-    pub async fn get_l2_height_from_l1(&self) -> Result<u64, Error> {
-        let proposal = self
-            .event_indexer
-            .get_indexer()
-            .get_last_proposal()
-            .ok_or_else(|| anyhow::anyhow!("There is no proposal in the indexer"))?;
-        Ok(proposal.core_state.lastProposalBlockId.to::<u64>())
-    }
-
     pub async fn send_batch_to_l1(
         &self,
         l2_blocks: Vec<L2Block>,
