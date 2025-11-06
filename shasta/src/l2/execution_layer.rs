@@ -196,10 +196,10 @@ impl L2ExecutionLayer {
 
     pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
         let block = self.common.get_latest_block_with_txs().await?;
-        let (anchor_tx, _) = match block.transactions.as_transactions() {
+        let anchor_tx = match block.transactions.as_transactions() {
             Some(txs) => txs
-                .split_first()
-                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block"))?,
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block for proposal id"))?,
             None => return Err(anyhow::anyhow!("No transactions in block")),
         };
 
@@ -214,10 +214,10 @@ impl L2ExecutionLayer {
 
     pub async fn get_last_synced_bond_instruction_hash_from_geth(&self) -> Result<B256, Error> {
         let block = self.common.get_latest_block_with_txs().await?;
-        let (anchor_tx, _) = match block.transactions.as_transactions() {
+        let anchor_tx = match block.transactions.as_transactions() {
             Some(txs) => txs
-                .split_first()
-                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block"))?,
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block for bond instruction"))?,
             None => return Err(anyhow::anyhow!("No transactions in block")),
         };
 

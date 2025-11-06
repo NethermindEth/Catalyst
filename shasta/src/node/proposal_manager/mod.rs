@@ -206,6 +206,39 @@ impl BatchManager {
         ))
     }
 
+    async fn get_next_proposal_id(&self) -> Result<u64, Error> {
+        if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
+            return Ok(current_proposal_id + 1);
+        }
+
+        // Try fetching from L2 execution layer
+        match self
+            .taiko
+            .l2_execution_layer()
+            .get_last_synced_proposal_id_from_geth()
+            .await
+        {
+            Ok(id) => Ok(id + 1),
+            // If fetching from L2 fails (e.g., no blocks in Shasta), fallback to event indexer
+            Err(_) => self.get_proposal_id_from_indexer_fallback().await,
+        }
+    }
+
+    async fn get_proposal_id_from_indexer_fallback(&self) -> Result<u64, Error> {
+        let id = self
+            .ethereum_l1
+            .execution_layer
+            .get_proposal_id_from_indexer()
+            .await?;
+        if id == 0 {
+            Ok(1)
+        } else {
+            Err(anyhow::anyhow!(
+                "Fallback to event indexer failed: proposal ID is nonzero"
+            ))
+        }
+    }
+
     async fn create_new_batch(&mut self) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
         let anchor_block_info = AnchorBlockInfo::new(
@@ -214,18 +247,7 @@ impl BatchManager {
         )
         .await?;
 
-        let proposal_id =
-            if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
-                current_proposal_id + 1
-            } else {
-                // get from l2
-                &self
-                    .taiko
-                    .l2_execution_layer()
-                    .get_last_synced_proposal_id_from_geth()
-                    .await?
-                    + 1
-            };
+        let proposal_id = self.get_next_proposal_id().await?;
         // Get bond instructions for the proposal
         let bond_instructions = self.get_bond_instructions(proposal_id).await?;
 
