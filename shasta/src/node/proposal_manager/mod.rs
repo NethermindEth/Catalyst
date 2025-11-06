@@ -180,30 +180,35 @@ impl BatchManager {
     }
 
     async fn get_bond_instructions(&self, proposal_id: u64) -> Result<BondInstructionData, Error> {
-        if proposal_id <= BOND_PROCESSING_DELAY {
-            let hash = self
-                .taiko
-                .l2_execution_layer()
-                .get_last_synced_bond_instruction_hash_from_geth()
-                .await?;
-            return Ok(BondInstructionData::new(Vec::new(), hash));
-        }
+        // Calculate the proposal ID to query, adjusting for processing delay
+        let target_id = if proposal_id <= BOND_PROCESSING_DELAY {
+            proposal_id.checked_sub(1).ok_or_else(|| {
+                anyhow::anyhow!("Proposal ID underflow when calculating target ID")
+            })?
+        } else {
+            proposal_id - BOND_PROCESSING_DELAY
+        };
 
-        let target_id = proposal_id - BOND_PROCESSING_DELAY;
+        // Fetch the proposal payload from the event indexer
         let target_payload = self
             .ethereum_l1
             .execution_layer
             .event_indexer
             .get_indexer()
             .get_proposal_by_id(U256::from(target_id))
-            .ok_or_else(|| anyhow::anyhow!("Can't get bond instruction from event_indexer"))?;
-        let target_hash =
-            B256::from_slice(target_payload.core_state.bondInstructionsHash.as_slice());
+            .ok_or_else(|| anyhow::anyhow!("Can't get bond instruction from event indexer"))?;
 
-        Ok(BondInstructionData::new(
-            target_payload.bond_instructions,
-            target_hash,
-        ))
+        // Extract the bond instructions hash
+        let target_hash = B256::from_slice(target_payload.core_state.bondInstructionsHash.as_slice());
+
+        // Use empty instructions if within the processing delay window, otherwise use actual instructions
+        let bond_instructions = if proposal_id <= BOND_PROCESSING_DELAY {
+            Vec::new()
+        } else {
+            target_payload.bond_instructions
+        };
+
+        Ok(BondInstructionData::new(bond_instructions, target_hash))
     }
 
     async fn get_next_proposal_id(&self) -> Result<u64, Error> {
