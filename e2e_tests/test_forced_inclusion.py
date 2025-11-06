@@ -49,7 +49,7 @@ def test_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars, f
     forced_inclusion_teardown
 
     check_empty_forced_inclusion_store(l1_client, env_vars)
-    fi_account = Account.from_key(env_vars.l2_prefunded_priv_key_2)
+    fi_account = Account.from_key(env_vars.l2_private_key)
     # print chain info
     ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
 
@@ -109,7 +109,7 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
 
     slot_duration_sec = get_slot_duration_sec(beacon_client)
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
-    fi_account = Account.from_key(env_vars.l2_prefunded_priv_key_2)
+    fi_account = Account.from_key(env_vars.l2_private_key)
     wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, env_vars.preconf_whitelist_address, 19)
 
     # get chain info
@@ -157,7 +157,7 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
 
     slot_duration_sec = get_slot_duration_sec(beacon_client)
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
-    fi_account = Account.from_key(env_vars.l2_prefunded_priv_key_2)
+    fi_account = Account.from_key(env_vars.l2_private_key)
 
     wait_for_slot_beginning(beacon_client, 1)
 
@@ -202,7 +202,7 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     """
     forced_inclusion_teardown
 
-    fi_account = Account.from_key(env_vars.l2_prefunded_priv_key_2)
+    fi_account = Account.from_key(env_vars.l2_private_key)
     slot_duration_sec = get_slot_duration_sec(beacon_client)
 
     # wait_for_slot_beginning(beacon_client, 1)
@@ -231,7 +231,7 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
     # Start all nodes after test
     catalyst_node_teardown
     forced_inclusion_teardown
-    fi_account = Account.from_key(env_vars.l2_prefunded_priv_key_2)
+    fi_account = Account.from_key(env_vars.l2_private_key)
 
     slot_duration_sec = get_slot_duration_sec(beacon_client)
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
