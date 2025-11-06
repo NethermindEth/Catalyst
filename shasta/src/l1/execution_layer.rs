@@ -180,7 +180,7 @@ impl PreconfOperator for ExecutionLayer {
     }
 
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
-        self.get_l2_height_from_taiko_inbox().await
+        self.get_l2_height_from_l1().await
     }
 
     async fn get_handover_window_slots(&self) -> Result<u64, Error> {
@@ -193,8 +193,13 @@ impl PreconfOperator for ExecutionLayer {
 }
 
 impl ExecutionLayer {
-    pub async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
-        Ok(1) // TODO Placeholder implementation / get from event indexer
+    pub async fn get_l2_height_from_l1(&self) -> Result<u64, Error> {
+        let proposal = self
+            .event_indexer
+            .get_indexer()
+            .get_last_proposal()
+            .ok_or_else(|| anyhow::anyhow!("There is no proposal in the indexer"))?;
+        Ok(proposal.core_state.lastProposalBlockId.to::<u64>())
     }
 
     pub async fn send_batch_to_l1(
