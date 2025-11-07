@@ -30,6 +30,9 @@ use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use tracing::{debug, trace};
 
+// TODO: retrieve from protocol
+const BLOCK_GAS_LIMIT: u32 = 16_000_000;
+
 pub struct Taiko {
     protocol_config: ProtocolConfig,
     l2_execution_layer: Arc<L2ExecutionLayer>,
@@ -82,11 +85,7 @@ impl Taiko {
         batches_ready_to_send: u64,
     ) -> Result<Option<PreBuiltTxList>, Error> {
         self.l2_engine
-            .get_pending_l2_tx_list(
-                base_fee,
-                batches_ready_to_send,
-                15000000, // TODO fix gas limit
-            )
+            .get_pending_l2_tx_list(base_fee, batches_ready_to_send, BLOCK_GAS_LIMIT)
             .await
     }
 
@@ -270,7 +269,7 @@ impl Taiko {
             block_number: l2_slot_info.parent_id() + 1,
             extra_data: format!("0x{:0>64x}", extra_data),
             fee_recipient: proposal.coinbase.to_string(),
-            gas_limit: 241_000_000u64,
+            gas_limit: BLOCK_GAS_LIMIT.into(),
             parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
             timestamp,
             transactions: format!("0x{}", hex::encode(tx_list_bytes)),
