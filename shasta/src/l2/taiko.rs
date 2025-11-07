@@ -267,7 +267,7 @@ impl Taiko {
         let executable_data = ExecutableData {
             base_fee_per_gas: l2_slot_info.base_fee(),
             block_number: l2_slot_info.parent_id() + 1,
-            extra_data: format!("0x{:0>64x}", extra_data),
+            extra_data: format!("0x{:04x}", extra_data),
             fee_recipient: proposal.coinbase.to_string(),
             gas_limit: BLOCK_GAS_LIMIT.into(),
             parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
