@@ -180,30 +180,69 @@ impl BatchManager {
     }
 
     async fn get_bond_instructions(&self, proposal_id: u64) -> Result<BondInstructionData, Error> {
-        if proposal_id <= BOND_PROCESSING_DELAY {
-            let hash = self
-                .taiko
-                .l2_execution_layer()
-                .get_last_synced_bond_instruction_hash_from_geth()
-                .await?;
-            return Ok(BondInstructionData::new(Vec::new(), hash));
-        }
+        // Calculate the proposal ID to query, adjusting for processing delay
+        let target_id = if proposal_id <= BOND_PROCESSING_DELAY {
+            proposal_id.checked_sub(1).ok_or_else(|| {
+                anyhow::anyhow!("Proposal ID underflow when calculating target ID")
+            })?
+        } else {
+            proposal_id - BOND_PROCESSING_DELAY
+        };
 
-        let target_id = proposal_id - BOND_PROCESSING_DELAY;
+        // Fetch the proposal payload from the event indexer
         let target_payload = self
             .ethereum_l1
             .execution_layer
             .event_indexer
             .get_indexer()
             .get_proposal_by_id(U256::from(target_id))
-            .ok_or_else(|| anyhow::anyhow!("Can't get bond instruction from event_indexer"))?;
+            .ok_or_else(|| anyhow::anyhow!("Can't get bond instruction from event indexer"))?;
+
+        // Extract the bond instructions hash
         let target_hash =
             B256::from_slice(target_payload.core_state.bondInstructionsHash.as_slice());
 
-        Ok(BondInstructionData::new(
-            target_payload.bond_instructions,
-            target_hash,
-        ))
+        // Use empty instructions if within the processing delay window, otherwise use actual instructions
+        let bond_instructions = if proposal_id <= BOND_PROCESSING_DELAY {
+            Vec::new()
+        } else {
+            target_payload.bond_instructions
+        };
+
+        Ok(BondInstructionData::new(bond_instructions, target_hash))
+    }
+
+    async fn get_next_proposal_id(&self) -> Result<u64, Error> {
+        if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
+            return Ok(current_proposal_id + 1);
+        }
+
+        // Try fetching from L2 execution layer
+        match self
+            .taiko
+            .l2_execution_layer()
+            .get_last_synced_proposal_id_from_geth()
+            .await
+        {
+            Ok(id) => Ok(id + 1),
+            // If fetching from L2 fails (e.g., no blocks in Shasta), fallback to event indexer
+            Err(_) => self.get_proposal_id_from_indexer_fallback().await,
+        }
+    }
+
+    async fn get_proposal_id_from_indexer_fallback(&self) -> Result<u64, Error> {
+        let id = self
+            .ethereum_l1
+            .execution_layer
+            .get_proposal_id_from_indexer()
+            .await?;
+        if id == 0 {
+            Ok(1)
+        } else {
+            Err(anyhow::anyhow!(
+                "Fallback to event indexer failed: proposal ID is nonzero"
+            ))
+        }
     }
 
     async fn create_new_batch(&mut self) -> Result<u64, Error> {
@@ -214,18 +253,7 @@ impl BatchManager {
         )
         .await?;
 
-        let proposal_id =
-            if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
-                current_proposal_id + 1
-            } else {
-                // get from l2
-                &self
-                    .taiko
-                    .l2_execution_layer()
-                    .get_last_synced_proposal_id_from_geth()
-                    .await?
-                    + 1
-            };
+        let proposal_id = self.get_next_proposal_id().await?;
         // Get bond instructions for the proposal
         let bond_instructions = self.get_bond_instructions(proposal_id).await?;
 

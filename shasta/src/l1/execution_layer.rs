@@ -256,4 +256,14 @@ impl ExecutionLayer {
 
         Ok(ProtocolConfig::from(&shasta_config))
     }
+
+    pub async fn get_proposal_id_from_indexer(&self) -> Result<u64, Error> {
+        let proposal = self
+            .event_indexer
+            .get_indexer()
+            .get_last_proposal()
+            .ok_or_else(|| anyhow::anyhow!("No last proposal in event indexer"))?;
+
+        Ok(proposal.proposal.id.to::<u64>())
+    }
 }
