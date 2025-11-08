@@ -181,13 +181,7 @@ impl BatchManager {
 
     async fn get_bond_instructions(&self, proposal_id: u64) -> Result<BondInstructionData, Error> {
         // Calculate the proposal ID to query, adjusting for processing delay
-        let target_id = if proposal_id <= BOND_PROCESSING_DELAY {
-            proposal_id.checked_sub(1).ok_or_else(|| {
-                anyhow::anyhow!("Proposal ID underflow when calculating target ID")
-            })?
-        } else {
-            proposal_id - BOND_PROCESSING_DELAY
-        };
+        let target_id = proposal_id.saturating_sub(BOND_PROCESSING_DELAY);
 
         // Fetch the proposal payload from the event indexer
         let target_payload = self
@@ -196,7 +190,12 @@ impl BatchManager {
             .event_indexer
             .get_indexer()
             .get_proposal_by_id(U256::from(target_id))
-            .ok_or_else(|| anyhow::anyhow!("Can't get bond instruction from event indexer"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Can't get bond instruction from event indexer (id: {})",
+                    target_id
+                )
+            })?;
 
         // Extract the bond instructions hash
         let target_hash =
