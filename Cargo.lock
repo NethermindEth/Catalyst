@@ -127,7 +127,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-chainspec"
 version = "0.5.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=361bbdfe9028477ccd1bf95ac9d16c46a7cc6337#361bbdfe9028477ccd1bf95ac9d16c46a7cc6337"
+source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=12fadbe0909a12be09a906a340733e7afcfe7c83#12fadbe0909a12be09a906a340733e7afcfe7c83"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -171,7 +171,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-consensus"
 version = "0.5.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=361bbdfe9028477ccd1bf95ac9d16c46a7cc6337#361bbdfe9028477ccd1bf95ac9d16c46a7cc6337"
+source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=12fadbe0909a12be09a906a340733e7afcfe7c83#12fadbe0909a12be09a906a340733e7afcfe7c83"
 dependencies = [
  "alethia-reth-chainspec 0.5.0",
  "alethia-reth-evm 0.5.0",
@@ -228,7 +228,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-evm"
 version = "0.5.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=361bbdfe9028477ccd1bf95ac9d16c46a7cc6337#361bbdfe9028477ccd1bf95ac9d16c46a7cc6337"
+source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=12fadbe0909a12be09a906a340733e7afcfe7c83#12fadbe0909a12be09a906a340733e7afcfe7c83"
 dependencies = [
  "alloy-evm",
  "alloy-primitives",
@@ -271,7 +271,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-primitives"
 version = "0.5.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=361bbdfe9028477ccd1bf95ac9d16c46a7cc6337#361bbdfe9028477ccd1bf95ac9d16c46a7cc6337"
+source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=12fadbe0909a12be09a906a340733e7afcfe7c83#12fadbe0909a12be09a906a340733e7afcfe7c83"
 dependencies = [
  "alethia-reth-chainspec 0.5.0",
  "alloy-primitives",
@@ -1796,6 +1796,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "592277618714fbcecda9a02ba7a8781f319d26532a88553bbacc77ba5d2b3a8d"
 dependencies = [
  "fastrand",
+ "gloo-timers 0.3.0",
  "tokio",
 ]
 
@@ -1908,7 +1909,7 @@ dependencies = [
 [[package]]
 name = "bindings"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=11cb8bea0f2bd3e44010b5694540c89c9e4b6056#11cb8bea0f2bd3e44010b5694540c89c9e4b6056"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=ae3dc5a4ff2d9f24c311b9c6081a1431fd4976b7#ae3dc5a4ff2d9f24c311b9c6081a1431fd4976b7"
 dependencies = [
  "alloy",
  "serde",
@@ -2461,7 +2462,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.21.14"
+version = "1.21.15"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -3445,7 +3446,7 @@ dependencies = [
 [[package]]
 name = "event-indexer"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=11cb8bea0f2bd3e44010b5694540c89c9e4b6056#11cb8bea0f2bd3e44010b5694540c89c9e4b6056"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=ae3dc5a4ff2d9f24c311b9c6081a1431fd4976b7#ae3dc5a4ff2d9f24c311b9c6081a1431fd4976b7"
 dependencies = [
  "alloy",
  "alloy-contract",
@@ -3482,14 +3483,15 @@ dependencies = [
 
 [[package]]
 name = "event-scanner"
-version = "0.4.0-alpha"
+version = "0.5.0-alpha"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6ae8ecb83aedc270b94a1636a59e7ca8af4c88dccfdaddfe4383b834b88974c"
+checksum = "29ca7ce49ed710ac56fcaa73995f4a5b18deacfc827b90af313c8e889f94b258"
 dependencies = [
  "alloy",
  "alloy-node-bindings",
  "anyhow",
  "async-trait",
+ "backon",
  "chrono",
  "serde",
  "serde_json",
@@ -3760,7 +3762,7 @@ version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
 dependencies = [
- "gloo-timers",
+ "gloo-timers 0.2.6",
  "send_wrapper 0.4.0",
 ]
 
@@ -3888,6 +3890,18 @@ name = "gloo-timers"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b995a66bb87bebce9a0f4a95aed01daca4872c050bfcb21653361c03bc35e5c"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -5828,7 +5842,7 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.21.14"
+version = "1.21.15"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6198,7 +6212,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.21.14"
+version = "1.21.15"
 dependencies = [
  "anyhow",
  "discv5",
@@ -6210,7 +6224,7 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.21.14"
+version = "1.21.15"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6344,7 +6358,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.21.14"
+version = "1.21.15"
 dependencies = [
  "alloy",
  "anyhow",
@@ -6702,7 +6716,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=11cb8bea0f2bd3e44010b5694540c89c9e4b6056#11cb8bea0f2bd3e44010b5694540c89c9e4b6056"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=ae3dc5a4ff2d9f24c311b9c6081a1431fd4976b7#ae3dc5a4ff2d9f24c311b9c6081a1431fd4976b7"
 dependencies = [
  "alloy",
  "alloy-consensus",
@@ -6716,6 +6730,7 @@ dependencies = [
  "flate2",
  "serde",
  "thiserror 2.0.17",
+ "tracing",
 ]
 
 [[package]]
@@ -9977,7 +9992,7 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 [[package]]
 name = "rpc"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=11cb8bea0f2bd3e44010b5694540c89c9e4b6056#11cb8bea0f2bd3e44010b5694540c89c9e4b6056"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=ae3dc5a4ff2d9f24c311b9c6081a1431fd4976b7#ae3dc5a4ff2d9f24c311b9c6081a1431fd4976b7"
 dependencies = [
  "alethia-reth-evm 0.1.0",
  "alethia-reth-primitives 0.1.0",
@@ -10003,6 +10018,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.4.13",
@@ -10622,7 +10638,7 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.21.14"
+version = "1.21.15"
 dependencies = [
  "alethia-reth-consensus 0.5.0",
  "alloy",
@@ -11974,7 +11990,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.21.14"
+version = "1.21.15"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
