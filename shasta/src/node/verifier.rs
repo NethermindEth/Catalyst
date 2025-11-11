@@ -1,7 +1,7 @@
 use super::proposal_manager::BatchManager;
 use crate::{
-    l1::execution_layer::ExecutionLayer, node::proposal_manager::proposal::Proposals, l2::taiko::Taiko,
-    metrics::Metrics,
+    l1::execution_layer::ExecutionLayer, l2::taiko::Taiko, metrics::Metrics,
+    node::proposal_manager::proposal::Proposals,
 };
 use alloy::primitives::B256;
 use anyhow::Error;
@@ -82,8 +82,7 @@ impl Verifier {
                 info!("🔍 Started block verification thread");
 
                 // update forced inclusion index
-                // TODO implement
-                //verifier_thread.batch_manager.reset_builder().await?;
+                verifier_thread.batch_manager.reset_builder().await?;
 
                 verifier_thread
                     .verify_submitted_blocks(taiko_inbox_height, metrics)
@@ -98,6 +97,7 @@ impl Verifier {
     pub async fn verify(
         &mut self,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
     ) -> Result<VerificationResult, Error> {
         if let Some(handle) = self.verifier_thread_handle.as_mut() {
@@ -113,12 +113,8 @@ impl Verifier {
                         Ok(VerificationResult::SuccessWithBatches(batches))
                     }
                     Err(err) => {
-                        // TODO implement
-                        let taiko_inbox_height = 2;
-                        /*let taiko_inbox_height = ethereum_l1
-                        .execution_layer
-                        .get_l2_height_from_taiko_inbox()
-                        .await?;*/
+                        let taiko_inbox_height =
+                            Verifier::get_l2_height_from_l1(ethereum_l1, taiko).await?;
                         Ok(VerificationResult::ReanchorNeeded(
                             taiko_inbox_height,
                             format!("Verifier return an error: {err}"),
@@ -140,17 +136,26 @@ impl Verifier {
                 return Ok(VerificationResult::SlotNotValid);
             }
 
-            // TODO implement
-            let taiko_inbox_height = 2;
-            /*let taiko_inbox_height = ethereum_l1
-            .execution_layer
-            .get_l2_height_from_taiko_inbox()
-            .await?;*/
+            let taiko_inbox_height = Verifier::get_l2_height_from_l1(ethereum_l1, taiko).await?;
             self.start_verification_thread(taiko_inbox_height, metrics)
                 .await;
 
             Ok(VerificationResult::VerificationInProgress)
         }
+    }
+
+    async fn get_l2_height_from_l1(
+        ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
+        taiko: Arc<Taiko>,
+    ) -> Result<u64, Error> {
+        let proposal_id = ethereum_l1
+            .execution_layer
+            .get_proposal_id_from_indexer()
+            .await?;
+        taiko
+            .l2_execution_layer()
+            .get_last_block_by_proposal(proposal_id)
+            .await
     }
 }
 
@@ -210,14 +215,10 @@ impl VerifierThread {
             self.preconfirmation_root.number, self.preconfirmation_root.hash
         );
 
-        // TODO implement
-        //metrics.inc_by_batch_recovered(self.batch_manager.get_number_of_batches());
+        metrics.inc_by_batch_recovered(self.batch_manager.get_number_of_batches());
 
-        // TODO implement
-        //self.batch_manager.try_finalize_current_batch()?;
-        // TODO implement
-        //Ok(self.batch_manager.take_batches_to_send())
-        Ok(Proposals::new())
+        self.batch_manager.try_finalize_current_batch()?;
+        Ok(self.batch_manager.take_batches_to_send())
     }
 
     async fn handle_unprocessed_blocks(

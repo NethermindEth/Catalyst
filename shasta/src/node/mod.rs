@@ -294,16 +294,4 @@ impl Node {
         );
         Ok(())
     }
-
-    async fn get_l2_height_from_l1(&self) -> Result<u64, Error> {
-        let proposal_id = self
-            .ethereum_l1
-            .execution_layer
-            .get_proposal_id_from_indexer()
-            .await?;
-        self.taiko
-            .l2_execution_layer()
-            .get_last_block_by_proposal(proposal_id)
-            .await
-    }
 }

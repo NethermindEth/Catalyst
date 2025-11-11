@@ -1,9 +1,10 @@
 use std::{collections::VecDeque, sync::Arc};
 
+use super::proposal::Proposals;
 use crate::{
     l1::execution_layer::ExecutionLayer,
-    node::proposal_manager::proposal::{BondInstructionData, Proposal},
     metrics::Metrics,
+    node::proposal_manager::proposal::{BondInstructionData, Proposal},
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
 };
 use alloy::primitives::Address;
@@ -491,5 +492,15 @@ impl BatchBuilder {
 
     pub fn get_current_proposal_id(&self) -> Option<u64> {
         self.current_proposal.as_ref().map(|b| b.id)
+    }
+
+    pub fn try_finalize_current_batch(&mut self) -> Result<(), Error> {
+        // TODO handle forced inclusion
+        self.finalize_current_batch();
+        Ok(())
+    }
+
+    pub fn take_batches_to_send(&mut self) -> Proposals {
+        std::mem::take(&mut self.proposals_to_send)
     }
 }

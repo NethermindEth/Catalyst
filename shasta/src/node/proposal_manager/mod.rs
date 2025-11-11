@@ -17,10 +17,11 @@ use common::{
 use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::node::proposal_manager::proposal::BondInstructionData;
 use alloy::primitives::{B256, U256};
+use proposal::Proposals;
 use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
 
 pub struct BatchManager {
@@ -281,5 +282,31 @@ impl BatchManager {
 
     fn remove_last_l2_block(&mut self) {
         self.batch_builder.remove_last_l2_block();
+    }
+
+    pub async fn reset_builder(&mut self) -> Result<(), Error> {
+        warn!("Resetting batch builder");
+        // TODO handle forced inclusion
+        //self.forced_inclusion.sync_queue_index_with_head().await?;
+
+        self.batch_builder = batch_builder::BatchBuilder::new(
+            self.batch_builder.get_config().clone(),
+            self.ethereum_l1.slot_clock.clone(),
+            self.metrics.clone(),
+        );
+
+        Ok(())
+    }
+
+    pub fn get_number_of_batches(&self) -> u64 {
+        self.batch_builder.get_number_of_batches()
+    }
+
+    pub fn try_finalize_current_batch(&mut self) -> Result<(), Error> {
+        self.batch_builder.try_finalize_current_batch()
+    }
+
+    pub fn take_batches_to_send(&mut self) -> Proposals {
+        self.batch_builder.take_batches_to_send()
     }
 }
