@@ -1,7 +1,7 @@
 use super::proposal_manager::BatchManager;
 use crate::{
-    l1::execution_layer::ExecutionLayer, l2::taiko::Taiko, metrics::Metrics,
-    l1::proposal::Proposals,
+    l1::execution_layer::ExecutionLayer, l1::proposal::Proposals, l2::taiko::Taiko,
+    metrics::Metrics,
 };
 use alloy::primitives::B256;
 use anyhow::Error;
@@ -116,9 +116,9 @@ impl Verifier {
                         // TODO implement
                         let taiko_inbox_height = 2;
                         /*let taiko_inbox_height = ethereum_l1
-                            .execution_layer
-                            .get_l2_height_from_taiko_inbox()
-                            .await?;*/
+                        .execution_layer
+                        .get_l2_height_from_taiko_inbox()
+                        .await?;*/
                         Ok(VerificationResult::ReanchorNeeded(
                             taiko_inbox_height,
                             format!("Verifier return an error: {err}"),
@@ -143,9 +143,9 @@ impl Verifier {
             // TODO implement
             let taiko_inbox_height = 2;
             /*let taiko_inbox_height = ethereum_l1
-                .execution_layer
-                .get_l2_height_from_taiko_inbox()
-                .await?;*/
+            .execution_layer
+            .get_l2_height_from_taiko_inbox()
+            .await?;*/
             self.start_verification_thread(taiko_inbox_height, metrics)
                 .await;
 
@@ -228,15 +228,16 @@ impl VerifierThread {
         //TODO implement
         let anchor_offset = 1;
         /*let anchor_offset = self
-            .batch_manager
-            .get_l1_anchor_block_offset_for_l2_block(taiko_inbox_height + 1)
-            .await?;*/
+        .batch_manager
+        .get_l1_anchor_block_offset_for_l2_block(taiko_inbox_height + 1)
+        .await?;*/
         // The first block anchor id is valid, so we can continue.
         //TODO implement
-        if /*self
-            .batch_manager
-            .is_anchor_block_offset_valid(anchor_offset)*/ true
-        {
+        if
+        /*self
+        .batch_manager
+        .is_anchor_block_offset_valid(anchor_offset)*/
+        true {
             let start = std::time::Instant::now();
             // recover all missed l2 blocks
             for current_height in taiko_inbox_height + 1..=taiko_geth_height {
@@ -245,8 +246,8 @@ impl VerifierThread {
                 }
                 //TODO implement
                 /*self.batch_manager
-                    .recover_from_l2_block(current_height)
-                    .await?;*/
+                .recover_from_l2_block(current_height)
+                .await?;*/
             }
             let elapsed = start.elapsed().as_millis();
             info!("Recovered in {} milliseconds", elapsed);

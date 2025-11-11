@@ -2,9 +2,9 @@ use std::{collections::VecDeque, sync::Arc};
 
 use crate::{
     l1::execution_layer::ExecutionLayer,
+    l1::proposal::{BondInstructionData, Proposal},
     metrics::Metrics,
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
-    l1::proposal::{BondInstructionData, Proposal},
 };
 use alloy::primitives::Address;
 use anyhow::Error;

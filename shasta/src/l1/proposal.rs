@@ -1,7 +1,7 @@
 use crate::shared::l2_block::L2Block;
 use alloy::primitives::{Address, B256};
-use taiko_bindings::anchor::LibBonds::BondInstruction;
 use std::collections::VecDeque;
+use taiko_bindings::anchor::LibBonds::BondInstruction;
 
 pub type Proposals = VecDeque<Proposal>;
 
