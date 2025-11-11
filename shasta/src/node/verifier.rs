@@ -227,28 +227,25 @@ impl VerifierThread {
         taiko_geth_height: u64,
     ) -> Result<(), Error> {
         //TODO implement
-        let anchor_offset = 1;
-        /*let anchor_offset = self
-        .batch_manager
-        .get_l1_anchor_block_offset_for_l2_block(taiko_inbox_height + 1)
-        .await?;*/
+        let anchor_offset = self
+            .batch_manager
+            .get_l1_anchor_block_offset_for_l2_block(taiko_inbox_height + 1)
+            .await?;
         // The first block anchor id is valid, so we can continue.
-        //TODO implement
-        if
-        /*self
-        .batch_manager
-        .is_anchor_block_offset_valid(anchor_offset)*/
-        true {
+        if self
+            .batch_manager
+            .is_anchor_block_offset_valid(anchor_offset)
+        {
             let start = std::time::Instant::now();
             // recover all missed l2 blocks
             for current_height in taiko_inbox_height + 1..=taiko_geth_height {
                 if self.cancel_token.is_cancelled() {
                     return Err(anyhow::anyhow!("Verification cancelled"));
                 }
-                //TODO implement
-                /*self.batch_manager
-                .recover_from_l2_block(current_height)
-                .await?;*/
+
+                self.batch_manager
+                    .recover_from_l2_block(current_height)
+                    .await?;
             }
             let elapsed = start.elapsed().as_millis();
             info!("Recovered in {} milliseconds", elapsed);

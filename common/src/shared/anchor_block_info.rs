@@ -12,11 +12,37 @@ pub struct AnchorBlockInfo {
 impl AnchorBlockInfo {
     pub async fn new(execution_layer: &ExecutionLayer, l1_height_lag: u64) -> Result<Self, Error> {
         let id = Self::calculate_anchor_block_id(execution_layer, l1_height_lag).await?;
+        Self::new_with_number(execution_layer, id).await
+    }
+
+    pub async fn new_with_precomputed_data(
+        execution_layer: &ExecutionLayer,
+        id: u64,
+        hash: B256,
+        state_root: B256,
+    ) -> Result<Self, Error> {
         let timestamp_sec = execution_layer.get_block_timestamp_by_number(id).await?;
-        let hash = execution_layer.get_block_hash(id).await?;
-        let state_root = execution_layer.get_block_state_root_by_number(id).await?;
         Ok(Self {
             id,
+            timestamp_sec,
+            hash,
+            state_root,
+        })
+    }
+
+    pub async fn new_with_number(
+        execution_layer: &ExecutionLayer,
+        number: u64,
+    ) -> Result<Self, Error> {
+        let timestamp_sec = execution_layer
+            .get_block_timestamp_by_number(number)
+            .await?;
+        let hash = execution_layer.get_block_hash(number).await?;
+        let state_root = execution_layer
+            .get_block_state_root_by_number(number)
+            .await?;
+        Ok(Self {
+            id: number,
             timestamp_sec,
             hash,
             state_root,

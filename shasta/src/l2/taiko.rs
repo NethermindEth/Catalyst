@@ -28,6 +28,7 @@ use common::{
 };
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
+use taiko_bindings::anchor::Anchor;
 use tracing::{debug, trace};
 
 // TODO: retrieve from protocol
@@ -288,6 +289,14 @@ impl Taiko {
 
     fn encode_extra_data(basefee_sharing_pctg: u8, is_low_bond_proposal: bool) -> u16 {
         u16::from(basefee_sharing_pctg) << 8 | u16::from(is_low_bond_proposal)
+    }
+
+    pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
+        L2ExecutionLayer::decode_anchor_id_from_tx_data(data)
+    }
+
+    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
+        L2ExecutionLayer::get_anchor_tx_data(data)
     }
 }
 

@@ -205,68 +205,65 @@ impl BatchBuilder {
         }
     }
 
-    // TODO implement
-    /*    pub fn recover_from(
-            &mut self,
-            tx_list: Vec<alloy::rpc::types::Transaction>,
-            anchor_block_id: u64,
-            anchor_block_timestamp_sec: u64,
-            l2_block_timestamp_sec: u64,
-            coinbase: Address,
-        ) -> Result<(), Error> {
-            // We have a new batch if any of the following is true:
-            // 1. Anchor block IDs differ
-            // 2. Time difference between two blocks exceeds u8
-            if !self.is_same_anchor_block_id(anchor_block_id)
-                || self.is_time_shift_expired(l2_block_timestamp_sec)
-                || !self.is_same_coinbase(coinbase)
-            {
-                self.finalize_current_batch();
-                self.current_proposal = Some(Batch {
-                    total_bytes: 0,
-                    l2_blocks: vec![],
-                    anchor_block_id,
-                    coinbase,
-                    anchor_block_timestamp_sec,
-                });
-            }
-
-            let bytes_length = crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
-            let l2_block = L2Block::new_from(
-                crate::shared::l2_tx_lists::PreBuiltTxList {
-                    tx_list,
-                    estimated_gas_used: 0,
-                    bytes_length,
-                },
-                l2_block_timestamp_sec,
+    pub async fn recover_from(
+        &mut self,
+        proposal_id: u64,
+        anchor_info: AnchorBlockInfo,
+        coinbase: Address,
+        bond_instructions: BondInstructionData,
+        tx_list: Vec<alloy::rpc::types::Transaction>,
+        l2_block_timestamp_sec: u64,
+    ) -> Result<(), Error> {
+        // We have a new porposal when proposal ID differs
+        // Otherwise we continue with the current proposal
+        if !self.is_same_proposal_id(proposal_id) {
+            self.finalize_current_batch();
+            debug!(
+                "Creating new proposal during recovery: proposal_id {}, anchor_block_id {} coinbase {}",
+                proposal_id,
+                anchor_info.id(),
+                coinbase
             );
-
-            if self.can_consume_l2_block(&l2_block) {
-                self.add_l2_block_and_get_current_anchor_block_id(l2_block)?;
-            } else {
-                self.create_new_batch_and_add_l2_block(
-                    anchor_block_id,
-                    anchor_block_timestamp_sec,
-                    l2_block,
-                    Some(coinbase),
-                );
-            }
-
-            Ok(())
+            self.current_proposal = Some(Proposal {
+                id: proposal_id,
+                total_bytes: 0,
+                l2_blocks: vec![],
+                coinbase,
+                anchor_block_id: anchor_info.id(),
+                anchor_block_timestamp_sec: anchor_info.timestamp_sec(),
+                anchor_block_hash: anchor_info.hash(),
+                anchor_state_root: anchor_info.state_root(),
+                bond_instructions,
+                num_forced_inclusion: 0,
+            });
         }
 
-        fn is_same_anchor_block_id(&self, anchor_block_id: u64) -> bool {
-            self.current_proposal
-                .as_ref()
-                .is_some_and(|batch| batch.anchor_block_id == anchor_block_id)
-        }
+        // TODO fix transaction encoding
+        let bytes_length = crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
+        let l2_block = L2Block::new_from(
+            crate::shared::l2_tx_lists::PreBuiltTxList {
+                tx_list,
+                estimated_gas_used: 0,
+                bytes_length,
+            },
+            l2_block_timestamp_sec,
+        );
 
-        fn is_same_coinbase(&self, coinbase: Address) -> bool {
-            self.current_proposal
-                .as_ref()
-                .is_some_and(|batch| batch.coinbase == coinbase)
-        }
-    */
+        // TODO we add block to the current proposal.
+        // But we should verify that it fit N blob data size
+        // Otherwise we should do a reorg
+        // TODO align on blob count with all teams
+        self.add_l2_block_and_get_current_anchor_block_id(l2_block)?;
+
+        Ok(())
+    }
+
+    fn is_same_proposal_id(&self, proposal_id: u64) -> bool {
+        self.current_proposal
+            .as_ref()
+            .is_some_and(|proposal| proposal.id == proposal_id)
+    }
+
     pub fn is_empty(&self) -> bool {
         trace!(
             "batch_builder::is_empty: current_proposal is none: {}, proposals_to_send len: {}",

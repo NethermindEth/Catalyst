@@ -245,6 +245,18 @@ impl L2ExecutionLayer {
             .and_then(Value::as_u64)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
     }
+
+    pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+        Ok(tx_data._blockParams.anchorBlockNumber.to::<u64>())
+    }
+
+    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+        Ok(tx_data)
+    }
 }
 
 impl PreconferBondProvider for L2ExecutionLayer {
