@@ -3,7 +3,7 @@
 
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
-use crate::utils::proposal::Proposal;
+use crate::l1::proposal::Proposal;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,

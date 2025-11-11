@@ -18,7 +18,7 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::utils::proposal::BondInstructionData;
+use crate::l1::proposal::BondInstructionData;
 use alloy::primitives::{B256, U256};
 use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
 

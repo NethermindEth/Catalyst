@@ -19,6 +19,8 @@ use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
 use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use proposal_manager::BatchManager;
 
+mod verifier;
+
 pub struct Node {
     config: NodeConfig,
     cancel_token: CancellationToken,
@@ -291,5 +293,12 @@ impl Node {
             },
         );
         Ok(())
+    }
+
+    async fn get_l2_height_from_l1(&self) -> Result<u64, Error> {
+        let proposal_id = self.ethereum_l1.execution_layer
+            .get_proposal_id_from_indexer(). await?;
+        self.taiko.l2_execution_layer()
+            .get_last_block_by_proposal(proposal_id).await
     }
 }

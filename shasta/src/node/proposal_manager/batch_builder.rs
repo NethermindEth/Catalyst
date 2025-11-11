@@ -4,7 +4,7 @@ use crate::{
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
-    utils::proposal::{BondInstructionData, Proposal},
+    l1::proposal::{BondInstructionData, Proposal},
 };
 use alloy::primitives::Address;
 use anyhow::Error;
