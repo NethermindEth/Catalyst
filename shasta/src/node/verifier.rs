@@ -1,6 +1,6 @@
 use super::proposal_manager::BatchManager;
 use crate::{
-    l1::execution_layer::ExecutionLayer, l1::proposal::Proposals, l2::taiko::Taiko,
+    l1::execution_layer::ExecutionLayer, node::proposal_manager::proposal::Proposals, l2::taiko::Taiko,
     metrics::Metrics,
 };
 use alloy::primitives::B256;

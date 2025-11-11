@@ -23,7 +23,7 @@ use tracing::{debug, info, warn};
 
 use serde_json::Value;
 
-use crate::l1::proposal::Proposal;
+use crate::node::proposal_manager::proposal::Proposal;
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,

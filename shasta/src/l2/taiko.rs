@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use super::execution_layer::L2ExecutionLayer;
-use crate::l1::proposal::Proposal;
+use crate::node::proposal_manager::proposal::Proposal;
 use crate::l1::protocol_config::ProtocolConfig;
 use alloy::{
     consensus::BlockHeader,

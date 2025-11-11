@@ -1,4 +1,5 @@
 mod batch_builder;
+pub mod proposal;
 
 use crate::{
     l1::execution_layer::ExecutionLayer,
@@ -18,7 +19,7 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::l1::proposal::BondInstructionData;
+use crate::node::proposal_manager::proposal::BondInstructionData;
 use alloy::primitives::{B256, U256};
 use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
 
