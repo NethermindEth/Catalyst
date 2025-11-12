@@ -352,15 +352,18 @@ def verifyPreconf(# CHANGE: Function now takes rawTxList instead of full L2 bloc
     # 6) Verify rawTxList consistency
     assert hash(rawTxList) == preconf.rawTxListHash
 
-    # 7) Reconstruct full L2 block by adding anchor transaction
+    # 7) Verify timestamp does not drift too far from current time
+    assert abs(preconf.timestamp - now()) <= MAX_TIMESTAMP_DRIFT
+
+    # 8) Reconstruct full L2 block by adding anchor transaction
     anchorHash = L1.getBlockHash(preconf.anchorId)
     anchorTx = constructAnchorTx(anchorHash)
     l2Block = executeL2Block([anchorTx] + rawTxList)
 
-    # 8) Advance local canonical chain
+    # 9) Advance local canonical chain
     localL2Head = l2Block
 
-    # 9) Handle explicit EOP handoff
+    # 10) Handle explicit EOP handoff
     if preconf.eop:
         currentPreconfer = lookaheadStore.getNextPreconfer()
 
