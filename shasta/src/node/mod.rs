@@ -22,7 +22,7 @@ use proposal_manager::BatchManager;
 
 use tokio::{
     sync::mpsc::{Receiver, error::TryRecvError},
-    time::Duration,
+    time::{Duration, sleep},
 };
 
 mod l2_head_provider;
@@ -110,14 +110,13 @@ impl Node {
     pub async fn entrypoint(mut self) -> Result<(), Error> {
         info!("Starting node");
 
-        // TODO
-        /*if let Err(err) = self.warmup().await {
+        if let Err(err) = self.warmup().await {
             error!("Failed to warm up node: {}. Shutting down.", err);
             self.cancel_token.cancel();
             return Err(anyhow::anyhow!(err));
         }
 
-        info!("Node warmup successful");*/
+        info!("Node warmup successful");
 
         // Run preconfirmation loop in background
         tokio::spawn(async move {
@@ -545,6 +544,56 @@ impl Node {
                 "Unknown".to_string()
             },
         );
+        Ok(())
+    }
+
+    async fn warmup(&mut self) -> Result<(), Error> {
+        info!("Warmup node");
+
+        // Wait for Taiko Geth to synchronize with L1
+        let (mut taiko_inbox_height, mut taiko_geth_height) =
+            self.get_current_protocol_height().await?;
+
+        info!("Taiko Inbox Height: {taiko_inbox_height}, Taiko Geth Height: {taiko_geth_height}");
+
+        while taiko_geth_height < taiko_inbox_height {
+            warn!("Taiko Geth is behind L1. Waiting 5 seconds...");
+            sleep(Duration::from_secs(5)).await;
+
+            (taiko_inbox_height, taiko_geth_height) = self.get_current_protocol_height().await?;
+
+            info!(
+                "Taiko Inbox Height: {taiko_inbox_height}, Taiko Geth Height: {taiko_geth_height}"
+            );
+        }
+
+        // Wait for the last sent transaction to be executed
+        self.wait_for_sent_transactions().await?;
+
+        Ok(())
+    }
+
+    async fn wait_for_sent_transactions(&self) -> Result<(), Error> {
+        loop {
+            let nonce_latest: u64 = self
+                .ethereum_l1
+                .execution_layer
+                .get_preconfer_nonce_latest()
+                .await?;
+            let nonce_pending: u64 = self
+                .ethereum_l1
+                .execution_layer
+                .get_preconfer_nonce_pending()
+                .await?;
+            if nonce_pending == nonce_latest {
+                break;
+            }
+            debug!(
+                "Waiting for sent transactions to be executed. Nonce Latest: {nonce_latest}, Nonce Pending: {nonce_pending}"
+            );
+            sleep(Duration::from_secs(6)).await;
+        }
+
         Ok(())
     }
 }
