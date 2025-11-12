@@ -313,16 +313,23 @@ PRECONFER_SLASHER_ADDRESS = ....
 
 # The currently expected preconfer
 currentPreconfer: LookaheadSlot
-# Node's canonical L2 head
-localL2Head: Block
+
+# Node's preconfed L2 head state
+# Based on `ParentState` in Rust implementation, but extended with `rawTxListHash`:
+# https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/pipeline/state.rs#L12-L13
+class ParentState:
+    header: Header             # Standard block header (hash, number, timestamp, gasLimit, coinbase, etc.)
+    anchorBlockNumber: uint256 # L1 anchor block ID
+    rawTxListHash: bytes32     # New! Hash of raw transaction list
+    ...
+
+localL2Head: ParentState
 
 # Run this function on each reception of preconf
-def verifyPreconf(# CHANGE: Function now takes rawTxList instead of full L2 block
-                  rawTxList: List[Tx],
-                  signedCommitment: SignedCommitment):
+def verifyPreconfirmation(rawTxList: List[Tx], signedCommitment: SignedCommitment):
     """
     Verifies a received preconfirmation against lookahead schedule, the signer,
-    the expected slasher, and the provided rawTxList.
+    the slasher address, and derive and execute the L2 block.
     """
 
     commitment = signedCommitment.commitment
@@ -355,15 +362,25 @@ def verifyPreconf(# CHANGE: Function now takes rawTxList instead of full L2 bloc
     # 7) Verify timestamp does not drift too far from current time
     assert abs(preconf.timestamp - now()) <= MAX_TIMESTAMP_DRIFT
 
-    # 8) Reconstruct full L2 block by adding anchor transaction
-    anchorHash = L1.getBlockHash(preconf.anchorId)
-    anchorTx = constructAnchorTx(anchorHash)
-    l2Block = executeL2Block([anchorTx] + rawTxList)
+    # 8) Derive L2 block from preconfirmation and execute it
+    # First construct block manifest from preconfirmation parameters.
+    # Block manifest in Rust implementation::
+    # https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/protocol/src/shasta/manifest.rs#L22-L23
+    manifest = BlockManifest(
+        anchorBlockNumber=preconf.anchorBlockNumber,
+        timestamp=preconf.timestamp,
+        gasLimit=preconf.gasLimit,
+        coinbase=preconf.coinbase,
+        transactions=rawTxList
+    )    
+    # Then process block.
+    # This validates constraints, constructs anchor tx, and executes the block.
+    # Corresponds to `process_block_manifest` in Rust implementation:
+    # https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/pipeline/payload.rs#L290
+    # Note: This function will update the `parentState` with the newly processed block.
+    processBlockManifest(manifest, parentState)
 
-    # 9) Advance local canonical chain
-    localL2Head = l2Block
-
-    # 10) Handle explicit EOP handoff
+    # 9) Handle explicit EOP handoff
     if preconf.eop:
         currentPreconfer = lookaheadStore.getNextPreconfer()
 
