@@ -10,12 +10,15 @@ pub struct AnchorBlockInfo {
 }
 
 impl AnchorBlockInfo {
-    pub async fn new(execution_layer: &ExecutionLayer, l1_height_lag: u64) -> Result<Self, Error> {
+    pub async fn from_lag(
+        execution_layer: &ExecutionLayer,
+        l1_height_lag: u64,
+    ) -> Result<Self, Error> {
         let id = Self::calculate_anchor_block_id(execution_layer, l1_height_lag).await?;
-        Self::new_with_number(execution_layer, id).await
+        Self::from_block_number(execution_layer, id).await
     }
 
-    pub async fn new_with_precomputed_data(
+    pub async fn from_precomputed_data(
         execution_layer: &ExecutionLayer,
         id: u64,
         hash: B256,
@@ -30,7 +33,7 @@ impl AnchorBlockInfo {
         })
     }
 
-    pub async fn new_with_number(
+    pub async fn from_block_number(
         execution_layer: &ExecutionLayer,
         number: u64,
     ) -> Result<Self, Error> {

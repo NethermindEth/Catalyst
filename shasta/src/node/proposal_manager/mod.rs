@@ -249,7 +249,7 @@ impl BatchManager {
 
     async fn create_new_batch(&mut self) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
-        let anchor_block_info = AnchorBlockInfo::new(
+        let anchor_block_info = AnchorBlockInfo::from_lag(
             self.ethereum_l1.execution_layer.common(),
             self.l1_height_lag,
         )
@@ -380,7 +380,7 @@ impl BatchManager {
 
         let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
 
-        let anchor_info = AnchorBlockInfo::new_with_precomputed_data(
+        let anchor_info = AnchorBlockInfo::from_precomputed_data(
             self.ethereum_l1.execution_layer.common(),
             anchor_tx_data._blockParams.anchorBlockNumber.to::<u64>(),
             anchor_tx_data._blockParams.anchorBlockHash,
