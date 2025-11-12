@@ -249,9 +249,15 @@ impl BatchManager {
 
     async fn create_new_batch(&mut self) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
-        let anchor_block_info = AnchorBlockInfo::from_lag(
+        let last_anchor_id = self
+            .taiko
+            .l2_execution_layer()
+            .get_last_synced_anchor_block_id_from_geth()
+            .await?;
+        let anchor_block_info = AnchorBlockInfo::from_lag_and_last_anchor_id(
             self.ethereum_l1.execution_layer.common(),
             self.l1_height_lag,
+            last_anchor_id,
         )
         .await?;
 
@@ -265,20 +271,6 @@ impl BatchManager {
             .create_new_batch(proposal_id, anchor_block_info, bond_instructions);
 
         Ok(anchor_block_id)
-    }
-
-    async fn calculate_anchor_block_id(&self) -> Result<u64, Error> {
-        // TODO get anchor from l2
-        // TODO implement MIN_ANCHOR_OFFSET
-        let l1_height = self
-            .ethereum_l1
-            .execution_layer
-            .common()
-            .get_latest_block_id()
-            .await?;
-        let l1_height_with_lag = l1_height - self.l1_height_lag;
-
-        Ok(l1_height_with_lag)
     }
 
     fn remove_last_l2_block(&mut self) {
