@@ -433,4 +433,8 @@ impl BatchManager {
         //self.forced_inclusion.sync_queue_index_with_head().await?;
         Ok(self.clone_without_batches())
     }
+
+    pub fn prepend_batches(&mut self, batches: Proposals) {
+        self.batch_builder.prepend_batches(batches);
+    }
 }

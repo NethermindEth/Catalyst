@@ -482,7 +482,7 @@ impl BatchBuilder {
         std::mem::take(&mut self.proposals_to_send)
     }
 
-    pub fn prepend_batches(&mut self, mut batches: VecDeque<Proposal>) {
+    pub fn prepend_batches(&mut self, mut batches: Proposals) {
         batches.append(&mut self.proposals_to_send);
         self.proposals_to_send = batches;
     }

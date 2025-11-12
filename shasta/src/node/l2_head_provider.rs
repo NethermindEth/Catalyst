@@ -23,7 +23,10 @@ pub async fn get_l2_height_from_l1(
         .get_last_block_by_proposal(proposal_id)
         .await?;
 
-    debug!("get_l2_height_from_l1: proposal id: {}, last block by proposal: {}", proposal_id, result);
+    debug!(
+        "get_l2_height_from_l1: proposal id: {}, last block by proposal: {}",
+        proposal_id, result
+    );
 
     Ok(result)
 }

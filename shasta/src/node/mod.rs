@@ -29,7 +29,7 @@ mod l2_head_provider;
 pub use l2_head_provider::get_l2_height_from_l1;
 
 mod verifier;
-use verifier::Verifier;
+use verifier::{VerificationResult, Verifier};
 
 pub struct Node {
     config: NodeConfig,
@@ -358,8 +358,44 @@ impl Node {
     }
 
     /// Returns true if the operation succeeds
+    /// Returns true if the operation succeeds
     async fn has_verified_unproposed_batches(&mut self) -> Result<bool, Error> {
-        // TODO implement proper verification
+        if let Some(mut verifier) = self.verifier.take() {
+            match verifier
+                .verify(
+                    self.ethereum_l1.clone(),
+                    self.taiko.clone(),
+                    self.metrics.clone(),
+                )
+                .await
+            {
+                Ok(res) => match res {
+                    VerificationResult::SlotNotValid => {
+                        self.verifier = Some(verifier);
+                        return Ok(false);
+                    }
+                    VerificationResult::ReanchorNeeded(block, reason) => {
+                        if let Err(err) = self.reanchor_blocks(block, &reason, false).await {
+                            error!("Failed to reanchor blocks: {}", err);
+                            self.cancel_token.cancel();
+                            return Err(err);
+                        }
+                    }
+                    VerificationResult::SuccessWithBatches(batches) => {
+                        self.proposal_manager.prepend_batches(batches);
+                    }
+                    VerificationResult::SuccessNoBatches => {}
+                    VerificationResult::VerificationInProgress => {
+                        self.verifier = Some(verifier);
+                        return Ok(false);
+                    }
+                },
+                Err(err) => {
+                    self.verifier = Some(verifier);
+                    return Err(err);
+                }
+            }
+        }
         Ok(true)
     }
 
@@ -447,21 +483,19 @@ impl Node {
                     "Anchor offset {} is too high for l2 block id {}, triggering reanchor",
                     anchor_offset, l2_block_id
                 );
-                // TODO implement reanchor logic
-                /*if let Err(err) = self
+                if let Err(err) = self
                     .reanchor_blocks(
                         taiko_inbox_height,
                         "Anchor offset is too high for unsafe L2 blocks",
                         false,
                     )
                     .await
-                {*/
-                //error!("Failed to reanchor: {}", err);
-                self.cancel_token.cancel();
-                return Err(anyhow::anyhow!("Reanchor not implemented yet"));
-                //return Err(anyhow::anyhow!("Failed to reanchor: {}", err));
-                //}
-                //return Ok(true);
+                {
+                    error!("Failed to reanchor: {}", err);
+                    self.cancel_token.cancel();
+                    return Err(anyhow::anyhow!("Failed to reanchor: {}", err));
+                }
+                return Ok(true);
             }
         }
 
@@ -595,5 +629,21 @@ impl Node {
         }
 
         Ok(())
+    }
+
+    async fn reanchor_blocks(
+        &mut self,
+        parent_block_id: u64,
+        reason: &str,
+        allow_forced_inclusion: bool,
+    ) -> Result<(), Error> {
+        warn!(
+            "⛓️‍💥 Reanchoring blocks for parent block: {} reason: {} allow_forced_inclusion: {}",
+            parent_block_id, reason, allow_forced_inclusion
+        );
+
+        // TODO implement reanchor
+        //Ok(())
+        Err(anyhow::anyhow!("Reanchor not implemented yet"))
     }
 }
