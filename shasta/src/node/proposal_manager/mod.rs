@@ -1,4 +1,5 @@
 mod batch_builder;
+pub mod proposal;
 
 use crate::{
     l1::execution_layer::ExecutionLayer,
@@ -6,6 +7,7 @@ use crate::{
     metrics::Metrics,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
 };
+use alloy::{consensus::BlockHeader, consensus::Transaction};
 use anyhow::Error;
 use batch_builder::BatchBuilder;
 use common::{
@@ -16,10 +18,11 @@ use common::{
 use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{debug, error, info, warn};
 
-use crate::utils::proposal::BondInstructionData;
+use crate::node::proposal_manager::proposal::BondInstructionData;
 use alloy::primitives::{B256, U256};
+use proposal::Proposals;
 use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
 
 pub struct BatchManager {
@@ -246,7 +249,7 @@ impl BatchManager {
 
     async fn create_new_batch(&mut self) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
-        let anchor_block_info = AnchorBlockInfo::new(
+        let anchor_block_info = AnchorBlockInfo::from_lag(
             self.ethereum_l1.execution_layer.common(),
             self.l1_height_lag,
         )
@@ -280,5 +283,158 @@ impl BatchManager {
 
     fn remove_last_l2_block(&mut self) {
         self.batch_builder.remove_last_l2_block();
+    }
+
+    pub async fn reset_builder(&mut self) -> Result<(), Error> {
+        warn!("Resetting batch builder");
+        // TODO handle forced inclusion
+        //self.forced_inclusion.sync_queue_index_with_head().await?;
+
+        self.batch_builder = batch_builder::BatchBuilder::new(
+            self.batch_builder.get_config().clone(),
+            self.ethereum_l1.slot_clock.clone(),
+            self.metrics.clone(),
+        );
+
+        Ok(())
+    }
+
+    pub fn has_batches(&self) -> bool {
+        !self.batch_builder.is_empty()
+    }
+
+    // TODO handle forced inclusion properly
+    pub fn has_current_forced_inclusion(&self) -> bool {
+        false
+    }
+
+    pub fn get_number_of_batches(&self) -> u64 {
+        self.batch_builder.get_number_of_batches()
+    }
+
+    pub fn try_finalize_current_batch(&mut self) -> Result<(), Error> {
+        self.batch_builder.try_finalize_current_batch()
+    }
+
+    pub fn take_batches_to_send(&mut self) -> Proposals {
+        self.batch_builder.take_batches_to_send()
+    }
+
+    pub fn is_anchor_block_offset_valid(&self, anchor_block_offset: u64) -> bool {
+        anchor_block_offset
+            < self
+                .taiko
+                .get_protocol_config()
+                .get_max_anchor_height_offset()
+    }
+
+    pub async fn get_l1_anchor_block_offset_for_l2_block(
+        &self,
+        l2_block_height: u64,
+    ) -> Result<u64, Error> {
+        debug!(
+            "get_anchor_block_offset: Checking L2 block {}",
+            l2_block_height
+        );
+        let block = self
+            .taiko
+            .get_l2_block_by_number(l2_block_height, false)
+            .await?;
+
+        let anchor_tx_hash = block
+            .transactions
+            .as_hashes()
+            .and_then(|txs| txs.first())
+            .ok_or_else(|| anyhow::anyhow!("get_anchor_block_offset: No transactions in block"))?;
+
+        let l2_anchor_tx = self.taiko.get_transaction_by_hash(*anchor_tx_hash).await?;
+        let l1_anchor_block_id = Taiko::decode_anchor_id_from_tx_data(l2_anchor_tx.input())?;
+
+        debug!(
+            "get_l1_anchor_block_offset_for_l2_block: L2 block {l2_block_height} has L1 anchor block id {l1_anchor_block_id}"
+        );
+
+        self.ethereum_l1.slot_clock.slots_since_l1_block(
+            self.ethereum_l1
+                .execution_layer
+                .common()
+                .get_block_timestamp_by_number(l1_anchor_block_id)
+                .await?,
+        )
+    }
+
+    pub async fn recover_from_l2_block(&mut self, block_height: u64) -> Result<(), Error> {
+        debug!("Recovering from L2 block {}", block_height);
+        let block = self
+            .taiko
+            .get_l2_block_by_number(block_height, true)
+            .await?;
+        let (anchor_tx, txs) = match block.transactions.as_transactions() {
+            Some(txs) => txs
+                .split_first()
+                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block"))?,
+            None => return Err(anyhow::anyhow!("No transactions in block")),
+        };
+
+        let coinbase = block.header.beneficiary();
+
+        let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
+
+        let anchor_info = AnchorBlockInfo::from_precomputed_data(
+            self.ethereum_l1.execution_layer.common(),
+            anchor_tx_data._blockParams.anchorBlockNumber.to::<u64>(),
+            anchor_tx_data._blockParams.anchorBlockHash,
+            anchor_tx_data._blockParams.anchorStateRoot,
+        )
+        .await?;
+
+        // TODO imporvee output
+        debug!(
+            "Recovering from L2 block {}, transactions {}",
+            block_height,
+            txs.len()
+        );
+
+        let txs = txs.to_vec();
+        // TODO handle forced inclusion properly
+
+        // TODO validate block params
+        self.batch_builder
+            .recover_from(
+                anchor_tx_data._proposalParams.proposalId.to::<u64>(),
+                anchor_info,
+                coinbase,
+                BondInstructionData::new(
+                    anchor_tx_data._proposalParams.bondInstructions,
+                    anchor_tx_data._proposalParams.bondInstructionsHash,
+                ),
+                txs,
+                block.header.timestamp(),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub fn clone_without_batches(&self) -> Self {
+        Self {
+            batch_builder: self.batch_builder.clone_without_batches(),
+            ethereum_l1: self.ethereum_l1.clone(),
+            taiko: self.taiko.clone(),
+            l1_height_lag: self.l1_height_lag,
+            metrics: self.metrics.clone(),
+            cancel_token: self.cancel_token.clone(),
+        }
+    }
+
+    pub async fn update_forced_inclusion_and_clone_without_batches(
+        &mut self,
+    ) -> Result<Self, Error> {
+        // TODO handle forced inclusion properly
+        //self.forced_inclusion.sync_queue_index_with_head().await?;
+        Ok(self.clone_without_batches())
+    }
+
+    pub fn prepend_batches(&mut self, batches: Proposals) {
+        self.batch_builder.prepend_batches(batches);
     }
 }

@@ -39,7 +39,7 @@ pub async fn create_shasta_node(
     let shasta_config = ShastaConfig::read_env_variables();
     info!("Shasta config: {}", shasta_config);
 
-    let (transaction_error_sender, _transaction_error_receiver) = mpsc::channel(100);
+    let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let ethereum_l1 = common_l1::ethereum_l1::EthereumL1::<ExecutionLayer>::new(
         common_l1::config::EthereumL1Config::new(&config).await?,
         l1::config::EthereumL1Config::try_from(shasta_config.clone())?,
@@ -129,6 +129,7 @@ pub async fn create_shasta_node(
         taiko.clone(),
         metrics.clone(),
         batch_builder_config,
+        transaction_error_receiver,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;

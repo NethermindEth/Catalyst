@@ -21,7 +21,9 @@ use pacaya::l2::config::TaikoConfig;
 use taiko_bindings::anchor::Anchor;
 use tracing::{debug, info, warn};
 
-use crate::utils::proposal::Proposal;
+use serde_json::Value;
+
+use crate::node::proposal_manager::proposal::Proposal;
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -228,6 +230,32 @@ impl L2ExecutionLayer {
         let tx_data =
             <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
         Ok(tx_data._proposalParams.bondInstructionsHash)
+    }
+
+    pub async fn get_last_block_by_proposal(&self, proposal_id: u64) -> Result<u64, Error> {
+        // taiko_lastBlockIDByBatchID returns error for proposals that are not landed on L1
+        self.provider
+            .raw_request::<_, Value>(
+                std::borrow::Cow::Borrowed("taiko_lastBlockIDByBatchID"),
+                vec![Value::String(proposal_id.to_string())],
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to call taiko_lastBlockIDByBatchID: {}", e))?
+            .get("result")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse taiko_lastBlockIDByBatchID result"))
+    }
+
+    pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+        Ok(tx_data._blockParams.anchorBlockNumber.to::<u64>())
+    }
+
+    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+        Ok(tx_data)
     }
 }
 
