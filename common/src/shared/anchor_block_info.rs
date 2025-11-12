@@ -9,16 +9,20 @@ pub struct AnchorBlockInfo {
     state_root: B256,
 }
 
-const MIN_ANCHOR_OFFSET: u64 = 2;
-
 impl AnchorBlockInfo {
-    pub async fn from_lag_and_last_anchor_id(
+    pub async fn from_chain_state(
         execution_layer: &ExecutionLayer,
         l1_height_lag: u64,
         last_anchor_id: u64,
+        min_anchor_offset: u64,
     ) -> Result<Self, Error> {
-        let id =
-            Self::calculate_anchor_block_id(execution_layer, l1_height_lag, last_anchor_id).await?;
+        let id = Self::calculate_anchor_block_id(
+            execution_layer,
+            l1_height_lag,
+            last_anchor_id,
+            min_anchor_offset,
+        )
+        .await?;
         Self::from_block_number(execution_layer, id).await
     }
 
@@ -41,18 +45,12 @@ impl AnchorBlockInfo {
         execution_layer: &ExecutionLayer,
         number: u64,
     ) -> Result<Self, Error> {
-        let timestamp_sec = execution_layer
-            .get_block_timestamp_by_number(number)
-            .await?;
-        let hash = execution_layer.get_block_hash(number).await?;
-        let state_root = execution_layer
-            .get_block_state_root_by_number(number)
-            .await?;
+        let block_info = execution_layer.get_block_info_by_number(number).await?;
         Ok(Self {
             id: number,
-            timestamp_sec,
-            hash,
-            state_root,
+            timestamp_sec: block_info.timestamp,
+            hash: block_info.hash,
+            state_root: block_info.state_root,
         })
     }
 
@@ -60,21 +58,23 @@ impl AnchorBlockInfo {
         execution_layer: &ExecutionLayer,
         l1_height_lag: u64,
         last_anchor_id: u64,
+        min_anchor_offset: u64,
     ) -> Result<u64, Error> {
         let l1_height = execution_layer.get_latest_block_id().await?;
         let l1_height_with_lag = l1_height - l1_height_lag;
 
         let anchor_id = l1_height_with_lag.max(last_anchor_id + 1);
 
-        if l1_height < anchor_id + MIN_ANCHOR_OFFSET {
+        if l1_height < anchor_id + min_anchor_offset {
             return Err(anyhow::anyhow!(
-                "Calculated anchor block ID {} exceeds latest L1 height {} - MIN_ANCHOR_OFFSET",
+                "Calculated anchor block ID {} exceeds latest L1 height {} - min_anchor_offset {}",
                 anchor_id,
-                l1_height
+                l1_height,
+                min_anchor_offset
             ));
         }
 
-        Ok(l1_height_with_lag)
+        Ok(anchor_id)
     }
 
     pub fn id(&self) -> u64 {

@@ -25,6 +25,8 @@ use alloy::primitives::{B256, U256};
 use proposal::Proposals;
 use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
 
+const MIN_ANCHOR_OFFSET: u64 = 2;
+
 pub struct BatchManager {
     batch_builder: BatchBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
@@ -254,10 +256,11 @@ impl BatchManager {
             .l2_execution_layer()
             .get_last_synced_anchor_block_id_from_geth()
             .await?;
-        let anchor_block_info = AnchorBlockInfo::from_lag_and_last_anchor_id(
+        let anchor_block_info = AnchorBlockInfo::from_chain_state(
             self.ethereum_l1.execution_layer.common(),
             self.l1_height_lag,
             last_anchor_id,
+            MIN_ANCHOR_OFFSET,
         )
         .await?;
 
