@@ -243,7 +243,7 @@ impl L2ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to call taiko_lastBlockIDByBatchID: {}", e))?
             .get("result")
             .and_then(Value::as_u64)
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse taiko_lastBlockIDByBatchID result"))
     }
 
     pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
