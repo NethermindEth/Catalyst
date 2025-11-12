@@ -39,7 +39,7 @@ pub struct Node {
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
     metrics: Arc<Metrics>,
-    proposal_manager: BatchManager, //TODO change name or unify wiith pacaya's batch manager
+    proposal_manager: BatchManager, //TODO change name or unify with pacaya's batch manager
     verifier: Option<Verifier>,
     head_verifier: HeadVerifier,
     transaction_error_channel: Receiver<TransactionError>,

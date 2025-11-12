@@ -214,7 +214,7 @@ impl BatchBuilder {
         tx_list: Vec<alloy::rpc::types::Transaction>,
         l2_block_timestamp_sec: u64,
     ) -> Result<(), Error> {
-        // We have a new porposal when proposal ID differs
+        // We have a new proposal when proposal ID differs
         // Otherwise we continue with the current proposal
         if !self.is_same_proposal_id(proposal_id) {
             self.finalize_current_batch();
