@@ -197,15 +197,9 @@ impl L2ExecutionLayer {
     }
 
     pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
-        let block = self.common.get_latest_block_with_txs().await?;
-        let anchor_tx = match block.transactions.as_transactions() {
-            Some(txs) => txs.first().ok_or_else(|| {
-                anyhow::anyhow!("Cannot get anchor transaction from block for proposal id")
-            })?,
-            None => return Err(anyhow::anyhow!("No transactions in block")),
-        };
-
-        Self::decode_proposal_id_from_tx_data(anchor_tx.input())
+        self.get_latest_anchor_transaction_input()
+            .await
+            .and_then(|input| Self::decode_proposal_id_from_tx_data(&input))
     }
 
     pub fn decode_proposal_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
@@ -215,15 +209,9 @@ impl L2ExecutionLayer {
     }
 
     pub async fn get_last_synced_bond_instruction_hash_from_geth(&self) -> Result<B256, Error> {
-        let block = self.common.get_latest_block_with_txs().await?;
-        let anchor_tx = match block.transactions.as_transactions() {
-            Some(txs) => txs.first().ok_or_else(|| {
-                anyhow::anyhow!("Cannot get anchor transaction from block for bond instruction")
-            })?,
-            None => return Err(anyhow::anyhow!("No transactions in block")),
-        };
-
-        Self::decode_bond_instruction_hash_from_tx_data(anchor_tx.input())
+        self.get_latest_anchor_transaction_input()
+            .await
+            .and_then(|input| Self::decode_bond_instruction_hash_from_tx_data(&input))
     }
 
     pub fn decode_bond_instruction_hash_from_tx_data(data: &[u8]) -> Result<B256, Error> {
@@ -243,6 +231,32 @@ impl L2ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to call taiko_lastBlockIDByBatchID: {}", e))?
             .as_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse taiko_lastBlockIDByBatchID result"))
+    }
+
+    async fn get_latest_anchor_transaction_input(&self) -> Result<Vec<u8>, Error> {
+        let block = self.common.get_latest_block_with_txs().await?;
+        let anchor_tx = match block.transactions.as_transactions() {
+            Some(txs) => txs.first().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Cannot get anchor transaction from block {}",
+                    block.number()
+                )
+            })?,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "No transactions in L2 block {}",
+                    block.number()
+                ));
+            }
+        };
+
+        Ok(anchor_tx.input().to_vec())
+    }
+
+    pub async fn get_last_synced_anchor_block_id_from_geth(&self) -> Result<u64, Error> {
+        self.get_latest_anchor_transaction_input()
+            .await
+            .and_then(|input| Self::decode_anchor_id_from_tx_data(&input))
     }
 
     pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
