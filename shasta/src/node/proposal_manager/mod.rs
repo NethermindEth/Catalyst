@@ -299,6 +299,15 @@ impl BatchManager {
         Ok(())
     }
 
+    pub fn has_batches(&self) -> bool {
+        !self.batch_builder.is_empty()
+    }
+
+    // TODO handle forced inclusion properly
+    pub fn has_current_forced_inclusion(&self) -> bool {
+        false
+    }
+
     pub fn get_number_of_batches(&self) -> u64 {
         self.batch_builder.get_number_of_batches()
     }
@@ -404,5 +413,24 @@ impl BatchManager {
             )
             .await?;
         Ok(())
+    }
+
+    pub fn clone_without_batches(&self) -> Self {
+        Self {
+            batch_builder: self.batch_builder.clone_without_batches(),
+            ethereum_l1: self.ethereum_l1.clone(),
+            taiko: self.taiko.clone(),
+            l1_height_lag: self.l1_height_lag,
+            metrics: self.metrics.clone(),
+            cancel_token: self.cancel_token.clone(),
+        }
+    }
+
+    pub async fn update_forced_inclusion_and_clone_without_batches(
+        &mut self,
+    ) -> Result<Self, Error> {
+        // TODO handle forced inclusion properly
+        //self.forced_inclusion.sync_queue_index_with_head().await?;
+        Ok(self.clone_without_batches())
     }
 }

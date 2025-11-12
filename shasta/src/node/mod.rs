@@ -10,16 +10,26 @@ use common::{
 };
 use pacaya::node::operator::Status as OperatorStatus;
 use pacaya::node::{config::NodeConfig, operator::Operator};
-use tokio::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::metrics::Metrics;
 use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
+use common::l1::traits::PreconferProvider;
+use common::shared::head_verifier::HeadVerifier;
 use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use proposal_manager::BatchManager;
 
+use tokio::{
+    sync::mpsc::{Receiver, error::TryRecvError},
+    time::Duration,
+};
+
+mod l2_head_provider;
+pub use l2_head_provider::get_l2_height_from_l1;
+
 mod verifier;
+use verifier::Verifier;
 
 pub struct Node {
     config: NodeConfig,
@@ -29,7 +39,10 @@ pub struct Node {
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
     metrics: Arc<Metrics>,
-    proposal_manager: BatchManager, //TODO
+    proposal_manager: BatchManager, //TODO change name or unify wiith pacaya's batch manager
+    verifier: Option<Verifier>,
+    head_verifier: HeadVerifier,
+    transaction_error_channel: Receiver<TransactionError>,
 }
 
 impl Node {
@@ -40,6 +53,7 @@ impl Node {
         taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
         batch_builder_config: BatchBuilderConfig,
+        transaction_error_channel: Receiver<TransactionError>,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -55,6 +69,7 @@ impl Node {
             cancel_token.clone(),
             ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
         );
+        let head_verifier = HeadVerifier::default();
 
         let proposal_manager = BatchManager::new(
             //TODO
@@ -86,6 +101,9 @@ impl Node {
             operator,
             metrics,
             proposal_manager,
+            verifier: None,
+            head_verifier,
+            transaction_error_channel,
         })
     }
 
@@ -157,28 +175,101 @@ impl Node {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
 
-        // TODO preconfirmation
-        if current_status.is_preconfer() && current_status.is_driver_synced() {
-            let _preconfed_block = self
-                .preconfirm_block(
-                    pending_tx_list,
-                    &l2_slot_info,
-                    current_status.is_end_of_sequencing(),
-                    false, // TODO preconf FI
-                )
-                .await?;
-
-            // TODO fix verification
-            // self.verify_preconfed_block(preconfed_block).await?;
-        }
-
-        // TODO Get the transaction status before checking the error channel
+        // Get the transaction status before checking the error channel
         // to avoid race condition
         let transaction_in_progress = self
             .ethereum_l1
             .execution_layer
             .is_transaction_in_progress()
             .await?;
+
+        self.check_transaction_error_channel(&current_status, &l2_slot_info)
+            .await?;
+
+        if current_status.is_preconfirmation_start_slot() {
+            self.head_verifier
+                .set(l2_slot_info.parent_id(), *l2_slot_info.parent_hash())
+                .await;
+
+            if current_status.is_submitter() {
+                // We start preconfirmation in the middle of the epoch.
+                // Need to check for unproposed L2 blocks.
+                if let Err(err) = self.check_for_missing_proposed_batches().await {
+                    error!(
+                        "Shutdown: Failed to verify proposed batches on startup: {}",
+                        err
+                    );
+                    self.cancel_token.cancel();
+                    return Err(anyhow::anyhow!(
+                        "Shutdown: Failed to verify proposed batches on startup: {}",
+                        err
+                    ));
+                }
+            } else {
+                // It is for handover window
+                let taiko_geth_height = l2_slot_info.parent_id();
+                let verification_slot = self.ethereum_l1.slot_clock.get_next_epoch_start_slot()?;
+                let verifier_result = Verifier::new_with_taiko_height(
+                    taiko_geth_height,
+                    self.taiko.clone(),
+                    self.proposal_manager
+                        .update_forced_inclusion_and_clone_without_batches()
+                        .await?,
+                    verification_slot,
+                    self.cancel_token.clone(),
+                )
+                .await;
+                match verifier_result {
+                    Ok(verifier) => {
+                        self.verifier = Some(verifier);
+                    }
+                    Err(err) => {
+                        error!("Shutdown: Failed to create verifier: {}", err);
+                        self.cancel_token.cancel();
+                        return Err(anyhow::anyhow!(
+                            "Shutdown: Failed to create verifier on startup: {}",
+                            err
+                        ));
+                    }
+                }
+            }
+        }
+
+        if current_status.is_preconfer() && current_status.is_driver_synced() {
+            // do not trigger fast reanchor on submitter window to prevent from double reanchor
+            if !current_status.is_submitter()
+                && self
+                    .check_and_handle_anchor_offset_for_unsafe_l2_blocks(&l2_slot_info)
+                    .await?
+            {
+                // reanchored, no need to preconf
+                return Ok(());
+            }
+
+            if !self
+                .head_verifier
+                .verify(l2_slot_info.parent_id(), l2_slot_info.parent_hash())
+                .await
+            {
+                self.head_verifier.log_error().await;
+                self.cancel_token.cancel();
+                return Err(anyhow::anyhow!(
+                    "Unexpected L2 head detected. Restarting node..."
+                ));
+            }
+            let preconfed_block = self
+                .preconfirm_block(
+                    pending_tx_list,
+                    &l2_slot_info,
+                    current_status.is_end_of_sequencing(),
+                    self.config.propose_forced_inclusion
+                        && current_status.is_submitter()
+                        && self.verifier.is_none(),
+                )
+                .await?;
+
+            self.verify_preconfed_block(preconfed_block).await?;
+        }
 
         if current_status.is_submitter() && !transaction_in_progress {
             // first check verifier
@@ -197,6 +288,70 @@ impl Node {
                     .await?;
                 }
                 return Err(err);
+            }
+        }
+
+        if !current_status.is_submitter() && !current_status.is_preconfer() {
+            if self.proposal_manager.has_batches()
+                || self.proposal_manager.has_current_forced_inclusion()
+            {
+                error!(
+                    "Resetting batch builder. has batches: {}, has current forced inclusion: {}",
+                    self.proposal_manager.has_batches(),
+                    self.proposal_manager.has_current_forced_inclusion()
+                );
+                self.proposal_manager.reset_builder().await?;
+            }
+            if self.verifier.is_some() {
+                error!("Verifier is not None after submitter window.");
+                self.verifier = None;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn check_for_missing_proposed_batches(&mut self) -> Result<(), Error> {
+        let (taiko_inbox_height, taiko_geth_height) = self.get_current_protocol_height().await?;
+
+        info!(
+            "📨 Taiko Inbox Height: {taiko_inbox_height}, Taiko Geth Height: {taiko_geth_height}"
+        );
+
+        if taiko_inbox_height == taiko_geth_height {
+            return Ok(());
+        } else {
+            let nonce_latest: u64 = self
+                .ethereum_l1
+                .execution_layer
+                .get_preconfer_nonce_latest()
+                .await?;
+            let nonce_pending: u64 = self
+                .ethereum_l1
+                .execution_layer
+                .get_preconfer_nonce_pending()
+                .await?;
+            debug!("Nonce Latest: {nonce_latest}, Nonce Pending: {nonce_pending}");
+            if nonce_latest == nonce_pending {
+                // Just create a new verifier, we will check it in preconfirmation loop
+                self.verifier = Some(
+                    Verifier::new_with_taiko_height(
+                        taiko_geth_height,
+                        self.taiko.clone(),
+                        self.proposal_manager
+                            .update_forced_inclusion_and_clone_without_batches()
+                            .await?,
+                        0,
+                        self.cancel_token.clone(),
+                    )
+                    .await?,
+                );
+            } else {
+                error!(
+                    "Error: Pending nonce is not equal to latest nonce. Nonce Latest: {nonce_latest}, Nonce Pending: {nonce_pending}"
+                );
+                self.cancel_token.cancel();
+                return Err(Error::msg("Pending nonce is not equal to latest nonce"));
             }
         }
 
@@ -242,12 +397,110 @@ impl Node {
             &current_status,
             &pending_tx_list,
             &l2_slot_info,
-            // TODO use proper number of batches
-            //self.batch_manager.get_number_of_batches(),
-            0,
+            self.proposal_manager.get_number_of_batches(),
         )?;
 
         Ok((l2_slot_info?, current_status?, pending_tx_list?))
+    }
+
+    async fn verify_preconfed_block(
+        &self,
+        l2_block: Option<BuildPreconfBlockResponse>,
+    ) -> Result<(), Error> {
+        if let Some(l2_block) = l2_block
+            && !self
+                .head_verifier
+                .verify_next_and_set(l2_block.number, l2_block.hash, l2_block.parent_hash)
+                .await
+        {
+            self.head_verifier.log_error().await;
+            self.cancel_token.cancel();
+            return Err(anyhow::anyhow!(
+                "Unexpected L2 head after preconfirmation. Restarting node..."
+            ));
+        }
+        Ok(())
+    }
+
+    /// Checks the anchor offset for unsafe L2 blocks and triggers a reanchor if necessary.
+    /// Returns true if reanchor was triggered.
+    async fn check_and_handle_anchor_offset_for_unsafe_l2_blocks(
+        &mut self,
+        l2_slot_info: &L2SlotInfo,
+    ) -> Result<bool, Error> {
+        debug!("Checking anchor offset for unsafe L2 blocks to do fast reanchor when needed");
+        let taiko_inbox_height =
+            get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await?;
+        if taiko_inbox_height < l2_slot_info.parent_id() {
+            let l2_block_id = taiko_inbox_height + 1;
+            let anchor_offset = self
+                .proposal_manager
+                .get_l1_anchor_block_offset_for_l2_block(l2_block_id)
+                .await?;
+            let max_anchor_height_offset = self
+                .taiko
+                .get_protocol_config()
+                .get_max_anchor_height_offset();
+
+            // +1 because we are checking the next block
+            if anchor_offset > max_anchor_height_offset + 1 {
+                warn!(
+                    "Anchor offset {} is too high for l2 block id {}, triggering reanchor",
+                    anchor_offset, l2_block_id
+                );
+                // TODO implement reanchor logic
+                /*if let Err(err) = self
+                    .reanchor_blocks(
+                        taiko_inbox_height,
+                        "Anchor offset is too high for unsafe L2 blocks",
+                        false,
+                    )
+                    .await
+                {*/
+                //error!("Failed to reanchor: {}", err);
+                self.cancel_token.cancel();
+                return Err(anyhow::anyhow!("Reanchor not implemented yet"));
+                //return Err(anyhow::anyhow!("Failed to reanchor: {}", err));
+                //}
+                //return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+    async fn get_current_protocol_height(&self) -> Result<(u64, u64), Error> {
+        let taiko_inbox_height =
+            get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await?;
+
+        let taiko_geth_height = self.taiko.get_latest_l2_block_id().await?;
+
+        Ok((taiko_inbox_height, taiko_geth_height))
+    }
+
+    async fn check_transaction_error_channel(
+        &mut self,
+        current_status: &OperatorStatus,
+        l2_slot_info: &L2SlotInfo,
+    ) -> Result<(), Error> {
+        match self.transaction_error_channel.try_recv() {
+            Ok(error) => {
+                return self
+                    .handle_transaction_error(&error, current_status, l2_slot_info)
+                    .await;
+            }
+            Err(err) => match err {
+                TryRecvError::Empty => {
+                    // no errors, proceed with preconfirmation
+                }
+                TryRecvError::Disconnected => {
+                    self.cancel_token.cancel();
+                    return Err(anyhow::anyhow!("Transaction error channel disconnected"));
+                }
+            },
+        }
+
+        Ok(())
     }
 
     fn print_current_slots_info(
