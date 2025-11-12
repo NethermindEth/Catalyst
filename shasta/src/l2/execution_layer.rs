@@ -241,8 +241,7 @@ impl L2ExecutionLayer {
             )
             .await
             .map_err(|e| anyhow::anyhow!("Failed to call taiko_lastBlockIDByBatchID: {}", e))?
-            .get("result")
-            .and_then(Value::as_u64)
+            .as_u64()
             .ok_or_else(|| anyhow::anyhow!("Failed to parse taiko_lastBlockIDByBatchID result"))
     }
 
