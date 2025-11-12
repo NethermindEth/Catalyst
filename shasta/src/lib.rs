@@ -75,7 +75,7 @@ pub async fn create_shasta_node(
     // TODO fix
     let node_config = pacaya::node::config::NodeConfig {
         preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-        handover_window_slots: 4,
+        handover_window_slots: 8,
         handover_start_buffer_ms: 500,
         l1_height_lag: 5,
         propose_forced_inclusion: false,
