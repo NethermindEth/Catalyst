@@ -12,6 +12,12 @@ pub struct ExecutionLayer {
     chain_id: u64,
 }
 
+pub struct BlockInfo {
+    pub timestamp: u64,
+    pub hash: B256,
+    pub state_root: B256,
+}
+
 impl ExecutionLayer {
     /// Creates a formatted error message with chain ID prefix
     pub fn chain_error(&self, message: &str, context: Option<&str>) -> Error {
@@ -87,6 +93,28 @@ impl ExecutionLayer {
                 self.chain_error(&format!("Failed to get block by number ({})", number), None)
             })?;
         Ok(block.header.state_root)
+    }
+
+    pub async fn get_block_info_by_number(&self, number: u64) -> Result<BlockInfo, Error> {
+        let block = self
+            .provider
+            .get_block_by_number(BlockNumberOrTag::Number(number))
+            .await
+            .map_err(|e| {
+                self.chain_error(
+                    &format!("Failed to get block by number ({})", number),
+                    Some(&e.to_string()),
+                )
+            })?
+            .ok_or_else(|| {
+                self.chain_error(&format!("Failed to get block by number ({})", number), None)
+            })?;
+
+        Ok(BlockInfo {
+            timestamp: block.header.timestamp,
+            hash: block.header.hash,
+            state_root: block.header.state_root,
+        })
     }
 
     async fn get_block_timestamp_by_number_or_tag(
