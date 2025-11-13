@@ -278,6 +278,19 @@ impl L2ExecutionLayer {
                 .map_err(|e| anyhow::anyhow!("Failed to decode anchor tx data: {}", e))?;
         Ok(tx_data)
     }
+
+    pub async fn get_forced_inclusion_form_l1origin(&self, block_id: u64) -> Result<bool, Error> {
+        self.provider
+            .raw_request::<_, Value>(
+                std::borrow::Cow::Borrowed("taiko_l1OriginByID"),
+                vec![Value::String(block_id.to_string())],
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get forced inclusion: {}", e))?
+            .get("isForcedInclusion")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
+    }
 }
 
 impl PreconferBondProvider for L2ExecutionLayer {
