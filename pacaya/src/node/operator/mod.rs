@@ -36,6 +36,7 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
 const OPERATOR_TRANSITION_SLOTS: u64 = 2;
 
 impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         execution_layer: Arc<T>,
         slot_clock: Arc<SlotClock<U>>,
