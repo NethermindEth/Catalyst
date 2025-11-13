@@ -64,6 +64,7 @@ pub struct Config {
     pub initial_fork: Fork,
     pub fork_switch_timestamp: Option<u64>,
     pub fork_switch_l2_height: Option<u64>,
+    pub fork_switch_transition_period_sec: u64,
 }
 
 impl Config {
@@ -331,6 +332,14 @@ impl Config {
             ),
         };
 
+        let fork_switch_transition_period_sec =
+            match std::env::var("fork_switch_transition_period_SEC") {
+                Err(_) => 15,
+                Ok(time) => time
+                    .parse::<u64>()
+                    .expect("fork_switch_transition_period_SEC must be a number"),
+            };
+
         let config = Self {
             preconfer_address,
             taiko_geth_rpc_url: std::env::var("TAIKO_GETH_RPC_URL")
@@ -385,6 +394,7 @@ impl Config {
             initial_fork,
             fork_switch_timestamp,
             fork_switch_l2_height,
+            fork_switch_transition_period_sec,
         };
 
         info!(
@@ -431,6 +441,7 @@ bridge transaction fee: {}wei
 initial fork: {}
 fork switch timestamp: {:?}
 fork switch l2 height: {:?}
+fork switch transition time: {}s
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -485,6 +496,7 @@ fork switch l2 height: {:?}
             config.initial_fork,
             config.fork_switch_timestamp,
             config.fork_switch_l2_height,
+            config.fork_switch_transition_period_sec,
         );
 
         config
