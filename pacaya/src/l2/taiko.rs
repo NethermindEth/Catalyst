@@ -330,4 +330,5 @@ impl Bridgeable for Taiko {
 
 pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
     L2ExecutionLayer::decode_anchor_id_from_tx_data(data)
+        .map_err(|e| anyhow::anyhow!("Failed to decode anchor id from tx data: {}", e))
 }

@@ -185,6 +185,10 @@ impl BatchManager {
     }
 
     async fn get_bond_instructions(&self, proposal_id: u64) -> Result<BondInstructionData, Error> {
+        if proposal_id <= BOND_PROCESSING_DELAY {
+            return Ok(BondInstructionData::new(Vec::new(), B256::ZERO));
+        }
+
         // Calculate the proposal ID to query, adjusting for processing delay
         let target_id = proposal_id.saturating_sub(BOND_PROCESSING_DELAY);
 
@@ -206,14 +210,10 @@ impl BatchManager {
         let target_hash =
             B256::from_slice(target_payload.core_state.bondInstructionsHash.as_slice());
 
-        // Use empty instructions if within the processing delay window, otherwise use actual instructions
-        let bond_instructions = if proposal_id <= BOND_PROCESSING_DELAY {
-            Vec::new()
-        } else {
-            target_payload.bond_instructions
-        };
-
-        Ok(BondInstructionData::new(bond_instructions, target_hash))
+        Ok(BondInstructionData::new(
+            target_payload.bond_instructions,
+            target_hash,
+        ))
     }
 
     async fn get_next_proposal_id(&self) -> Result<u64, Error> {
@@ -255,7 +255,11 @@ impl BatchManager {
             .taiko
             .l2_execution_layer()
             .get_last_synced_anchor_block_id_from_geth()
-            .await?;
+            .await
+            .unwrap_or_else(|e| {
+                warn!("Failed to get last synced anchor block ID from Taiko Geth: {e}");
+                0
+            });
         let anchor_block_info = AnchorBlockInfo::from_chain_state(
             self.ethereum_l1.execution_layer.common(),
             self.l1_height_lag,
@@ -365,10 +369,14 @@ impl BatchManager {
             .get_l2_block_by_number(block_height, true)
             .await?;
         let (anchor_tx, txs) = match block.transactions.as_transactions() {
-            Some(txs) => txs
-                .split_first()
-                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block"))?,
-            None => return Err(anyhow::anyhow!("No transactions in block")),
+            Some(txs) => txs.split_first().ok_or_else(|| {
+                anyhow::anyhow!("recover_from_l2_block: Cannot get anchor transaction from block")
+            })?,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "recover_from_l2_block: No transactions in block"
+                ));
+            }
         };
 
         let coinbase = block.header.beneficiary();

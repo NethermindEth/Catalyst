@@ -69,7 +69,6 @@ impl L2ExecutionLayer {
         &self.common
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn construct_anchor_tx(
         &self,
         proposal: &Proposal,
@@ -199,24 +198,30 @@ impl L2ExecutionLayer {
     pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
         self.get_latest_anchor_transaction_input()
             .await
+            .map_err(|e| anyhow::anyhow!("get_last_synced_proposal_id_from_geth: {e}"))
             .and_then(|input| Self::decode_proposal_id_from_tx_data(&input))
     }
 
     pub fn decode_proposal_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
         let tx_data =
-            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+                .map_err(|e| anyhow::anyhow!("Failed to decode proposal id from tx data: {}", e))?;
         Ok(tx_data._proposalParams.proposalId.to::<u64>())
     }
 
     pub async fn get_last_synced_bond_instruction_hash_from_geth(&self) -> Result<B256, Error> {
         self.get_latest_anchor_transaction_input()
             .await
+            .map_err(|e| anyhow::anyhow!("get_last_synced_bond_instruction_hash_from_geth: {e}"))
             .and_then(|input| Self::decode_bond_instruction_hash_from_tx_data(&input))
     }
 
     pub fn decode_bond_instruction_hash_from_tx_data(data: &[u8]) -> Result<B256, Error> {
         let tx_data =
-            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+                .map_err(|e| {
+                    anyhow::anyhow!("Failed to decode bond instruction hash from tx data: {}", e)
+                })?;
         Ok(tx_data._proposalParams.bondInstructionsHash)
     }
 
@@ -238,7 +243,7 @@ impl L2ExecutionLayer {
         let anchor_tx = match block.transactions.as_transactions() {
             Some(txs) => txs.first().ok_or_else(|| {
                 anyhow::anyhow!(
-                    "Cannot get anchor transaction from block {}",
+                    "get_latest_anchor_transaction_input: Cannot get anchor transaction from block {}",
                     block.number()
                 )
             })?,
@@ -256,18 +261,21 @@ impl L2ExecutionLayer {
     pub async fn get_last_synced_anchor_block_id_from_geth(&self) -> Result<u64, Error> {
         self.get_latest_anchor_transaction_input()
             .await
+            .map_err(|e| anyhow::anyhow!("get_last_synced_anchor_block_id_from_geth: {e}"))
             .and_then(|input| Self::decode_anchor_id_from_tx_data(&input))
     }
 
     pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
         let tx_data =
-            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+                .map_err(|e| anyhow::anyhow!("Failed to decode anchor id from tx data: {}", e))?;
         Ok(tx_data._blockParams.anchorBlockNumber.to::<u64>())
     }
 
     pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
         let tx_data =
-            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)?;
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+                .map_err(|e| anyhow::anyhow!("Failed to decode anchor tx data: {}", e))?;
         Ok(tx_data)
     }
 }

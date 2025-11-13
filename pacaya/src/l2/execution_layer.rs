@@ -106,8 +106,8 @@ impl L2ExecutionLayer {
         let (anchor_tx, _) = match block.transactions.as_transactions() {
             Some(txs) => txs
                 .split_first()
-                .ok_or_else(|| anyhow::anyhow!("Cannot get anchor transaction from block"))?,
-            None => return Err(anyhow::anyhow!("No transactions in block")),
+                .ok_or_else(|| anyhow::anyhow!("get_last_synced_anchor_block_id_from_geth: Cannot get anchor transaction from block"))?,
+            None => return Err(anyhow::anyhow!("get_last_synced_anchor_block_id_from_geth: No transactions in block")),
         };
 
         Self::decode_anchor_id_from_tx_data(anchor_tx.input())
