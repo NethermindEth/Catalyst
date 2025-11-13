@@ -9,6 +9,17 @@ pub struct ForkInfoConfig {
     pub fork_switch_transition_period: Duration,
 }
 
+impl Default for ForkInfoConfig {
+    fn default() -> Self {
+        Self {
+            initial_fork: Fork::Pacaya,
+            fork_switch_timestamp: None,
+            fork_switch_l2_height: None,
+            fork_switch_transition_period: Duration::from_secs(15),
+        }
+    }
+}
+
 impl From<&Config> for ForkInfoConfig {
     fn from(config: &Config) -> Self {
         Self {

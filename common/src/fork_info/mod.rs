@@ -1,5 +1,5 @@
-mod config;
-mod fork;
+pub mod config;
+pub mod fork;
 use anyhow::Error;
 use config::ForkInfoConfig;
 pub use fork::Fork;
@@ -9,6 +9,15 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub struct ForkInfo {
     pub fork: Fork,
     pub config: ForkInfoConfig,
+}
+
+impl Default for ForkInfo {
+    fn default() -> Self {
+        Self {
+            fork: Fork::Pacaya,
+            config: ForkInfoConfig::default(),
+        }
+    }
 }
 
 impl ForkInfo {
