@@ -1,7 +1,7 @@
 use super::proposal_manager::BatchManager;
 use crate::{
     l1::execution_layer::ExecutionLayer, l2::taiko::Taiko, metrics::Metrics,
-    node::get_l2_height_from_l1, node::proposal_manager::proposal::Proposals,
+    node::proposal_manager::proposal::Proposals,
 };
 use alloy::primitives::B256;
 use anyhow::Error;
@@ -113,7 +113,8 @@ impl Verifier {
                         Ok(VerificationResult::SuccessWithBatches(batches))
                     }
                     Err(err) => {
-                        let taiko_inbox_height = get_l2_height_from_l1(ethereum_l1, taiko).await?;
+                        let taiko_inbox_height =
+                            taiko.l2_execution_layer().get_head_l1_origin().await?;
                         Ok(VerificationResult::ReanchorNeeded(
                             taiko_inbox_height,
                             format!("Verifier return an error: {err}"),
@@ -135,7 +136,7 @@ impl Verifier {
                 return Ok(VerificationResult::SlotNotValid);
             }
 
-            let taiko_inbox_height = get_l2_height_from_l1(ethereum_l1, taiko).await?;
+            let taiko_inbox_height = taiko.l2_execution_layer().get_head_l1_origin().await?;
             self.start_verification_thread(taiko_inbox_height, metrics)
                 .await;
 
