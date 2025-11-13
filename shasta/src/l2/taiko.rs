@@ -255,7 +255,13 @@ impl Taiko {
         let anchor_tx = self
             .l2_execution_layer
             .construct_anchor_tx(proposal, l2_slot_info)
-            .await?;
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "advance_head_to_new_l2_block: Failed to construct anchor tx: {}",
+                    e
+                )
+            })?;
         let tx_list = std::iter::once(anchor_tx)
             .chain(proposal.get_last_block_tx_list_copy()?.into_iter())
             .collect::<Vec<_>>();
