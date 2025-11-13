@@ -44,6 +44,7 @@ pub struct Node {
 }
 
 impl Node {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         config: NodeConfig,
         cancel_token: CancellationToken,
