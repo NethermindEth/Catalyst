@@ -334,7 +334,7 @@ impl Config {
 
         let fork_switch_transition_period_sec =
             match std::env::var("fork_switch_transition_period_SEC") {
-                Err(_) => 15,
+                Err(_) => 60,
                 Ok(time) => time
                     .parse::<u64>()
                     .expect("fork_switch_transition_period_SEC must be a number"),
