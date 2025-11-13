@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Error;
 use common::{
+    fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
     shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
@@ -24,9 +25,6 @@ use tokio::{
     sync::mpsc::{Receiver, error::TryRecvError},
     time::{Duration, sleep},
 };
-
-mod l2_head_provider;
-pub use l2_head_provider::get_l2_height_from_l1;
 
 mod verifier;
 use verifier::{VerificationResult, Verifier};
@@ -54,6 +52,7 @@ impl Node {
         metrics: Arc<Metrics>,
         batch_builder_config: BatchBuilderConfig,
         transaction_error_channel: Receiver<TransactionError>,
+        fork_info: ForkInfo,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -63,6 +62,7 @@ impl Node {
             config.handover_start_buffer_ms,
             config.simulate_not_submitting_at_the_end_of_epoch,
             cancel_token.clone(),
+            fork_info.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create Operator: {}", e))?;
         let watchdog = common_utils::watchdog::Watchdog::new(
@@ -464,8 +464,7 @@ impl Node {
         l2_slot_info: &L2SlotInfo,
     ) -> Result<bool, Error> {
         debug!("Checking anchor offset for unsafe L2 blocks to do fast reanchor when needed");
-        let taiko_inbox_height =
-            get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await?;
+        let taiko_inbox_height = self.taiko.l2_execution_layer().get_head_l1_origin().await?;
         if taiko_inbox_height < l2_slot_info.parent_id() {
             let l2_block_id = taiko_inbox_height + 1;
             let anchor_offset = self
@@ -503,8 +502,7 @@ impl Node {
     }
 
     async fn get_current_protocol_height(&self) -> Result<(u64, u64), Error> {
-        let taiko_inbox_height =
-            get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await?;
+        let taiko_inbox_height = self.taiko.l2_execution_layer().get_head_l1_origin().await?;
 
         let taiko_geth_height = self.taiko.get_latest_l2_block_id().await?;
 

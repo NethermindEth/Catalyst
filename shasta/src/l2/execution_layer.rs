@@ -1,5 +1,3 @@
-// TODO remove allow dead_code when the module is used
-#![allow(dead_code)]
 use crate::l2::bindings::BondManager;
 
 use alloy::{
@@ -209,35 +207,6 @@ impl L2ExecutionLayer {
         Ok(tx_data._proposalParams.proposalId.to::<u64>())
     }
 
-    pub async fn get_last_synced_bond_instruction_hash_from_geth(&self) -> Result<B256, Error> {
-        self.get_latest_anchor_transaction_input()
-            .await
-            .map_err(|e| anyhow::anyhow!("get_last_synced_bond_instruction_hash_from_geth: {e}"))
-            .and_then(|input| Self::decode_bond_instruction_hash_from_tx_data(&input))
-    }
-
-    pub fn decode_bond_instruction_hash_from_tx_data(data: &[u8]) -> Result<B256, Error> {
-        let tx_data =
-            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
-                .map_err(|e| {
-                    anyhow::anyhow!("Failed to decode bond instruction hash from tx data: {}", e)
-                })?;
-        Ok(tx_data._proposalParams.bondInstructionsHash)
-    }
-
-    pub async fn get_last_block_by_proposal(&self, proposal_id: u64) -> Result<u64, Error> {
-        // taiko_lastBlockIDByBatchID returns error for proposals that are not landed on L1
-        self.provider
-            .raw_request::<_, Value>(
-                std::borrow::Cow::Borrowed("taiko_lastBlockIDByBatchID"),
-                vec![Value::String(proposal_id.to_string())],
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to call taiko_lastBlockIDByBatchID: {}", e))?
-            .as_u64()
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse taiko_lastBlockIDByBatchID result"))
-    }
-
     async fn get_latest_anchor_transaction_input(&self) -> Result<Vec<u8>, Error> {
         let block = self.common.get_latest_block_with_txs().await?;
         let anchor_tx = match block.transactions.as_transactions() {
@@ -277,6 +246,16 @@ impl L2ExecutionLayer {
             <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
                 .map_err(|e| anyhow::anyhow!("Failed to decode anchor tx data: {}", e))?;
         Ok(tx_data)
+    }
+
+    pub async fn get_head_l1_origin(&self) -> Result<u64, Error> {
+        self.provider
+            .raw_request::<_, Value>(std::borrow::Cow::Borrowed("taiko_headL1Origin"), ())
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to call taiko_headL1Origin: {}", e))?
+            .get("block_id")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse block_id from taiko_headL1Origin"))
     }
 
     pub async fn get_forced_inclusion_form_l1origin(&self, block_id: u64) -> Result<bool, Error> {
