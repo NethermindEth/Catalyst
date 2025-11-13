@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Error;
 use common::{
+    fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
     shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
@@ -51,6 +52,7 @@ impl Node {
         metrics: Arc<Metrics>,
         batch_builder_config: BatchBuilderConfig,
         transaction_error_channel: Receiver<TransactionError>,
+        fork_info: ForkInfo,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -60,6 +62,7 @@ impl Node {
             config.handover_start_buffer_ms,
             config.simulate_not_submitting_at_the_end_of_epoch,
             cancel_token.clone(),
+            fork_info.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create Operator: {}", e))?;
         let watchdog = common_utils::watchdog::Watchdog::new(

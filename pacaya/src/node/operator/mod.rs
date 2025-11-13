@@ -3,10 +3,10 @@ mod tests;
 
 use crate::l1::PreconfOperator;
 use anyhow::Error;
-use common::l2::taiko_driver::StatusProvider;
 use common::{
+    fork_info::ForkInfo,
     l1::slot_clock::{Clock, SlotClock},
-    l2::taiko_driver::models::TaikoStatus,
+    l2::taiko_driver::{StatusProvider, models::TaikoStatus},
     shared::l2_slot_info::L2SlotInfo,
     utils::types::*,
 };
@@ -30,11 +30,13 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     cancel_counter: u64,
     operator_transition_slots: u64,
     last_config_reload_epoch: u64,
+    fork_info: ForkInfo,
 }
 
 const OPERATOR_TRANSITION_SLOTS: u64 = 2;
 
 impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         execution_layer: Arc<T>,
         slot_clock: Arc<SlotClock<U>>,
@@ -43,6 +45,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         handover_start_buffer_ms: u64,
         simulate_not_submitting_at_the_end_of_epoch: bool,
         cancel_token: CancellationToken,
+        fork_info: ForkInfo,
     ) -> Result<Self, Error> {
         Ok(Self {
             execution_layer,
@@ -59,6 +62,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             cancel_counter: 0,
             operator_transition_slots: OPERATOR_TRANSITION_SLOTS,
             last_config_reload_epoch: 0,
+            fork_info,
         })
     }
 
@@ -215,6 +219,15 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         l2_slot_info: &L2SlotInfo,
         driver_status: &TaikoStatus,
     ) -> Result<bool, Error> {
+        if self
+            .fork_info
+            .is_fork_switch_transition_period(std::time::Duration::from_secs(
+                l2_slot_info.slot_timestamp(),
+            ))
+        {
+            return Ok(false);
+        }
+
         if handover_window {
             return Ok(self.next_operator
                 && (self.was_synced_preconfer // If we were the operator for the previous slot, the handover buffer doesn't matter.

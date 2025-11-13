@@ -12,7 +12,7 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.21.20"
+version = "1.22.0"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -49,9 +49,7 @@ discv5 = { version = "0.9.1", default-features = false, features = ["libp2p"] }
 dotenvy = { version = "0.15", default-features = false }
 ecdsa = { version = "0.16", default-features = false }
 elliptic-curve = { version = "0.13", default-features = false }
-flate2 = { version = "1.0", default-features = false, features = [
-    "zlib",
-] }
+flate2 = { version = "1.0", default-features = false, features = ["zlib"] }
 futures = { version = "0.3.31", default-features = false }
 futures-util = { version = "0.3", default-features = false }
 hex = { version = "0.4", default-features = false }

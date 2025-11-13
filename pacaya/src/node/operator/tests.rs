@@ -525,6 +525,18 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_get_status_with_fork_switch_transition_period() {
+        // fork swich timestamp is 100 seconds
+        const CURRENT_TIMESTAMP: u64 = 90;
+        let mut operator = create_operator_with_fork_switch_transition_period(CURRENT_TIMESTAMP);
+        let l2_slot_info = L2SlotInfo::new(0, CURRENT_TIMESTAMP, 0, get_test_hash(), 0);
+        assert_eq!(
+            operator.get_status(&l2_slot_info).await.unwrap(),
+            Status::new(false, true, false, false, true)
+        );
+    }
+
     fn create_operator(
         timestamp: u64,
         current_operator: bool,
@@ -534,6 +546,7 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
         Operator {
+            fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
             cancel_counter: 0,
@@ -568,6 +581,7 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
         Operator {
+            fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
             taiko: Arc::new(TaikoMock {
@@ -602,6 +616,7 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
         Operator {
+            fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
             taiko: Arc::new(TaikoUnsyncedMock {
@@ -631,6 +646,7 @@ mod tests {
     -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
         let slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         Operator {
+            fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
             cancel_counter: 0,
@@ -661,6 +677,7 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = 32 * 12 + 25 * 12; // second epoch 26th slot
         Operator {
+            fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
             cancel_counter: 0,
@@ -690,6 +707,7 @@ mod tests {
     -> Operator<ExecutionLayerMockError, MockClock, TaikoMock> {
         let slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         Operator {
+            fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
             cancel_counter: 0,
@@ -697,6 +715,49 @@ mod tests {
                 end_of_sequencing_block_hash: B256::ZERO,
             }),
             execution_layer: Arc::new(ExecutionLayerMockError {}),
+            slot_clock: Arc::new(slot_clock),
+            handover_window_slots: HANDOVER_WINDOW_SLOTS,
+            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
+            handover_start_buffer_ms: 1000,
+            next_operator: false,
+            continuing_role: false,
+            simulate_not_submitting_at_the_end_of_epoch: false,
+            was_synced_preconfer: false,
+            operator_transition_slots: 1,
+        }
+    }
+
+    fn create_operator_with_fork_switch_transition_period(
+        current_timestamp: u64,
+    ) -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
+        use common::fork_info::{ForkInfo, config::ForkInfoConfig, fork::Fork};
+        use std::time::Duration;
+
+        let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
+        slot_clock.clock.timestamp = current_timestamp;
+        Operator {
+            fork_info: ForkInfo {
+                fork: Fork::Pacaya,
+                config: ForkInfoConfig {
+                    initial_fork: Fork::Pacaya,
+                    fork_switch_timestamp: Some(Duration::from_secs(100)),
+                    fork_switch_l2_height: None,
+                    fork_switch_transition_period: Duration::from_secs(15),
+                },
+            },
+            cancel_token: CancellationToken::new(),
+            last_config_reload_epoch: 0,
+            cancel_counter: 0,
+            taiko: Arc::new(TaikoMock {
+                end_of_sequencing_block_hash: B256::ZERO,
+            }),
+            execution_layer: Arc::new(ExecutionLayerMock {
+                current_operator: true,
+                next_operator: true,
+                is_preconf_router_specified: true,
+                taiko_inbox_height: 0,
+                handover_window_slots: HANDOVER_WINDOW_SLOTS,
+            }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS,
             handover_window_slots_default: HANDOVER_WINDOW_SLOTS,

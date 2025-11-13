@@ -14,7 +14,7 @@ use common::{l1::traits::PreconferProvider, metrics, shared};
 use common::funds_controller::FundsController;
 use common::l1::{self as common_l1};
 use common::l2::engine::{L2Engine, L2EngineConfig};
-use common::{config::Config, config::ConfigTrait};
+use common::{config::Config, config::ConfigTrait, fork_info::ForkInfo};
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
 use pacaya::node::batch_manager::config::BatchBuilderConfig;
@@ -27,6 +27,7 @@ pub async fn create_shasta_node(
     config: Config,
     metrics: Arc<metrics::Metrics>,
     cancel_token: CancellationToken,
+    fork_info: ForkInfo,
 ) -> Result<(), Error> {
     info!("Creating Shasta node");
 
@@ -130,6 +131,7 @@ pub async fn create_shasta_node(
         metrics.clone(),
         batch_builder_config,
         transaction_error_receiver,
+        fork_info,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
