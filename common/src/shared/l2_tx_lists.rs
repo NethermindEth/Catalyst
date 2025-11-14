@@ -103,11 +103,16 @@ pub fn uncompress_and_decode(data: &[u8]) -> Result<Vec<Transaction>, Error> {
     txs
 }
 
+pub fn rlp_encode(tx_list: &[Transaction]) -> Vec<u8> {
+    let mut buffer = Vec::<u8>::new();
+    alloy_rlp::encode_iter(tx_list.iter().map(|tx| tx.inner.clone()), &mut buffer);
+    buffer
+}
+
 // RLP encode and zlib compress
 pub fn encode_and_compress(tx_list: &[Transaction]) -> Result<Vec<u8>, Error> {
     // First RLP encode the transactions
-    let mut buffer = Vec::<u8>::new();
-    alloy_rlp::encode_iter(tx_list.iter().map(|tx| tx.inner.clone()), &mut buffer);
+    let buffer = rlp_encode(tx_list);
 
     // Then compress using zlib
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
