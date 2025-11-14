@@ -473,7 +473,6 @@ impl BatchManager {
         {
             Ok(fi) => fi,
             Err(e) => {
-                error!("Failed to get forced inclusion flag from Taiko Geth: {e}");
                 return Err(anyhow::anyhow!(
                     "Failed to get forced inclusion flag from Taiko Geth: {e}"
                 ));
