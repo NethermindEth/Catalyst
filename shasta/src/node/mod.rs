@@ -44,6 +44,7 @@ pub struct Node {
 }
 
 impl Node {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         config: NodeConfig,
         cancel_token: CancellationToken,
@@ -640,8 +641,110 @@ impl Node {
             parent_block_id, reason, allow_forced_inclusion
         );
 
-        // TODO implement reanchor
-        //Ok(())
-        Err(anyhow::anyhow!("Reanchor not implemented yet"))
+        let start_time = std::time::Instant::now();
+
+        let mut l2_slot_info = self
+            .taiko
+            .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
+                parent_block_id,
+            ))
+            .await?;
+
+        // Update self state
+        self.verifier = None;
+        self.proposal_manager.reset_builder().await?;
+
+        // TODO add chain monitor to node
+        //self.chain_monitor.set_expected_reorg(parent_block_id).await;
+
+        let start_block_id = parent_block_id + 1;
+        let blocks = self
+            .taiko
+            .fetch_l2_blocks_until_latest(start_block_id, true)
+            .await?;
+
+        let blocks_reanchored = blocks.len() as u64;
+
+        let mut forced_inclusion_flags: Vec<bool> = Vec::with_capacity(blocks.len());
+        for block in &blocks {
+            forced_inclusion_flags.push(
+                self.proposal_manager
+                    .is_forced_inclusion(block.header.number)
+                    .await?,
+            );
+        }
+
+        for (block, is_forced_inclusion) in blocks.iter().zip(forced_inclusion_flags) {
+            debug!(
+                "Reanchoring block {} with {} transactions, parent_id {}, parent_hash {}, is_forced_inclusion: {}",
+                block.header.number,
+                block.transactions.len(),
+                l2_slot_info.parent_id(),
+                l2_slot_info.parent_hash(),
+                is_forced_inclusion,
+            );
+
+            let (_, txs) = match block.transactions.as_transactions() {
+                Some(txs) => txs.split_first().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Cannot get anchor transaction from block {}",
+                        block.header.number
+                    )
+                })?,
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "No transactions in block {}",
+                        block.header.number
+                    ));
+                }
+            };
+
+            let tx_list = txs.to_vec();
+            let pending_tx_list = crate::shared::l2_tx_lists::PreBuiltTxList {
+                tx_list,
+                estimated_gas_used: 0,
+                bytes_length: 0,
+            };
+
+            let block = self
+                .proposal_manager
+                .reanchor_block(
+                    pending_tx_list,
+                    &l2_slot_info,
+                    is_forced_inclusion,
+                    allow_forced_inclusion,
+                )
+                .await;
+            // if reanchor_block fails restart the node
+            if let Ok(Some(block)) = block {
+                debug!("Reanchored block {} hash {}", block.number, block.hash);
+            } else {
+                let err_msg = match block {
+                    Ok(None) => "Failed to reanchor block: None returned".to_string(),
+                    Err(err) => format!("Failed to reanchor block: {err}"),
+                    Ok(Some(_)) => "Unreachable".to_string(),
+                };
+                error!("{}", err_msg);
+                self.cancel_token.cancel();
+                return Err(anyhow::anyhow!("{}", err_msg));
+            }
+
+            // TODO reduce 1 geth call
+            // We can get previous L2 slot info from BuildPreconfBlockResponse
+            l2_slot_info = self.taiko.get_l2_slot_info().await?;
+        }
+
+        self.head_verifier
+            .set(l2_slot_info.parent_id(), *l2_slot_info.parent_hash())
+            .await;
+
+        self.metrics.inc_by_blocks_reanchored(blocks_reanchored);
+
+        debug!(
+            "Finished reanchoring blocks for parent block {} in {} ms",
+            parent_block_id,
+            start_time.elapsed().as_millis()
+        );
+        Ok(())
     }
 }

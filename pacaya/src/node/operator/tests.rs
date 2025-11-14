@@ -527,7 +527,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_status_with_fork_switch_transition_period() {
-        // fork swich timestamp is 100 seconds
+        // fork switch timestamp is 100 seconds
         const CURRENT_TIMESTAMP: u64 = 90;
         let mut operator = create_operator_with_fork_switch_transition_period(CURRENT_TIMESTAMP);
         let l2_slot_info = L2SlotInfo::new(0, CURRENT_TIMESTAMP, 0, get_test_hash(), 0);

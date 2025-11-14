@@ -440,4 +440,40 @@ impl BatchManager {
     pub fn prepend_batches(&mut self, batches: Proposals) {
         self.batch_builder.prepend_batches(batches);
     }
+
+    pub async fn reanchor_block(
+        &mut self,
+        pending_tx_list: PreBuiltTxList,
+        l2_slot_info: &L2SlotInfo,
+        _is_forced_inclusion: bool,
+        allow_forced_inclusion: bool,
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+        let l2_block = L2Block::new_from(pending_tx_list, l2_slot_info.slot_timestamp());
+
+        // TODO handle forced inclusion properly
+
+        let block = self
+            .add_new_l2_block(
+                l2_block,
+                l2_slot_info,
+                false,
+                OperationType::Reanchor,
+                allow_forced_inclusion,
+            )
+            .await?;
+
+        Ok(block)
+    }
+
+    pub async fn is_forced_inclusion(&mut self, block_id: u64) -> Result<bool, Error> {
+        let is_forced_inclusion = self
+            .taiko
+            .get_forced_inclusion_form_l1origin(block_id)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to get forced inclusion flag from Taiko Geth: {e}")
+            })?;
+
+        Ok(is_forced_inclusion)
+    }
 }
