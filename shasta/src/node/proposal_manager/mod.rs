@@ -466,18 +466,13 @@ impl BatchManager {
     }
 
     pub async fn is_forced_inclusion(&mut self, block_id: u64) -> Result<bool, Error> {
-        let is_forced_inclusion = match self
+        let is_forced_inclusion = self
             .taiko
             .get_forced_inclusion_form_l1origin(block_id)
             .await
-        {
-            Ok(fi) => fi,
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "Failed to get forced inclusion flag from Taiko Geth: {e}"
-                ));
-            }
-        };
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to get forced inclusion flag from Taiko Geth: {e}")
+            })?;
 
         Ok(is_forced_inclusion)
     }
