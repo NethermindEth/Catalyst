@@ -249,13 +249,21 @@ impl L2ExecutionLayer {
     }
 
     pub async fn get_head_l1_origin(&self) -> Result<u64, Error> {
-        self.provider
+        let response = self
+            .provider
             .raw_request::<_, Value>(std::borrow::Cow::Borrowed("taiko_headL1Origin"), ())
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to call taiko_headL1Origin: {}", e))?
-            .get("block_id")
-            .and_then(Value::as_u64)
-            .ok_or_else(|| anyhow::anyhow!("Failed to parse block_id from taiko_headL1Origin"))
+            .map_err(|e| anyhow::anyhow!("Failed to fetch taiko_headL1Origin: {}", e))?;
+
+        let hex_str = response
+            .get("blockID")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Missing or invalid 'blockID' in taiko_headL1Origin response")
+            })?;
+
+        u64::from_str_radix(hex_str.trim_start_matches("0x"), 16)
+            .map_err(|e| anyhow::anyhow!("Failed to parse 'blockID' as u64: {}", e))
     }
 
     pub async fn get_forced_inclusion_form_l1origin(&self, block_id: u64) -> Result<bool, Error> {
