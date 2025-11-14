@@ -246,6 +246,10 @@ struct Preconfirmation {
     uint256 parentSubmissionWindowEnd;
     // The timestamp of the preconfer's slot in the lookahead
     uint256 submissionWindowEnd;
+    // Prover authorization for the block
+    address proverAuth;
+    // Proposal ID for the block
+    uint256 proposalId;
 }
 ```
 
@@ -371,6 +375,8 @@ def verifyPreconfirmation(rawTxList: List[Tx], signedCommitment: SignedCommitmen
         timestamp=preconf.timestamp,
         gasLimit=preconf.gasLimit,
         coinbase=preconf.coinbase,
+        proverAuth=preconf.proverAuth,
+        proposalId=preconf.proposalId,
         transactions=rawTxList
     )    
     # Then process block.
@@ -409,7 +415,7 @@ The preconfers will need to eventually include their preconfed L2 transactions i
 
 Preconf equivocation can be categorized into four categories:
 
-- **Block commitment mismatch:** The preconfer failed to honor the rawTxList, anchor ID, timestamp, gas limit, or coinbase they preconfed.
+- **Block commitment mismatch:** The preconfer failed to honor the rawTxList, anchor ID, timestamp, gas limit, coinbase, proverAuth, or proposalId they preconfed.
 - **Missed submission**: The preconfer did not submit the preconfed block to the Taiko inbox.
 - **Invalid EOP:** The preconfer included additional L2 blocks after their `EOP=true` block.
 - **Missing EOP:** The preconfer did not include set `EOP=true` in their final preconfed block.
@@ -418,12 +424,12 @@ Let's examine each category in detail.
 
 ### Block Commitment Mismatch Slashing
 
-Slash when the rawTxList/anchorID/timestamp/gasLimit/coinbase for a given L2 block ID differs between:
+Slash when the rawTxList/anchorID/timestamp/gasLimit/coinbase/proverAuth/proposalId for a given L2 block ID differs between:
 
 - The block is **preconfed** and published on the P2P network.
 - The block was **submitted** to L1 and later proven.
 
-For example, in this diagram, the preconfed block `B1` (preconfed in P2P) and the submitted block `B1′` (submitted to L1) have different rawTxList/anchorID/timestamp/gasLimit/coinbase for the same L2 block ID. 
+For example, in this diagram, the preconfed block `B1` (preconfed in P2P) and the submitted block `B1′` (submitted to L1) have different rawTxList/anchorID/timestamp/gasLimit/coinbase/proverAuth/proposalId for the same L2 block ID. 
 
 ![image.png](images/image%205.png)
 
@@ -443,7 +449,7 @@ However, checking `submissionWindowEnd` alone is not sufficient to protect preco
 
 ![image.png](images/image%207.png)
 
-To protect against such cases, we compare not only the `rawTxList`, `anchorId`, `timestamp`, `gasLimit`, and `coinbase` of the preconfirmed and submitted blocks, but also their **parent** `rawTxList`, `anchorId`, and `submissionWindowEnd` values. If any of these parent values differ, the slashing is not applied to the current preconfer. Instead, the slashing entity is expected to target the parent block. This allows us to trace the divergence back transitively to the original L2 block where the mismatch first occurred.
+To protect against such cases, we compare not only the `rawTxList`, `anchorId`, `timestamp`, `gasLimit`, `coinbase`, `proverAuth`, and `proposalId` of the preconfirmed and submitted blocks, but also their **parent** `rawTxList`, `anchorId`, and `submissionWindowEnd` values. If any of these parent values differ, the slashing is not applied to the current preconfer. Instead, the slashing entity is expected to target the parent block. This allows us to trace the divergence back transitively to the original L2 block where the mismatch first occurred.
 
 ### Missed Submission
 
