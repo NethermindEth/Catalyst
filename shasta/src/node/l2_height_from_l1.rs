@@ -16,11 +16,7 @@ pub async fn get_l2_height_from_l1(
                 .get_proposal_id_from_indexer()
                 .await?;
 
-            if proposal_id == 0 {
-                Ok(0)
-            } else {
-                Err(err)
-            }
+            if proposal_id == 0 { Ok(0) } else { Err(err) }
         }
     }
 }

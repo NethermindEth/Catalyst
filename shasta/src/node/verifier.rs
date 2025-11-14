@@ -1,7 +1,7 @@
 use super::proposal_manager::BatchManager;
 use crate::{
     l1::execution_layer::ExecutionLayer, l2::taiko::Taiko, metrics::Metrics,
-    node::proposal_manager::proposal::Proposals, node::get_l2_height_from_l1,
+    node::get_l2_height_from_l1, node::proposal_manager::proposal::Proposals,
 };
 use alloy::primitives::B256;
 use anyhow::Error;
