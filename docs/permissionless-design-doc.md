@@ -325,6 +325,7 @@ class ParentState:
     header: Header             # Standard block header (hash, number, timestamp, gasLimit, coinbase, etc.)
     anchorBlockNumber: uint256 # L1 anchor block ID
     rawTxListHash: bytes32     # New! Hash of raw transaction list
+    proposalId: uint256        # New! Incremental ID for each L1 proposal
     ...
 
 localL2Head: ParentState
@@ -366,7 +367,16 @@ def verifyPreconfirmation(rawTxList: List[Tx], signedCommitment: SignedCommitmen
     # 7) Verify timestamp does not drift too far from current time
     assert abs(preconf.timestamp - now()) <= MAX_TIMESTAMP_DRIFT
 
-    # 8) Derive L2 block from preconfirmation and execute it
+    # 8) Verify timestamp, gasLimit, coinbase, proverAuth, based on
+    #    logic in derivation.
+    # TODO: Revisit once derivation is refactored 
+    #       to handle per-block derivation.
+    verifyTimestamp(preconf.timestamp, preconf.proposalId, parentState)
+    verifyGasLimit(preconf.gasLimit, parentState)
+    verifyCoinbase(preconf.coinbase, currentPreconfer.committer)
+    verifyProverAuth(preconf.proverAuth)
+
+    # 9) Derive L2 block from preconfirmation and execute it
     # First construct block manifest from preconfirmation parameters.
     # Block manifest in Rust implementation::
     # https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/protocol/src/shasta/manifest.rs#L22-L23
@@ -386,7 +396,7 @@ def verifyPreconfirmation(rawTxList: List[Tx], signedCommitment: SignedCommitmen
     # Note: This function will update the `parentState` with the newly processed block.
     processBlockManifest(manifest, parentState)
 
-    # 9) Handle explicit EOP handoff
+    # 10) Handle explicit EOP handoff
     if preconf.eop:
         currentPreconfer = lookaheadStore.getNextPreconfer()
 
