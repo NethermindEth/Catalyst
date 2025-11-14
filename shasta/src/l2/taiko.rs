@@ -304,6 +304,12 @@ impl Taiko {
     pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
         L2ExecutionLayer::get_anchor_tx_data(data)
     }
+
+    pub async fn get_forced_inclusion_form_l1origin(&self, block_id: u64) -> Result<bool, Error> {
+        self.l2_execution_layer
+            .get_forced_inclusion_form_l1origin(block_id)
+            .await
+    }
 }
 
 impl Bridgeable for Taiko {
