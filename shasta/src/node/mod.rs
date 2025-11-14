@@ -596,7 +596,10 @@ impl Node {
             .await?;
 
         while activation_timestamp == 0 {
-            warn!("Shasta Inbox is not activated yet. Waiting 12 seconds...");
+            warn!(
+                "Shasta Inbox is not activated yet. Waiting {} seconds...",
+                self.ethereum_l1.slot_clock.get_slot_duration().as_secs()
+            );
             sleep(self.ethereum_l1.slot_clock.get_slot_duration()).await;
             activation_timestamp = self
                 .ethereum_l1
