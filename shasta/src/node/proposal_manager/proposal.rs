@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use std::time::Instant;
 use taiko_bindings::anchor::LibBonds::BondInstruction;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
-use tracing::debug;
+use tracing::{debug, warn};
 
 pub type Proposals = VecDeque<Proposal>;
 
@@ -72,7 +72,7 @@ impl Proposal {
         let manifest_data = match manifest.encode_and_compress() {
             Ok(data) => data,
             Err(err) => {
-                debug!("Failed to compress proposal manifest: {err}");
+                warn!("Failed to compress proposal manifest: {err}");
                 return;
             }
         };
@@ -121,9 +121,7 @@ mod test {
     use common::shared::l2_tx_lists::{PreBuiltTxList, rlp_encode};
 
     #[test]
-    fn test_proposal_assumption() {
-        // Assert that the RLP encoded AnchorTx has a greater length than the encoded and compressed DerivationSourceManifest.
-        // This assumption is based on the expectation that compression significantly reduces the size of the manifest.
+    fn test_proposal_compression() {
         let json_data = r#"
         {
             "blockHash":"0x845049a264a004a223db6a4b87434cc9b6410f12ff5a15d18fea0d2d04ebb6f2",

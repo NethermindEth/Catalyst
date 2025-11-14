@@ -238,7 +238,6 @@ impl BatchBuilder {
             });
         }
 
-        // TODO fix transaction encoding
         let bytes_length = crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
         let l2_block = L2Block::new_from(
             crate::shared::l2_tx_lists::PreBuiltTxList {
