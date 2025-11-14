@@ -29,6 +29,9 @@ use tokio::{
 mod verifier;
 use verifier::{VerificationResult, Verifier};
 
+mod l2_height_from_l1;
+pub use l2_height_from_l1::get_l2_height_from_l1;
+
 pub struct Node {
     config: NodeConfig,
     cancel_token: CancellationToken,
@@ -465,7 +468,8 @@ impl Node {
         l2_slot_info: &L2SlotInfo,
     ) -> Result<bool, Error> {
         debug!("Checking anchor offset for unsafe L2 blocks to do fast reanchor when needed");
-        let taiko_inbox_height = self.taiko.l2_execution_layer().get_head_l1_origin().await?;
+        let taiko_inbox_height =
+            get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await?;
         if taiko_inbox_height < l2_slot_info.parent_id() {
             let l2_block_id = taiko_inbox_height + 1;
             let anchor_offset = self
@@ -503,7 +507,8 @@ impl Node {
     }
 
     async fn get_current_protocol_height(&self) -> Result<(u64, u64), Error> {
-        let taiko_inbox_height = self.taiko.l2_execution_layer().get_head_l1_origin().await?;
+        let taiko_inbox_height =
+            get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await?;
 
         let taiko_geth_height = self.taiko.get_latest_l2_block_id().await?;
 
