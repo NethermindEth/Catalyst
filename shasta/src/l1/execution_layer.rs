@@ -22,7 +22,7 @@ use pacaya::l1::PreconfOperator;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 
-use super::bindings::IPreconfWhitelist;
+use super::bindings::{IPreconfWhitelist, Inbox};
 use super::event_indexer::EventIndexer;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use taiko_bindings::i_inbox::IInbox;
@@ -265,5 +265,16 @@ impl ExecutionLayer {
             .ok_or_else(|| anyhow::anyhow!("No last proposal in event indexer"))?;
 
         Ok(proposal.proposal.id.to::<u64>())
+    }
+
+    pub async fn get_activation_timestamp(&self) -> Result<u64, Error> {
+        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
+        let timestamp = shasta_inbox
+            .activationTimestamp()
+            .call()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to call activationTimestamp for Inbox: {e}"))?;
+
+        Ok(timestamp.to::<u64>())
     }
 }

@@ -583,6 +583,23 @@ impl Node {
     async fn warmup(&mut self) -> Result<(), Error> {
         info!("Warmup node");
 
+        // Wait for Inbox activation
+        let mut activation_timestamp = self
+            .ethereum_l1
+            .execution_layer
+            .get_activation_timestamp()
+            .await?;
+
+        while activation_timestamp == 0 {
+            warn!("Shasta Inbox is not activated yet. Waiting 12 seconds...");
+            sleep(Duration::from_secs(12)).await;
+            activation_timestamp = self
+                .ethereum_l1
+                .execution_layer
+                .get_activation_timestamp()
+                .await?;
+        }
+
         // Wait for Taiko Geth to synchronize with L1
         let (mut taiko_inbox_height, mut taiko_geth_height) =
             self.get_current_protocol_height().await?;
