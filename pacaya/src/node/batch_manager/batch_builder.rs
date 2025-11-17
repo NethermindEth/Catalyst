@@ -1,36 +1,23 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use super::config::{BatchesToSend, ForcedInclusionBatch};
+use crate::l1::bindings::BatchParams;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
-    node::batch_manager::{batch::Batch, config::BatchBuilderConfig},
+    node::batch_manager::batch::Batch,
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
 };
 use alloy::primitives::Address;
 use anyhow::Error;
-use common::l1::{
-    ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError,
+use common::{
+    batch_builder::{BatchBuilderConfig, BatchBuilderCore, BatchLike},
+    l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, trace};
 
 pub struct BatchBuilder {
-    config: BatchBuilderConfig,
-    batches_to_send: BatchesToSend,
-    current_batch: Option<Batch>,
-    current_forced_inclusion: ForcedInclusionBatch,
-    slot_clock: Arc<SlotClock>,
-    metrics: Arc<Metrics>,
-}
-
-impl Drop for BatchBuilder {
-    fn drop(&mut self) {
-        debug!(
-            "BatchBuilder dropped! current_batch is none: {}, batches_to_send len: {}",
-            self.current_batch.is_none(),
-            self.batches_to_send.len()
-        );
-    }
+    core: BatchBuilderCore<Batch, BatchParams>,
 }
 
 impl BatchBuilder {
@@ -40,12 +27,7 @@ impl BatchBuilder {
         metrics: Arc<Metrics>,
     ) -> Self {
         Self {
-            config,
-            batches_to_send: VecDeque::new(),
-            current_batch: None,
-            current_forced_inclusion: None,
-            slot_clock,
-            metrics,
+            core: BatchBuilderCore::new(None, config, slot_clock, metrics),
         }
     }
 
@@ -53,108 +35,67 @@ impl BatchBuilder {
     ///
     /// This configuration is used to manage batching parameters.
     pub fn get_config(&self) -> &BatchBuilderConfig {
-        &self.config
+        &self.core.config
     }
 
     pub fn can_consume_l2_block(&mut self, l2_block: &L2Block) -> bool {
-        let is_time_shift_expired = self.is_time_shift_expired(l2_block.timestamp_sec);
-        self.current_batch.as_mut().is_some_and(|batch| {
-            let new_block_count = match u16::try_from(batch.l2_blocks.len() + 1) {
-                Ok(n) => n,
-                Err(_) => return false,
-            };
-
-            let mut new_total_bytes = batch.total_bytes + l2_block.prebuilt_tx_list.bytes_length;
-
-            if !self.config.is_within_bytes_limit(new_total_bytes) {
-                // first compression, compressing the batch without the new L2 block
-                batch.compress();
-                new_total_bytes = batch.total_bytes + l2_block.prebuilt_tx_list.bytes_length;
-                if !self.config.is_within_bytes_limit(new_total_bytes) {
-                    // second compression, compressing the batch with the new L2 block
-                    // we can tolerate the processing overhead as it's a very rare case
-                    let mut batch_clone = batch.clone();
-                    batch_clone.l2_blocks.push(l2_block.clone());
-                    batch_clone.compress();
-                    new_total_bytes = batch_clone.total_bytes;
-                    debug!(
-                        "can_consume_l2_block: Second compression, new total bytes: {}",
-                        new_total_bytes
-                    );
-                }
-            }
-
-            self.config.is_within_bytes_limit(new_total_bytes)
-                && self.config.is_within_block_limit(new_block_count)
-                && !is_time_shift_expired
-        })
-    }
-
-    pub fn finalize_current_batch(&mut self) {
-        if let Some(batch) = self.current_batch.take()
-            && !batch.l2_blocks.is_empty()
-        {
-            self.batches_to_send
-                .push_back((self.current_forced_inclusion.take(), batch));
-        }
-    }
-
-    pub fn has_current_forced_inclusion(&self) -> bool {
-        self.current_forced_inclusion.is_some()
+        self.core.can_consume_l2_block(l2_block)
     }
 
     pub fn current_batch_is_empty(&self) -> bool {
-        self.current_batch
+        self.core
+            .current_batch
             .as_ref()
-            .is_none_or(|b| b.l2_blocks.is_empty())
+            .is_none_or(|b| b.l2_blocks().is_empty())
     }
 
     pub fn try_finalize_current_batch(&mut self) -> Result<(), Error> {
         let is_empty = self
+            .core
             .current_batch
             .as_ref()
-            .is_none_or(|b| b.l2_blocks.is_empty());
+            .is_none_or(|b| b.l2_blocks().is_empty());
 
-        let has_forced_inclusion = self.current_forced_inclusion.is_some();
+        let has_forced_inclusion = self.core.current_forced_inclusion.is_some();
 
         if has_forced_inclusion && is_empty {
             error!(
                 "Failed to finalize current batch, current_batch {} forced_inclusion {}",
-                self.current_batch.is_some(),
-                self.current_forced_inclusion.is_some()
+                self.core.current_batch.is_some(),
+                self.core.current_forced_inclusion.is_some()
             );
             return Err(anyhow::anyhow!(
                 "Failed to finalize current batch, current_batch {} forced_inclusion {}",
-                self.current_batch.is_some(),
-                self.current_forced_inclusion.is_some()
+                self.core.current_batch.is_some(),
+                self.core.current_forced_inclusion.is_some()
             ));
         }
-        self.finalize_current_batch();
+        self.core.finalize_current_batch();
         Ok(())
     }
 
     pub fn set_forced_inclusion(&mut self, forced_inclusion_batch: ForcedInclusionBatch) -> bool {
-        if self.current_forced_inclusion.is_some() {
+        if self.core.current_forced_inclusion.is_some() {
             return false;
         }
-        self.current_forced_inclusion = forced_inclusion_batch;
+        self.core.current_forced_inclusion = forced_inclusion_batch;
         true
     }
 
     pub fn create_new_batch(&mut self, anchor_block_id: u64, anchor_block_timestamp_sec: u64) {
         // TODO replace with try_finalize_current_batch
-        self.finalize_current_batch();
-        self.current_batch = Some(Batch {
+        self.core.finalize_current_batch();
+        self.core.current_batch = Some(Batch {
             total_bytes: 0,
             l2_blocks: vec![],
             anchor_block_id,
             anchor_block_timestamp_sec,
-            coinbase: self.config.default_coinbase,
+            coinbase: self.core.config.default_coinbase,
         });
     }
 
     pub fn remove_current_batch(&mut self) {
-        self.current_batch = None;
+        self.core.current_batch = None;
     }
 
     pub fn create_new_batch_and_add_l2_block(
@@ -164,13 +105,13 @@ impl BatchBuilder {
         l2_block: L2Block,
         coinbase: Option<Address>,
     ) {
-        self.finalize_current_batch();
-        self.current_batch = Some(Batch {
+        self.core.finalize_current_batch();
+        self.core.current_batch = Some(Batch {
             total_bytes: l2_block.prebuilt_tx_list.bytes_length,
             l2_blocks: vec![l2_block],
             anchor_block_id,
             anchor_block_timestamp_sec,
-            coinbase: coinbase.unwrap_or(self.config.default_coinbase),
+            coinbase: coinbase.unwrap_or(self.core.config.default_coinbase),
         });
     }
 
@@ -179,35 +120,22 @@ impl BatchBuilder {
         &mut self,
         l2_block: L2Block,
     ) -> Result<u64, Error> {
-        if let Some(current_batch) = self.current_batch.as_mut() {
-            current_batch.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
-            current_batch.l2_blocks.push(l2_block);
+        if let Some(current_batch) = self.core.current_batch.as_mut() {
+            *current_batch.total_bytes_mut() += l2_block.prebuilt_tx_list.bytes_length;
+            current_batch.l2_blocks_mut().push(l2_block);
             debug!(
                 "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
-                current_batch.l2_blocks.len(),
-                current_batch.total_bytes
+                current_batch.l2_blocks().len(),
+                current_batch.total_bytes()
             );
-            Ok(current_batch.anchor_block_id)
+            Ok(current_batch.anchor_block_id())
         } else {
             Err(anyhow::anyhow!("No current batch"))
         }
     }
 
     pub fn remove_last_l2_block(&mut self) {
-        if let Some(current_batch) = self.current_batch.as_mut() {
-            let removed_block = current_batch.l2_blocks.pop();
-            if let Some(removed_block) = removed_block {
-                current_batch.total_bytes -= removed_block.prebuilt_tx_list.bytes_length;
-                if current_batch.l2_blocks.is_empty() {
-                    self.current_batch = None;
-                }
-                debug!(
-                    "Removed L2 block from batch: {} txs, {} bytes",
-                    removed_block.prebuilt_tx_list.tx_list.len(),
-                    removed_block.prebuilt_tx_list.bytes_length
-                );
-            }
-        }
+        self.core.remove_last_l2_block();
     }
 
     pub fn recover_from(
@@ -225,8 +153,8 @@ impl BatchBuilder {
             || self.is_time_shift_expired(l2_block_timestamp_sec)
             || !self.is_same_coinbase(coinbase)
         {
-            self.finalize_current_batch();
-            self.current_batch = Some(Batch {
+            self.core.finalize_current_batch();
+            self.core.current_batch = Some(Batch {
                 total_bytes: 0,
                 l2_blocks: vec![],
                 anchor_block_id,
@@ -260,24 +188,17 @@ impl BatchBuilder {
     }
 
     fn is_same_anchor_block_id(&self, anchor_block_id: u64) -> bool {
-        self.current_batch
+        self.core
+            .current_batch
             .as_ref()
-            .is_some_and(|batch| batch.anchor_block_id == anchor_block_id)
+            .is_some_and(|batch| batch.anchor_block_id() == anchor_block_id)
     }
 
     fn is_same_coinbase(&self, coinbase: Address) -> bool {
-        self.current_batch
+        self.core
+            .current_batch
             .as_ref()
             .is_some_and(|batch| batch.coinbase == coinbase)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        trace!(
-            "batch_builder::is_empty: current_batch is none: {}, batches_to_send len: {}",
-            self.current_batch.is_none(),
-            self.batches_to_send.len()
-        );
-        self.current_batch.is_none() && self.batches_to_send.is_empty()
     }
 
     pub async fn try_submit_oldest_batch(
@@ -285,29 +206,30 @@ impl BatchBuilder {
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         submit_only_full_batches: bool,
     ) -> Result<(), Error> {
-        if self.current_batch.is_some()
+        if self.core.current_batch.is_some()
             && (!submit_only_full_batches
-                || !self.config.is_within_block_limit(
+                || !self.core.config.is_within_block_limit(
                     u16::try_from(
-                        self.current_batch
+                        self.core
+                            .current_batch
                             .as_ref()
                             .map(|b| b.l2_blocks.len())
                             .unwrap_or(0),
                     )? + 1,
                 ))
         {
-            self.finalize_current_batch();
+            self.core.finalize_current_batch();
         }
 
-        if let Some((forced_inclusion, batch)) = self.batches_to_send.front() {
+        if let Some((forced_inclusion, batch)) = self.core.batches_to_send.front() {
             if ethereum_l1
                 .execution_layer
                 .is_transaction_in_progress()
                 .await?
             {
                 debug!(
-                    batches_to_send = %self.batches_to_send.len(),
-                    current_batch = %self.current_batch.is_some(),
+                    batches_to_send = %self.core.batches_to_send.len(),
+                    current_batch = %self.core.current_batch.is_some(),
                     "Cannot submit batch, transaction is in progress.",
                 );
                 return Err(anyhow::anyhow!(
@@ -320,8 +242,8 @@ impl BatchBuilder {
                 coinbase = %batch.coinbase,
                 l2_blocks_len = %batch.l2_blocks.len(),
                 total_bytes = %batch.total_bytes,
-                batches_to_send = %self.batches_to_send.len(),
-                current_batch = %self.current_batch.is_some(),
+                batches_to_send = %self.core.batches_to_send.len(),
+                current_batch = %self.core.current_batch.is_some(),
                 "Submitting batch"
             );
 
@@ -331,7 +253,7 @@ impl BatchBuilder {
                     batch.l2_blocks.clone(),
                     batch.anchor_block_id,
                     batch.coinbase,
-                    self.slot_clock.get_current_slot_begin_timestamp()?,
+                    self.core.slot_clock.get_current_slot_begin_timestamp()?,
                     forced_inclusion.clone(),
                 )
                 .await
@@ -340,62 +262,25 @@ impl BatchBuilder {
                     && !matches!(transaction_error, TransactionError::EstimationTooEarly)
                 {
                     debug!("BatchBuilder: Transaction error, removing all batches");
-                    self.batches_to_send.clear();
+                    self.core.batches_to_send.clear();
                 }
                 return Err(err);
             }
 
-            self.batches_to_send.pop_front();
+            self.core.batches_to_send.pop_front();
         }
 
         Ok(())
     }
 
     pub fn is_time_shift_expired(&self, current_l2_slot_timestamp: u64) -> bool {
-        if let Some(current_batch) = self.current_batch.as_ref()
-            && let Some(last_block) = current_batch.l2_blocks.last()
-        {
-            return current_l2_slot_timestamp - last_block.timestamp_sec
-                > self.config.max_time_shift_between_blocks_sec;
-        }
-        false
-    }
-
-    pub fn is_time_shift_between_blocks_expiring(&self, current_l2_slot_timestamp: u64) -> bool {
-        if let Some(current_batch) = self.current_batch.as_ref() {
-            // l1_batches is not empty
-            if let Some(last_block) = current_batch.l2_blocks.last() {
-                if current_l2_slot_timestamp < last_block.timestamp_sec {
-                    warn!("Preconfirmation timestamp is before the last block timestamp");
-                    return false;
-                }
-                // is the last L1 slot to add an empty L2 block so we don't have a time shift overflow
-                return self.is_the_last_l1_slot_to_add_an_empty_l2_block(
-                    current_l2_slot_timestamp,
-                    last_block.timestamp_sec,
-                );
-            }
-        }
-        false
-    }
-
-    fn is_the_last_l1_slot_to_add_an_empty_l2_block(
-        &self,
-        current_l2_slot_timestamp: u64,
-        last_block_timestamp: u64,
-    ) -> bool {
-        current_l2_slot_timestamp - last_block_timestamp
-            >= self.config.max_time_shift_between_blocks_sec - self.config.l1_slot_duration_sec
+        // These methods only need current_batch, no sync needed
+        self.core.is_time_shift_expired(current_l2_slot_timestamp)
     }
 
     pub fn is_greater_than_max_anchor_height_offset(&self) -> Result<bool, Error> {
-        if let Some(current_batch) = self.current_batch.as_ref() {
-            let slots_since_l1_block = self
-                .slot_clock
-                .slots_since_l1_block(current_batch.anchor_block_timestamp_sec)?;
-            return Ok(slots_since_l1_block > self.config.max_anchor_height_offset);
-        }
-        Ok(false)
+        // These methods only need current_batch, no sync needed
+        self.core.is_greater_than_max_anchor_height_offset()
     }
 
     pub fn try_creating_l2_block(
@@ -404,88 +289,43 @@ impl BatchBuilder {
         l2_slot_timestamp: u64,
         end_of_sequencing: bool,
     ) -> Option<L2Block> {
-        let tx_list_len = pending_tx_list
-            .as_ref()
-            .map(|tx_list| tx_list.tx_list.len())
-            .unwrap_or(0);
-        if self.should_new_block_be_created(
-            tx_list_len as u64,
-            l2_slot_timestamp,
-            end_of_sequencing,
-        ) {
-            if let Some(pending_tx_list) = pending_tx_list {
-                debug!(
-                    "Creating new block with pending tx list length: {}, bytes length: {}",
-                    pending_tx_list.tx_list.len(),
-                    pending_tx_list.bytes_length
-                );
-
-                Some(L2Block::new_from(pending_tx_list, l2_slot_timestamp))
-            } else {
-                Some(L2Block::new_empty(l2_slot_timestamp))
-            }
-        } else {
-            debug!("Skipping preconfirmation for the current L2 slot");
-            self.metrics.inc_skipped_l2_slots_by_low_txs_count();
-            None
-        }
-    }
-
-    fn should_new_block_be_created(
-        &self,
-        number_of_pending_txs: u64,
-        current_l2_slot_timestamp: u64,
-        end_of_sequencing: bool,
-    ) -> bool {
-        if self.is_empty_block_required(current_l2_slot_timestamp) || end_of_sequencing {
-            return true;
-        }
-
-        if number_of_pending_txs >= self.config.preconf_min_txs {
-            return true;
-        }
-
-        if let Some(current_batch) = self.current_batch.as_ref()
-            && let Some(last_block) = current_batch.l2_blocks.last()
-        {
-            let number_of_l2_slots = (current_l2_slot_timestamp - last_block.timestamp_sec) * 1000
-                / self.slot_clock.get_preconf_heartbeat_ms();
-            return number_of_l2_slots > self.config.preconf_max_skipped_l2_slots;
-        }
-
-        true
-    }
-
-    fn is_empty_block_required(&self, preconfirmation_timestamp: u64) -> bool {
-        self.is_time_shift_between_blocks_expiring(preconfirmation_timestamp)
+        self.core
+            .try_creating_l2_block(pending_tx_list, l2_slot_timestamp, end_of_sequencing)
     }
 
     pub fn clone_without_batches(&self) -> Self {
         Self {
-            config: self.config.clone(),
-            batches_to_send: VecDeque::new(),
-            current_batch: None,
-            current_forced_inclusion: None,
-            slot_clock: self.slot_clock.clone(),
-            metrics: self.metrics.clone(),
+            core: self.core.clone_without_batches(),
         }
     }
 
     pub fn get_number_of_batches(&self) -> u64 {
-        self.batches_to_send.len() as u64 + if self.current_batch.is_some() { 1 } else { 0 }
+        self.core.get_number_of_batches()
     }
 
     pub fn get_number_of_batches_ready_to_send(&self) -> u64 {
-        self.batches_to_send.len() as u64
+        self.core.batches_to_send.len() as u64
     }
 
     pub fn take_batches_to_send(&mut self) -> BatchesToSend {
-        std::mem::take(&mut self.batches_to_send)
+        std::mem::take(&mut self.core.batches_to_send)
     }
 
     pub fn prepend_batches(&mut self, mut batches: BatchesToSend) {
-        batches.append(&mut self.batches_to_send);
-        self.batches_to_send = batches;
+        batches.append(&mut self.core.batches_to_send);
+        self.core.batches_to_send = batches;
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.core.is_empty()
+    }
+
+    pub fn has_current_forced_inclusion(&self) -> bool {
+        self.core.has_current_forced_inclusion()
+    }
+
+    pub fn finalize_current_batch(&mut self) {
+        self.core.finalize_current_batch();
     }
 }
 
@@ -493,29 +333,6 @@ impl BatchBuilder {
 mod tests {
     use super::*;
     use crate::shared;
-
-    #[test]
-    fn test_is_the_last_l1_slot_to_add_an_empty_l2_block() {
-        let batch_builder = BatchBuilder::new(
-            BatchBuilderConfig {
-                max_bytes_size_of_batch: 1000,
-                max_blocks_per_batch: 10,
-                l1_slot_duration_sec: 12,
-                max_time_shift_between_blocks_sec: 255,
-                max_anchor_height_offset: 10,
-                default_coinbase: Address::ZERO,
-                preconf_min_txs: 5,
-                preconf_max_skipped_l2_slots: 3,
-            },
-            Arc::new(SlotClock::new(0, 5, 12, 32, 3000)),
-            Arc::new(Metrics::new()),
-        );
-
-        assert!(!batch_builder.is_the_last_l1_slot_to_add_an_empty_l2_block(100, 0));
-        assert!(!batch_builder.is_the_last_l1_slot_to_add_an_empty_l2_block(242, 0));
-        assert!(batch_builder.is_the_last_l1_slot_to_add_an_empty_l2_block(243, 0));
-        assert!(batch_builder.is_the_last_l1_slot_to_add_an_empty_l2_block(255, 0));
-    }
 
     fn build_tx_1() -> alloy::rpc::types::Transaction {
         let json_data = r#"
@@ -607,13 +424,14 @@ mod tests {
         };
         batch.l2_blocks.push(l2_block);
 
+        let slot_clock = Arc::new(SlotClock::new(0, 5, 12, 32, 3000));
         let mut batch_builder = BatchBuilder {
-            config,
-            current_batch: Some(batch),
-            batches_to_send: VecDeque::new(),
-            current_forced_inclusion: None,
-            slot_clock: Arc::new(SlotClock::new(0, 5, 12, 32, 3000)),
-            metrics: Arc::new(Metrics::new()),
+            core: BatchBuilderCore::new(
+                Some(batch),
+                config,
+                slot_clock.clone(),
+                Arc::new(Metrics::new()),
+            ),
         };
 
         let tx2 = build_tx_2();
@@ -629,7 +447,12 @@ mod tests {
 
         let res = batch_builder.can_consume_l2_block(&l2_block);
 
-        let total_bytes = batch_builder.current_batch.as_ref().unwrap().total_bytes;
+        let total_bytes = batch_builder
+            .core
+            .current_batch
+            .as_ref()
+            .unwrap()
+            .total_bytes();
         (res, total_bytes)
     }
 
@@ -659,74 +482,5 @@ mod tests {
         let (res, total_bytes) = test_can_consume_l2_block(1000);
         assert!(res);
         assert_eq!(total_bytes, 228 * 2);
-    }
-
-    #[test]
-    fn test_should_new_block_be_created() {
-        let config = BatchBuilderConfig {
-            max_bytes_size_of_batch: 1000,
-            max_blocks_per_batch: 10,
-            l1_slot_duration_sec: 12,
-            max_time_shift_between_blocks_sec: 255,
-            max_anchor_height_offset: 10,
-            default_coinbase: Address::ZERO,
-            preconf_min_txs: 5,
-            preconf_max_skipped_l2_slots: 3,
-        };
-
-        let slot_clock = Arc::new(SlotClock::new(0, 5, 12, 32, 2000));
-        let mut batch_builder = BatchBuilder::new(config, slot_clock, Arc::new(Metrics::new()));
-
-        // Test case 1: Should create new block when pending transactions >= preconf_min_txs
-        assert!(batch_builder.should_new_block_be_created(5, 1000, false));
-        assert!(batch_builder.should_new_block_be_created(10, 1000, false));
-
-        // Test case 2: Should create new block when pending transactions < preconf_min_txs and no current batch
-        assert!(batch_builder.should_new_block_be_created(3, 1000, false));
-
-        // Test case 3: Should create new block when pending transactions < preconf_min_txs and current batch exists but no blocks
-        let empty_batch = Batch {
-            l2_blocks: vec![],
-            total_bytes: 0,
-            coinbase: Address::ZERO,
-            anchor_block_id: 0,
-            anchor_block_timestamp_sec: 0,
-        };
-        batch_builder.current_batch = Some(empty_batch);
-        assert!(batch_builder.should_new_block_be_created(3, 1000, false));
-
-        let batch_with_blocks = Batch {
-            l2_blocks: vec![L2Block {
-                prebuilt_tx_list: shared::l2_tx_lists::PreBuiltTxList {
-                    tx_list: vec![],
-                    estimated_gas_used: 0,
-                    bytes_length: 0,
-                },
-                timestamp_sec: 1000,
-            }],
-            total_bytes: 0,
-            coinbase: Address::ZERO,
-            anchor_block_id: 0,
-            anchor_block_timestamp_sec: 0,
-        };
-        batch_builder.current_batch = Some(batch_with_blocks);
-
-        // Test case 4: Should create new block when skipped slots > preconf_max_skipped_l2_slots
-        assert!(batch_builder.should_new_block_be_created(0, 1008, false));
-
-        // Test case 5: Should not create new block when skipped slots <= preconf_max_skipped_l2_slots
-        assert!(!batch_builder.should_new_block_be_created(3, 1006, false));
-
-        // Test case 6: Should create new block when end_of_sequencing is true
-        assert!(batch_builder.should_new_block_be_created(3, 1006, true));
-
-        // Test case 7: Should not create new block when is_empty_block_required is false
-        assert!(!batch_builder.should_new_block_be_created(0, 1006, false));
-
-        // Test case 8: Should create new block when is_empty_block_required is true
-        assert!(batch_builder.should_new_block_be_created(0, 1260, false));
-
-        // Test case 9: Should create new block when is_empty_block_required is true and end_of_sequencing is true
-        assert!(batch_builder.should_new_block_be_created(0, 1260, true));
     }
 }

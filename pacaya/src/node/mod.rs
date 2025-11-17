@@ -11,7 +11,8 @@ use crate::{
     shared::{head_verifier::HeadVerifier, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
 };
 use anyhow::Error;
-use batch_manager::{BatchManager, config::BatchBuilderConfig};
+use batch_manager::BatchManager;
+use common::batch_builder::BatchBuilderConfig;
 use common::{
     fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, traits::PreconferProvider, transaction_error::TransactionError},

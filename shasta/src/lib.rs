@@ -11,13 +11,13 @@ use crate::utils::config::ShastaConfig;
 use anyhow::Error;
 use common::{l1::traits::PreconferProvider, metrics, shared};
 
+use common::batch_builder::BatchBuilderConfig;
 use common::funds_controller::FundsController;
 use common::l1::{self as common_l1};
 use common::l2::engine::{L2Engine, L2EngineConfig};
 use common::{config::Config, config::ConfigTrait, fork_info::ForkInfo};
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
-use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
