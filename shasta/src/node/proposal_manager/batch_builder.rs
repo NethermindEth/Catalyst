@@ -312,9 +312,10 @@ impl BatchBuilder {
     }
 
     pub fn prepend_batches(&mut self, batches: Proposals) {
-        batches.into_iter().for_each(|batch| {
-            self.core.batches_to_send.push_front((None, batch));
-        });
+        let mut new_batches: VecDeque<(Option<()>, Proposal)> =
+            batches.into_iter().map(|batch| (None, batch)).collect();
+        new_batches.append(&mut self.core.batches_to_send);
+        self.core.batches_to_send = new_batches;
     }
 
     pub fn get_current_proposal_id(&self) -> Option<u64> {

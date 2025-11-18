@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::sync::Arc;
 
 use super::config::{BatchesToSend, ForcedInclusionBatch};
 use crate::l1::bindings::BatchParams;
@@ -14,7 +14,7 @@ use common::{
     batch_builder::{BatchBuilderConfig, BatchBuilderCore, BatchLike},
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, error};
 
 pub struct BatchBuilder {
     core: BatchBuilderCore<Batch, BatchParams>,

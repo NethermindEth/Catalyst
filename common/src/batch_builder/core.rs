@@ -15,17 +15,11 @@ use tracing::{debug, trace, warn};
 /// This struct owns the current batch/proposal and the queue of batches ready to send,
 /// providing methods for common batch building operations.
 pub struct BatchBuilderCore<B: BatchLike, F> {
-    /// The current batch or proposal being built
     pub current_batch: Option<B>,
-    /// The current forced inclusion batch
     pub current_forced_inclusion: Option<F>,
-    /// Queue of batches/proposals ready to send
     pub batches_to_send: VecDeque<(Option<F>, B)>,
-    /// Configuration for batch building
     pub config: BatchBuilderConfig,
-    /// Slot clock for timing calculations
     pub slot_clock: Arc<SlotClock>,
-    /// Metrics for batch building
     pub metrics: Arc<Metrics>,
 }
 
@@ -83,29 +77,29 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
 
     /// Checks if the time shift between blocks has expired.
     pub fn is_time_shift_expired(&self, current_l2_slot_timestamp: u64) -> bool {
-        if let Some(batch) = self.current_batch.as_ref() {
-            if let Some(last_block) = batch.l2_blocks().last() {
-                return current_l2_slot_timestamp - last_block.timestamp_sec
-                    > self.config.max_time_shift_between_blocks_sec;
-            }
+        if let Some(batch) = self.current_batch.as_ref()
+            && let Some(last_block) = batch.l2_blocks().last()
+        {
+            return current_l2_slot_timestamp - last_block.timestamp_sec
+                > self.config.max_time_shift_between_blocks_sec;
         }
         false
     }
 
     /// Checks if the time shift between blocks is expiring soon.
     pub fn is_time_shift_between_blocks_expiring(&self, current_l2_slot_timestamp: u64) -> bool {
-        if let Some(batch) = self.current_batch.as_ref() {
-            if let Some(last_block) = batch.l2_blocks().last() {
-                if current_l2_slot_timestamp < last_block.timestamp_sec {
-                    warn!("Preconfirmation timestamp is before the last block timestamp");
-                    return false;
-                }
-                // is the last L1 slot to add an empty L2 block so we don't have a time shift overflow
-                return self.is_the_last_l1_slot_to_add_an_empty_l2_block(
-                    current_l2_slot_timestamp,
-                    last_block.timestamp_sec,
-                );
+        if let Some(batch) = self.current_batch.as_ref()
+            && let Some(last_block) = batch.l2_blocks().last()
+        {
+            if current_l2_slot_timestamp < last_block.timestamp_sec {
+                warn!("Preconfirmation timestamp is before the last block timestamp");
+                return false;
             }
+            // is the last L1 slot to add an empty L2 block so we don't have a time shift overflow
+            return self.is_the_last_l1_slot_to_add_an_empty_l2_block(
+                current_l2_slot_timestamp,
+                last_block.timestamp_sec,
+            );
         }
         false
     }
@@ -146,13 +140,12 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
             return true;
         }
 
-        if let Some(batch) = self.current_batch.as_ref() {
-            if let Some(last_block) = batch.l2_blocks().last() {
-                let number_of_l2_slots = (current_l2_slot_timestamp - last_block.timestamp_sec)
-                    * 1000
-                    / self.slot_clock.get_preconf_heartbeat_ms();
-                return number_of_l2_slots > self.config.preconf_max_skipped_l2_slots;
-            }
+        if let Some(batch) = self.current_batch.as_ref()
+            && let Some(last_block) = batch.l2_blocks().last()
+        {
+            let number_of_l2_slots = (current_l2_slot_timestamp - last_block.timestamp_sec) * 1000
+                / self.slot_clock.get_preconf_heartbeat_ms();
+            return number_of_l2_slots > self.config.preconf_max_skipped_l2_slots;
         }
 
         true
