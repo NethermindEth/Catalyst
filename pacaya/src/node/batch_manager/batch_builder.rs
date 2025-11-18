@@ -120,18 +120,13 @@ impl BatchBuilder {
         &mut self,
         l2_block: L2Block,
     ) -> Result<u64, Error> {
-        if let Some(current_batch) = self.core.current_batch.as_mut() {
-            *current_batch.total_bytes_mut() += l2_block.prebuilt_tx_list.bytes_length;
-            current_batch.l2_blocks_mut().push(l2_block);
-            debug!(
-                "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
-                current_batch.l2_blocks().len(),
-                current_batch.total_bytes()
-            );
-            Ok(current_batch.anchor_block_id())
-        } else {
-            Err(anyhow::anyhow!("No current batch"))
-        }
+        self.core.add_l2_block(l2_block)?;
+        Ok(self
+            .core
+            .current_batch
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No current batch after adding L2 block"))?
+            .anchor_block_id())
     }
 
     pub fn remove_last_l2_block(&mut self) {
