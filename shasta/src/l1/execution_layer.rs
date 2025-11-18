@@ -4,6 +4,7 @@
 use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
 use alloy::primitives::Bytes;
+use alloy::primitives::aliases::U48;
 use alloy::{eips::BlockNumberOrTag, primitives::Address, providers::DynProvider};
 use anyhow::{Error, anyhow};
 use common::shared::l2_block::L2Block;
@@ -276,5 +277,46 @@ impl ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to call activationTimestamp for Inbox: {e}"))?;
 
         Ok(timestamp.to::<u64>())
+    }
+
+    pub async fn get_forced_inclusion_head(&self) -> Result<u64, Error> {
+        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
+        let state = shasta_inbox
+            .getForcedInclusionState()
+            .call()
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to call getForcedInclusionState for Inbox: {e}")
+            })?;
+
+        Ok(state.head_.to::<u64>())
+    }
+
+    pub async fn get_forced_inclusion_tail(&self) -> Result<u64, Error> {
+        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
+        let state = shasta_inbox
+            .getForcedInclusionState()
+            .call()
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to call getForcedInclusionState for Inbox: {e}")
+            })?;
+
+        Ok(state.tail_.to::<u64>())
+    }
+
+    pub async fn get_forced_inclusion(&self, index: u64) -> Result<Inbox::ForcedInclusion, Error> {
+        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
+        let inclusions = shasta_inbox
+            .getForcedInclusions(U48::from(index), U48::ONE)
+            .call()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to call getForcedInclusions for Inbox: {e}"))?;
+
+        let inclusion = inclusions
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("No forced inclusion at index {}", index))?;
+
+        Ok(inclusion.clone())
     }
 }

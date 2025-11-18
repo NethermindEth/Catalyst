@@ -4,6 +4,8 @@ mod node;
 #[allow(dead_code)] // TODO: remove this once we have a used create_shasta_node function
 mod utils;
 
+mod forced_inclusion;
+
 mod l1;
 mod l2;
 

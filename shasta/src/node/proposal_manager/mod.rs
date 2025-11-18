@@ -21,6 +21,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::node::proposal_manager::proposal::BondInstructionData;
+use crate::forced_inclusion::ForcedInclusion;
 use alloy::primitives::{B256, U256};
 use proposal::Proposals;
 use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
@@ -32,6 +33,7 @@ pub struct BatchManager {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
     l1_height_lag: u64,
+    forced_inclusion: Arc<ForcedInclusion>,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
 }
@@ -59,6 +61,8 @@ impl BatchManager {
             config.max_anchor_height_offset,
         );
 
+        let forced_inclusion = Arc::new(ForcedInclusion::new(ethereum_l1.clone()).await?);
+
         Ok(Self {
             batch_builder: BatchBuilder::new(
                 config,
@@ -68,6 +72,7 @@ impl BatchManager {
             ethereum_l1,
             taiko,
             l1_height_lag,
+            forced_inclusion,
             metrics,
             cancel_token,
         })
@@ -118,6 +123,105 @@ impl BatchManager {
         Ok(result)
     }
 
+    // TODO handle forced inclusion properly
+    async fn add_new_l2_block_with_forced_inclusion_when_needed(
+        &mut self,
+        l2_slot_info: &L2SlotInfo,
+        operation_type: OperationType,
+        anchor_block_id: u64,
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+        /*if self.has_current_forced_inclusion() {
+            warn!("There is already a forced inclusion in the current batch");
+            return Ok(None);
+        }
+        if !self.batch_builder.current_batch_is_empty() {
+            error!(
+                "Cannot add new L2 block with forced inclusion because there are existing blocks in the current batch"
+            );
+            return Ok(None);
+        }
+        // get next forced inclusion
+        let start = std::time::Instant::now();
+        let forced_inclusion = self.forced_inclusion.consume_forced_inclusion().await?;
+        debug!(
+            "Got forced inclusion in {} milliseconds",
+            start.elapsed().as_millis()
+        );
+
+        if let Some(forced_inclusion) = forced_inclusion {
+            let forced_inclusion_batch = self
+                .ethereum_l1
+                .execution_layer
+                .build_forced_inclusion_batch(
+                    self.batch_builder.get_config().default_coinbase,
+                    anchor_block_id,
+                    l2_slot_info.slot_timestamp(),
+                    &forced_inclusion,
+                );
+            // preconfirm
+            let forced_inclusion_block = L2Block {
+                prebuilt_tx_list: PreBuiltTxList {
+                    tx_list: forced_inclusion.txs,
+                    estimated_gas_used: 0,
+                    bytes_length: 0,
+                },
+                timestamp_sec: l2_slot_info.slot_timestamp(),
+            };
+            let forced_inclusion_block_response = match self
+                .taiko
+                .advance_head_to_new_l2_block(
+                    forced_inclusion_block,
+                    anchor_block_id,
+                    self.ethereum_l1
+                        .execution_layer
+                        .common()
+                        .get_block_state_root_by_number(anchor_block_id)
+                        .await?,
+                    l2_slot_info,
+                    false,
+                    true,
+                    operation_type,
+                )
+                .await
+            {
+                Ok(preconfed_block) => {
+                    debug!(
+                        "Preconfirmed forced inclusion L2 block: {:?}",
+                        preconfed_block
+                    );
+                    preconfed_block
+                }
+                Err(err) => {
+                    error!(
+                        "Failed to advance head to new forced inclusion L2 block: {}",
+                        err
+                    );
+                    self.forced_inclusion.release_forced_inclusion().await;
+                    self.batch_builder.remove_current_batch();
+                    return Err(anyhow::anyhow!(
+                        "Failed to advance head to new forced inclusion L2 block: {}",
+                        err
+                    ));
+                }
+            };
+            // set it to batch builder
+            if !self
+                .batch_builder
+                .set_forced_inclusion(Some(forced_inclusion_batch))
+            {
+                // We should never enter here because it means we already have a forced inclusion
+                // but we didn't set it yet. And at the beginning of the function we checked if
+                // the forced inclusion is empty. This is a bug in the code logic
+                error!("Failed to set forced inclusion to batch");
+                self.cancel_token.cancel();
+                return Err(anyhow::anyhow!("Failed to set forced inclusion to batch"));
+            }
+            return Ok(forced_inclusion_block_response);
+        }*/
+
+        Ok(None)
+    }
+
     async fn add_new_l2_block(
         &mut self,
         l2_block: L2Block,
@@ -136,11 +240,22 @@ impl BatchManager {
 
         if !self.batch_builder.can_consume_l2_block(&l2_block) {
             // Create new batch
-            let _anchor_block_id = self.create_new_batch().await?;
+            let anchor_block_id = self.create_new_batch().await?;
 
             // Add forced inclusion when needed
             // not add forced inclusion when end_of_sequencing is true
-            // TODO add fi blocks
+            if allow_forced_inclusion
+                && !end_of_sequencing
+                && let Some(fi_block) = self
+                    .add_new_l2_block_with_forced_inclusion_when_needed(
+                        l2_slot_info,
+                        operation_type,
+                        anchor_block_id,
+                    )
+                    .await?
+            {
+                return Ok(Some(fi_block));
+            }
         }
 
         let preconfed_block = self
@@ -424,6 +539,7 @@ impl BatchManager {
             ethereum_l1: self.ethereum_l1.clone(),
             taiko: self.taiko.clone(),
             l1_height_lag: self.l1_height_lag,
+            forced_inclusion: self.forced_inclusion.clone(),
             metrics: self.metrics.clone(),
             cancel_token: self.cancel_token.clone(),
         }

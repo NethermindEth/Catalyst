@@ -10,12 +10,19 @@ use crate::shared::l2_tx_lists::uncompress_and_decode;
 pub async fn extract_transactions_from_blob<T: ELTrait>(
     ethereum_l1: Arc<EthereumL1<T>>,
     block: u64,
-    blob_hash: Vec<B256>,
+    blob_hashes: Vec<B256>,
     tx_list_offset: u32,
     tx_list_size: u32,
 ) -> Result<Vec<Transaction>, Error> {
     let start = std::time::Instant::now();
-    let v = blob_to_vec(ethereum_l1, block, blob_hash, tx_list_offset, tx_list_size).await?;
+    let v = blob_to_vec(
+        ethereum_l1,
+        block,
+        blob_hashes,
+        tx_list_offset,
+        tx_list_size,
+    )
+    .await?;
     tracing::debug!(
         "extract_transactions_from_blob: Blob conversion took {} ms",
         start.elapsed().as_millis()
@@ -31,15 +38,17 @@ pub async fn extract_transactions_from_blob<T: ELTrait>(
 async fn blob_to_vec<T: ELTrait>(
     ethereum_l1: Arc<EthereumL1<T>>,
     block: u64,
-    blob_hash: Vec<B256>,
+    blob_hashes: Vec<B256>,
     tx_list_offset: u32,
     tx_list_size: u32,
 ) -> Result<Vec<u8>, Error> {
-    let result: Vec<u8> = if ethereum_l1.blob_indexer.is_some() {
-        get_data_from_block_indexer(ethereum_l1.clone(), blob_hash).await?
-    } else {
-        get_data_from_consensus_layer(ethereum_l1.clone(), block, blob_hash).await?
-    };
+    let block_timestamp = ethereum_l1
+        .execution_layer
+        .common()
+        .get_block_timestamp_by_number(block)
+        .await?;
+
+    let result: Vec<u8> = get_bytes_from_blobs(ethereum_l1, block_timestamp, blob_hashes).await?;
 
     let tx_list_left: usize = tx_list_offset.try_into()?;
     let tx_list_right: usize = tx_list_left + usize::try_from(tx_list_size)?;
@@ -58,21 +67,28 @@ async fn blob_to_vec<T: ELTrait>(
     Ok(result)
 }
 
+pub async fn get_bytes_from_blobs<T: ELTrait>(
+    ethereum_l1: Arc<EthereumL1<T>>,
+    block_timestamp: u64,
+    blob_hashes: Vec<B256>,
+) -> Result<Vec<u8>, Error> {
+    if ethereum_l1.blob_indexer.is_some() {
+        get_data_from_block_indexer(ethereum_l1.clone(), blob_hashes).await
+    } else {
+        get_data_from_consensus_layer(ethereum_l1.clone(), block_timestamp, blob_hashes).await
+    }
+}
+
 async fn get_data_from_consensus_layer<T: ELTrait>(
     ethereum_l1: Arc<EthereumL1<T>>,
-    block: u64,
-    blob_hash: Vec<B256>,
+    block_timestamp: u64,
+    blob_hashes: Vec<B256>,
 ) -> Result<Vec<u8>, Error> {
     let mut result: Vec<u8> = Vec::new();
 
-    let timestamp = ethereum_l1
-        .execution_layer
-        .common()
-        .get_block_timestamp_by_number(block)
-        .await?;
     let slot = ethereum_l1
         .slot_clock
-        .slot_of(Duration::from_secs(timestamp))?;
+        .slot_of(Duration::from_secs(block_timestamp))?;
     let sidecars = ethereum_l1.consensus_layer.get_blob_sidecars(slot).await?;
 
     let sidecar_hashes: Vec<B256> = sidecars
@@ -81,7 +97,7 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
         .map(|sidecar| kzg_to_versioned_hash(sidecar.kzg_commitment.as_slice()))
         .collect();
 
-    for hash in blob_hash {
+    for hash in blob_hashes {
         for (i, sidecar) in sidecars.data.iter().enumerate() {
             if sidecar_hashes[i] == hash {
                 let data = BlobDecoder::decode_blob(sidecar.blob.as_ref())?;
