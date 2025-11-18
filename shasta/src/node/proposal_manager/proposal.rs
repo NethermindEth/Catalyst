@@ -1,5 +1,6 @@
 use crate::shared::l2_block::L2Block;
 use alloy::primitives::{Address, B256, Bytes};
+use common::batch_builder::BatchLike;
 use std::collections::VecDeque;
 use std::time::Instant;
 use taiko_bindings::anchor::LibBonds::BondInstruction;
@@ -112,6 +113,36 @@ impl Proposal {
             .last()
             .map(|block| block.prebuilt_tx_list.tx_list.len())
             .ok_or_else(|| anyhow::anyhow!("No L2 blocks in proposal"))
+    }
+}
+
+impl BatchLike for Proposal {
+    fn l2_blocks_mut(&mut self) -> &mut Vec<L2Block> {
+        &mut self.l2_blocks
+    }
+
+    fn l2_blocks(&self) -> &Vec<L2Block> {
+        &self.l2_blocks
+    }
+
+    fn total_bytes_mut(&mut self) -> &mut u64 {
+        &mut self.total_bytes
+    }
+
+    fn total_bytes(&self) -> u64 {
+        self.total_bytes
+    }
+
+    fn anchor_block_id(&self) -> u64 {
+        self.anchor_block_id
+    }
+
+    fn anchor_block_timestamp_sec(&self) -> u64 {
+        self.anchor_block_timestamp_sec
+    }
+
+    fn compress(&mut self) {
+        Proposal::compress(self);
     }
 }
 

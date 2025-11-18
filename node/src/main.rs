@@ -15,6 +15,8 @@ enum ExecutionStopped {
     RecreateNode,
 }
 
+const WAIT_BEFORE_RECREATING_NODE_SECS: u64 = 5;
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     common::utils::logging::init_logging();
@@ -35,7 +37,14 @@ async fn main() -> Result<(), Error> {
             }
             Err(e) => {
                 error!("Failed to run node: {}", e);
-                return Err(e);
+                info!(
+                    "Waiting {WAIT_BEFORE_RECREATING_NODE_SECS} second before recreating node..."
+                );
+                tokio::time::sleep(tokio::time::Duration::from_secs(
+                    WAIT_BEFORE_RECREATING_NODE_SECS,
+                ))
+                .await;
+                continue;
             }
         }
     }
@@ -124,7 +133,7 @@ async fn wait_for_the_termination(
         _ = cancel_token.cancelled() => {
             info!("Shutdown signal received, exiting Catalyst node...");
             // prevent rapid recreation of the node in case of initial error
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(tokio::time::Duration::from_secs(WAIT_BEFORE_RECREATING_NODE_SECS)).await;
             ExecutionStopped::RecreateNode
         }
     }
