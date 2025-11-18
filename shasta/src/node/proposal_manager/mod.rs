@@ -20,8 +20,8 @@ use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::node::proposal_manager::proposal::BondInstructionData;
 use crate::forced_inclusion::ForcedInclusion;
+use crate::node::proposal_manager::proposal::BondInstructionData;
 use alloy::primitives::{B256, U256};
 use proposal::Proposals;
 use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;

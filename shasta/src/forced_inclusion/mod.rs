@@ -1,10 +1,10 @@
 use crate::l1::execution_layer::ExecutionLayer;
 use alloy::rpc::types::Transaction;
 use anyhow::Error;
+use common::shared::l2_tx_lists::convert_tx_envelopes_to_transactions;
 use common::{blob::blob_parser::get_bytes_from_blobs, l1::ethereum_l1::EthereumL1};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, atomic::AtomicU64};
-use common::shared::l2_tx_lists::convert_tx_envelopes_to_transactions;
 
 use taiko_protocol::shasta::manifest::DerivationSourceManifest;
 
@@ -81,9 +81,13 @@ impl ForcedInclusion {
             ));
         }
         if let Some(first_block) = fi.blocks.first() {
-            Ok(Some(convert_tx_envelopes_to_transactions(first_block.transactions.clone())?))
+            Ok(Some(convert_tx_envelopes_to_transactions(
+                first_block.transactions.clone(),
+            )?))
         } else {
-            Err(anyhow::anyhow!("No blocks found in forced inclusion manifest"))
+            Err(anyhow::anyhow!(
+                "No blocks found in forced inclusion manifest"
+            ))
         }
     }
 
