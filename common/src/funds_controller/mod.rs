@@ -62,6 +62,7 @@ where
     async fn monitor_funds_level(self) {
         if let Err(e) = self.check_initial_funds().await {
             error!("{}", e);
+            self.metrics.inc_critical_errors();
             self.cancel_token.cancel();
             return;
         }

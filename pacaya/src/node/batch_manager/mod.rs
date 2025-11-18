@@ -472,6 +472,7 @@ impl BatchManager {
                 // but we didn't set it yet. And at the beginning of the function we checked if
                 // the forced inclusion is empty. This is a bug in the code logic
                 error!("Failed to set forced inclusion to batch");
+                self.metrics.inc_critical_errors();
                 self.cancel_token.cancel();
                 return Err(anyhow::anyhow!("Failed to set forced inclusion to batch"));
             }

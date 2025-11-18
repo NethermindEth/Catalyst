@@ -546,6 +546,7 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
         Operator {
+            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
@@ -581,6 +582,7 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
         Operator {
+            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
@@ -616,6 +618,7 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
         Operator {
+            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
@@ -646,6 +649,7 @@ mod tests {
     -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
         let slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         Operator {
+            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
@@ -677,6 +681,7 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = 32 * 12 + 25 * 12; // second epoch 26th slot
         Operator {
+            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
@@ -707,6 +712,7 @@ mod tests {
     -> Operator<ExecutionLayerMockError, MockClock, TaikoMock> {
         let slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         Operator {
+            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(),
             last_config_reload_epoch: 0,
@@ -736,6 +742,7 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = current_timestamp;
         Operator {
+            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo {
                 fork: Fork::Pacaya,
                 config: ForkInfoConfig {

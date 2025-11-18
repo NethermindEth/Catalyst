@@ -32,6 +32,7 @@ impl Node {
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
             ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
+            metrics.clone(),
         );
         Ok(Self {
             cancel_token,
