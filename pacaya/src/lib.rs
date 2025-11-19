@@ -8,11 +8,11 @@ use common::{
     l2::engine::{L2Engine, L2EngineConfig},
     metrics::{self, Metrics},
     shared,
+    utils::cancellation_token::CancellationToken,
 };
 use l1::execution_layer::ExecutionLayer;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 mod chain_monitor;

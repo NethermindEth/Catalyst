@@ -1,11 +1,11 @@
 mod config;
 
+use crate::utils::cancellation_token::CancellationToken;
 use alloy::primitives::U256;
 use anyhow::Error;
 use config::FundsControllerConfig;
 use std::sync::Arc;
 use tokio::time::sleep;
-use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use crate::{
@@ -62,8 +62,7 @@ where
     async fn monitor_funds_level(self) {
         if let Err(e) = self.check_initial_funds().await {
             error!("{}", e);
-            self.metrics.inc_critical_errors();
-            self.cancel_token.cancel();
+            self.cancel_token.cancel_on_critical_error();
             return;
         }
 

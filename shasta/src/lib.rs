@@ -11,16 +11,20 @@ use crate::utils::config::ShastaConfig;
 use anyhow::Error;
 use common::{l1::traits::PreconferProvider, metrics, shared};
 
-use common::batch_builder::BatchBuilderConfig;
-use common::funds_controller::FundsController;
-use common::l1::{self as common_l1};
-use common::l2::engine::{L2Engine, L2EngineConfig};
-use common::{config::Config, config::ConfigTrait, fork_info::ForkInfo};
+use common::{
+    batch_builder::BatchBuilderConfig,
+    config::Config,
+    config::ConfigTrait,
+    fork_info::ForkInfo,
+    funds_controller::FundsController,
+    l1::{self as common_l1},
+    l2::engine::{L2Engine, L2EngineConfig},
+    utils::cancellation_token::CancellationToken,
+};
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub async fn create_shasta_node(

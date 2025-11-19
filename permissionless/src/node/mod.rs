@@ -4,10 +4,10 @@ use common::{
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     metrics::Metrics,
     utils as common_utils,
+    utils::cancellation_token::CancellationToken,
 };
 use std::sync::Arc;
 use tokio::{sync::mpsc::Receiver, time::Duration};
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 pub mod config;
@@ -32,7 +32,6 @@ impl Node {
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
             ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
-            metrics.clone(),
         );
         Ok(Self {
             cancel_token,

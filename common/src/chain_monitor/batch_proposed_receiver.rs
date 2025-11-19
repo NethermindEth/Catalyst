@@ -1,9 +1,8 @@
-use crate::utils::event_listener::listen_for_event;
+use crate::utils::{cancellation_token::CancellationToken, event_listener::listen_for_event};
 use alloy::primitives::Address;
 use alloy::sol_types::SolEvent;
 use anyhow::Error;
 use tokio::{sync::mpsc::Sender, time::Duration};
-use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 const SLEEP_DURATION: Duration = Duration::from_secs(15);

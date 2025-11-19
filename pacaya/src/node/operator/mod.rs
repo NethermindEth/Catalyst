@@ -7,13 +7,11 @@ use common::{
     fork_info::ForkInfo,
     l1::slot_clock::{Clock, SlotClock},
     l2::taiko_driver::{StatusProvider, models::TaikoStatus},
-    metrics::Metrics,
     shared::l2_slot_info::L2SlotInfo,
-    utils::types::*,
+    utils::{cancellation_token::CancellationToken, types::*},
 };
 pub use status::Status;
 use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
@@ -32,7 +30,6 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     operator_transition_slots: u64,
     last_config_reload_epoch: u64,
     fork_info: ForkInfo,
-    metrics: Arc<Metrics>,
 }
 
 const OPERATOR_TRANSITION_SLOTS: u64 = 2;
@@ -48,7 +45,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         simulate_not_submitting_at_the_end_of_epoch: bool,
         cancel_token: CancellationToken,
         fork_info: ForkInfo,
-        metrics: Arc<Metrics>,
     ) -> Result<Self, Error> {
         Ok(Self {
             execution_layer,
@@ -66,7 +62,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             operator_transition_slots: OPERATOR_TRANSITION_SLOTS,
             last_config_reload_epoch: 0,
             fork_info,
-            metrics,
         })
     }
 
@@ -247,8 +242,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
                 "Not synchronized Geth driver count: {}, exiting...",
                 self.cancel_counter
             );
-            self.metrics.inc_critical_errors();
-            self.cancel_token.cancel();
+            self.cancel_token.cancel_on_critical_error();
         }
     }
 

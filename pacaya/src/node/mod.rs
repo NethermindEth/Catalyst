@@ -18,6 +18,7 @@ use common::{
     l1::{ethereum_l1::EthereumL1, traits::PreconferProvider, transaction_error::TransactionError},
     l2::taiko_driver::{OperationType, TaikoDriver, models::BuildPreconfBlockResponse},
     utils as common_utils,
+    utils::cancellation_token::CancellationToken,
 };
 use config::NodeConfig;
 use operator::{Operator, Status as OperatorStatus};
@@ -26,7 +27,6 @@ use tokio::{
     sync::mpsc::{Receiver, error::TryRecvError},
     time::{Duration, sleep},
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use verifier::{VerificationResult, Verifier};
 
@@ -68,7 +68,6 @@ impl Node {
             config.simulate_not_submitting_at_the_end_of_epoch,
             cancel_token.clone(),
             fork_info.clone(),
-            metrics.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create Operator: {}", e))?;
         let batch_manager = BatchManager::new(
@@ -93,7 +92,6 @@ impl Node {
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
             ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
-            metrics.clone(),
         );
         Ok(Self {
             cancel_token,
@@ -117,7 +115,7 @@ impl Node {
 
         if let Err(err) = self.warmup().await {
             error!("Failed to warm up node: {}. Shutting down.", err);
-            self.recreate_node_in_case_of_critical_error();
+            self.cancel_token.cancel_on_critical_error();
             return Err(anyhow::anyhow!(err));
         }
 
@@ -313,7 +311,7 @@ impl Node {
                         "Shutdown: Failed to verify proposed batches on startup: {}",
                         err
                     );
-                    self.recreate_node_in_case_of_critical_error();
+                    self.cancel_token.cancel_on_critical_error();
                     return Err(anyhow::anyhow!(
                         "Shutdown: Failed to verify proposed batches on startup: {}",
                         err
@@ -339,7 +337,7 @@ impl Node {
                     }
                     Err(err) => {
                         error!("Shutdown: Failed to create verifier: {}", err);
-                        self.recreate_node_in_case_of_critical_error();
+                        self.cancel_token.cancel_on_critical_error();
                         return Err(anyhow::anyhow!(
                             "Shutdown: Failed to create verifier on startup: {}",
                             err
@@ -366,7 +364,7 @@ impl Node {
                 .await
             {
                 self.head_verifier.log_error().await;
-                self.recreate_node_in_case_of_critical_error();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!(
                     "Unexpected L2 head detected. Restarting node..."
                 ));
@@ -435,7 +433,7 @@ impl Node {
                 .await
         {
             self.head_verifier.log_error().await;
-            self.recreate_node_in_case_of_critical_error();
+            self.cancel_token.cancel_on_critical_error();
             return Err(anyhow::anyhow!(
                 "Unexpected L2 head after preconfirmation. Restarting node..."
             ));
@@ -481,7 +479,7 @@ impl Node {
                     .await
                 {
                     error!("Failed to reanchor: {}", err);
-                    self.recreate_node_in_case_of_critical_error();
+                    self.cancel_token.cancel_on_critical_error();
                     return Err(anyhow::anyhow!("Failed to reanchor: {}", err));
                 }
                 return Ok(true);
@@ -533,7 +531,7 @@ impl Node {
                     VerificationResult::ReanchorNeeded(block, reason) => {
                         if let Err(err) = self.reanchor_blocks(block, &reason, false).await {
                             error!("Failed to reanchor blocks: {}", err);
-                            self.recreate_node_in_case_of_critical_error();
+                            self.cancel_token.cancel_on_critical_error();
                             return Err(err);
                         }
                     }
@@ -571,7 +569,7 @@ impl Node {
                     // no errors, proceed with preconfirmation
                 }
                 TryRecvError::Disconnected => {
-                    self.recreate_node_in_case_of_critical_error();
+                    self.cancel_token.cancel_on_critical_error();
                     return Err(anyhow::anyhow!("Transaction error channel disconnected"));
                 }
             },
@@ -601,7 +599,7 @@ impl Node {
                                 "ReanchorRequired: Failed to get L2 height from Taiko inbox: {}",
                                 err
                             );
-                            self.recreate_node_in_case_of_critical_error();
+                            self.cancel_token.cancel_on_critical_error();
                             return Err(anyhow::anyhow!(
                                 "ReanchorRequired: Failed to get L2 height from Taiko inbox: {}",
                                 err
@@ -613,7 +611,7 @@ impl Node {
                         .await
                     {
                         error!("ReanchorRequired: Failed to reanchor blocks: {}", err);
-                        self.recreate_node_in_case_of_critical_error();
+                        self.cancel_token.cancel_on_critical_error();
                         return Err(anyhow::anyhow!(
                             "ReanchorRequired: Failed to reanchor blocks: {}",
                             err
@@ -625,20 +623,20 @@ impl Node {
                 }
             }
             TransactionError::NotConfirmed => {
-                self.recreate_node_in_case_of_critical_error();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!(
                     "Transaction not confirmed for a long time, exiting"
                 ));
             }
             TransactionError::UnsupportedTransactionType => {
-                self.recreate_node_in_case_of_critical_error();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!(
                     "Unsupported transaction type. You can send eip1559 or eip4844 transactions only"
                 ));
             }
             TransactionError::GetBlockNumberFailed => {
                 // TODO recreate L1 provider
-                self.recreate_node_in_case_of_critical_error();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!("Failed to get block number from L1"));
             }
             TransactionError::EstimationTooEarly => {
@@ -647,17 +645,17 @@ impl Node {
                 ));
             }
             TransactionError::InsufficientFunds => {
-                self.recreate_node_in_case_of_critical_error();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!(
                     "Transaction reverted with InsufficientFunds error"
                 ));
             }
             TransactionError::EstimationFailed => {
-                self.recreate_node_in_case_of_critical_error();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!("Transaction estimation failed, exiting"));
             }
             TransactionError::TransactionReverted => {
-                self.recreate_node_in_case_of_critical_error();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!("Transaction reverted, exiting"));
             }
             TransactionError::OldestForcedInclusionDue => {
@@ -674,7 +672,7 @@ impl Node {
                             "OldestForcedInclusionDue: Failed to get L2 height from Taiko inbox: {err}"
                         );
                         error!("{}", err_msg);
-                        self.recreate_node_in_case_of_critical_error();
+                        self.cancel_token.cancel_on_critical_error();
                         return Err(anyhow::anyhow!("{}", err_msg));
                     }
                 };
@@ -688,7 +686,7 @@ impl Node {
                 {
                     let err_msg = format!("OldestForcedInclusionDue: Failed to reorg: {err}");
                     error!("{}", err_msg);
-                    self.recreate_node_in_case_of_critical_error();
+                    self.cancel_token.cancel_on_critical_error();
                     return Err(anyhow::anyhow!("{}", err_msg));
                 }
                 return Err(anyhow::anyhow!(
@@ -902,7 +900,7 @@ impl Node {
                     Ok(Some(_)) => "Unreachable".to_string(),
                 };
                 error!("{}", err_msg);
-                self.recreate_node_in_case_of_critical_error();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!("{}", err_msg));
             }
 
@@ -923,10 +921,5 @@ impl Node {
             start_time.elapsed().as_millis()
         );
         Ok(())
-    }
-
-    fn recreate_node_in_case_of_critical_error(&self) {
-        self.metrics.inc_critical_errors();
-        self.cancel_token.cancel();
     }
 }

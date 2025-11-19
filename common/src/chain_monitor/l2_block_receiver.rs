@@ -1,3 +1,4 @@
+use crate::utils::cancellation_token::CancellationToken;
 use alloy::primitives::B256;
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
 use anyhow::Error;
@@ -6,7 +7,6 @@ use tokio::{
     sync::mpsc::Sender,
     time::{Duration, sleep},
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{error, info, trace, warn};
 
 const SLEEP_DURATION: Duration = Duration::from_secs(15);

@@ -1,3 +1,4 @@
+use crate::utils::cancellation_token::CancellationToken;
 use alloy::primitives::{Address, B256};
 use alloy::sol_types::SolEvent;
 use anyhow::{Error, anyhow};
@@ -6,7 +7,6 @@ use l2_block_receiver::{L2BlockInfo, L2BlockReceiver};
 use std::{str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{self, Receiver};
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
 mod batch_proposed_receiver;

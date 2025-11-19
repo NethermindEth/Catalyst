@@ -3,8 +3,7 @@ mod tests {
     use crate::node::operator::*;
     use alloy::primitives::B256;
     use chrono::DateTime;
-    use common::l1::slot_clock::Clock;
-    use common::l2::taiko_driver::models;
+    use common::{l1::slot_clock::Clock, l2::taiko_driver::models, metrics::Metrics};
     use std::time::SystemTime;
 
     const HANDOVER_WINDOW_SLOTS: u64 = 6;
@@ -546,9 +545,8 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
         Operator {
-            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
-            cancel_token: CancellationToken::new(),
+            cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
             last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
@@ -582,9 +580,8 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
         Operator {
-            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
-            cancel_token: CancellationToken::new(),
+            cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
             last_config_reload_epoch: 0,
             taiko: Arc::new(TaikoMock {
                 end_of_sequencing_block_hash: get_test_hash(),
@@ -618,9 +615,8 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
         Operator {
-            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
-            cancel_token: CancellationToken::new(),
+            cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
             last_config_reload_epoch: 0,
             taiko: Arc::new(TaikoUnsyncedMock {
                 end_of_sequencing_block_hash: get_test_hash(),
@@ -649,9 +645,8 @@ mod tests {
     -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
         let slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         Operator {
-            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
-            cancel_token: CancellationToken::new(),
+            cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
             last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
@@ -681,9 +676,8 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = 32 * 12 + 25 * 12; // second epoch 26th slot
         Operator {
-            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
-            cancel_token: CancellationToken::new(),
+            cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
             last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
@@ -712,9 +706,8 @@ mod tests {
     -> Operator<ExecutionLayerMockError, MockClock, TaikoMock> {
         let slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         Operator {
-            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo::default(),
-            cancel_token: CancellationToken::new(),
+            cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
             last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
@@ -742,7 +735,6 @@ mod tests {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = current_timestamp;
         Operator {
-            metrics: Arc::new(Metrics::new()),
             fork_info: ForkInfo {
                 fork: Fork::Pacaya,
                 config: ForkInfoConfig {
@@ -752,7 +744,7 @@ mod tests {
                     fork_switch_transition_period: Duration::from_secs(15),
                 },
             },
-            cancel_token: CancellationToken::new(),
+            cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
             last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
