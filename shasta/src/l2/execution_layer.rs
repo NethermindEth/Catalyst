@@ -270,6 +270,20 @@ impl L2ExecutionLayer {
             .and_then(Value::as_bool)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
     }
+
+    pub async fn get_last_synced_block_params_from_geth(&self) -> Result<Anchor::BlockParams, Error> {
+        self.get_latest_anchor_transaction_input()
+            .await
+            .map_err(|e| anyhow::anyhow!("get_last_synced_proposal_id_from_geth: {e}"))
+            .and_then(|input| Self::decode_block_params_from_tx_data(&input))
+    }
+
+    pub fn decode_block_params_from_tx_data(data: &[u8]) -> Result<Anchor::BlockParams, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+                .map_err(|e| anyhow::anyhow!("Failed to decode proposal id from tx data: {}", e))?;
+        Ok(tx_data._blockParams)
+    }
 }
 
 impl PreconferBondProvider for L2ExecutionLayer {

@@ -262,12 +262,7 @@ impl Taiko {
         };
 
         let anchor_block_params = if is_forced_inclusion {
-            Anchor::BlockParams {
-                // TODO get from L1 origin
-                anchorBlockNumber: alloy::primitives::aliases::U48::ZERO,
-                anchorBlockHash: B256::ZERO,
-                anchorStateRoot: B256::ZERO,
-            }
+            self.l2_execution_layer.get_last_synced_block_params_from_geth().await?
         } else {
             Anchor::BlockParams {
                 anchorBlockNumber: proposal.anchor_block_id.try_into()?,
