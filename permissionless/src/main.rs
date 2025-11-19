@@ -4,13 +4,13 @@ use common::{
     l1::{self as common_l1, ethereum_l1::EthereumL1},
     metrics::Metrics,
     utils as common_utils,
+    utils::cancellation_token::CancellationToken,
 };
 use std::sync::Arc;
 use tokio::{
     signal::unix::{SignalKind, signal},
     sync::mpsc,
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 mod l1;
@@ -33,11 +33,11 @@ async fn main() -> Result<(), Error> {
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let metrics = Arc::new(Metrics::new());
 
-    let cancel_token = CancellationToken::new();
+    let cancel_token = CancellationToken::new(metrics.clone());
     let panic_cancel_token = cancel_token.clone();
     std::panic::set_hook(Box::new(move |panic_info| {
         error!("Panic occurred: {:?}", panic_info);
-        panic_cancel_token.cancel();
+        panic_cancel_token.cancel_on_critical_error();
         info!("Cancellation token triggered, initiating shutdown...");
     }));
 

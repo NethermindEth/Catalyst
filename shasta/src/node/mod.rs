@@ -8,10 +8,10 @@ use common::{
     l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
     shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
     utils as common_utils,
+    utils::cancellation_token::CancellationToken,
 };
 use pacaya::node::operator::Status as OperatorStatus;
 use pacaya::node::{config::NodeConfig, operator::Operator};
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::metrics::Metrics;
@@ -116,7 +116,7 @@ impl Node {
 
         if let Err(err) = self.warmup().await {
             error!("Failed to warm up node: {}. Shutting down.", err);
-            self.cancel_token.cancel();
+            self.cancel_token.cancel_on_critical_error();
             return Err(anyhow::anyhow!(err));
         }
 
@@ -202,7 +202,7 @@ impl Node {
                         "Shutdown: Failed to verify proposed batches on startup: {}",
                         err
                     );
-                    self.cancel_token.cancel();
+                    self.cancel_token.cancel_on_critical_error();
                     return Err(anyhow::anyhow!(
                         "Shutdown: Failed to verify proposed batches on startup: {}",
                         err
@@ -228,7 +228,7 @@ impl Node {
                     }
                     Err(err) => {
                         error!("Shutdown: Failed to create verifier: {}", err);
-                        self.cancel_token.cancel();
+                        self.cancel_token.cancel_on_critical_error();
                         return Err(anyhow::anyhow!(
                             "Shutdown: Failed to create verifier on startup: {}",
                             err
@@ -255,7 +255,7 @@ impl Node {
                 .await
             {
                 self.head_verifier.log_error().await;
-                self.cancel_token.cancel();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!(
                     "Unexpected L2 head detected. Restarting node..."
                 ));
@@ -353,7 +353,6 @@ impl Node {
                 error!(
                     "Error: Pending nonce is not equal to latest nonce. Nonce Latest: {nonce_latest}, Nonce Pending: {nonce_pending}"
                 );
-                self.cancel_token.cancel();
                 return Err(Error::msg("Pending nonce is not equal to latest nonce"));
             }
         }
@@ -381,7 +380,7 @@ impl Node {
                     VerificationResult::ReanchorNeeded(block, reason) => {
                         if let Err(err) = self.reanchor_blocks(block, &reason, false).await {
                             error!("Failed to reanchor blocks: {}", err);
-                            self.cancel_token.cancel();
+                            self.cancel_token.cancel_on_critical_error();
                             return Err(err);
                         }
                     }
@@ -453,7 +452,7 @@ impl Node {
                 .await
         {
             self.head_verifier.log_error().await;
-            self.cancel_token.cancel();
+            self.cancel_token.cancel_on_critical_error();
             return Err(anyhow::anyhow!(
                 "Unexpected L2 head after preconfirmation. Restarting node..."
             ));
@@ -496,7 +495,7 @@ impl Node {
                     .await
                 {
                     error!("Failed to reanchor: {}", err);
-                    self.cancel_token.cancel();
+                    self.cancel_token.cancel_on_critical_error();
                     return Err(anyhow::anyhow!("Failed to reanchor: {}", err));
                 }
                 return Ok(true);
@@ -531,7 +530,7 @@ impl Node {
                     // no errors, proceed with preconfirmation
                 }
                 TryRecvError::Disconnected => {
-                    self.cancel_token.cancel();
+                    self.cancel_token.cancel_on_critical_error();
                     return Err(anyhow::anyhow!("Transaction error channel disconnected"));
                 }
             },
@@ -750,7 +749,7 @@ impl Node {
                     Ok(Some(_)) => "Unreachable".to_string(),
                 };
                 error!("{}", err_msg);
-                self.cancel_token.cancel();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!("{}", err_msg));
             }
 

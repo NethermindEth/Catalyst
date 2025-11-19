@@ -1,3 +1,4 @@
+use crate::utils::cancellation_token::CancellationToken;
 use alloy::{
     primitives::{Address, B256},
     providers::{Provider, ProviderBuilder, WsConnect},
@@ -11,7 +12,6 @@ use tokio::{
     sync::mpsc::Sender,
     time::{Duration, sleep},
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 #[allow(clippy::too_many_arguments)]

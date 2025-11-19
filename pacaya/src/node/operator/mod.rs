@@ -8,11 +8,10 @@ use common::{
     l1::slot_clock::{Clock, SlotClock},
     l2::taiko_driver::{StatusProvider, models::TaikoStatus},
     shared::l2_slot_info::L2SlotInfo,
-    utils::types::*,
+    utils::{cancellation_token::CancellationToken, types::*},
 };
 pub use status::Status;
 use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
@@ -243,7 +242,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
                 "Not synchronized Geth driver count: {}, exiting...",
                 self.cancel_counter
             );
-            self.cancel_token.cancel();
+            self.cancel_token.cancel_on_critical_error();
         }
     }
 

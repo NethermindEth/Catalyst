@@ -1,6 +1,6 @@
 use crate::metrics::Metrics;
+use crate::utils::cancellation_token::CancellationToken;
 use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
 use tracing::info;
 use warp::Filter;
 

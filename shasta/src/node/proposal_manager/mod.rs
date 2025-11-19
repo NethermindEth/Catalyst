@@ -15,9 +15,9 @@ use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
     l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
     shared::anchor_block_info::AnchorBlockInfo,
+    utils::cancellation_token::CancellationToken,
 };
 use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::node::proposal_manager::proposal::BondInstructionData;

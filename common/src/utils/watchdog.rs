@@ -1,4 +1,4 @@
-use tokio_util::sync::CancellationToken;
+use crate::utils::cancellation_token::CancellationToken;
 use tracing::error;
 
 pub struct Watchdog {
@@ -27,7 +27,7 @@ impl Watchdog {
                 "Watchdog triggered after {} heartbeats, shutting down...",
                 self.counter
             );
-            self.cancel_token.cancel();
+            self.cancel_token.cancel_on_critical_error();
         }
     }
 }
