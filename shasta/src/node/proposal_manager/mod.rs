@@ -188,7 +188,6 @@ impl BatchManager {
                     ));
                 }
             };
-
         }
 
         Ok(None)

@@ -3,6 +3,7 @@
 
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
+use crate::node::proposal_manager::proposal::BondInstructionData;
 use crate::node::proposal_manager::proposal::Proposal;
 use alloy::{
     consensus::BlockHeader,
@@ -31,7 +32,6 @@ use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use taiko_bindings::anchor::Anchor;
 use tracing::{debug, trace};
-use crate::node::proposal_manager::proposal::BondInstructionData;
 
 // TODO: retrieve from protocol
 const BLOCK_GAS_LIMIT: u32 = 16_000_000;
@@ -252,7 +252,7 @@ impl Taiko {
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         tracing::debug!(
             "Submitting new L2 block to the Taiko driver with {} txs",
-            proposal.get_last_block_tx_len()?
+            tx_list.len()
         );
 
         let timestamp = if is_forced_inclusion {
@@ -262,7 +262,9 @@ impl Taiko {
         };
 
         let anchor_block_params = if is_forced_inclusion {
-            self.l2_execution_layer.get_last_synced_block_params_from_geth().await?
+            self.l2_execution_layer
+                .get_last_synced_block_params_from_geth()
+                .await?
         } else {
             Anchor::BlockParams {
                 anchorBlockNumber: proposal.anchor_block_id.try_into()?,
@@ -285,7 +287,12 @@ impl Taiko {
 
         let anchor_tx = self
             .l2_execution_layer
-            .construct_anchor_tx(proposal.id, l2_slot_info, anchor_block_params, bond_instructions)
+            .construct_anchor_tx(
+                proposal.id,
+                l2_slot_info,
+                anchor_block_params,
+                bond_instructions,
+            )
             .await
             .map_err(|e| {
                 anyhow::anyhow!(

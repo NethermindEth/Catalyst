@@ -81,7 +81,7 @@ pub async fn create_shasta_node(
         handover_window_slots: 8,
         handover_start_buffer_ms: 500,
         l1_height_lag: 5,
-        propose_forced_inclusion: false,
+        propose_forced_inclusion: true,
         simulate_not_submitting_at_the_end_of_epoch: false,
     };
 

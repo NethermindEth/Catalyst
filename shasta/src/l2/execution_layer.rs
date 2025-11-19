@@ -1,5 +1,6 @@
 use crate::l2::bindings::BondManager;
 
+use crate::node::proposal_manager::proposal::BondInstructionData;
 use alloy::{
     consensus::Transaction as AnchorTransaction,
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
@@ -18,7 +19,6 @@ use common::{
 use pacaya::l2::config::TaikoConfig;
 use taiko_bindings::anchor::Anchor;
 use tracing::{debug, info, warn};
-use crate::node::proposal_manager::proposal::BondInstructionData;
 
 use serde_json::Value;
 pub struct L2ExecutionLayer {
@@ -271,7 +271,9 @@ impl L2ExecutionLayer {
             .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
     }
 
-    pub async fn get_last_synced_block_params_from_geth(&self) -> Result<Anchor::BlockParams, Error> {
+    pub async fn get_last_synced_block_params_from_geth(
+        &self,
+    ) -> Result<Anchor::BlockParams, Error> {
         self.get_latest_anchor_transaction_input()
             .await
             .map_err(|e| anyhow::anyhow!("get_last_synced_proposal_id_from_geth: {e}"))
