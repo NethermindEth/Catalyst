@@ -6,6 +6,7 @@ pub struct L2SlotInfo {
     parent_id: u64,
     parent_hash: B256,
     parent_gas_used: u32,
+    parent_timestamp: u64,
 }
 
 impl L2SlotInfo {
@@ -15,6 +16,7 @@ impl L2SlotInfo {
         parent_id: u64,
         parent_hash: B256,
         parent_gas_used: u32,
+        parent_timestamp: u64,
     ) -> Self {
         Self {
             base_fee,
@@ -22,6 +24,7 @@ impl L2SlotInfo {
             parent_id,
             parent_hash,
             parent_gas_used,
+            parent_timestamp,
         }
     }
 
@@ -43,5 +46,9 @@ impl L2SlotInfo {
 
     pub fn parent_gas_used(&self) -> u32 {
         self.parent_gas_used
+    }
+
+    pub fn parent_timestamp(&self) -> u64 {
+        self.parent_timestamp
     }
 }

@@ -8,6 +8,7 @@ use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
     primitives::{Address, B256},
+    rpc::types::Transaction,
 };
 use anyhow::Error;
 use common::{
@@ -30,6 +31,7 @@ use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use taiko_bindings::anchor::Anchor;
 use tracing::{debug, trace};
+use crate::node::proposal_manager::proposal::BondInstructionData;
 
 // TODO: retrieve from protocol
 const BLOCK_GAS_LIMIT: u32 = 16_000_000;
@@ -140,10 +142,10 @@ impl Taiko {
             .await
     }
 
-    pub async fn get_l2_block_id_hash_and_gas_used(
+    pub async fn get_l2_block_info(
         &self,
         block: BlockNumberOrTag,
-    ) -> Result<(u64, B256, u64), Error> {
+    ) -> Result<(u64, B256, u64, u64), Error> {
         let block = self
             .l2_execution_layer
             .common()
@@ -154,6 +156,7 @@ impl Taiko {
             block.header.number(),
             block.header.hash,
             block.header.gas_used(),
+            block.header.timestamp(),
         ))
     }
 
@@ -174,8 +177,8 @@ impl Taiko {
         block: BlockNumberOrTag,
     ) -> Result<L2SlotInfo, Error> {
         let l2_slot_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
-        let (parent_id, parent_hash, parent_gas_used) =
-            self.get_l2_block_id_hash_and_gas_used(block).await?;
+        let (parent_id, parent_hash, parent_gas_used, parent_timestamp) =
+            self.get_l2_block_info(block).await?;
 
         // Safe conversion with overflow check
         let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
@@ -198,6 +201,7 @@ impl Taiko {
             parent_id,
             parent_hash,
             parent_gas_used_u32,
+            parent_timestamp,
         ))
     }
 
@@ -241,6 +245,7 @@ impl Taiko {
         &self,
         proposal: &Proposal,
         l2_slot_info: &L2SlotInfo,
+        tx_list: Vec<Transaction>,
         end_of_sequencing: bool,
         is_forced_inclusion: bool,
         operation_type: OperationType,
@@ -250,11 +255,42 @@ impl Taiko {
             proposal.get_last_block_tx_len()?
         );
 
-        let timestamp = proposal.get_last_block_timestamp()?;
+        let timestamp = if is_forced_inclusion {
+            l2_slot_info.parent_timestamp() + 1
+        } else {
+            proposal.get_last_block_timestamp()?
+        };
+
+        let anchor_block_params = if is_forced_inclusion {
+            Anchor::BlockParams {
+                // TODO get from L1 origin
+                anchorBlockNumber: alloy::primitives::aliases::U48::ZERO,
+                anchorBlockHash: B256::ZERO,
+                anchorStateRoot: B256::ZERO,
+            }
+        } else {
+            Anchor::BlockParams {
+                anchorBlockNumber: proposal.anchor_block_id.try_into()?,
+                anchorBlockHash: proposal.anchor_block_hash,
+                anchorStateRoot: proposal.anchor_state_root,
+            }
+        };
+
+        let use_full_instructions = (is_forced_inclusion && proposal.is_empty())
+            || (!is_forced_inclusion && proposal.has_only_one_common_block());
+
+        let bond_instructions = if use_full_instructions {
+            BondInstructionData::new(
+                proposal.bond_instructions.instructions().clone(),
+                proposal.bond_instructions.hash(),
+            )
+        } else {
+            BondInstructionData::new(vec![], proposal.bond_instructions.hash())
+        };
 
         let anchor_tx = self
             .l2_execution_layer
-            .construct_anchor_tx(proposal, l2_slot_info)
+            .construct_anchor_tx(proposal.id, l2_slot_info, anchor_block_params, bond_instructions)
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -263,7 +299,7 @@ impl Taiko {
                 )
             })?;
         let tx_list = std::iter::once(anchor_tx)
-            .chain(proposal.get_last_block_tx_list_copy()?.into_iter())
+            .chain(tx_list.into_iter())
             .collect::<Vec<_>>();
 
         let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
