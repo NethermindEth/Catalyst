@@ -1,13 +1,12 @@
-use alloy::dyn_abi::SolType;
 use common::chain_monitor::ChainMonitor;
-use taiko_bindings::codec_optimized::IInbox::ProposedEventPayload;
 use taiko_bindings::i_inbox::IInbox;
-use tracing::info;
+use taiko_protocol::shasta::codec_optimized;
+use tracing::{info, warn};
 
 pub type ShastaChainMonitor = ChainMonitor<IInbox::Proposed>;
 
 pub fn print_proposed_info(event: &IInbox::Proposed) {
-    match <ProposedEventPayload as SolType>::abi_decode(&event.data) {
+    match codec_optimized::decode_proposed_event(&event.data) {
         Ok(payload) => {
             info!(
                 "Proposed event → id = {}, proposer = {}",
@@ -15,7 +14,7 @@ pub fn print_proposed_info(event: &IInbox::Proposed) {
             );
         }
         Err(e) => {
-            info!("Failed to decode Proposed event data: {:?}", e);
+            warn!("Failed to decode Proposed event data: {:?}", e);
         }
     }
 }
