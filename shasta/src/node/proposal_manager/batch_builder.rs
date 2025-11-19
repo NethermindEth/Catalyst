@@ -347,7 +347,7 @@ impl BatchBuilder {
         proposal.is_some_and(|p| p.num_forced_inclusion > 0)
     }
 
-    pub fn add_forced_inclusion(&mut self) -> Result<(), Error> {
+    pub fn inc_forced_inclusion(&mut self) -> Result<(), Error> {
         if let Some(proposal) = self.core.current_batch.as_mut() {
             proposal.num_forced_inclusion += 1;
         } else {

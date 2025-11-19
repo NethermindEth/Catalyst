@@ -153,7 +153,7 @@ impl BatchManager {
                 .get_current_proposal()
                 .ok_or_else(|| anyhow::anyhow!("No current proposal available"))?;
 
-            let forced_inclusion_block_response = match self
+            match self
                 .taiko
                 .advance_head_to_new_l2_block(
                     proposal,
@@ -165,12 +165,15 @@ impl BatchManager {
                 )
                 .await
             {
-                Ok(preconfed_block) => {
+                Ok(fi_preconfed_block) => {
+                    // set fi to batch builder
+                    self.batch_builder.inc_forced_inclusion()?;
+
                     debug!(
                         "Preconfirmed forced inclusion L2 block: {:?}",
-                        preconfed_block
+                        fi_preconfed_block
                     );
-                    preconfed_block
+                    return Ok(fi_preconfed_block);
                 }
                 Err(err) => {
                     error!(
@@ -185,10 +188,7 @@ impl BatchManager {
                     ));
                 }
             };
-            // set fi to batch builder
-            self.batch_builder.add_forced_inclusion()?;
 
-            return Ok(forced_inclusion_block_response);
         }
 
         Ok(None)
