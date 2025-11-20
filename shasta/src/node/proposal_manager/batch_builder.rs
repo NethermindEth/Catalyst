@@ -122,7 +122,14 @@ impl BatchBuilder {
         }
 
         if is_forced_inclusion {
-            if !self.core.current_batch.as_ref().unwrap().l2_blocks.is_empty() {
+            if !self
+                .core
+                .current_batch
+                .as_ref()
+                .unwrap()
+                .l2_blocks
+                .is_empty()
+            {
                 return Err(anyhow::anyhow!(
                     "recover_from: Cannot add forced inclusion L2 block to non-empty proposal"
                 ));
