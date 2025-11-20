@@ -72,41 +72,15 @@ impl BatchBuilder {
         self.core.current_batch = None;
     }
 
-    /// Returns true if the block was added to the batch, false otherwise.
-    pub fn add_l2_block_and_get_current_anchor_block_id(
-        &mut self,
-        l2_block: L2Block,
-    ) -> Result<u64, Error> {
-        if let Some(current_proposal) = self.core.current_batch.as_mut() {
-            *current_proposal.total_bytes_mut() += l2_block.prebuilt_tx_list.bytes_length;
-            current_proposal.l2_blocks_mut().push(l2_block);
-            debug!(
-                "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
-                current_proposal.l2_blocks().len(),
-                current_proposal.total_bytes()
-            );
-            Ok(current_proposal.anchor_block_id())
-        } else {
-            Err(anyhow::anyhow!("No current batch"))
-        }
-    }
-
     pub fn add_l2_block_and_get_current_proposal(
         &mut self,
         l2_block: L2Block,
     ) -> Result<&Proposal, Error> {
-        if let Some(current_proposal) = self.core.current_batch.as_mut() {
-            *current_proposal.total_bytes_mut() += l2_block.prebuilt_tx_list.bytes_length;
-            current_proposal.l2_blocks_mut().push(l2_block);
-            debug!(
-                "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
-                current_proposal.l2_blocks().len(),
-                current_proposal.total_bytes()
-            );
-            Ok(current_proposal)
-        } else {
-            Err(anyhow::anyhow!("No current batch"))
-        }
+        self.core.add_l2_block(l2_block)?;
+        self.core
+            .current_batch
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("No current proposal after adding L2 block"))
     }
 
     pub fn remove_last_l2_block(&mut self) {
@@ -160,7 +134,7 @@ impl BatchBuilder {
         // But we should verify that it fit N blob data size
         // Otherwise we should do a reorg
         // TODO align on blob count with all teams
-        self.add_l2_block_and_get_current_anchor_block_id(l2_block)?;
+        self.add_l2_block_and_get_current_proposal(l2_block)?;
 
         Ok(())
     }

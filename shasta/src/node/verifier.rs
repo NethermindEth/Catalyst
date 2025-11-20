@@ -5,11 +5,11 @@ use crate::{
 };
 use alloy::primitives::B256;
 use anyhow::Error;
-use common::l1::ethereum_l1::EthereumL1;
-use common::utils::types::*;
+use common::{
+    l1::ethereum_l1::EthereumL1, utils::cancellation_token::CancellationToken, utils::types::*,
+};
 use std::{cmp::Ordering, sync::Arc};
 use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 pub enum VerificationResult {

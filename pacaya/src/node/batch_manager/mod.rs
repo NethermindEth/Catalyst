@@ -16,13 +16,13 @@ use crate::{
 use alloy::{consensus::BlockHeader, consensus::Transaction, primitives::Address};
 use anyhow::Error;
 use batch_builder::BatchBuilder;
-use common::batch_builder::BatchBuilderConfig;
 use common::{
+    batch_builder::BatchBuilderConfig,
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
     l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
+    utils::cancellation_token::CancellationToken,
 };
 use std::sync::Arc;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 pub struct BatchManager {
@@ -472,7 +472,7 @@ impl BatchManager {
                 // but we didn't set it yet. And at the beginning of the function we checked if
                 // the forced inclusion is empty. This is a bug in the code logic
                 error!("Failed to set forced inclusion to batch");
-                self.cancel_token.cancel();
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!("Failed to set forced inclusion to batch"));
             }
             return Ok(forced_inclusion_block_response);

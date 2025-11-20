@@ -3,11 +3,11 @@ use common::{
     fork_info::{Fork, ForkInfo},
     metrics::{self, Metrics},
     shared::execution_layer::ExecutionLayer,
+    utils::cancellation_token::CancellationToken,
 };
 use pacaya::create_pacaya_node;
 use std::sync::Arc;
 use tokio::signal::unix::{SignalKind, signal};
-use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 enum ExecutionStopped {
@@ -65,15 +65,14 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     let fork_info = ForkInfo::from_config((&config).into(), l2_height)
         .map_err(|e| anyhow::anyhow!("Failed to get fork info: {}", e))?;
 
-    let cancel_token = CancellationToken::new();
-
     let metrics = Arc::new(Metrics::new());
+    let cancel_token = CancellationToken::new(metrics.clone());
 
     // Set up panic hook to cancel token on panic
     let panic_cancel_token = cancel_token.clone();
     std::panic::set_hook(Box::new(move |panic_info| {
         error!("Panic occurred: {:?}", panic_info);
-        panic_cancel_token.cancel();
+        panic_cancel_token.cancel_on_critical_error();
         info!("Cancellation token triggered, initiating shutdown...");
     }));
 

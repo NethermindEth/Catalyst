@@ -21,12 +21,13 @@ pub struct BatchBuilderCore<B: BatchLike, F> {
     pub config: BatchBuilderConfig,
     pub slot_clock: Arc<SlotClock>,
     pub metrics: Arc<Metrics>,
+    last_l2_block_timestamp: u64,
 }
 
 impl<B: BatchLike, F> Drop for BatchBuilderCore<B, F> {
     fn drop(&mut self) {
         debug!(
-            "BatchBuilder dropped! current_proposal is none: {}, batches_to_send len: {}",
+            "BatchBuilder dropped! current_batch is none: {}, batches_to_send len: {}",
             self.current_batch.is_none(),
             self.batches_to_send.len()
         );
@@ -48,6 +49,7 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
             config,
             slot_clock,
             metrics,
+            last_l2_block_timestamp: 0,
         }
     }
 
@@ -140,15 +142,9 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
             return true;
         }
 
-        if let Some(batch) = self.current_batch.as_ref()
-            && let Some(last_block) = batch.l2_blocks().last()
-        {
-            let number_of_l2_slots = (current_l2_slot_timestamp - last_block.timestamp_sec) * 1000
-                / self.slot_clock.get_preconf_heartbeat_ms();
-            return number_of_l2_slots > self.config.preconf_max_skipped_l2_slots;
-        }
-
-        true
+        let number_of_l2_slots = (current_l2_slot_timestamp - self.last_l2_block_timestamp) * 1000
+            / self.slot_clock.get_preconf_heartbeat_ms();
+        number_of_l2_slots > self.config.preconf_max_skipped_l2_slots
     }
 
     /// Checks if an empty block is required to prevent time shift overflow.
@@ -274,6 +270,7 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
             config: self.config.clone(),
             slot_clock: self.slot_clock.clone(),
             metrics: self.metrics.clone(),
+            last_l2_block_timestamp: 0,
         }
     }
 
@@ -283,6 +280,24 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
         {
             self.batches_to_send
                 .push_back((self.current_forced_inclusion.take(), batch.clone()));
+        }
+    }
+
+    pub fn add_l2_block(&mut self, l2_block: L2Block) -> Result<(), anyhow::Error> {
+        if let Some(current_batch) = self.current_batch.as_mut() {
+            *current_batch.total_bytes_mut() += l2_block.prebuilt_tx_list.bytes_length;
+            self.last_l2_block_timestamp = l2_block.timestamp_sec;
+            current_batch.l2_blocks_mut().push(l2_block);
+            debug!(
+                "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
+                current_batch.l2_blocks().len(),
+                current_batch.total_bytes()
+            );
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "No current batch while adding L2 block to batch builder core"
+            ))
         }
     }
 }
@@ -375,15 +390,16 @@ mod tests {
             slot_clock,
             Arc::new(Metrics::new()),
         );
+        core.last_l2_block_timestamp = 998;
 
         // Test case 1: Should create new block when pending transactions >= preconf_min_txs
         assert!(core.should_new_block_be_created(5, 1000, false));
         assert!(core.should_new_block_be_created(10, 1000, false));
 
-        // Test case 2: Should create new block when pending transactions < preconf_min_txs and no current batch
-        assert!(core.should_new_block_be_created(3, 1000, false));
+        // Test case 2: Should not create new block when pending transactions < preconf_min_txs and no current batch
+        assert!(!core.should_new_block_be_created(3, 1000, false));
 
-        // Test case 3: Should create new block when pending transactions < preconf_min_txs and current batch exists but no blocks
+        // Test case 3: Should not create new block when pending transactions < preconf_min_txs and current batch exists but no blocks
         let empty_batch = TestBatch {
             l2_blocks: vec![],
             total_bytes: 0,
@@ -391,22 +407,17 @@ mod tests {
             anchor_block_timestamp_sec: 0,
         };
         core.current_batch = Some(empty_batch);
-        assert!(core.should_new_block_be_created(3, 1000, false));
+        assert!(!core.should_new_block_be_created(3, 1000, false));
 
-        let batch_with_blocks = TestBatch {
-            l2_blocks: vec![L2Block {
-                prebuilt_tx_list: PreBuiltTxList {
-                    tx_list: vec![],
-                    estimated_gas_used: 0,
-                    bytes_length: 0,
-                },
-                timestamp_sec: 1000,
-            }],
-            total_bytes: 0,
-            anchor_block_id: 0,
-            anchor_block_timestamp_sec: 0,
+        let l2_block = L2Block {
+            prebuilt_tx_list: PreBuiltTxList {
+                tx_list: vec![],
+                estimated_gas_used: 0,
+                bytes_length: 0,
+            },
+            timestamp_sec: 1000,
         };
-        core.current_batch = Some(batch_with_blocks);
+        core.add_l2_block(l2_block).unwrap();
 
         // Test case 4: Should create new block when skipped slots > preconf_max_skipped_l2_slots
         assert!(core.should_new_block_be_created(0, 1008, false));

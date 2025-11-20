@@ -4,10 +4,10 @@ use common::{
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     metrics::Metrics,
     utils as common_utils,
+    utils::cancellation_token::CancellationToken,
 };
 use std::sync::Arc;
 use tokio::{sync::mpsc::Receiver, time::Duration};
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
 pub mod config;

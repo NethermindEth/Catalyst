@@ -21,6 +21,7 @@ impl EventIndexer {
         let config = ShastaEventIndexerConfig {
             l1_subscription_source: SubscriptionSource::Ws(Url::from_str(l1_ws_rpc_url.as_str())?),
             inbox_address: inbox_contract_address,
+            use_local_codec_decoder: true,
         };
 
         let indexer = ShastaEventIndexer::new(config).await?;
