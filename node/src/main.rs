@@ -24,9 +24,10 @@ async fn main() -> Result<(), Error> {
     info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
 
     let mut iteration = 0;
+    let metrics = Arc::new(Metrics::new());
     loop {
         iteration += 1;
-        match run_node(iteration).await {
+        match run_node(iteration, metrics.clone()).await {
             Ok(ExecutionStopped::CloseApp) => {
                 info!("👋 ExecutionStopped::CloseApp , shutting down...");
                 break;
@@ -52,7 +53,7 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
-async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
+async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStopped, Error> {
     info!("Running node iteration: {iteration}");
 
     let config = common::config::Config::read_env_variables();
@@ -65,7 +66,6 @@ async fn run_node(iteration: u64) -> Result<ExecutionStopped, Error> {
     let fork_info = ForkInfo::from_config((&config).into(), l2_height)
         .map_err(|e| anyhow::anyhow!("Failed to get fork info: {}", e))?;
 
-    let metrics = Arc::new(Metrics::new());
     let cancel_token = CancellationToken::new(metrics.clone());
 
     // Set up panic hook to cancel token on panic
