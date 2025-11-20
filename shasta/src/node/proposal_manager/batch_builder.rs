@@ -95,6 +95,7 @@ impl BatchBuilder {
         bond_instructions: BondInstructionData,
         tx_list: Vec<alloy::rpc::types::Transaction>,
         l2_block_timestamp_sec: u64,
+        is_forced_inclusion: bool,
     ) -> Result<(), Error> {
         // We have a new proposal when proposal ID differs
         // Otherwise we continue with the current proposal
@@ -120,22 +121,32 @@ impl BatchBuilder {
             });
         }
 
-        let bytes_length = crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
-        let l2_block = L2Block::new_from(
-            crate::shared::l2_tx_lists::PreBuiltTxList {
-                tx_list,
-                estimated_gas_used: 0,
-                bytes_length,
-            },
-            l2_block_timestamp_sec,
-        );
+        if is_forced_inclusion {
+            if !self.core.current_batch.as_ref().unwrap().l2_blocks.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "recover_from: Cannot add forced inclusion L2 block to non-empty proposal"
+                ));
+            }
 
-        // TODO we add block to the current proposal.
-        // But we should verify that it fit N blob data size
-        // Otherwise we should do a reorg
-        // TODO align on blob count with all teams
-        self.add_l2_block_and_get_current_proposal(l2_block)?;
+            self.inc_forced_inclusion()?;
+        } else {
+            let bytes_length =
+                crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
+            let l2_block = L2Block::new_from(
+                crate::shared::l2_tx_lists::PreBuiltTxList {
+                    tx_list,
+                    estimated_gas_used: 0,
+                    bytes_length,
+                },
+                l2_block_timestamp_sec,
+            );
 
+            // TODO we add block to the current proposal.
+            // But we should verify that it fit N blob data size
+            // Otherwise we should do a reorg
+            // TODO align on blob count with all teams
+            self.add_l2_block_and_get_current_proposal(l2_block)?;
+        }
         Ok(())
     }
 
