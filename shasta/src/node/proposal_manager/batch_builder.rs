@@ -87,6 +87,7 @@ impl BatchBuilder {
         self.core.remove_last_l2_block();
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn recover_from(
         &mut self,
         proposal_id: u64,
@@ -122,13 +123,8 @@ impl BatchBuilder {
         }
 
         if is_forced_inclusion {
-            if !self
-                .core
-                .current_batch
-                .as_ref()
-                .unwrap()
-                .l2_blocks
-                .is_empty()
+            if let Some(batch) = self.core.current_batch.as_ref()
+                && !batch.l2_blocks.is_empty()
             {
                 return Err(anyhow::anyhow!(
                     "recover_from: Cannot add forced inclusion L2 block to non-empty proposal"
@@ -137,6 +133,15 @@ impl BatchBuilder {
 
             self.inc_forced_inclusion()?;
         } else {
+            if let Some(batch) = self.core.current_batch.as_mut()
+                && batch.anchor_block_id < anchor_info.id()
+            {
+                batch.anchor_block_id = anchor_info.id();
+                batch.anchor_block_timestamp_sec = anchor_info.timestamp_sec();
+                batch.anchor_block_hash = anchor_info.hash();
+                batch.anchor_state_root = anchor_info.state_root();
+            }
+
             let bytes_length =
                 crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
             let l2_block = L2Block::new_from(

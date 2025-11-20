@@ -479,11 +479,13 @@ impl BatchManager {
         // TODO imporvee output
         let proposal_id = anchor_tx_data._proposalParams.proposalId.to::<u64>();
         debug!(
-            "Recovering from L2 block {}, proposal_id: {} transactions: {} is_forced_inclusion: {}",
+            "Recovering from L2 block {}, proposal_id: {} transactions: {} is_forced_inclusion: {}, timestamp {}, anchor_block_number {}",
             block_height,
             proposal_id,
             txs.len(),
-            is_forced_inclusion
+            is_forced_inclusion,
+            block.header.timestamp(),
+            anchor_info.id(),
         );
 
         let txs = txs.to_vec();
