@@ -1,5 +1,6 @@
 use crate::l2::bindings::BondManager;
 
+use crate::node::proposal_manager::proposal::BondInstructionData;
 use alloy::{
     consensus::Transaction as AnchorTransaction,
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
@@ -20,9 +21,6 @@ use taiko_bindings::anchor::Anchor;
 use tracing::{debug, info, warn};
 
 use serde_json::Value;
-
-use crate::node::proposal_manager::proposal::Proposal;
-
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
@@ -69,8 +67,10 @@ impl L2ExecutionLayer {
 
     pub async fn construct_anchor_tx(
         &self,
-        proposal: &Proposal,
+        proposal_id: u64,
         l2_slot_info: &L2SlotInfo,
+        anchor_block_params: Anchor::BlockParams,
+        bond_instructions: BondInstructionData,
     ) -> Result<Transaction, Error> {
         debug!(
             "Constructing anchor transaction for block number: {}",
@@ -90,21 +90,13 @@ impl L2ExecutionLayer {
             .shasta_anchor
             .anchorV4(
                 Anchor::ProposalParams {
-                    proposalId: proposal.id.try_into()?,
+                    proposalId: proposal_id.try_into()?,
                     proposer: self.config.signer.get_address(),
                     proverAuth: Bytes::new(), // no prover designation for now
-                    bondInstructionsHash: proposal.bond_instructions.hash(),
-                    bondInstructions: if proposal.has_only_one_block() {
-                        proposal.bond_instructions.instructions().clone()
-                    } else {
-                        Vec::new()
-                    },
+                    bondInstructionsHash: bond_instructions.hash(),
+                    bondInstructions: bond_instructions.instructions_mut(),
                 },
-                Anchor::BlockParams {
-                    anchorBlockNumber: proposal.anchor_block_id.try_into()?,
-                    anchorBlockHash: proposal.anchor_block_hash,
-                    anchorStateRoot: proposal.anchor_state_root,
-                },
+                anchor_block_params,
             )
             .gas(1_000_000) // value expected by Taiko
             .max_fee_per_gas(u128::from(l2_slot_info.base_fee())) // value expected by Taiko
@@ -277,6 +269,22 @@ impl L2ExecutionLayer {
             .get("isForcedInclusion")
             .and_then(Value::as_bool)
             .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
+    }
+
+    pub async fn get_last_synced_block_params_from_geth(
+        &self,
+    ) -> Result<Anchor::BlockParams, Error> {
+        self.get_latest_anchor_transaction_input()
+            .await
+            .map_err(|e| anyhow::anyhow!("get_last_synced_proposal_id_from_geth: {e}"))
+            .and_then(|input| Self::decode_block_params_from_tx_data(&input))
+    }
+
+    pub fn decode_block_params_from_tx_data(data: &[u8]) -> Result<Anchor::BlockParams, Error> {
+        let tx_data =
+            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+                .map_err(|e| anyhow::anyhow!("Failed to decode proposal id from tx data: {}", e))?;
+        Ok(tx_data._blockParams)
     }
 }
 

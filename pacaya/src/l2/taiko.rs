@@ -132,10 +132,10 @@ impl Taiko {
             .await
     }
 
-    pub async fn get_l2_block_id_hash_and_gas_used(
+    pub async fn get_l2_block_info(
         &self,
         block: BlockNumberOrTag,
-    ) -> Result<(u64, B256, u64), Error> {
+    ) -> Result<(u64, B256, u64, u64), Error> {
         let block = self
             .l2_execution_layer
             .common()
@@ -146,6 +146,7 @@ impl Taiko {
             block.header.number(),
             block.header.hash,
             block.header.gas_used(),
+            block.header.timestamp(),
         ))
     }
 
@@ -172,8 +173,8 @@ impl Taiko {
         block: BlockNumberOrTag,
     ) -> Result<L2SlotInfo, Error> {
         let l2_slot_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
-        let (parent_id, parent_hash, parent_gas_used) =
-            self.get_l2_block_id_hash_and_gas_used(block).await?;
+        let (parent_id, parent_hash, parent_gas_used, parent_timestamp) =
+            self.get_l2_block_info(block).await?;
 
         // Safe conversion with overflow check
         let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
@@ -205,6 +206,7 @@ impl Taiko {
             parent_id,
             parent_hash,
             parent_gas_used_u32,
+            parent_timestamp,
         ))
     }
 

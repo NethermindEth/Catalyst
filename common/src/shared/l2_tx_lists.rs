@@ -84,7 +84,13 @@ pub fn uncompress_and_decode(data: &[u8]) -> Result<Vec<Transaction>, Error> {
         .map_err(|e| anyhow::anyhow!("Failed to decode RLP: {}", e))?;
 
     // Convert to transactions
-    let txs: Result<Vec<_>, _> = tx_list
+    convert_tx_envelopes_to_transactions(tx_list)
+}
+
+pub fn convert_tx_envelopes_to_transactions(
+    tx_envelopes: impl IntoIterator<Item = TxEnvelope>,
+) -> Result<Vec<Transaction>, Error> {
+    tx_envelopes
         .into_iter()
         .map(|tx| {
             let signer = tx
@@ -98,9 +104,7 @@ pub fn uncompress_and_decode(data: &[u8]) -> Result<Vec<Transaction>, Error> {
                 effective_gas_price: None,
             })
         })
-        .collect();
-
-    txs
+        .collect()
 }
 
 pub fn rlp_encode(tx_list: &[Transaction]) -> Vec<u8> {

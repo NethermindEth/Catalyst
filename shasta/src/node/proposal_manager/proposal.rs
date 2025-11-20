@@ -24,6 +24,10 @@ impl BondInstructionData {
         &self.instructions
     }
 
+    pub fn instructions_mut(self) -> Vec<BondInstruction> {
+        self.instructions
+    }
+
     pub fn hash(&self) -> B256 {
         self.hash
     }
@@ -95,8 +99,12 @@ impl Proposal {
             .ok_or_else(|| anyhow::anyhow!("No L2 blocks in proposal"))
     }
 
-    pub fn has_only_one_block(&self) -> bool {
-        self.l2_blocks.len() == 1
+    pub fn has_only_one_common_block(&self) -> bool {
+        self.num_forced_inclusion == 0 && self.l2_blocks.len() == 1
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.num_forced_inclusion == 0 && self.l2_blocks.is_empty()
     }
 
     pub fn get_last_block_tx_list_copy(

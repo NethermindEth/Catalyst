@@ -315,4 +315,24 @@ impl BatchBuilder {
         self.core
             .try_creating_l2_block(pending_tx_list, l2_slot_timestamp, end_of_sequencing)
     }
+
+    pub fn has_current_forced_inclusion(&self) -> bool {
+        let proposal = self.core.current_batch();
+        proposal.is_some_and(|p| p.num_forced_inclusion > 0)
+    }
+
+    pub fn inc_forced_inclusion(&mut self) -> Result<(), Error> {
+        if let Some(proposal) = self.core.current_batch.as_mut() {
+            proposal.num_forced_inclusion += 1;
+        } else {
+            return Err(anyhow::anyhow!(
+                "No current batch to add forced inclusion to"
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn get_current_proposal(&self) -> Option<&Proposal> {
+        self.core.current_batch.as_ref()
+    }
 }
