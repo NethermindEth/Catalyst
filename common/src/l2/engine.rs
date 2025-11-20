@@ -86,6 +86,9 @@ impl L2Engine {
         if result != Value::Null {
             let mut tx_lists = l2_tx_lists::decompose_pending_lists_json_from_geth(result)
                 .map_err(|e| anyhow::anyhow!("Failed to decompose L2 tx lists: {}", e))?;
+            if tx_lists.is_empty() {
+                return Ok(None);
+            }
             // ignoring rest of tx lists, only one list per L2 block is processed
             Ok(Some(tx_lists.remove(0)))
         } else {
