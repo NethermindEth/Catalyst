@@ -84,10 +84,15 @@ impl L2Engine {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get L2 tx lists: {}", e))?;
         if result != Value::Null {
-            let mut tx_lists = l2_tx_lists::decompose_pending_lists_json_from_geth(result)
+            let tx_lists = l2_tx_lists::decompose_pending_lists_json_from_geth(result)
                 .map_err(|e| anyhow::anyhow!("Failed to decompose L2 tx lists: {}", e))?;
+
             // ignoring rest of tx lists, only one list per L2 block is processed
-            Ok(Some(tx_lists.remove(0)))
+            let first = tx_lists.into_iter().next();
+            match first {
+                Some(list) => Ok(Some(list)),
+                _ => Ok(None),
+            }
         } else {
             Ok(None)
         }
