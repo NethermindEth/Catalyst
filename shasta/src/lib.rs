@@ -14,7 +14,6 @@ use anyhow::Error;
 use common::{l1::traits::PreconferProvider, metrics, shared};
 
 use common::{
-    batch_builder::BatchBuilderConfig,
     config::Config,
     config::ConfigTrait,
     fork_info::ForkInfo,
@@ -28,6 +27,7 @@ use node::Node;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::info;
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 
 pub async fn create_shasta_node(
     config: Config,

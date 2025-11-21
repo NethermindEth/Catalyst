@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::metrics::Metrics;
 use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
-use common::batch_builder::BatchBuilderConfig;
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use common::l1::traits::PreconferProvider;
 use common::shared::head_verifier::HeadVerifier;
 use proposal_manager::BatchManager;

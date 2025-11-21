@@ -136,7 +136,7 @@ pub async fn create_pacaya_node(
             simulate_not_submitting_at_the_end_of_epoch: pacaya_config
                 .simulate_not_submitting_at_the_end_of_epoch,
         },
-        common::batch_builder::BatchBuilderConfig {
+        node::batch_manager::config::BatchBuilderConfig {
             max_bytes_size_of_batch: config.max_bytes_size_of_batch,
             max_blocks_per_batch,
             l1_slot_duration_sec: config.l1_slot_duration_sec,

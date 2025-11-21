@@ -1,7 +1,6 @@
 use crate::shared::l2_block::L2Block;
 use crate::shared::l2_tx_lists::encode_and_compress;
 use alloy::primitives::Address;
-use common::batch_builder::BatchLike;
 use std::time::Instant;
 use tracing::{debug, warn};
 
@@ -34,36 +33,6 @@ impl Batch {
 
         let duration = start.elapsed();
         debug!("Batch compression completed in {} ms", duration.as_millis());
-    }
-}
-
-impl BatchLike for Batch {
-    fn l2_blocks_mut(&mut self) -> &mut Vec<L2Block> {
-        &mut self.l2_blocks
-    }
-
-    fn l2_blocks(&self) -> &Vec<L2Block> {
-        &self.l2_blocks
-    }
-
-    fn total_bytes_mut(&mut self) -> &mut u64 {
-        &mut self.total_bytes
-    }
-
-    fn total_bytes(&self) -> u64 {
-        self.total_bytes
-    }
-
-    fn anchor_block_id(&self) -> u64 {
-        self.anchor_block_id
-    }
-
-    fn anchor_block_timestamp_sec(&self) -> u64 {
-        self.anchor_block_timestamp_sec
-    }
-
-    fn compress(&mut self) {
-        Batch::compress(self);
     }
 }
 
