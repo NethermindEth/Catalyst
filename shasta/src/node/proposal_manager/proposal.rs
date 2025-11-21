@@ -1,10 +1,11 @@
-use crate::shared::l2_block::L2Block;
+use crate::shared::l2_block_v2::L2BlockV2;
 use alloy::primitives::{Address, B256, Bytes};
 use std::collections::VecDeque;
 use std::time::Instant;
 use taiko_bindings::anchor::LibBonds::BondInstruction;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
+use crate::shared::l2_tx_lists::PreBuiltTxList;
 
 pub type Proposals = VecDeque<Proposal>;
 
@@ -35,7 +36,7 @@ impl BondInstructionData {
 #[derive(Default, Clone)]
 pub struct Proposal {
     pub id: u64,
-    pub l2_blocks: Vec<L2Block>,
+    pub l2_blocks: Vec<L2BlockV2>,
     pub total_bytes: u64,
     pub coinbase: Address,
     pub anchor_block_id: u64,
@@ -55,9 +56,9 @@ impl Proposal {
             // Build the block manifests.
             block_manifests.push(BlockManifest {
                 timestamp: l2_block.timestamp_sec,
-                coinbase: self.coinbase,
-                anchor_block_number: self.anchor_block_id,
-                gas_limit: 0,
+                coinbase: l2_block.coinbase,
+                anchor_block_number: l2_block.anchor_block_number,
+                gas_limit: l2_block.gas_limit,
                 transactions: l2_block
                     .prebuilt_tx_list
                     .tx_list
@@ -124,6 +125,18 @@ impl Proposal {
 
     pub fn total_bytes(&self) -> u64 {
         self.total_bytes
+    }
+
+    pub fn add_l2_block(&mut self, tx_list: PreBuiltTxList, timestamp_sec: u64, gas_limit: u64) {
+        self.total_bytes += tx_list.bytes_length;
+        let l2_block = L2BlockV2::new_from(
+            tx_list,
+            timestamp_sec,
+            self.coinbase,
+            self.anchor_block_id,
+            gas_limit,
+        );
+        self.l2_blocks.push(l2_block);
     }
 }
 

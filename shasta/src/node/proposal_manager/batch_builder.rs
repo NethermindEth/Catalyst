@@ -61,7 +61,12 @@ impl BatchBuilder {
                     // second compression, compressing the batch with the new L2 block
                     // we can tolerate the processing overhead as it's a very rare case
                     let mut batch_clone = batch.clone();
-                    batch_clone.l2_blocks.push(l2_block.clone());
+                    batch_clone.add_l2_block(
+                        l2_block.prebuilt_tx_list.clone(),
+                        l2_block.timestamp_sec,
+                        15_000_000, // TODO gas limit
+                        // We should preconfirm with one value and send to L1 with another
+                    );
                     batch_clone.compress();
                     new_total_bytes = batch_clone.total_bytes;
                     debug!(
@@ -114,8 +119,12 @@ impl BatchBuilder {
         l2_block: L2Block,
     ) -> Result<&Proposal, Error> {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
-            current_proposal.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
-            current_proposal.l2_blocks.push(l2_block);
+            current_proposal.add_l2_block(
+                l2_block.prebuilt_tx_list,
+                l2_block.timestamp_sec,
+                15_000_000, // TODO gas limit
+                // We should preconfirm with one value and send to L1 with another
+            );
             debug!(
                 "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
                 current_proposal.l2_blocks.len(),
@@ -287,8 +296,6 @@ impl BatchBuilder {
                 // TODO send a Proosal to function
                 .send_batch_to_l1(
                     batch.l2_blocks.clone(),
-                    batch.anchor_block_id,
-                    batch.coinbase,
                     batch.num_forced_inclusion,
                 )
                 .await
