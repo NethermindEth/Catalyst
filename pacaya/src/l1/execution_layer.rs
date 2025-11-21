@@ -362,6 +362,24 @@ impl ExecutionLayer {
         Ok(operator)
     }
 
+    pub async fn check_if_operator_is_in_whitelist(&self) -> Result<bool, Error> {
+        let contract = PreconfWhitelist::new(
+            self.config.contract_addresses.preconf_whitelist,
+            &self.provider,
+        );
+        let operators = contract
+            .operators(self.preconfer_address)
+            .call()
+            .await
+            .map_err(|e| {
+                Error::msg(format!(
+                    "Failed to get operators: {}, contract: {:?}",
+                    e, self.config.contract_addresses.preconf_whitelist
+                ))
+            })?;
+        Ok(operators.activeSince > 0)
+    }
+
     pub async fn get_forced_inclusion_head(&self) -> Result<u64, Error> {
         let contract = IForcedInclusionStore::new(
             self.config.contract_addresses.forced_inclusion_store,
