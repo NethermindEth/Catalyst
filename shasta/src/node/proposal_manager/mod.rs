@@ -123,7 +123,6 @@ impl BatchManager {
         Ok(result)
     }
 
-    // TODO handle forced inclusion properly
     async fn add_new_l2_block_with_forced_inclusion_when_needed(
         &mut self,
         l2_slot_info: &L2SlotInfo,
@@ -475,20 +474,26 @@ impl BatchManager {
         )
         .await?;
 
+        let is_forced_inclusion = self.is_forced_inclusion(block_height).await?;
+
         // TODO imporvee output
+        let proposal_id = anchor_tx_data._proposalParams.proposalId.to::<u64>();
         debug!(
-            "Recovering from L2 block {}, transactions {}",
+            "Recovering from L2 block {}, proposal_id: {} transactions: {} is_forced_inclusion: {}, timestamp {}, anchor_block_number {}",
             block_height,
-            txs.len()
+            proposal_id,
+            txs.len(),
+            is_forced_inclusion,
+            block.header.timestamp(),
+            anchor_info.id(),
         );
 
         let txs = txs.to_vec();
-        // TODO handle forced inclusion properly
 
         // TODO validate block params
         self.batch_builder
             .recover_from(
-                anchor_tx_data._proposalParams.proposalId.to::<u64>(),
+                proposal_id,
                 anchor_info,
                 coinbase,
                 BondInstructionData::new(
@@ -497,6 +502,7 @@ impl BatchManager {
                 ),
                 txs,
                 block.header.timestamp(),
+                is_forced_inclusion,
             )
             .await?;
         Ok(())
