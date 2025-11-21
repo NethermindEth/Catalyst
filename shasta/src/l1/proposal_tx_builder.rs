@@ -9,7 +9,7 @@ use alloy::{
     rpc::types::TransactionRequest,
 };
 use anyhow::Error;
-use common::shared::l2_block::L2Block;
+use common::shared::l2_block_v2::L2BlockV2;
 use std::sync::Arc;
 use taiko_bindings::codec_optimized::{
     CodecOptimized::CodecOptimizedInstance, IInbox::ProposeInput, LibBlobs::BlobReference,
@@ -40,9 +40,7 @@ impl ProposalTxBuilder {
     #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_tx(
         &self,
-        l2_blocks: Vec<L2Block>,
-        anchor_block_number: u64,
-        coinbase: Address,
+        l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
         prover_auth_bytes: Bytes,
@@ -52,8 +50,6 @@ impl ProposalTxBuilder {
         let tx_blob = self
             .build_propose_blob(
                 l2_blocks,
-                anchor_block_number,
-                coinbase,
                 from,
                 to,
                 prover_auth_bytes,
@@ -100,9 +96,7 @@ impl ProposalTxBuilder {
     #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_blob(
         &self,
-        l2_blocks: Vec<L2Block>,
-        anchor_block_number: u64,
-        coinbase: Address,
+        l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
         prover_auth_bytes: Bytes,
@@ -126,9 +120,10 @@ impl ProposalTxBuilder {
             // Build the block manifests.
             block_manifests.push(BlockManifest {
                 timestamp: l2_block.timestamp_sec,
-                coinbase,
-                anchor_block_number,
-                gas_limit: 15_000_000, // TODO calculate it and store inside l2_block
+                coinbase: l2_block.coinbase,
+                anchor_block_number: l2_block.anchor_block_number,
+                gas_limit: l2_block.gas_limit,
+                //gas_limit: 15_000_000, // TODO calculate it and store inside l2_block
                 // 0 - does not work for now
                 /* Use 0 for gas limit as it will be set as its parent's gas
                  * limit during derivation. */

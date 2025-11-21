@@ -1,5 +1,4 @@
 // Shared modules for the catalyst node
-pub mod batch_builder;
 pub mod blob;
 pub mod chain_monitor;
 pub mod config;

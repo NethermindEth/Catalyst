@@ -14,7 +14,6 @@ use anyhow::Error;
 use common::{l1::traits::PreconferProvider, metrics, shared};
 
 use common::{
-    batch_builder::BatchBuilderConfig,
     config::Config,
     config::ConfigTrait,
     fork_info::ForkInfo,
@@ -25,6 +24,7 @@ use common::{
 };
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::info;

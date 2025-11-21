@@ -1,6 +1,6 @@
-use crate::shared::l2_block::L2Block;
+use crate::shared::l2_block_v2::L2BlockV2;
+use crate::shared::l2_tx_lists::PreBuiltTxList;
 use alloy::primitives::{Address, B256, Bytes};
-use common::batch_builder::BatchLike;
 use std::collections::VecDeque;
 use std::time::Instant;
 use taiko_bindings::anchor::LibBonds::BondInstruction;
@@ -36,7 +36,7 @@ impl BondInstructionData {
 #[derive(Default, Clone)]
 pub struct Proposal {
     pub id: u64,
-    pub l2_blocks: Vec<L2Block>,
+    pub l2_blocks: Vec<L2BlockV2>,
     pub total_bytes: u64,
     pub coinbase: Address,
     pub anchor_block_id: u64,
@@ -56,9 +56,9 @@ impl Proposal {
             // Build the block manifests.
             block_manifests.push(BlockManifest {
                 timestamp: l2_block.timestamp_sec,
-                coinbase: self.coinbase,
-                anchor_block_number: self.anchor_block_id,
-                gas_limit: 0,
+                coinbase: l2_block.coinbase,
+                anchor_block_number: l2_block.anchor_block_number,
+                gas_limit: l2_block.gas_limit,
                 transactions: l2_block
                     .prebuilt_tx_list
                     .tx_list
@@ -122,35 +122,21 @@ impl Proposal {
             .map(|block| block.prebuilt_tx_list.tx_list.len())
             .ok_or_else(|| anyhow::anyhow!("No L2 blocks in proposal"))
     }
-}
 
-impl BatchLike for Proposal {
-    fn l2_blocks_mut(&mut self) -> &mut Vec<L2Block> {
-        &mut self.l2_blocks
-    }
-
-    fn l2_blocks(&self) -> &Vec<L2Block> {
-        &self.l2_blocks
-    }
-
-    fn total_bytes_mut(&mut self) -> &mut u64 {
-        &mut self.total_bytes
-    }
-
-    fn total_bytes(&self) -> u64 {
+    pub fn total_bytes(&self) -> u64 {
         self.total_bytes
     }
 
-    fn anchor_block_id(&self) -> u64 {
-        self.anchor_block_id
-    }
-
-    fn anchor_block_timestamp_sec(&self) -> u64 {
-        self.anchor_block_timestamp_sec
-    }
-
-    fn compress(&mut self) {
-        Proposal::compress(self);
+    pub fn add_l2_block(&mut self, tx_list: PreBuiltTxList, timestamp_sec: u64, gas_limit: u64) {
+        self.total_bytes += tx_list.bytes_length;
+        let l2_block = L2BlockV2::new_from(
+            tx_list,
+            timestamp_sec,
+            self.coinbase,
+            self.anchor_block_id,
+            gas_limit,
+        );
+        self.l2_blocks.push(l2_block);
     }
 }
 
@@ -187,13 +173,16 @@ mod test {
 
         let tx: alloy::rpc::types::Transaction = serde_json::from_str(json_data).unwrap();
 
-        let l2_block = L2Block {
+        let l2_block = L2BlockV2 {
             prebuilt_tx_list: PreBuiltTxList {
                 tx_list: vec![tx],
                 estimated_gas_used: 0,
                 bytes_length: 0,
             },
             timestamp_sec: 0,
+            coinbase: Address::ZERO,
+            anchor_block_number: 0,
+            gas_limit: 0,
         };
 
         // RLP encode the transactions

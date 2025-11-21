@@ -7,7 +7,7 @@ use alloy::primitives::Bytes;
 use alloy::primitives::aliases::U48;
 use alloy::{eips::BlockNumberOrTag, primitives::Address, providers::DynProvider};
 use anyhow::{Error, anyhow};
-use common::shared::l2_block::L2Block;
+use common::shared::l2_block_v2::L2BlockV2;
 use common::{
     l1::{
         traits::{ELTrait, PreconferProvider},
@@ -200,9 +200,7 @@ impl PreconfOperator for ExecutionLayer {
 impl ExecutionLayer {
     pub async fn send_batch_to_l1(
         &self,
-        l2_blocks: Vec<L2Block>,
-        anchor_block_number: u64,
-        coinbase: Address,
+        l2_blocks: Vec<L2BlockV2>,
         num_forced_inclusion: u8,
     ) -> Result<(), Error> {
         info!(
@@ -218,8 +216,6 @@ impl ExecutionLayer {
         let tx = builder
             .build_propose_tx(
                 l2_blocks,
-                anchor_block_number,
-                coinbase,
                 self.preconfer_address,
                 self.contract_addresses.shasta_inbox,
                 Bytes::new(), // TODO fill prover_auth_bytes
