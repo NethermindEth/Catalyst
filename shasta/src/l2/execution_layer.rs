@@ -249,9 +249,10 @@ impl L2ExecutionLayer {
 
         let hex_str = response
             .get("blockID")
+            .or_else(|| response.get("blockId"))
             .and_then(Value::as_str)
             .ok_or_else(|| {
-                anyhow::anyhow!("Missing or invalid 'blockID' in taiko_headL1Origin response")
+                anyhow::anyhow!("Missing or invalid  block id in taiko_headL1Origin response, allowed keys are: blockID, blockId")
             })?;
 
         u64::from_str_radix(hex_str.trim_start_matches("0x"), 16)
