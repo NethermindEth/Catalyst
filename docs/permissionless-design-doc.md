@@ -230,6 +230,12 @@ struct Preconfirmation {
     bool eop;
     // Height of the preconfed block
     uint256 blockNumber;
+    // Timestamp of the preconfed block
+    uint256 timestamp;
+    // Gas limit for the preconfed block
+    uint256 gasLimit;
+    // Coinbase address (recipient of block rewards)
+    address coinbase;
     // Height of the L1 block chosen as anchor for the preconfed block
     uint256 anchorBlockNumber;
     // Hash of the raw list of transactions included in the parent block
@@ -240,6 +246,10 @@ struct Preconfirmation {
     uint256 parentSubmissionWindowEnd;
     // The timestamp of the preconfer's slot in the lookahead
     uint256 submissionWindowEnd;
+    // Prover authorization for the block
+    address proverAuth;
+    // Proposal ID for the block
+    uint256 proposalId;
 }
 ```
 
@@ -307,16 +317,24 @@ PRECONFER_SLASHER_ADDRESS = ....
 
 # The currently expected preconfer
 currentPreconfer: LookaheadSlot
-# Node's canonical L2 head
-localL2Head: Block
+
+# Node's preconfed L2 head state
+# Based on `ParentState` in Rust implementation, but extended with `rawTxListHash`:
+# https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/pipeline/state.rs#L12-L13
+class ParentState:
+    header: Header             # Standard block header (hash, number, timestamp, gasLimit, coinbase, etc.)
+    anchorBlockNumber: uint256 # L1 anchor block ID
+    rawTxListHash: bytes32     # New! Hash of raw transaction list
+    proposalId: uint256        # New! Incremental ID for each L1 proposal
+    ...
+
+localL2Head: ParentState
 
 # Run this function on each reception of preconf
-def verifyPreconf(# CHANGE: Function now takes rawTxList instead of full L2 block
-                  rawTxList: List[Tx],
-                  signedCommitment: SignedCommitment):
+def verifyPreconfirmation(rawTxList: List[Tx], signedCommitment: SignedCommitment):
     """
     Verifies a received preconfirmation against lookahead schedule, the signer,
-    the expected slasher, and the provided rawTxList.
+    the slasher address, and derive and execute the L2 block.
     """
 
     commitment = signedCommitment.commitment
@@ -346,15 +364,39 @@ def verifyPreconf(# CHANGE: Function now takes rawTxList instead of full L2 bloc
     # 6) Verify rawTxList consistency
     assert hash(rawTxList) == preconf.rawTxListHash
 
-    # 7) Reconstruct full L2 block by adding anchor transaction
-    anchorHash = L1.getBlockHash(preconf.anchorId)
-    anchorTx = constructAnchorTx(anchorHash)
-    l2Block = executeL2Block([anchorTx] + rawTxList)
+    # 7) Verify timestamp does not drift too far from current time
+    assert abs(preconf.timestamp - now()) <= MAX_TIMESTAMP_DRIFT
 
-    # 8) Advance local canonical chain
-    localL2Head = l2Block
+    # 8) Verify timestamp, gasLimit, coinbase, proverAuth, based on
+    #    logic in derivation.
+    # TODO: Revisit once derivation is refactored 
+    #       to handle per-block derivation.
+    verifyTimestamp(preconf.timestamp, preconf.proposalId, parentState)
+    verifyGasLimit(preconf.gasLimit, parentState)
+    verifyCoinbase(preconf.coinbase, currentPreconfer.committer)
+    verifyProverAuth(preconf.proverAuth)
 
-    # 9) Handle explicit EOP handoff
+    # 9) Derive L2 block from preconfirmation and execute it
+    # First construct block manifest from preconfirmation parameters.
+    # Block manifest in Rust implementation::
+    # https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/protocol/src/shasta/manifest.rs#L22-L23
+    manifest = BlockManifest(
+        anchorBlockNumber=preconf.anchorBlockNumber,
+        timestamp=preconf.timestamp,
+        gasLimit=preconf.gasLimit,
+        coinbase=preconf.coinbase,
+        proverAuth=preconf.proverAuth,
+        proposalId=preconf.proposalId,
+        transactions=rawTxList
+    )    
+    # Then process block.
+    # This validates constraints, constructs anchor tx, and executes the block.
+    # Corresponds to `process_block_manifest` in Rust implementation:
+    # https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/pipeline/payload.rs#L290
+    # Note: This function will update the `parentState` with the newly processed block.
+    processBlockManifest(manifest, parentState)
+
+    # 10) Handle explicit EOP handoff
     if preconf.eop:
         currentPreconfer = lookaheadStore.getNextPreconfer()
 
@@ -383,21 +425,21 @@ The preconfers will need to eventually include their preconfed L2 transactions i
 
 Preconf equivocation can be categorized into four categories:
 
-- **RawTxList/anchorID mismatch:** The preconfer failed to honor the transaction ordering and/or anchor ID they preconfed.
+- **Block commitment mismatch:** The preconfer failed to honor the rawTxList, anchor ID, timestamp, gas limit, coinbase, proverAuth, or proposalId they preconfed.
 - **Missed submission**: The preconfer did not submit the preconfed block to the Taiko inbox.
 - **Invalid EOP:** The preconfer included additional L2 blocks after their `EOP=true` block.
 - **Missing EOP:** The preconfer did not include set `EOP=true` in their final preconfed block.
 
-Let’s examine each category in detail.
+Let's examine each category in detail.
 
-### **RawTxList/anchorID** Mismatch Slashing
+### Block Commitment Mismatch Slashing
 
-Slash when the rawTxList/anchorID for a given L2 block ID differs between:
+Slash when the rawTxList/anchorID/timestamp/gasLimit/coinbase/proverAuth/proposalId for a given L2 block ID differs between:
 
 - The block is **preconfed** and published on the P2P network.
 - The block was **submitted** to L1 and later proven.
 
-For example, in this diagram, the preconfed block `B1` (preconfed in P2P) and the submitted block `B1′` (submitted to L1) have different rawTxList/anchorID for the same L2 block ID. 
+For example, in this diagram, the preconfed block `B1` (preconfed in P2P) and the submitted block `B1′` (submitted to L1) have different rawTxList/anchorID/timestamp/gasLimit/coinbase/proverAuth/proposalId for the same L2 block ID. 
 
 ![image.png](images/image%205.png)
 
@@ -417,7 +459,7 @@ However, checking `submissionWindowEnd` alone is not sufficient to protect preco
 
 ![image.png](images/image%207.png)
 
-To protect against such cases, we compare not only the `rawTxList` and `anchorId` of the preconfirmed and submitted blocks, but also their **parent** `rawTxList`, `anchorId`, and `submissionWindowEnd` values. If any of these parent values differ, the slashing is not applied to the current preconfer. Instead, the slashing entity is expected to target the parent block. This allows us to trace the divergence back transitively to the original L2 block where the mismatch first occurred.
+To protect against such cases, we compare not only the `rawTxList`, `anchorId`, `timestamp`, `gasLimit`, `coinbase`, `proverAuth`, and `proposalId` of the preconfirmed and submitted blocks, but also their **parent** `rawTxList`, `anchorId`, and `submissionWindowEnd` values. If any of these parent values differ, the slashing is not applied to the current preconfer. Instead, the slashing entity is expected to target the parent block. This allows us to trace the divergence back transitively to the original L2 block where the mismatch first occurred.
 
 ### Missed Submission
 
