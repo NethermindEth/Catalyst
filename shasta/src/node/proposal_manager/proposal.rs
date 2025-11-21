@@ -173,13 +173,16 @@ mod test {
 
         let tx: alloy::rpc::types::Transaction = serde_json::from_str(json_data).unwrap();
 
-        let l2_block = L2Block {
+        let l2_block = L2BlockV2 {
             prebuilt_tx_list: PreBuiltTxList {
                 tx_list: vec![tx],
                 estimated_gas_used: 0,
                 bytes_length: 0,
             },
             timestamp_sec: 0,
+            coinbase: Address::ZERO,
+            anchor_block_number: 0,
+            gas_limit: 0,
         };
 
         // RLP encode the transactions
