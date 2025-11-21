@@ -13,8 +13,8 @@ use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
     shared::anchor_block_info::AnchorBlockInfo,
 };
-use tracing::{debug, trace, warn};
 use pacaya::node::batch_manager::config::BatchBuilderConfig;
+use tracing::{debug, trace, warn};
 
 pub struct BatchBuilder {
     config: BatchBuilderConfig,
@@ -65,7 +65,7 @@ impl BatchBuilder {
                         l2_block.prebuilt_tx_list.clone(),
                         l2_block.timestamp_sec,
                         15_000_000, // TODO gas limit
-                        // We should preconfirm with one value and send to L1 with another
+                                    // We should preconfirm with one value and send to L1 with another
                     );
                     batch_clone.compress();
                     new_total_bytes = batch_clone.total_bytes;
@@ -123,7 +123,7 @@ impl BatchBuilder {
                 l2_block.prebuilt_tx_list,
                 l2_block.timestamp_sec,
                 15_000_000, // TODO gas limit
-                // We should preconfirm with one value and send to L1 with another
+                            // We should preconfirm with one value and send to L1 with another
             );
             debug!(
                 "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
@@ -294,10 +294,7 @@ impl BatchBuilder {
             if let Err(err) = ethereum_l1
                 .execution_layer
                 // TODO send a Proosal to function
-                .send_batch_to_l1(
-                    batch.l2_blocks.clone(),
-                    batch.num_forced_inclusion,
-                )
+                .send_batch_to_l1(batch.l2_blocks.clone(), batch.num_forced_inclusion)
                 .await
             {
                 if let Some(transaction_error) = err.downcast_ref::<TransactionError>()
@@ -378,7 +375,12 @@ impl BatchBuilder {
     }
 
     pub fn get_number_of_batches(&self) -> u64 {
-        self.proposals_to_send.len() as u64 + if self.current_proposal.is_some() { 1 } else { 0 }
+        self.proposals_to_send.len() as u64
+            + if self.current_proposal.is_some() {
+                1
+            } else {
+                0
+            }
     }
 
     pub fn get_number_of_batches_ready_to_send(&self) -> u64 {
@@ -390,7 +392,7 @@ impl BatchBuilder {
         std::mem::take(&mut self.proposals_to_send)
     }
 
-    pub fn prepend_batches(&mut self,mut batches: Proposals) {
+    pub fn prepend_batches(&mut self, mut batches: Proposals) {
         batches.append(&mut self.proposals_to_send);
         self.proposals_to_send = batches;
     }
@@ -413,8 +415,7 @@ impl BatchBuilder {
         if let Some(batch) = self.current_proposal.take()
             && !batch.l2_blocks.is_empty()
         {
-            self.proposals_to_send
-                .push_back(batch);
+            self.proposals_to_send.push_back(batch);
         }
     }
 
@@ -450,34 +451,33 @@ impl BatchBuilder {
         end_of_sequencing: bool,
     ) -> Option<L2Block> {
         let tx_list_len = pending_tx_list
-        .as_ref()
-        .map(|tx_list| tx_list.tx_list.len())
-        .unwrap_or(0);
-    if self.should_new_block_be_created(
-        tx_list_len as u64,
-        l2_slot_timestamp,
-        end_of_sequencing,
-    ) {
-        if let Some(pending_tx_list) = pending_tx_list {
-            debug!(
-                "Creating new block with pending tx list length: {}, bytes length: {}",
-                pending_tx_list.tx_list.len(),
-                pending_tx_list.bytes_length
-            );
+            .as_ref()
+            .map(|tx_list| tx_list.tx_list.len())
+            .unwrap_or(0);
+        if self.should_new_block_be_created(
+            tx_list_len as u64,
+            l2_slot_timestamp,
+            end_of_sequencing,
+        ) {
+            if let Some(pending_tx_list) = pending_tx_list {
+                debug!(
+                    "Creating new block with pending tx list length: {}, bytes length: {}",
+                    pending_tx_list.tx_list.len(),
+                    pending_tx_list.bytes_length
+                );
 
-            Some(L2Block::new_from(pending_tx_list, l2_slot_timestamp))
+                Some(L2Block::new_from(pending_tx_list, l2_slot_timestamp))
+            } else {
+                Some(L2Block::new_empty(l2_slot_timestamp))
+            }
         } else {
-            Some(L2Block::new_empty(l2_slot_timestamp))
+            debug!("Skipping preconfirmation for the current L2 slot");
+            self.metrics.inc_skipped_l2_slots_by_low_txs_count();
+            None
         }
-    } else {
-        debug!("Skipping preconfirmation for the current L2 slot");
-        self.metrics.inc_skipped_l2_slots_by_low_txs_count();
-        None
-    }
     }
 
     pub fn has_current_forced_inclusion(&self) -> bool {
-
         self.current_proposal
             .as_ref()
             .map(|p| p.num_forced_inclusion > 0)

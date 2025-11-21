@@ -16,7 +16,7 @@ impl L2BlockV2 {
         timestamp_sec: u64,
         coinbase: Address,
         anchor_block_number: u64,
-        gas_limit: u64
+        gas_limit: u64,
     ) -> Self {
         L2BlockV2 {
             prebuilt_tx_list: tx_list,
@@ -31,7 +31,7 @@ impl L2BlockV2 {
         timestamp_sec: u64,
         coinbase: Address,
         anchor_block_number: u64,
-        gas_limit: u64
+        gas_limit: u64,
     ) -> Self {
         L2BlockV2 {
             prebuilt_tx_list: PreBuiltTxList::empty(),

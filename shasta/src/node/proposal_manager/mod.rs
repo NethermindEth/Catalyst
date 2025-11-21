@@ -16,9 +16,9 @@ use common::{
     shared::anchor_block_info::AnchorBlockInfo,
     utils::cancellation_token::CancellationToken,
 };
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
-use pacaya::node::batch_manager::config::BatchBuilderConfig;
 
 use crate::forced_inclusion::ForcedInclusion;
 use crate::node::proposal_manager::proposal::BondInstructionData;

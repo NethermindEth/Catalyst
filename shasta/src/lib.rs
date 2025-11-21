@@ -24,10 +24,10 @@ use common::{
 };
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
+use pacaya::node::batch_manager::config::BatchBuilderConfig;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::info;
-use pacaya::node::batch_manager::config::BatchBuilderConfig;
 
 pub async fn create_shasta_node(
     config: Config,
