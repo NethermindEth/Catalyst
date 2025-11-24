@@ -154,8 +154,15 @@ pub async fn create_shasta_node(
         metrics.clone(),
         cancel_token.clone(),
     );
-
     funds_controller.run();
+
+    let whitelist_monitor = pacaya::chain_monitor::WhitelistMonitor::new(
+        ethereum_l1.execution_layer.clone(),
+        cancel_token.clone(),
+        metrics.clone(),
+        config.whitelist_monitor_interval_sec,
+    );
+    whitelist_monitor.run();
 
     Ok(())
 }

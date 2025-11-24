@@ -19,11 +19,11 @@ use common::{
         transaction_monitor::TransactionMonitor,
     },
 };
-use pacaya::l1::PreconfOperator;
+use pacaya::l1::traits::{PreconfOperator, WhitelistProvider};
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 
-use super::bindings::{IPreconfWhitelist, Inbox};
+use super::bindings::{IPreconfWhitelist, Inbox, PreconfWhitelist};
 use super::event_indexer::EventIndexer;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use taiko_bindings::i_inbox::IInbox;
@@ -314,5 +314,25 @@ impl ExecutionLayer {
             .ok_or_else(|| anyhow::anyhow!("No forced inclusion at index {}", index))?;
 
         Ok(inclusion.clone())
+    }
+}
+
+impl WhitelistProvider for ExecutionLayer {
+    async fn is_operator_whitelisted(&self) -> Result<bool, Error> {
+        let contract =
+            PreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
+        let operators = contract
+            .operators(self.preconfer_address)
+            .call()
+            .await
+            .map_err(|e| {
+                Error::msg(format!(
+                    "Failed to get operators: {}, contract: {:?}",
+                    e, self.contract_addresses.proposer_checker
+                ))
+            })?;
+
+        // _0 is the activeSince field
+        Ok(operators._0 > 0)
     }
 }

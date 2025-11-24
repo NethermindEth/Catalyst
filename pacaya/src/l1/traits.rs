@@ -1,4 +1,5 @@
 use anyhow::Error;
+use std::future::Future;
 
 pub trait PreconfOperator {
     fn is_operator_for_current_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
@@ -8,4 +9,8 @@ pub trait PreconfOperator {
     ) -> impl Future<Output = Result<bool, Error>> + Send;
     fn get_l2_height_from_taiko_inbox(&self) -> impl Future<Output = Result<u64, Error>> + Send;
     fn get_handover_window_slots(&self) -> impl Future<Output = Result<u64, Error>> + Send;
+}
+
+pub trait WhitelistProvider: Send + Sync {
+    fn is_operator_whitelisted(&self) -> impl Future<Output = Result<bool, Error>> + Send;
 }
