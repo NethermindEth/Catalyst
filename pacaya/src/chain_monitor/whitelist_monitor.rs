@@ -4,7 +4,7 @@ use common::utils::cancellation_token::CancellationToken;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub struct WhitelistMonitor<T: WhitelistProvider + 'static> {
     execution_layer: Arc<T>,
@@ -39,6 +39,9 @@ impl<T: WhitelistProvider + 'static> WhitelistMonitor<T> {
             match self.execution_layer.is_operator_whitelisted().await {
                 Ok(is_whitelisted) => {
                     self.metrics.set_operator_whitelisted(is_whitelisted);
+                    if !is_whitelisted {
+                        warn!("Operator ejected from the whitelist");
+                    }
                 }
                 Err(e) => {
                     error!("Failed to check if operator is whitelisted: {}", e);
