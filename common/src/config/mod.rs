@@ -65,6 +65,8 @@ pub struct Config {
     pub fork_switch_timestamp: Option<u64>,
     pub fork_switch_l2_height: Option<u64>,
     pub fork_switch_transition_period_sec: u64,
+    // Whitelist monitor
+    pub whitelist_monitor_interval_sec: u64,
 }
 
 impl Config {
@@ -340,6 +342,11 @@ impl Config {
                     .expect("FORK_SWITCH_TRANSITION_PERIOD_SEC must be a number"),
             };
 
+        let whitelist_monitor_interval_sec = std::env::var("WHITELIST_MONITOR_INTERVAL_SEC")
+            .unwrap_or("60".to_string())
+            .parse::<u64>()
+            .expect("WHITELIST_MONITOR_INTERVAL_SEC must be a number");
+
         let config = Self {
             preconfer_address,
             taiko_geth_rpc_url: std::env::var("TAIKO_GETH_RPC_URL")
@@ -395,6 +402,7 @@ impl Config {
             fork_switch_timestamp,
             fork_switch_l2_height,
             fork_switch_transition_period_sec,
+            whitelist_monitor_interval_sec,
         };
 
         info!(
@@ -442,6 +450,7 @@ initial fork: {}
 fork switch timestamp: {:?}
 fork switch l2 height: {:?}
 fork switch transition time: {}s
+whitelist monitor interval: {}s
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -497,6 +506,7 @@ fork switch transition time: {}s
             config.fork_switch_timestamp,
             config.fork_switch_l2_height,
             config.fork_switch_transition_period_sec,
+            config.whitelist_monitor_interval_sec,
         );
 
         config

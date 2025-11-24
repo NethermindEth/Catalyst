@@ -53,3 +53,19 @@ interface IPreconfWhitelist {
     function getOperatorForNextEpoch() external view returns (address);
 }
 );
+
+sol!(
+
+#[allow(missing_docs)]
+#[sol(rpc)]
+contract PreconfWhitelist {
+    struct OperatorInfo {
+        uint32 activeSince; // Epoch when the operator becomes active.
+        uint32 deprecatedInactiveSince; // Deprecated. Kept for storage compatibility.
+        uint8 index; // Index in operatorMapping.
+        address sequencerAddress; // Sequencer address for this operator (for off-chain use).
+    }
+
+    mapping(address proposer => OperatorInfo info) public operators;
+}
+);

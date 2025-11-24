@@ -15,7 +15,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
-mod chain_monitor;
+pub mod chain_monitor;
 mod forced_inclusion;
 pub mod l1;
 pub mod l2;
@@ -165,6 +165,14 @@ pub async fn create_pacaya_node(
         cancel_token.clone(),
     );
     funds_controller.run();
+
+    let whitelist_monitor = chain_monitor::WhitelistMonitor::new(
+        ethereum_l1.execution_layer.clone(),
+        cancel_token.clone(),
+        metrics.clone(),
+        config.whitelist_monitor_interval_sec,
+    );
+    whitelist_monitor.run();
 
     Ok(())
 }

@@ -24,6 +24,7 @@ pub struct Metrics {
     rpc_driver_call_error: CounterVec,
     skipped_l2_slots_by_low_txs_count: Counter,
     critical_errors: Counter,
+    operator_whitelisted: Gauge,
     registry: Registry,
 }
 
@@ -230,6 +231,16 @@ impl Metrics {
             error!("Error: Failed to register critical_errors: {}", err);
         }
 
+        let operator_whitelisted = Gauge::new(
+            "operator_whitelisted",
+            "Whether the operator is whitelisted (1.0 = true, 0.0 = false)",
+        )
+        .expect("Failed to create operator_whitelisted gauge");
+
+        if let Err(err) = registry.register(Box::new(operator_whitelisted.clone())) {
+            error!("Error: Failed to register operator_whitelisted: {}", err);
+        }
+
         Self {
             preconfer_eth_balance,
             preconfer_taiko_balance,
@@ -248,6 +259,7 @@ impl Metrics {
             rpc_driver_call_error,
             skipped_l2_slots_by_low_txs_count,
             critical_errors,
+            operator_whitelisted,
             registry,
         }
     }
@@ -350,6 +362,11 @@ impl Metrics {
 
     pub fn inc_critical_errors(&self) {
         self.critical_errors.inc();
+    }
+
+    pub fn set_operator_whitelisted(&self, whitelisted: bool) {
+        self.operator_whitelisted
+            .set(if whitelisted { 1.0 } else { 0.0 });
     }
 
     fn u256_to_f64(balance: alloy::primitives::U256) -> f64 {

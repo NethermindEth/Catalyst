@@ -1,29 +1,30 @@
-use crate::l1::execution_layer::ExecutionLayer;
+use crate::l1::traits::WhitelistProvider;
 use common::metrics::Metrics;
 use common::utils::cancellation_token::CancellationToken;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
+use tracing::{error, info};
 
-struct WhitelistMonitor {
-    execution_layer: ExecutionLayer,
+pub struct WhitelistMonitor<T: WhitelistProvider + 'static> {
+    execution_layer: Arc<T>,
     cancel_token: CancellationToken,
     metrics: Arc<Metrics>,
     monitor_interval: Duration,
 }
 
-impl WhitelistMonitor {
+impl<T: WhitelistProvider + 'static> WhitelistMonitor<T> {
     pub fn new(
-        execution_layer: ExecutionLayer,
+        execution_layer: Arc<T>,
         cancel_token: CancellationToken,
         metrics: Arc<Metrics>,
-        monitor_interval: Duration,
+        monitor_interval_sec: u64,
     ) -> Self {
         Self {
             execution_layer,
             cancel_token,
             metrics,
-            monitor_interval,
+            monitor_interval: Duration::from_secs(monitor_interval_sec),
         }
     }
 
@@ -35,13 +36,18 @@ impl WhitelistMonitor {
 
     async fn monitor_whitelist(self) {
         loop {
-            self.execution_layer
-                .check_if_operator_is_in_whitelist()
-                .await;
+            match self.execution_layer.is_operator_whitelisted().await {
+                Ok(is_whitelisted) => {
+                    self.metrics.set_operator_whitelisted(is_whitelisted);
+                }
+                Err(e) => {
+                    error!("Failed to check if operator is whitelisted: {}", e);
+                }
+            }
             tokio::select! {
                 _ = sleep(self.monitor_interval) => {},
                 _ = self.cancel_token.cancelled() => {
-                    info!("Shutdown signal received, exiting metrics loop...");
+                    info!("Shutdown signal received, exiting whitelist monitor loop...");
                     return;
                 }
             }

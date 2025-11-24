@@ -3,6 +3,7 @@ use common::chain_monitor::ChainMonitor;
 use tracing::info;
 
 mod whitelist_monitor;
+pub use whitelist_monitor::WhitelistMonitor;
 
 pub type PacayaChainMonitor = ChainMonitor<ITaikoInbox::BatchProposed>;
 
