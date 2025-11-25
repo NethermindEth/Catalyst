@@ -1,6 +1,6 @@
-use crate::shared::l2_block_v2::L2BlockV2;
-use crate::shared::l2_tx_lists::PreBuiltTxList;
 use alloy::primitives::{Address, B256, Bytes};
+use common::shared::l2_block_v2::L2BlockV2;
+use common::shared::l2_tx_lists::PreBuiltTxList;
 use std::collections::VecDeque;
 use std::time::Instant;
 use taiko_bindings::anchor::LibBonds::BondInstruction;
@@ -127,15 +127,24 @@ impl Proposal {
         self.total_bytes
     }
 
-    pub fn add_l2_block(&mut self, tx_list: PreBuiltTxList, timestamp_sec: u64, gas_limit: u64) {
+    pub fn create_block(
+        &mut self,
+        tx_list: PreBuiltTxList,
+        timestamp_sec: u64,
+        gas_limit: u64,
+    ) -> L2BlockV2 {
         self.total_bytes += tx_list.bytes_length;
-        let l2_block = L2BlockV2::new_from(
+        L2BlockV2::new_from(
             tx_list,
             timestamp_sec,
             self.coinbase,
             self.anchor_block_id,
             gas_limit,
-        );
+        )
+    }
+
+    pub fn add_l2_block(&mut self, l2_block: L2BlockV2) {
+        self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
         self.l2_blocks.push(l2_block);
     }
 }

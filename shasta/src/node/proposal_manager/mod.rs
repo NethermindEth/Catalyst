@@ -241,9 +241,17 @@ impl BatchManager {
         end_of_sequencing: bool,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+        // TODO fix block production
+        let l2_block_v2 = self.batch_builder.create_block(
+            l2_block.prebuilt_tx_list,
+            l2_block.timestamp_sec,
+            15_000_000, // TODO gas limit
+                        // We should preconfirm with one value and send to L1 with another
+        )?;
+
         let proposal = self
             .batch_builder
-            .add_l2_block_and_get_current_proposal(l2_block.clone())?;
+            .add_l2_block_and_get_current_proposal(l2_block_v2.clone())?;
 
         match self
             .taiko
@@ -462,6 +470,7 @@ impl BatchManager {
             }
         };
 
+        let gas_limit = block.header.gas_limit();
         let coinbase = block.header.beneficiary();
 
         let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
@@ -479,13 +488,15 @@ impl BatchManager {
         // TODO imporvee output
         let proposal_id = anchor_tx_data._proposalParams.proposalId.to::<u64>();
         debug!(
-            "Recovering from L2 block {}, proposal_id: {} transactions: {} is_forced_inclusion: {}, timestamp {}, anchor_block_number {}",
+            "Recovering from L2 block {}, proposal_id: {} transactions: {} is_forced_inclusion: {}, timestamp: {}, anchor_block_number: {} coinbase: {}, gas_limit: {}",
             block_height,
             proposal_id,
             txs.len(),
             is_forced_inclusion,
             block.header.timestamp(),
             anchor_info.id(),
+            coinbase,
+            gas_limit
         );
 
         let txs = txs.to_vec();
@@ -502,6 +513,7 @@ impl BatchManager {
                 ),
                 txs,
                 block.header.timestamp(),
+                gas_limit,
                 is_forced_inclusion,
             )
             .await?;
