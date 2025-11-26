@@ -9,7 +9,7 @@ use crate::{
 };
 use alloy::primitives::Address;
 use anyhow::Error;
-use common::batch_builder::BatchBuilderConfig;
+use common::{batch_builder::BatchBuilderConfig, shared::l2_block_v2::L2BlockV2};
 use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
     shared::anchor_block_info::AnchorBlockInfo,
@@ -43,6 +43,7 @@ impl BatchBuilder {
         &self.config
     }
 
+    // TODO use L2BlockV2 here
     pub fn can_consume_l2_block(&mut self, l2_block: &L2Block) -> bool {
         let is_time_shift_expired = self.is_time_shift_expired(l2_block.timestamp_sec);
         self.current_proposal.as_mut().is_some_and(|batch| {
@@ -61,12 +62,9 @@ impl BatchBuilder {
                     // second compression, compressing the batch with the new L2 block
                     // we can tolerate the processing overhead as it's a very rare case
                     let mut batch_clone = batch.clone();
-                    batch_clone.add_l2_block(
-                        l2_block.prebuilt_tx_list.clone(),
-                        l2_block.timestamp_sec,
-                        15_000_000, // TODO gas limit
-                                    // We should preconfirm with one value and send to L1 with another
-                    );
+                    let l2_block = batch_clone
+                        .create_block(l2_block.prebuilt_tx_list.clone(), l2_block.timestamp_sec);
+                    batch_clone.add_l2_block(l2_block);
                     batch_clone.compress();
                     new_total_bytes = batch_clone.total_bytes;
                     debug!(
@@ -116,15 +114,11 @@ impl BatchBuilder {
 
     pub fn add_l2_block_and_get_current_proposal(
         &mut self,
-        l2_block: L2Block,
+        l2_block: L2BlockV2,
     ) -> Result<&Proposal, Error> {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
-            current_proposal.add_l2_block(
-                l2_block.prebuilt_tx_list,
-                l2_block.timestamp_sec,
-                15_000_000, // TODO gas limit
-                            // We should preconfirm with one value and send to L1 with another
-            );
+            current_proposal.add_l2_block(l2_block);
+
             debug!(
                 "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
                 current_proposal.l2_blocks.len(),
@@ -162,6 +156,7 @@ impl BatchBuilder {
         bond_instructions: BondInstructionData,
         tx_list: Vec<alloy::rpc::types::Transaction>,
         l2_block_timestamp_sec: u64,
+        gas_limit: u64,
         is_forced_inclusion: bool,
     ) -> Result<(), Error> {
         // We have a new proposal when proposal ID differs
@@ -210,19 +205,25 @@ impl BatchBuilder {
 
             let bytes_length =
                 crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
-            let l2_block = L2Block::new_from(
+
+            let l2_block = L2BlockV2::new_from(
                 crate::shared::l2_tx_lists::PreBuiltTxList {
                     tx_list,
                     estimated_gas_used: 0,
                     bytes_length,
                 },
                 l2_block_timestamp_sec,
+                coinbase,
+                anchor_info.id(),
+                gas_limit,
             );
 
             // TODO we add block to the current proposal.
             // But we should verify that it fit N blob data size
             // Otherwise we should do a reorg
             // TODO align on blob count with all teams
+
+            // at previous step we check that proposal exists
             self.add_l2_block_and_get_current_proposal(l2_block)?;
         }
         Ok(())
@@ -485,14 +486,21 @@ impl BatchBuilder {
     }
 
     pub fn inc_forced_inclusion(&mut self) -> Result<(), Error> {
-        if let Some(proposal) = self.current_proposal.as_mut() {
-            proposal.num_forced_inclusion += 1;
-        } else {
-            return Err(anyhow::anyhow!(
-                "No current batch to add forced inclusion to"
-            ));
-        }
-        Ok(())
+        self.current_proposal
+            .as_mut()
+            .map(|proposal| proposal.num_forced_inclusion += 1)
+            .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
+    }
+
+    pub fn create_block(
+        &mut self,
+        tx_list: PreBuiltTxList,
+        timestamp_sec: u64,
+    ) -> Result<L2BlockV2, Error> {
+        self.current_proposal
+            .as_mut()
+            .map(|proposal| proposal.create_block(tx_list, timestamp_sec))
+            .ok_or_else(|| anyhow::anyhow!("No current proposal to create block"))
     }
 
     pub fn get_current_proposal(&self) -> Option<&Proposal> {
