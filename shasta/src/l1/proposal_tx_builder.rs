@@ -123,10 +123,6 @@ impl ProposalTxBuilder {
                 coinbase: l2_block.coinbase,
                 anchor_block_number: l2_block.anchor_block_number,
                 gas_limit: l2_block.gas_limit,
-                //gas_limit: 15_000_000, // TODO calculate it and store inside l2_block
-                // 0 - does not work for now
-                /* Use 0 for gas limit as it will be set as its parent's gas
-                 * limit during derivation. */
                 transactions: l2_block
                     .prebuilt_tx_list
                     .tx_list
