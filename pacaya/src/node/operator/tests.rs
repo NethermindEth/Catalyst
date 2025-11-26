@@ -739,9 +739,10 @@ mod tests {
             fork_info: ForkInfo {
                 fork: Fork::Pacaya,
                 config: ForkInfoConfig {
-                    initial_fork: Fork::Pacaya,
-                    fork_switch_timestamp: Some(Duration::from_secs(100)),
-                    fork_switch_l2_height: None,
+                    fork_switch_timestamps: vec![
+                        Duration::from_secs(0),   // Pacaya
+                        Duration::from_secs(100), // Shasta
+                    ],
                     fork_switch_transition_period: Duration::from_secs(15),
                 },
             },
