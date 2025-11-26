@@ -242,12 +242,9 @@ impl BatchManager {
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         // TODO fix block production
-        let l2_block_v2 = self.batch_builder.create_block(
-            l2_block.prebuilt_tx_list,
-            l2_block.timestamp_sec,
-            15_000_000, // TODO gas limit
-                        // We should preconfirm with one value and send to L1 with another
-        )?;
+        let l2_block_v2 = self
+            .batch_builder
+            .create_block(l2_block.prebuilt_tx_list, l2_block.timestamp_sec)?;
 
         let proposal = self
             .batch_builder

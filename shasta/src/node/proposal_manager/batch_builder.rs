@@ -62,12 +62,8 @@ impl BatchBuilder {
                     // second compression, compressing the batch with the new L2 block
                     // we can tolerate the processing overhead as it's a very rare case
                     let mut batch_clone = batch.clone();
-                    let l2_block = batch_clone.create_block(
-                        l2_block.prebuilt_tx_list.clone(),
-                        l2_block.timestamp_sec,
-                        15_000_000, // TODO gas limit
-                                    // We should preconfirm with one value and send to L1 with another)
-                    );
+                    let l2_block = batch_clone
+                        .create_block(l2_block.prebuilt_tx_list.clone(), l2_block.timestamp_sec);
                     batch_clone.add_l2_block(l2_block);
                     batch_clone.compress();
                     new_total_bytes = batch_clone.total_bytes;
@@ -500,11 +496,10 @@ impl BatchBuilder {
         &mut self,
         tx_list: PreBuiltTxList,
         timestamp_sec: u64,
-        gas_limit: u64,
     ) -> Result<L2BlockV2, Error> {
         self.current_proposal
             .as_mut()
-            .map(|proposal| proposal.create_block(tx_list, timestamp_sec, gas_limit))
+            .map(|proposal| proposal.create_block(tx_list, timestamp_sec))
             .ok_or_else(|| anyhow::anyhow!("No current proposal to create block"))
     }
 

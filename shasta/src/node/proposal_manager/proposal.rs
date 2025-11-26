@@ -127,19 +127,15 @@ impl Proposal {
         self.total_bytes
     }
 
-    pub fn create_block(
-        &mut self,
-        tx_list: PreBuiltTxList,
-        timestamp_sec: u64,
-        gas_limit: u64,
-    ) -> L2BlockV2 {
+    pub fn create_block(&mut self, tx_list: PreBuiltTxList, timestamp_sec: u64) -> L2BlockV2 {
         self.total_bytes += tx_list.bytes_length;
         L2BlockV2::new_from(
             tx_list,
             timestamp_sec,
             self.coinbase,
             self.anchor_block_id,
-            gas_limit,
+            15_000_000, // TODO gas limit
+                        // We should preconfirm with one value and send to L1 with another
         )
     }
 
