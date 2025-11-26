@@ -36,10 +36,10 @@ impl ForkInfo {
 
         // Iterate through Fork variants in reverse order to find the highest fork that should be active
         for (fork_index, fork) in Fork::iter().enumerate().rev() {
-            if let Some(&fork_timestamp) = config.fork_switch_timestamps.get(fork_index) {
-                if current_timestamp >= fork_timestamp {
-                    return Ok(fork);
-                }
+            if let Some(&fork_timestamp) = config.fork_switch_timestamps.get(fork_index)
+                && current_timestamp >= fork_timestamp
+            {
+                return Ok(fork);
             }
         }
 
