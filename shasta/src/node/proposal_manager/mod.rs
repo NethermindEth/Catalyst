@@ -20,6 +20,7 @@ use common::{
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
+use crate::node::l2_slot_context::L2SlotContext;
 use crate::forced_inclusion::ForcedInclusion;
 use crate::node::proposal_manager::proposal::BondInstructionData;
 use alloy::primitives::{B256, U256};
@@ -89,22 +90,19 @@ impl BatchManager {
 
     pub async fn preconfirm_block(
         &mut self,
-        pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_info: &L2SlotInfo,
-        end_of_sequencing: bool,
-        allow_forced_inclusion: bool,
+        l2_slot_context: L2SlotContext,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let result = if let Some(l2_block) = self.batch_builder.try_creating_l2_block(
-            pending_tx_list,
-            l2_slot_info.slot_timestamp(),
-            end_of_sequencing,
+            l2_slot_context.pending_tx_list,
+            l2_slot_context.info.slot_timestamp(),
+            l2_slot_context.is_end_of_sequencing,
         ) {
             self.add_new_l2_block(
                 l2_block,
-                l2_slot_info,
-                end_of_sequencing,
+                &l2_slot_context.info,
+                l2_slot_context.is_end_of_sequencing,
                 OperationType::Preconfirm,
-                allow_forced_inclusion,
+                l2_slot_context.allow_forced_inclusion,
             )
             .await?
         } else {

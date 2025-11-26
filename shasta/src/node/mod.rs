@@ -32,6 +32,9 @@ use verifier::{VerificationResult, Verifier};
 mod l2_height_from_l1;
 pub use l2_height_from_l1::get_l2_height_from_l1;
 
+mod l2_slot_context;
+pub use l2_slot_context::L2SlotContext;
+
 pub struct Node {
     config: NodeConfig,
     cancel_token: CancellationToken,
@@ -157,21 +160,14 @@ impl Node {
 
     async fn preconfirm_block(
         &mut self,
-        pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_info: &L2SlotInfo,
-        end_of_sequencing: bool,
-        allow_forced_inclusion: bool,
+        l2_slot_context: L2SlotContext
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        let result = self
+        self
             .proposal_manager
             .preconfirm_block(
-                pending_tx_list,
-                l2_slot_info,
-                end_of_sequencing,
-                allow_forced_inclusion,
+                l2_slot_context
             )
-            .await?;
-        Ok(result)
+            .await
     }
 
     async fn main_block_preconfirmation_step(&mut self) -> Result<(), Error> {
@@ -260,14 +256,19 @@ impl Node {
                     "Unexpected L2 head detected. Restarting node..."
                 ));
             }
+
+            let l2_slot_context = L2SlotContext::new(
+                pending_tx_list,
+                l2_slot_info.clone(),
+                current_status.is_end_of_sequencing(),
+                self.config.propose_forced_inclusion
+                    && current_status.is_submitter()
+                    && self.verifier.is_none(),
+            );
+
             let preconfed_block = self
                 .preconfirm_block(
-                    pending_tx_list,
-                    &l2_slot_info,
-                    current_status.is_end_of_sequencing(),
-                    self.config.propose_forced_inclusion
-                        && current_status.is_submitter()
-                        && self.verifier.is_none(),
+                    l2_slot_context
                 )
                 .await?;
 

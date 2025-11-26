@@ -1,5 +1,6 @@
 use alloy::primitives::B256;
 
+#[derive(Clone)]
 pub struct L2SlotInfo {
     base_fee: u64,
     slot_timestamp: u64,
