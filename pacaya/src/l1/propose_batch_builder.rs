@@ -12,7 +12,7 @@ use alloy_json_rpc::RpcError;
 use alloy_rlp::BufMut;
 use anyhow::{Error, anyhow};
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
-use tracing::warn;
+use tracing::{debug, warn};
 
 pub struct ProposeBatchBuilder {
     provider_ws: DynProvider,
@@ -122,25 +122,6 @@ impl ProposeBatchBuilder {
             )
             .await?;
 
-        let tx_size_bytes = match Self::calculate_tx_size_bytes(&tx_calldata) {
-            Ok(size) => size,
-            Err(e) => {
-                warn!(
-                    "Build proposeBatch: Failed to calculate transaction size: {}",
-                    e
-                );
-                return Ok(tx_blob);
-            }
-        };
-        const MAX_TX_SIZE_BYTES: usize = 128 * 1024; // 128 KB
-        if tx_size_bytes > MAX_TX_SIZE_BYTES {
-            warn!(
-                "Build proposeBatch: eip1559 transaction size is too large: {} bytes, using eip4844 transaction",
-                tx_size_bytes
-            );
-            return Ok(tx_blob);
-        }
-
         let tx_calldata_gas = match self.provider_ws.estimate_gas(tx_calldata.clone()).await {
             Ok(gas) => gas,
             Err(e) => {
@@ -187,19 +168,43 @@ impl ProposeBatchBuilder {
         if eip4844_cost < eip1559_cost {
             Ok(tx_blob)
         } else {
-            Ok(fees_per_gas.update_eip1559(tx_calldata, tx_calldata_gas))
+            let tx_calldata = fees_per_gas.update_eip1559(tx_calldata, tx_calldata_gas);
+            if Self::is_tx_1559_size_too_large(&tx_calldata) {
+                return Ok(tx_blob);
+            }
+            Ok(tx_calldata)
         }
     }
 
-    fn calculate_tx_size_bytes(tx: &TransactionRequest) -> Result<usize, Error> {
-        let typed_tx = tx.clone().build_typed_tx().map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to build typed transaction for calculating size: {:?}",
-                e
-            )
-        })?;
+    fn is_tx_1559_size_too_large(tx: &TransactionRequest) -> bool {
+        let tx_size_bytes = match Self::calculate_tx_1559_size_bytes(tx) {
+            Ok(size) => size,
+            Err(e) => {
+                warn!(
+                    "Build proposeBatch: Failed to calculate transaction size: {}",
+                    e
+                );
+                return true;
+            }
+        };
+        const MAX_TX_SIZE_BYTES: usize = 128 * 1024; // 128 KB
+        if tx_size_bytes > MAX_TX_SIZE_BYTES {
+            warn!(
+                "Build proposeBatch: eip1559 transaction size is too large: {} bytes, using eip4844 transaction",
+                tx_size_bytes
+            );
+            return true;
+        }
+
+        false
+    }
+
+    fn calculate_tx_1559_size_bytes(tx: &TransactionRequest) -> Result<usize, Error> {
         let mut buffer = Vec::<u8>::new();
-        typed_tx.rlp_encode(&mut buffer as &mut dyn BufMut);
+        let mut tx = tx.clone();
+        tx.set_nonce(1);
+        tx.build_1559()?.rlp_encode(&mut buffer as &mut dyn BufMut);
+        debug!("tx 1559 size bytes: {}", buffer.len());
         Ok(buffer.len())
     }
 

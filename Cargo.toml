@@ -12,7 +12,7 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.23.16"
+version = "1.23.17"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -77,6 +77,7 @@ reqwest = { version = "0.12", default-features = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false }
 shasta = { path = "shasta" }
+strum = { version = "0.27", features = ["derive"] }
 
 taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "12fadbe0909a12be09a906a340733e7afcfe7c83", package = "alethia-reth-consensus", version = "0.5.0" }
 taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "5e18853b253d7c4e8db2d8c547870c11a3af45d9", package = "bindings", version = "2.0.0" }

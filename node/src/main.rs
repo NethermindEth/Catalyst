@@ -2,7 +2,6 @@ use anyhow::Error;
 use common::{
     fork_info::{Fork, ForkInfo},
     metrics::{self, Metrics},
-    shared::execution_layer::ExecutionLayer,
     utils::cancellation_token::CancellationToken,
 };
 use pacaya::create_pacaya_node;
@@ -58,12 +57,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
 
     let config = common::config::Config::read_env_variables();
 
-    let l2_height = ExecutionLayer::new_read_only(&config.taiko_geth_rpc_url)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create L2 execution layer: {}", e))?
-        .get_latest_block_id()
-        .await?;
-    let fork_info = ForkInfo::from_config((&config).into(), l2_height)
+    let fork_info = ForkInfo::from_config((&config).into())
         .map_err(|e| anyhow::anyhow!("Failed to get fork info: {}", e))?;
 
     let cancel_token = CancellationToken::new(metrics.clone());
@@ -79,9 +73,10 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
     match fork_info.fork {
         Fork::Pacaya => {
             // TODO pacaya::utils::config::Config
+            let next_fork_timestamp = fork_info.config.fork_switch_timestamps.get(1);
             info!(
-                "Current fork: Pacaya, switch_timestamp: {:?}",
-                fork_info.config.fork_switch_timestamp
+                "Current fork: PACAYA 🌋, next fork timestamp: {:?}",
+                next_fork_timestamp
             );
             create_pacaya_node(
                 config.clone(),
@@ -92,7 +87,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
             .await?;
         }
         Fork::Shasta => {
-            info!("Current fork: Shasta");
+            info!("Current fork: SHASTA 🌋");
             shasta::create_shasta_node(
                 config.clone(),
                 metrics.clone(),
