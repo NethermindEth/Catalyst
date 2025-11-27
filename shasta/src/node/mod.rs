@@ -421,16 +421,34 @@ impl Node {
             Ok(info) => self.operator.get_status(info).await,
             Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
         };
-        // TODO use proper number of batches ready to send
-        let batches_ready_to_send = 0; // self.batch_manager.get_number_of_batches_ready_to_send();
-        let pending_tx_list = match &l2_slot_info {
-            Ok(info) => {
-                self.taiko
-                    .get_pending_l2_tx_list_from_l2_engine(info.base_fee(), batches_ready_to_send)
-                    .await
+
+        let gas_limit_without_anchor = match &l2_slot_info {
+            Ok(info) => info.parent_gas_limit_without_anchor(),
+            Err(_) => {
+                error!("Failed to get L2 slot info set  gas_limit_without_anchor to 0");
+                0u64
             }
-            Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
         };
+
+        let pending_tx_list = if gas_limit_without_anchor != 0 {
+            // TODO use proper number of batches ready to send
+            let batches_ready_to_send = 0; //self.batch_manager.get_number_of_batches_ready_to_send();
+            match &l2_slot_info {
+                Ok(info) => {
+                    self.taiko
+                        .get_pending_l2_tx_list_from_l2_engine(
+                            info.base_fee(),
+                            batches_ready_to_send,
+                            gas_limit_without_anchor,
+                        )
+                        .await
+                }
+                Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
+            }
+        } else {
+            Ok(None)
+        };
+
         self.print_current_slots_info(
             &current_status,
             &pending_tx_list,

@@ -44,7 +44,7 @@ impl BatchBuilder {
     }
 
     // TODO use L2BlockV2 here
-    pub fn can_consume_l2_block(&mut self, l2_block: &L2Block) -> bool {
+    pub fn can_consume_l2_block(&mut self, l2_block: &L2Block, gas_limit: u64) -> bool {
         let is_time_shift_expired = self.is_time_shift_expired(l2_block.timestamp_sec);
         self.current_proposal.as_mut().is_some_and(|batch| {
             let new_block_count = match u16::try_from(batch.l2_blocks.len() + 1) {
@@ -62,8 +62,11 @@ impl BatchBuilder {
                     // second compression, compressing the batch with the new L2 block
                     // we can tolerate the processing overhead as it's a very rare case
                     let mut batch_clone = batch.clone();
-                    let l2_block = batch_clone
-                        .create_block(l2_block.prebuilt_tx_list.clone(), l2_block.timestamp_sec);
+                    let l2_block = batch_clone.create_block(
+                        l2_block.prebuilt_tx_list.clone(),
+                        l2_block.timestamp_sec,
+                        gas_limit,
+                    );
                     batch_clone.add_l2_block(l2_block);
                     batch_clone.compress();
                     new_total_bytes = batch_clone.total_bytes;
@@ -496,10 +499,11 @@ impl BatchBuilder {
         &mut self,
         tx_list: PreBuiltTxList,
         timestamp_sec: u64,
+        gas_limit: u64,
     ) -> Result<L2BlockV2, Error> {
         self.current_proposal
             .as_mut()
-            .map(|proposal| proposal.create_block(tx_list, timestamp_sec))
+            .map(|proposal| proposal.create_block(tx_list, timestamp_sec, gas_limit))
             .ok_or_else(|| anyhow::anyhow!("No current proposal to create block"))
     }
 
