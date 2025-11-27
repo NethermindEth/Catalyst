@@ -23,17 +23,21 @@ impl Default for ForkInfo {
 
 impl ForkInfo {
     pub fn from_config(config: ForkInfoConfig) -> Result<Self, Error> {
-        let fork = Self::choose_current_fork(&config)?;
+        let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?;
+        // TODO: consider changing l2_slot_info timestamp to Duration
+        let fork = Self::choose_current_fork(&config, current_timestamp.as_secs())?;
         Ok(Self { fork, config })
     }
 
-    pub fn is_next_fork_active(&self, _l2_height: u64) -> Result<bool, Error> {
-        Ok(self.fork != Self::choose_current_fork(&self.config)?)
+    pub fn is_next_fork_active(&self, timestamp_sec: u64) -> Result<bool, Error> {
+        Ok(self.fork != Self::choose_current_fork(&self.config, timestamp_sec)?)
     }
 
-    fn choose_current_fork(config: &ForkInfoConfig) -> Result<Fork, Error> {
-        let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?;
-
+    fn choose_current_fork(
+        config: &ForkInfoConfig,
+        current_timestamp_sec: u64,
+    ) -> Result<Fork, Error> {
+        let current_timestamp = Duration::from_secs(current_timestamp_sec);
         // Iterate through Fork variants in reverse order to find the highest fork that should be active
         for (fork_index, fork) in Fork::iter().enumerate().rev() {
             if let Some(&fork_timestamp) = config.fork_switch_timestamps.get(fork_index)

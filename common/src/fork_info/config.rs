@@ -1,5 +1,7 @@
+use super::fork::Fork;
 use crate::config::Config;
 use std::time::Duration;
+use strum::IntoEnumIterator;
 
 #[derive(Debug, Clone)]
 pub struct ForkInfoConfig {
@@ -21,11 +23,14 @@ impl Default for ForkInfoConfig {
 
 impl From<&Config> for ForkInfoConfig {
     fn from(config: &Config) -> Self {
+        let fork_switch_timestamps = Fork::iter()
+            .map(|f| match f {
+                Fork::Pacaya => Duration::from_secs(config.pacaya_timestamp_sec),
+                Fork::Shasta => Duration::from_secs(config.shasta_timestamp_sec),
+            })
+            .collect();
         Self {
-            fork_switch_timestamps: vec![
-                Duration::from_secs(config.pacaya_timestamp_sec),
-                Duration::from_secs(config.shasta_timestamp_sec),
-            ],
+            fork_switch_timestamps,
             fork_switch_transition_period: Duration::from_secs(
                 config.fork_switch_transition_period_sec,
             ),
