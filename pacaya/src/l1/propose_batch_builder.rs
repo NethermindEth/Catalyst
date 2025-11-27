@@ -122,8 +122,6 @@ impl ProposeBatchBuilder {
             )
             .await?;
 
-        // Calculate transaction size by building and RLP encoding the typed transaction
-        // Fallback to estimating based on calldata if building fails
         let tx_size_bytes = match Self::calculate_tx_size_bytes(&tx_calldata) {
             Ok(size) => size,
             Err(e) => {
