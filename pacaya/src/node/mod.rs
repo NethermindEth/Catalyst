@@ -218,9 +218,9 @@ impl Node {
 
     async fn recreate_node_when_next_fork_became_active(
         &self,
-        l2_height: u64,
+        timestamp_sec: u64,
     ) -> Result<bool, Error> {
-        if self.fork_info.is_next_fork_active(l2_height)? {
+        if self.fork_info.is_next_fork_active(timestamp_sec)? {
             debug!("Next fork became active, recreating node...");
             self.cancel_token.cancel();
             return Ok(true);
@@ -280,7 +280,7 @@ impl Node {
             self.get_slot_info_and_status().await?;
 
         if self
-            .recreate_node_when_next_fork_became_active(l2_slot_info.parent_id())
+            .recreate_node_when_next_fork_became_active(l2_slot_info.slot_timestamp())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to check if next fork became active: {}", e))?
         {
