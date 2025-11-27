@@ -5,12 +5,12 @@ use crate::{
     l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
     metrics::Metrics,
-    shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
+    shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
 };
 use alloy::{consensus::BlockHeader, consensus::Transaction};
 use anyhow::Error;
 use batch_builder::BatchBuilder;
-use common::batch_builder::BatchBuilderConfig;
+use common::{batch_builder::BatchBuilderConfig, shared::l2_slot_info_v2::L2SlotContext};
 use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
     l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
@@ -21,6 +21,7 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::forced_inclusion::ForcedInclusion;
+use crate::node::L2SlotInfoV2;
 use crate::node::proposal_manager::proposal::BondInstructionData;
 use alloy::primitives::{B256, U256};
 use proposal::Proposals;
@@ -90,14 +91,11 @@ impl BatchManager {
     pub async fn preconfirm_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_info: &L2SlotInfo,
-        end_of_sequencing: bool,
-        allow_forced_inclusion: bool,
+        l2_slot_context: &L2SlotContext,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let result = if let Some(l2_block) = self.batch_builder.try_creating_l2_block(
             pending_tx_list,
-            l2_slot_info.slot_timestamp(),
-            end_of_sequencing,
+            l2_slot_context,
         ) {
             self.add_new_l2_block(
                 l2_block,
@@ -125,7 +123,7 @@ impl BatchManager {
 
     async fn add_new_l2_block_with_forced_inclusion_when_needed(
         &mut self,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         if self.has_current_forced_inclusion() {
@@ -195,16 +193,15 @@ impl BatchManager {
     async fn add_new_l2_block(
         &mut self,
         l2_block: L2Block,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
         end_of_sequencing: bool,
         operation_type: OperationType,
         allow_forced_inclusion: bool,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         info!(
-            "Adding new L2 block id: {}, timestamp: {}, parent gas used: {}, allow_forced_inclusion: {}",
+            "Adding new L2 block id: {}, timestamp: {}, allow_forced_inclusion: {}",
             l2_slot_info.parent_id() + 1,
             l2_slot_info.slot_timestamp(),
-            l2_slot_info.parent_gas_used(),
             allow_forced_inclusion,
         );
 
@@ -240,7 +237,7 @@ impl BatchManager {
     async fn add_new_l2_block_to_batch(
         &mut self,
         l2_block: L2Block,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
         end_of_sequencing: bool,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
@@ -549,7 +546,7 @@ impl BatchManager {
     pub async fn reanchor_block(
         &mut self,
         pending_tx_list: PreBuiltTxList,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
         _is_forced_inclusion: bool,
         allow_forced_inclusion: bool,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {

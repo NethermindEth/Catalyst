@@ -10,11 +10,13 @@ use alloy::{
     signers::Signature,
 };
 use anyhow::Error;
-use common::shared::{alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon};
+use common::shared::{
+    alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon,
+    l2_slot_info_v2::L2SlotInfoV2,
+};
 use common::{
     crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY},
     l1::traits::PreconferBondProvider,
-    shared::l2_slot_info::L2SlotInfo,
 };
 use pacaya::l2::config::TaikoConfig;
 use taiko_bindings::anchor::Anchor;
@@ -68,7 +70,7 @@ impl L2ExecutionLayer {
     pub async fn construct_anchor_tx(
         &self,
         proposal_id: u64,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
         anchor_block_params: Anchor::BlockParams,
         bond_instructions: BondInstructionData,
     ) -> Result<Transaction, Error> {
