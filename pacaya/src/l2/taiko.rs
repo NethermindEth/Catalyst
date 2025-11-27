@@ -50,7 +50,7 @@ impl Taiko {
             rpc_driver_preconf_timeout: taiko_config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: taiko_config.rpc_driver_status_timeout,
             jwt_secret_bytes: taiko_config.jwt_secret_bytes,
-            call_timeout: Duration::from_secs(taiko_config.preconf_heartbeat_ms / 2),
+            call_timeout: Duration::from_millis(taiko_config.preconf_heartbeat_ms / 2),
         };
         Ok(Self {
             protocol_config,
