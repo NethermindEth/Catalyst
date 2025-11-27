@@ -50,7 +50,7 @@ impl Taiko {
             rpc_driver_preconf_timeout: taiko_config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: taiko_config.rpc_driver_status_timeout,
             jwt_secret_bytes: taiko_config.jwt_secret_bytes,
-            call_timeout: Duration::from_secs(taiko_config.preconf_heartbeat_ms / 2),
+            call_timeout: Duration::from_millis(taiko_config.preconf_heartbeat_ms / 2),
         };
         Ok(Self {
             protocol_config,
@@ -77,7 +77,7 @@ impl Taiko {
             .get_pending_l2_tx_list(
                 base_fee,
                 batches_ready_to_send,
-                self.get_protocol_config().get_block_max_gas_limit(),
+                self.get_protocol_config().get_block_max_gas_limit().into(),
             )
             .await
     }
@@ -132,24 +132,6 @@ impl Taiko {
             .await
     }
 
-    pub async fn get_l2_block_info(
-        &self,
-        block: BlockNumberOrTag,
-    ) -> Result<(u64, B256, u64, u64), Error> {
-        let block = self
-            .l2_execution_layer
-            .common()
-            .get_block_header(block)
-            .await?;
-
-        Ok((
-            block.header.number(),
-            block.header.hash,
-            block.header.gas_used(),
-            block.header.timestamp(),
-        ))
-    }
-
     pub async fn get_l2_block_hash(&self, number: u64) -> Result<B256, Error> {
         self.l2_execution_layer
             .common()
@@ -173,9 +155,17 @@ impl Taiko {
         block: BlockNumberOrTag,
     ) -> Result<L2SlotInfo, Error> {
         let l2_slot_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
-        let (parent_id, parent_hash, parent_gas_used, parent_timestamp) =
-            self.get_l2_block_info(block).await?;
-
+        let block_info = self
+            .l2_execution_layer
+            .common()
+            .get_block_header(block)
+            .await?;
+        let parent_id = block_info.header.number();
+        let parent_hash = block_info.header.hash;
+        let parent_gas_used = block_info.header.gas_used();
+        // For Pacaya we do not use that value so we can set it to zero
+        let parent_gas_limit_without_anchor = 0;
+        let parent_timestamp = block_info.header.timestamp();
         // Safe conversion with overflow check
         let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
             anyhow::anyhow!("parent_gas_used {} exceeds u32 max value", parent_gas_used)
@@ -206,6 +196,7 @@ impl Taiko {
             parent_id,
             parent_hash,
             parent_gas_used_u32,
+            parent_gas_limit_without_anchor,
             parent_timestamp,
         ))
     }

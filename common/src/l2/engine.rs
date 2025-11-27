@@ -60,7 +60,7 @@ impl L2Engine {
         &self,
         base_fee: u64,
         batches_ready_to_send: u64,
-        block_max_gas_limit: u32,
+        block_max_gas_limit: u64,
     ) -> Result<Option<PreBuiltTxList>, Error> {
         let max_bytes_per_tx_list = calculate_max_bytes_per_tx_list(
             self.config.max_bytes_per_tx_list,

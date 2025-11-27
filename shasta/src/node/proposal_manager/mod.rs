@@ -208,7 +208,10 @@ impl BatchManager {
             allow_forced_inclusion,
         );
 
-        if !self.batch_builder.can_consume_l2_block(&l2_block) {
+        if !self
+            .batch_builder
+            .can_consume_l2_block(&l2_block, l2_slot_info.parent_gas_limit_without_anchor())
+        {
             // Create new batch
             let _ = self.create_new_batch().await?;
 
@@ -242,9 +245,11 @@ impl BatchManager {
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         // TODO fix block production
-        let l2_block_v2 = self
-            .batch_builder
-            .create_block(l2_block.prebuilt_tx_list, l2_block.timestamp_sec)?;
+        let l2_block_v2 = self.batch_builder.create_block(
+            l2_block.prebuilt_tx_list,
+            l2_block.timestamp_sec,
+            l2_slot_info.parent_gas_limit_without_anchor(),
+        )?;
 
         let proposal = self
             .batch_builder
