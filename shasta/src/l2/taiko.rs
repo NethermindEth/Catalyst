@@ -171,15 +171,19 @@ impl Taiko {
         let parent_gas_limit = block_info.header.gas_limit();
         let parent_timestamp = block_info.header.timestamp();
 
-        let parent_gas_limit_without_anchor = parent_gas_limit
-            .checked_sub(ANCHOR_V3_V4_GAS_LIMIT)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "parent_gas_limit {} is less than ANCHOR_V3_V4_GAS_LIMIT {}",
-                    parent_gas_limit,
-                    ANCHOR_V3_V4_GAS_LIMIT
-                )
-            })?;
+        let parent_gas_limit_without_anchor = if parent_id != 0 {
+            parent_gas_limit
+                .checked_sub(ANCHOR_V3_V4_GAS_LIMIT)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "parent_gas_limit {} is less than ANCHOR_V3_V4_GAS_LIMIT {}",
+                        parent_gas_limit,
+                        ANCHOR_V3_V4_GAS_LIMIT
+                    )
+                })?
+        } else {
+            parent_gas_limit
+        };
 
         // Safe conversion with overflow check
         let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
