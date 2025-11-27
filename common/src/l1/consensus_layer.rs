@@ -136,7 +136,11 @@ pub mod tests {
     #[tokio::test]
     async fn test_get_genesis_data() {
         let server = setup_server().await;
-        let cl = ConsensusLayer::new(server.url().as_str(), Duration::from_secs(1)).unwrap();
+        let cl = ConsensusLayer::new(
+            format!("{}/", server.url()).as_str(),
+            Duration::from_secs(1),
+        )
+        .unwrap();
         let genesis_time = cl.get_genesis_time().await.unwrap();
 
         assert_eq!(genesis_time, 1590832934);
@@ -145,7 +149,11 @@ pub mod tests {
     #[tokio::test]
     async fn test_get_head_slot_number() {
         let server = setup_server().await;
-        let cl = ConsensusLayer::new(server.url().as_str(), Duration::from_secs(1)).unwrap();
+        let cl = ConsensusLayer::new(
+            format!("{}/", server.url()).as_str(),
+            Duration::from_secs(1),
+        )
+        .unwrap();
         let slot = cl.get_head_slot_number().await.unwrap();
 
         assert_eq!(slot, 4269575);
