@@ -7,7 +7,7 @@ use common::{
     fork_info::ForkInfo,
     l1::slot_clock::{Clock, SlotClock},
     l2::taiko_driver::{StatusProvider, models::TaikoStatus},
-    shared::l2_slot_info::L2SlotInfo,
+    shared::l2_slot_info::SlotData,
     utils::{cancellation_token::CancellationToken, types::*},
 };
 pub use status::Status;
@@ -66,7 +66,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
     }
 
     /// Get the current status of the operator based on the current L1 and L2 slots
-    pub async fn get_status(&mut self, l2_slot_info: &L2SlotInfo) -> Result<Status, Error> {
+    pub async fn get_status<S: SlotData>(&mut self, l2_slot_info: &S) -> Result<Status, Error> {
         if !self
             .execution_layer
             .is_preconf_router_specified_in_taiko_wrapper()
@@ -184,9 +184,9 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         }
     }
 
-    async fn is_driver_synced(
+    async fn is_driver_synced<S: SlotData>(
         &mut self,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &S,
         driver_status: &TaikoStatus,
     ) -> Result<bool, Error> {
         let taiko_geth_synced_with_l1 = self.is_taiko_geth_synced_with_l1(l2_slot_info).await?;
@@ -210,12 +210,12 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         Ok(false)
     }
 
-    async fn is_preconfer(
+    async fn is_preconfer<S: SlotData>(
         &mut self,
         current_operator: bool,
         handover_window: bool,
         l1_slot: Slot,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &S,
         driver_status: &TaikoStatus,
     ) -> Result<bool, Error> {
         if self
@@ -246,10 +246,10 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         }
     }
 
-    async fn is_handover_buffer(
+    async fn is_handover_buffer<S: SlotData>(
         &self,
         l1_slot: Slot,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &S,
         driver_status: &TaikoStatus,
     ) -> Result<bool, Error> {
         if self.get_ms_from_handover_window_start(l1_slot)? <= self.handover_start_buffer_ms {
@@ -263,10 +263,10 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         Ok(false)
     }
 
-    fn end_of_sequencing_marker_received(
+    fn end_of_sequencing_marker_received<S: SlotData>(
         &self,
         driver_status: &TaikoStatus,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &S,
     ) -> bool {
         *l2_slot_info.parent_hash() == driver_status.end_of_sequencing_block_hash
     }
@@ -300,10 +300,10 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         Ok(result)
     }
 
-    async fn is_block_height_synced_between_taiko_geth_and_the_driver(
+    async fn is_block_height_synced_between_taiko_geth_and_the_driver<S: SlotData>(
         &self,
         status: &TaikoStatus,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &S,
     ) -> Result<bool, Error> {
         if status.highest_unsafe_l2_payload_block_id == 0 {
             return Ok(true);
@@ -320,7 +320,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         Ok(taiko_geth_height == status.highest_unsafe_l2_payload_block_id)
     }
 
-    async fn is_taiko_geth_synced_with_l1(&self, l2_slot_info: &L2SlotInfo) -> Result<bool, Error> {
+    async fn is_taiko_geth_synced_with_l1<S: SlotData>(&self, l2_slot_info: &S) -> Result<bool, Error> {
         let taiko_inbox_height = self
             .execution_layer
             .get_l2_height_from_taiko_inbox()

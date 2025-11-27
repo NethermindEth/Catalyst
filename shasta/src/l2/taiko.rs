@@ -9,7 +9,7 @@ use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
     primitives::{Address, B256},
-    rpc::types::Transaction,
+    rpc::types::{Block, Transaction},
 };
 use anyhow::Error;
 use common::{
@@ -24,10 +24,10 @@ use common::{
     },
     metrics::Metrics,
     shared::{
-        l2_slot_info::L2SlotInfo,
         l2_tx_lists::{self, PreBuiltTxList},
     },
 };
+use crate::node::L2SlotInfoV2;
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use taiko_bindings::anchor::Anchor;
@@ -150,26 +150,25 @@ impl Taiko {
             .await
     }
 
-    pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfo, Error> {
+    pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfoV2, Error> {
         self.get_l2_slot_info_by_parent_block(BlockNumberOrTag::Latest)
             .await
     }
 
     pub async fn get_l2_slot_info_by_parent_block(
         &self,
-        block: BlockNumberOrTag,
-    ) -> Result<L2SlotInfo, Error> {
+        parent: BlockNumberOrTag,
+    ) -> Result<L2SlotInfoV2, Error> {
         let l2_slot_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
-        let block_info = self
+        let parent_block = self
             .l2_execution_layer
             .common()
-            .get_block_header(block)
+            .get_block_header(parent)
             .await?;
-        let parent_id = block_info.header.number();
-        let parent_hash = block_info.header.hash;
-        let parent_gas_used = block_info.header.gas_used();
-        let parent_gas_limit = block_info.header.gas_limit();
-        let parent_timestamp = block_info.header.timestamp();
+        let parent_id = parent_block.header.number();
+        let parent_hash = parent_block.header.hash;
+        let parent_gas_limit = parent_block.header.gas_limit();
+        let parent_timestamp = parent_block.header.timestamp();
 
         let parent_gas_limit_without_anchor = if parent_id != 0 {
             parent_gas_limit
@@ -185,41 +184,28 @@ impl Taiko {
             parent_gas_limit
         };
 
-        // Safe conversion with overflow check
-        let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
-            anyhow::anyhow!("parent_gas_used {} exceeds u32 max value", parent_gas_used)
-        })?;
-
-        let base_fee: u64 = self.get_base_fee(block).await?;
+        let base_fee: u64 = self.get_base_fee(parent_block).await?;
 
         trace!(
             timestamp = %l2_slot_timestamp,
             parent_hash = %parent_hash,
-            parent_gas_used = %parent_gas_used_u32,
             parent_gas_limit_without_anchor = %parent_gas_limit_without_anchor,
             parent_timestamp = %parent_timestamp,
             base_fee = %base_fee,
             "L2 slot info"
         );
 
-        Ok(L2SlotInfo::new(
+        Ok(L2SlotInfoV2::new(
             base_fee,
             l2_slot_timestamp,
             parent_id,
             parent_hash,
-            parent_gas_used_u32,
             parent_gas_limit_without_anchor,
             parent_timestamp,
         ))
     }
 
-    async fn get_base_fee(&self, block: BlockNumberOrTag) -> Result<u64, Error> {
-        let parent_block = self
-            .l2_execution_layer
-            .common()
-            .get_block_header(block)
-            .await?;
-
+    async fn get_base_fee(&self, parent_block: Block) -> Result<u64, Error> {
         if parent_block.header.number() == 0 {
             return Ok(taiko_alethia_reth::eip4396::SHASTA_INITIAL_BASE_FEE);
         }
@@ -252,7 +238,7 @@ impl Taiko {
     pub async fn advance_head_to_new_l2_block(
         &self,
         proposal: &Proposal,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
         tx_list: Vec<Transaction>,
         end_of_sequencing: bool,
         is_forced_inclusion: bool,

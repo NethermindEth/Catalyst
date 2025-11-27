@@ -6,7 +6,7 @@ use common::{
     fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
-    shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
+    shared::{l2_tx_lists::PreBuiltTxList},
     utils as common_utils,
     utils::cancellation_token::CancellationToken,
 };
@@ -31,6 +31,9 @@ use verifier::{VerificationResult, Verifier};
 
 mod l2_height_from_l1;
 pub use l2_height_from_l1::get_l2_height_from_l1;
+
+mod l2_slot_info_v2;
+pub use l2_slot_info_v2::L2SlotInfoV2;
 
 pub struct Node {
     config: NodeConfig,
@@ -158,7 +161,7 @@ impl Node {
     async fn preconfirm_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
         end_of_sequencing: bool,
         allow_forced_inclusion: bool,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
@@ -407,7 +410,7 @@ impl Node {
         &mut self,
         error: &TransactionError,
         _current_status: &OperatorStatus,
-        _l2_slot_info: &L2SlotInfo,
+        _l2_slot_info: &L2SlotInfoV2,
     ) -> Result<(), Error> {
         info!("Handling transaction error: {error}");
         Ok(())
@@ -415,7 +418,7 @@ impl Node {
 
     async fn get_slot_info_and_status(
         &mut self,
-    ) -> Result<(L2SlotInfo, OperatorStatus, Option<PreBuiltTxList>), Error> {
+    ) -> Result<(L2SlotInfoV2, OperatorStatus, Option<PreBuiltTxList>), Error> {
         let l2_slot_info = self.taiko.get_l2_slot_info().await;
         let current_status = match &l2_slot_info {
             Ok(info) => self.operator.get_status(info).await,
@@ -482,7 +485,7 @@ impl Node {
     /// Returns true if reanchor was triggered.
     async fn check_and_handle_anchor_offset_for_unsafe_l2_blocks(
         &mut self,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
     ) -> Result<bool, Error> {
         debug!("Checking anchor offset for unsafe L2 blocks to do fast reanchor when needed");
         let taiko_inbox_height =
@@ -535,7 +538,7 @@ impl Node {
     async fn check_transaction_error_channel(
         &mut self,
         current_status: &OperatorStatus,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
     ) -> Result<(), Error> {
         match self.transaction_error_channel.try_recv() {
             Ok(error) => {
@@ -561,7 +564,7 @@ impl Node {
         &self,
         current_status: &Result<OperatorStatus, Error>,
         pending_tx_list: &Result<Option<PreBuiltTxList>, Error>,
-        l2_slot_info: &Result<L2SlotInfo, Error>,
+        l2_slot_info: &Result<L2SlotInfoV2, Error>,
         batches_number: u64,
     ) -> Result<(), Error> {
         let l1_slot = self.ethereum_l1.slot_clock.get_current_slot()?;

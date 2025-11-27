@@ -14,11 +14,11 @@ use common::shared::{alloy_tools, execution_layer::ExecutionLayer as ExecutionLa
 use common::{
     crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY},
     l1::traits::PreconferBondProvider,
-    shared::l2_slot_info::L2SlotInfo,
 };
 use pacaya::l2::config::TaikoConfig;
 use taiko_bindings::anchor::Anchor;
 use tracing::{debug, info, warn};
+use crate::node::L2SlotInfoV2;
 
 use serde_json::Value;
 pub struct L2ExecutionLayer {
@@ -68,7 +68,7 @@ impl L2ExecutionLayer {
     pub async fn construct_anchor_tx(
         &self,
         proposal_id: u64,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
         anchor_block_params: Anchor::BlockParams,
         bond_instructions: BondInstructionData,
     ) -> Result<Transaction, Error> {
