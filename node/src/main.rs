@@ -75,7 +75,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
             // TODO pacaya::utils::config::Config
             let next_fork_timestamp = fork_info.config.fork_switch_timestamps.get(1);
             info!(
-                "Current fork:  PACAYA 🌋, next fork timestamp: {:?}",
+                "Current fork: PACAYA 🌋, next fork timestamp: {:?}",
                 next_fork_timestamp
             );
             create_pacaya_node(
