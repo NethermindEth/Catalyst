@@ -103,6 +103,17 @@ impl Config {
             );
         }
 
+        let l1_beacon_url = {
+            let mut url = std::env::var("L1_BEACON_URL").unwrap_or_else(|_| {
+                warn!("No L1 beacon URL found in L1_BEACON_URL env var, using default",);
+                "http://127.0.0.1:4000".to_string()
+            });
+            if !url.ends_with('/') {
+                url.push('/');
+            }
+            url
+        };
+
         let extra_gas_percentage = std::env::var("EXTRA_GAS_PERCENTAGE")
             .unwrap_or("100".to_string())
             .parse::<u64>()
@@ -361,8 +372,7 @@ impl Config {
                 .split(",")
                 .map(|s| s.to_string())
                 .collect(),
-            l1_beacon_url: std::env::var("L1_BEACON_URL")
-                .unwrap_or("http://127.0.0.1:4000".to_string()),
+            l1_beacon_url,
             blob_indexer_url: std::env::var("BLOB_INDEXER_URL").ok(),
             web3signer_l1_url,
             web3signer_l2_url,

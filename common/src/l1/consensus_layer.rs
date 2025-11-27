@@ -11,6 +11,9 @@ pub struct ConsensusLayer {
 
 impl ConsensusLayer {
     pub fn new(rpc_url: &str, timeout: Duration) -> Result<Self, Error> {
+        if !rpc_url.ends_with('/') {
+            return Err(anyhow::anyhow!("Consensus layer URL must end with '/'"));
+        }
         let client = reqwest::Client::builder().timeout(timeout).build()?;
         Ok(Self {
             client,
@@ -20,7 +23,7 @@ impl ConsensusLayer {
 
     pub async fn get_blob_sidecars(&self, slot: u64) -> Result<BeaconBlobBundle, Error> {
         let res = self
-            .get(format!("/eth/v1/beacon/blob_sidecars/{slot}").as_str())
+            .get(format!("eth/v1/beacon/blob_sidecars/{slot}").as_str())
             .await?;
         let sidecar: BeaconBlobBundle = serde_json::from_value(res)?;
         Ok(sidecar)
@@ -28,7 +31,7 @@ impl ConsensusLayer {
 
     pub async fn get_genesis_time(&self) -> Result<u64, Error> {
         tracing::debug!("Getting genesis time");
-        let genesis = self.get("/eth/v1/beacon/genesis").await?;
+        let genesis = self.get("eth/v1/beacon/genesis").await?;
         let genesis_time = genesis
             .get("data")
             .and_then(|data| data.get("genesis_time"))
@@ -42,7 +45,7 @@ impl ConsensusLayer {
     }
 
     pub async fn get_head_slot_number(&self) -> Result<u64, Error> {
-        let headers = self.get("/eth/v1/beacon/headers/head").await?;
+        let headers = self.get("eth/v1/beacon/headers/head").await?;
 
         let slot = headers
             .get("data")
@@ -61,7 +64,7 @@ impl ConsensusLayer {
 
     pub async fn get_validators_for_epoch(&self, epoch: u64) -> Result<Vec<String>, Error> {
         let response = self
-            .get(format!("/eth/v1/validator/duties/proposer/{epoch}").as_str())
+            .get(format!("eth/v1/validator/duties/proposer/{epoch}").as_str())
             .await?;
 
         let validators_response = response
@@ -173,5 +176,17 @@ pub mod tests {
             .create();
 
         server
+    }
+
+    #[test]
+    fn test_join_path() {
+        let base =
+            reqwest::Url::parse("https://lb.drpc.test/eth-beacon-chain-hoodi/oasijdfjoasfmd/")
+                .unwrap();
+        let url = base.join("eth/v1/beacon/genesis").unwrap();
+        assert_eq!(
+            url.as_str(),
+            "https://lb.drpc.test/eth-beacon-chain-hoodi/oasijdfjoasfmd/eth/v1/beacon/genesis"
+        );
     }
 }
