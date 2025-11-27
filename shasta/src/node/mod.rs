@@ -6,7 +6,7 @@ use common::{
     fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
-    shared::{l2_tx_lists::PreBuiltTxList},
+    shared::l2_tx_lists::PreBuiltTxList,
     utils as common_utils,
     utils::cancellation_token::CancellationToken,
 };
@@ -19,6 +19,7 @@ use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
 use common::batch_builder::BatchBuilderConfig;
 use common::l1::traits::PreconferProvider;
 use common::shared::head_verifier::HeadVerifier;
+use common::shared::l2_slot_info_v2::L2SlotInfoV2;
 use proposal_manager::BatchManager;
 
 use tokio::{
@@ -31,9 +32,6 @@ use verifier::{VerificationResult, Verifier};
 
 mod l2_height_from_l1;
 pub use l2_height_from_l1::get_l2_height_from_l1;
-
-mod l2_slot_info_v2;
-pub use l2_slot_info_v2::L2SlotInfoV2;
 
 pub struct Node {
     config: NodeConfig,

@@ -1,5 +1,11 @@
+use super::l2_slot_info::SlotData;
 use alloy::primitives::B256;
-use common::shared::l2_slot_info::SlotData;
+
+pub struct L2SlotContext {
+    pub info: L2SlotInfoV2,
+    pub end_of_sequencing: bool,
+    pub allow_forced_inclusion: bool,
+}
 
 pub struct L2SlotInfoV2 {
     base_fee: u64,

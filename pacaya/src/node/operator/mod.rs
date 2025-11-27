@@ -320,7 +320,10 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         Ok(taiko_geth_height == status.highest_unsafe_l2_payload_block_id)
     }
 
-    async fn is_taiko_geth_synced_with_l1<S: SlotData>(&self, l2_slot_info: &S) -> Result<bool, Error> {
+    async fn is_taiko_geth_synced_with_l1<S: SlotData>(
+        &self,
+        l2_slot_info: &S,
+    ) -> Result<bool, Error> {
         let taiko_inbox_height = self
             .execution_layer
             .get_l2_height_from_taiko_inbox()

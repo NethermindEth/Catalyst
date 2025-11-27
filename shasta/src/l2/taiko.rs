@@ -24,10 +24,10 @@ use common::{
     },
     metrics::Metrics,
     shared::{
+        l2_slot_info_v2::L2SlotInfoV2,
         l2_tx_lists::{self, PreBuiltTxList},
     },
 };
-use crate::node::L2SlotInfoV2;
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use taiko_bindings::anchor::Anchor;

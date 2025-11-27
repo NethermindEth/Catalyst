@@ -10,7 +10,10 @@ use alloy::{
     signers::Signature,
 };
 use anyhow::Error;
-use common::shared::{alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon};
+use common::shared::{
+    alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon,
+    l2_slot_info_v2::L2SlotInfoV2,
+};
 use common::{
     crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY},
     l1::traits::PreconferBondProvider,
@@ -18,7 +21,6 @@ use common::{
 use pacaya::l2::config::TaikoConfig;
 use taiko_bindings::anchor::Anchor;
 use tracing::{debug, info, warn};
-use crate::node::L2SlotInfoV2;
 
 use serde_json::Value;
 pub struct L2ExecutionLayer {
