@@ -109,6 +109,7 @@ mod tests {
             ]),
             0,
             0,
+            0,
         )
     }
 
@@ -388,7 +389,7 @@ mod tests {
         // Override the handover start buffer to be larger than the mock timestamp
         assert_eq!(
             operator
-                .get_status(&L2SlotInfo::new(0, 0, 0, get_test_hash(), 0, 0))
+                .get_status(&L2SlotInfo::new(0, 0, 0, get_test_hash(), 0, 0, 0))
                 .await
                 .unwrap(),
             Status::new(true, false, true, false, true)
@@ -530,7 +531,7 @@ mod tests {
         // fork switch timestamp is 100 seconds
         const CURRENT_TIMESTAMP: u64 = 90;
         let mut operator = create_operator_with_fork_switch_transition_period(CURRENT_TIMESTAMP);
-        let l2_slot_info = L2SlotInfo::new(0, CURRENT_TIMESTAMP, 0, get_test_hash(), 0, 0);
+        let l2_slot_info = L2SlotInfo::new(0, CURRENT_TIMESTAMP, 0, get_test_hash(), 0, 0, 0);
         assert_eq!(
             operator.get_status(&l2_slot_info).await.unwrap(),
             Status::new(false, true, false, false, true)

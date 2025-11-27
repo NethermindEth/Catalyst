@@ -34,7 +34,7 @@ use taiko_bindings::anchor::Anchor;
 use tracing::{debug, trace};
 
 // TODO: retrieve from protocol
-const BLOCK_GAS_LIMIT: u32 = 16_000_000;
+const ANCHOR_V3_V4_GAS_LIMIT: u64 = 1_000_000;
 
 pub struct Taiko {
     protocol_config: ProtocolConfig,
@@ -86,9 +86,10 @@ impl Taiko {
         &self,
         base_fee: u64,
         batches_ready_to_send: u64,
+        gas_limit: u64,
     ) -> Result<Option<PreBuiltTxList>, Error> {
         self.l2_engine
-            .get_pending_l2_tx_list(base_fee, batches_ready_to_send, BLOCK_GAS_LIMIT)
+            .get_pending_l2_tx_list(base_fee, batches_ready_to_send, gas_limit)
             .await
     }
 
@@ -142,24 +143,6 @@ impl Taiko {
             .await
     }
 
-    pub async fn get_l2_block_info(
-        &self,
-        block: BlockNumberOrTag,
-    ) -> Result<(u64, B256, u64, u64), Error> {
-        let block = self
-            .l2_execution_layer
-            .common()
-            .get_block_header(block)
-            .await?;
-
-        Ok((
-            block.header.number(),
-            block.header.hash,
-            block.header.gas_used(),
-            block.header.timestamp(),
-        ))
-    }
-
     pub async fn get_l2_block_hash(&self, number: u64) -> Result<B256, Error> {
         self.l2_execution_layer
             .common()
@@ -177,8 +160,30 @@ impl Taiko {
         block: BlockNumberOrTag,
     ) -> Result<L2SlotInfo, Error> {
         let l2_slot_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
-        let (parent_id, parent_hash, parent_gas_used, parent_timestamp) =
-            self.get_l2_block_info(block).await?;
+        let block_info = self
+            .l2_execution_layer
+            .common()
+            .get_block_header(block)
+            .await?;
+        let parent_id = block_info.header.number();
+        let parent_hash = block_info.header.hash;
+        let parent_gas_used = block_info.header.gas_used();
+        let parent_gas_limit = block_info.header.gas_limit();
+        let parent_timestamp = block_info.header.timestamp();
+
+        let parent_gas_limit_without_anchor = if parent_id != 0 {
+            parent_gas_limit
+                .checked_sub(ANCHOR_V3_V4_GAS_LIMIT)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "parent_gas_limit {} is less than ANCHOR_V3_V4_GAS_LIMIT {}",
+                        parent_gas_limit,
+                        ANCHOR_V3_V4_GAS_LIMIT
+                    )
+                })?
+        } else {
+            parent_gas_limit
+        };
 
         // Safe conversion with overflow check
         let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
@@ -191,6 +196,8 @@ impl Taiko {
             timestamp = %l2_slot_timestamp,
             parent_hash = %parent_hash,
             parent_gas_used = %parent_gas_used_u32,
+            parent_gas_limit_without_anchor = %parent_gas_limit_without_anchor,
+            parent_timestamp = %parent_timestamp,
             base_fee = %base_fee,
             "L2 slot info"
         );
@@ -201,6 +208,7 @@ impl Taiko {
             parent_id,
             parent_hash,
             parent_gas_used_u32,
+            parent_gas_limit_without_anchor,
             parent_timestamp,
         ))
     }
@@ -314,7 +322,7 @@ impl Taiko {
             block_number: l2_slot_info.parent_id() + 1,
             extra_data: format!("0x{:04x}", extra_data),
             fee_recipient: proposal.coinbase.to_string(),
-            gas_limit: BLOCK_GAS_LIMIT.into(),
+            gas_limit: l2_slot_info.parent_gas_limit_without_anchor() + ANCHOR_V3_V4_GAS_LIMIT,
             parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
             timestamp,
             transactions: format!("0x{}", hex::encode(tx_list_bytes)),
