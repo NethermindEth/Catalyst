@@ -1,6 +1,7 @@
 use super::bindings::*;
 use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
+    consensus::transaction::RlpEcdsaEncodableTx,
     network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{Address, Bytes, FixedBytes},
     providers::{DynProvider, Provider},
@@ -8,6 +9,7 @@ use alloy::{
     sol_types::SolValue,
 };
 use alloy_json_rpc::RpcError;
+use alloy_rlp::BufMut;
 use anyhow::{Error, anyhow};
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use tracing::warn;
@@ -119,6 +121,28 @@ impl ProposeBatchBuilder {
                 &forced_inclusion,
             )
             .await?;
+
+        // Calculate transaction size by building and RLP encoding the typed transaction
+        // Fallback to estimating based on calldata if building fails
+        let tx_size_bytes = match Self::calculate_tx_size_bytes(&tx_calldata) {
+            Ok(size) => size,
+            Err(e) => {
+                warn!(
+                    "Build proposeBatch: Failed to calculate transaction size: {}",
+                    e
+                );
+                return Ok(tx_blob);
+            }
+        };
+        const MAX_TX_SIZE_BYTES: usize = 128 * 1024; // 128 KB
+        if tx_size_bytes > MAX_TX_SIZE_BYTES {
+            warn!(
+                "Build proposeBatch: eip1559 transaction size is too large: {} bytes, using eip4844 transaction",
+                tx_size_bytes
+            );
+            return Ok(tx_blob);
+        }
+
         let tx_calldata_gas = match self.provider_ws.estimate_gas(tx_calldata.clone()).await {
             Ok(gas) => gas,
             Err(e) => {
@@ -167,6 +191,18 @@ impl ProposeBatchBuilder {
         } else {
             Ok(fees_per_gas.update_eip1559(tx_calldata, tx_calldata_gas))
         }
+    }
+
+    fn calculate_tx_size_bytes(tx: &TransactionRequest) -> Result<usize, Error> {
+        let typed_tx = tx.clone().build_typed_tx().map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to build typed transaction for calculating size: {:?}",
+                e
+            )
+        })?;
+        let mut buffer = Vec::<u8>::new();
+        typed_tx.rlp_encode(&mut buffer as &mut dyn BufMut);
+        Ok(buffer.len())
     }
 
     #[allow(clippy::too_many_arguments)]
