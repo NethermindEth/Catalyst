@@ -10,7 +10,7 @@ use crate::{
 use alloy::{consensus::BlockHeader, consensus::Transaction};
 use anyhow::Error;
 use batch_builder::BatchBuilder;
-use common::batch_builder::BatchBuilderConfig;
+use common::{batch_builder::BatchBuilderConfig, shared::l2_slot_info_v2::L2SlotContext};
 use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
     l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
@@ -91,14 +91,11 @@ impl BatchManager {
     pub async fn preconfirm_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_info: &L2SlotInfoV2,
-        end_of_sequencing: bool,
-        allow_forced_inclusion: bool,
+        l2_slot_context: &L2SlotContext,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let result = if let Some(l2_block) = self.batch_builder.try_creating_l2_block(
             pending_tx_list,
-            l2_slot_info.slot_timestamp(),
-            end_of_sequencing,
+            l2_slot_context,
         ) {
             self.add_new_l2_block(
                 l2_block,

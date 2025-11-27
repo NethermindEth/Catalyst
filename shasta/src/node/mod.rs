@@ -6,9 +6,8 @@ use common::{
     fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
-    shared::l2_tx_lists::PreBuiltTxList,
-    utils as common_utils,
-    utils::cancellation_token::CancellationToken,
+    shared::{l2_slot_info_v2::L2SlotContext, l2_tx_lists::PreBuiltTxList},
+    utils::{self as common_utils, cancellation_token::CancellationToken},
 };
 use pacaya::node::operator::Status as OperatorStatus;
 use pacaya::node::{config::NodeConfig, operator::Operator};
@@ -159,17 +158,13 @@ impl Node {
     async fn preconfirm_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_info: &L2SlotInfoV2,
-        end_of_sequencing: bool,
-        allow_forced_inclusion: bool,
+        l2_slot_context: &L2SlotContext,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let result = self
             .proposal_manager
             .preconfirm_block(
                 pending_tx_list,
-                l2_slot_info,
-                end_of_sequencing,
-                allow_forced_inclusion,
+                l2_slot_context,
             )
             .await?;
         Ok(result)
@@ -261,14 +256,19 @@ impl Node {
                     "Unexpected L2 head detected. Restarting node..."
                 ));
             }
+
+            let l2_slot_context = L2SlotContext {
+                info: &l2_slot_info,
+                end_of_sequencing: current_status.is_end_of_sequencing(),
+                allow_forced_inclusion: self.config.propose_forced_inclusion
+                    && current_status.is_submitter()
+                    && self.verifier.is_none(),
+            };
+
             let preconfed_block = self
                 .preconfirm_block(
                     pending_tx_list,
-                    &l2_slot_info,
-                    current_status.is_end_of_sequencing(),
-                    self.config.propose_forced_inclusion
-                        && current_status.is_submitter()
-                        && self.verifier.is_none(),
+                    &l2_slot_context,
                 )
                 .await?;
 

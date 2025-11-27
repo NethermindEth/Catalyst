@@ -9,7 +9,7 @@ use crate::{
 };
 use alloy::primitives::Address;
 use anyhow::Error;
-use common::{batch_builder::BatchBuilderConfig, shared::l2_block_v2::L2BlockV2};
+use common::{batch_builder::BatchBuilderConfig, shared::{l2_block_v2::L2BlockV2, l2_slot_info_v2::L2SlotContext}};
 use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
     shared::anchor_block_info::AnchorBlockInfo,
@@ -451,16 +451,15 @@ impl BatchBuilder {
     pub fn try_creating_l2_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_timestamp: u64,
-        end_of_sequencing: bool,
-    ) -> Option<L2Block> {
+        l2_slot_context: &L2SlotContext,
+    ) -> Option<L2BlockV2> {
         let tx_list_len = pending_tx_list
             .as_ref()
             .map(|tx_list| tx_list.tx_list.len())
             .unwrap_or(0);
         if self.should_new_block_be_created(
             tx_list_len as u64,
-            l2_slot_timestamp,
+            l2_slot_context.info.slot_timestamp(),
             end_of_sequencing,
         ) {
             if let Some(pending_tx_list) = pending_tx_list {
