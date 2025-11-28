@@ -1,5 +1,5 @@
 use super::{
-    PreconfOperator,
+    OperatorError, PreconfOperator,
     bindings::{
         BatchParams, BlockParams, PreconfWhitelist,
         forced_inclusion_store::{IForcedInclusionStore, IForcedInclusionStore::ForcedInclusion},
@@ -325,43 +325,66 @@ impl ExecutionLayer {
         Ok(balance.min(allowance))
     }
 
-    async fn get_operator_for_current_epoch(&self) -> Result<Address, Error> {
+    async fn get_operator_for_current_epoch(
+        &self,
+        current_epoch_timestamp: u64,
+    ) -> Result<Address, OperatorError> {
+        let latest_block_timestamp = self
+            .common
+            .get_latest_block_timestamp()
+            .await
+            .map_err(OperatorError::Any)?;
+        if latest_block_timestamp < current_epoch_timestamp {
+            return Err(OperatorError::OperatorCheckTooEarly);
+        }
+
         let contract = PreconfWhitelist::new(
             self.config.contract_addresses.preconf_whitelist,
             &self.provider,
         );
+
         let operator = contract
             .getOperatorForCurrentEpoch()
-            .block(alloy::eips::BlockId::pending())
+            .block(alloy::eips::BlockId::latest())
             .call()
             .await
             .map_err(|e| {
-                Error::msg(format!(
+                OperatorError::Any(Error::msg(format!(
                     "Failed to get operator for current epoch: {}, contract: {:?}",
                     e, self.config.contract_addresses.preconf_whitelist
-                ))
+                )))
             })?;
-        tracing::debug!("get_operator_for_current_epoch: {:?}", operator);
         Ok(operator)
     }
 
-    async fn get_operator_for_next_epoch(&self) -> Result<Address, Error> {
+    async fn get_operator_for_next_epoch(
+        &self,
+        current_epoch_timestamp: u64,
+    ) -> Result<Address, OperatorError> {
+        let latest_block_timestamp = self
+            .common
+            .get_latest_block_timestamp()
+            .await
+            .map_err(OperatorError::Any)?;
+        if latest_block_timestamp < current_epoch_timestamp {
+            return Err(OperatorError::OperatorCheckTooEarly);
+        }
+
         let contract = PreconfWhitelist::new(
             self.config.contract_addresses.preconf_whitelist,
             &self.provider,
         );
         let operator = contract
             .getOperatorForNextEpoch()
-            .block(alloy::eips::BlockId::pending())
+            .block(alloy::eips::BlockId::latest())
             .call()
             .await
             .map_err(|e| {
-                Error::msg(format!(
+                OperatorError::Any(Error::msg(format!(
                     "Failed to get operator for next epoch: {}, contract: {:?}",
                     e, self.config.contract_addresses.preconf_whitelist
-                ))
+                )))
             })?;
-        tracing::debug!("get_operator_for_next_epoch: {:?}", operator);
         Ok(operator)
     }
 
@@ -459,14 +482,24 @@ impl WhitelistProvider for ExecutionLayer {
 }
 
 impl PreconfOperator for ExecutionLayer {
-    async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
-        let operator = self.get_operator_for_current_epoch().await?;
-        Ok(operator == self.preconfer_address)
+    async fn is_operator_for_current_epoch(
+        &self,
+        current_epoch_timestamp: u64,
+    ) -> Result<(bool, Address), OperatorError> {
+        let operator = self
+            .get_operator_for_current_epoch(current_epoch_timestamp)
+            .await?;
+        Ok((operator == self.preconfer_address, operator))
     }
 
-    async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
-        let operator = self.get_operator_for_next_epoch().await?;
-        Ok(operator == self.preconfer_address)
+    async fn is_operator_for_next_epoch(
+        &self,
+        current_epoch_timestamp: u64,
+    ) -> Result<(bool, Address), OperatorError> {
+        let operator = self
+            .get_operator_for_next_epoch(current_epoch_timestamp)
+            .await?;
+        Ok((operator == self.preconfer_address, operator))
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
