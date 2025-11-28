@@ -91,7 +91,8 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
 
         // For the first N slots of the new epoch, use the next operator from the previous epoch
         // it's because of the delay that L1 updates the current operator after the epoch has changed.
-        let current_operator = if l1_slot < self.operator_transition_slots {
+        // TODO workaround to skip slot 31. Refactore once we find a reason for the slot 31 operator issue.
+        let current_operator = if l1_slot < self.operator_transition_slots && l1_slot > 30 {
             let curr = match self.execution_layer.is_operator_for_current_epoch().await {
                 Ok(val) => format!("{val}"),
                 Err(e) => {
