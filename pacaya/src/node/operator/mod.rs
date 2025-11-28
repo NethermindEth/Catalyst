@@ -96,13 +96,13 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             .is_operator_for_current_epoch(current_epoch_timestamp)
             .await
         {
-            Ok((current_operator, from_contract_address)) => {
-                if from_contract_address != self.current_operator_address {
+            Ok((current_operator, current_operator_address)) => {
+                if current_operator_address != self.current_operator_address {
                     info!(
                         "Operator has changed from {} to {}",
-                        self.current_operator_address, from_contract_address
+                        self.current_operator_address, current_operator_address
                     );
-                    self.current_operator_address = from_contract_address;
+                    self.current_operator_address = current_operator_address;
                 }
                 current_operator
             }
@@ -121,10 +121,10 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             .is_operator_for_next_epoch(current_epoch_timestamp)
             .await
         {
-            Ok((next_operator, from_contract_address)) => {
-                if from_contract_address != self.next_operator_address {
-                    info!("Next epoch operator: {from_contract_address}");
-                    self.next_operator_address = from_contract_address;
+            Ok((next_operator, next_operator_address)) => {
+                if next_operator_address != self.next_operator_address {
+                    info!("Next epoch operator: {next_operator_address}");
+                    self.next_operator_address = next_operator_address;
                 }
                 self.next_operator = next_operator;
                 self.continuing_role = current_operator && self.next_operator;
