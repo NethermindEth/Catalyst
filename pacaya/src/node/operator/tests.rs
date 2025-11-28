@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
+    use crate::l1::traits::OperatorError;
     use crate::node::operator::*;
+    use alloy::primitives::Address;
     use alloy::primitives::B256;
     use chrono::DateTime;
     use common::{l1::slot_clock::Clock, l2::taiko_driver::models, metrics::Metrics};
@@ -29,12 +31,18 @@ mod tests {
     }
 
     impl PreconfOperator for ExecutionLayerMock {
-        async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
-            Ok(self.current_operator)
+        async fn is_operator_for_current_epoch(
+            &self,
+            current_epoch_timestamp: u64,
+        ) -> Result<(bool, Address), OperatorError> {
+            Ok((self.current_operator, Address::ZERO))
         }
 
-        async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
-            Ok(self.next_operator)
+        async fn is_operator_for_next_epoch(
+            &self,
+            current_epoch_timestamp: u64,
+        ) -> Result<(bool, Address), OperatorError> {
+            Ok((self.next_operator, Address::ZERO))
         }
 
         async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
@@ -52,12 +60,22 @@ mod tests {
 
     struct ExecutionLayerMockError {}
     impl PreconfOperator for ExecutionLayerMockError {
-        async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
-            Err(Error::from(anyhow::anyhow!("test error")))
+        async fn is_operator_for_current_epoch(
+            &self,
+            current_epoch_timestamp: u64,
+        ) -> Result<(bool, Address), OperatorError> {
+            Err(OperatorError::Any(Error::from(anyhow::anyhow!(
+                "test error"
+            ))))
         }
 
-        async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
-            Err(Error::from(anyhow::anyhow!("test error")))
+        async fn is_operator_for_next_epoch(
+            &self,
+            current_epoch_timestamp: u64,
+        ) -> Result<(bool, Address), OperatorError> {
+            Err(OperatorError::Any(Error::from(anyhow::anyhow!(
+                "test error"
+            ))))
         }
 
         async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
@@ -262,7 +280,6 @@ mod tests {
             Status::new(true, false, false, false, false)
         );
 
-        let mut operator = create_operator_with_high_taiko_inbox_height();
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
             Status::new(false, false, false, false, false)
@@ -569,7 +586,8 @@ mod tests {
             continuing_role: false,
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
-            operator_transition_slots: 1,
+            current_operator_address: Address::ZERO,
+            next_operator_address: Address::ZERO,
         }
     }
 
@@ -604,7 +622,8 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             cancel_counter: 0,
-            operator_transition_slots: 1,
+            current_operator_address: Address::ZERO,
+            next_operator_address: Address::ZERO,
         }
     }
 
@@ -639,7 +658,8 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             cancel_counter: 0,
-            operator_transition_slots: 1,
+            current_operator_address: Address::ZERO,
+            next_operator_address: Address::ZERO,
         }
     }
 
@@ -669,7 +689,8 @@ mod tests {
             continuing_role: false,
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
-            operator_transition_slots: 1,
+            current_operator_address: Address::ZERO,
+            next_operator_address: Address::ZERO,
         }
     }
 
@@ -700,7 +721,8 @@ mod tests {
             continuing_role: false,
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
-            operator_transition_slots: 1,
+            current_operator_address: Address::ZERO,
+            next_operator_address: Address::ZERO,
         }
     }
 
@@ -724,7 +746,8 @@ mod tests {
             continuing_role: false,
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
-            operator_transition_slots: 1,
+            current_operator_address: Address::ZERO,
+            next_operator_address: Address::ZERO,
         }
     }
 
@@ -768,7 +791,8 @@ mod tests {
             continuing_role: false,
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
-            operator_transition_slots: 1,
+            current_operator_address: Address::ZERO,
+            next_operator_address: Address::ZERO,
         }
     }
 

@@ -28,13 +28,11 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     was_synced_preconfer: bool,
     cancel_token: CancellationToken,
     cancel_counter: u64,
-    operator_transition_slots: u64,
     last_config_reload_epoch: u64,
     fork_info: ForkInfo,
     current_operator_address: Address,
+    next_operator_address: Address,
 }
-
-const OPERATOR_TRANSITION_SLOTS: u64 = 2;
 
 impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
     #[allow(clippy::too_many_arguments)]
@@ -61,10 +59,10 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             was_synced_preconfer: false,
             cancel_token,
             cancel_counter: 0,
-            operator_transition_slots: OPERATOR_TRANSITION_SLOTS,
             last_config_reload_epoch: 0,
             fork_info,
             current_operator_address: Address::ZERO,
+            next_operator_address: Address::ZERO,
         })
     }
 
@@ -109,7 +107,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
                 current_operator
             }
             Err(OperatorError::OperatorCheckTooEarly) => {
-                debug!("====> Operator check too early, using next operator");
+                debug!("Operator check too early, using next operator");
                 self.next_operator
             }
             Err(OperatorError::Any(e)) => {
@@ -123,7 +121,11 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             .is_operator_for_next_epoch(current_epoch_timestamp)
             .await
         {
-            Ok((next_operator, _)) => {
+            Ok((next_operator, from_contract_address)) => {
+                if from_contract_address != self.next_operator_address {
+                    info!("Next epoch operator: {from_contract_address}");
+                    self.next_operator_address = from_contract_address;
+                }
                 self.next_operator = next_operator;
                 self.continuing_role = current_operator && self.next_operator;
             }
@@ -134,22 +136,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
                 )));
             }
         };
-
-        // For the first N slots of the new epoch, use the next operator from the previous epoch
-        // it's because of the delay that L1 updates the current operator after the epoch has changed.
-        // let current_operator = if l1_slot < self.operator_transition_slots {
-        //     // tracing::debug!(
-        //     //     "Status in transition: l1_slot: {} current_operator: {} next_operator: {}",
-        //     //     l1_slot,
-        //     //     curr,
-        //     //     next
-        //     // );
-        //     self.next_operator
-        // } else {
-        //     self.next_operator = is_next_from_contract;
-        //     self.continuing_role = is_curr && self.next_operator;
-        //     is_curr
-        // };
 
         let handover_window = self.is_handover_window(l1_slot);
         let driver_status = self.taiko.get_status().await?;
