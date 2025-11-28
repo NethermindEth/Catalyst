@@ -144,11 +144,20 @@ impl PreconfOperator for ExecutionLayer {
         &self,
         current_epoch_timestamp: u64,
     ) -> Result<(bool, Address), OperatorError> {
+        let latest_block_timestamp = self
+            .common
+            .get_latest_block_timestamp()
+            .await
+            .map_err(OperatorError::Any)?;
+        if latest_block_timestamp < current_epoch_timestamp {
+            return Err(OperatorError::OperatorCheckTooEarly);
+        }
+
         let contract =
             IPreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
         let operator = contract
             .getOperatorForCurrentEpoch()
-            .block(alloy::eips::BlockId::pending())
+            .block(alloy::eips::BlockId::latest())
             .call()
             .await
             .map_err(|e| {
@@ -165,11 +174,20 @@ impl PreconfOperator for ExecutionLayer {
         &self,
         current_epoch_timestamp: u64,
     ) -> Result<(bool, Address), OperatorError> {
+        let latest_block_timestamp = self
+            .common
+            .get_latest_block_timestamp()
+            .await
+            .map_err(OperatorError::Any)?;
+        if latest_block_timestamp < current_epoch_timestamp {
+            return Err(OperatorError::OperatorCheckTooEarly);
+        }
+
         let contract =
             IPreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
         let operator = contract
             .getOperatorForNextEpoch()
-            .block(alloy::eips::BlockId::pending())
+            .block(alloy::eips::BlockId::latest())
             .call()
             .await
             .map_err(|e| {

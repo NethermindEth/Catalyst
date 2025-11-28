@@ -33,14 +33,14 @@ mod tests {
     impl PreconfOperator for ExecutionLayerMock {
         async fn is_operator_for_current_epoch(
             &self,
-            current_epoch_timestamp: u64,
+            _: u64,
         ) -> Result<(bool, Address), OperatorError> {
             Ok((self.current_operator, Address::ZERO))
         }
 
         async fn is_operator_for_next_epoch(
             &self,
-            current_epoch_timestamp: u64,
+            _: u64,
         ) -> Result<(bool, Address), OperatorError> {
             Ok((self.next_operator, Address::ZERO))
         }
@@ -62,7 +62,7 @@ mod tests {
     impl PreconfOperator for ExecutionLayerMockError {
         async fn is_operator_for_current_epoch(
             &self,
-            current_epoch_timestamp: u64,
+            _: u64,
         ) -> Result<(bool, Address), OperatorError> {
             Err(OperatorError::Any(Error::from(anyhow::anyhow!(
                 "test error"
@@ -71,7 +71,7 @@ mod tests {
 
         async fn is_operator_for_next_epoch(
             &self,
-            current_epoch_timestamp: u64,
+            _: u64,
         ) -> Result<(bool, Address), OperatorError> {
             Err(OperatorError::Any(Error::from(anyhow::anyhow!(
                 "test error"
@@ -280,9 +280,10 @@ mod tests {
             Status::new(true, false, false, false, false)
         );
 
+        let mut operator = create_operator_with_high_taiko_inbox_height();
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, false, false, false, false)
+            Status::new(true, true, false, false, false)
         );
     }
 
@@ -459,10 +460,52 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_status_with_error_in_execution_layer() {
-        let operator = create_operator_with_error_in_execution_layer();
+        let operator =
+            create_operator_with_error_in_execution_layer(Arc::new(ExecutionLayerMockError {}));
         assert_eq!(
             operator.get_handover_window_slots().await,
             HANDOVER_WINDOW_SLOTS
+        );
+    }
+
+    struct ExecutionLayerMockErrorToEarly {}
+    impl PreconfOperator for ExecutionLayerMockErrorToEarly {
+        async fn is_operator_for_current_epoch(
+            &self,
+            _: u64,
+        ) -> Result<(bool, Address), OperatorError> {
+            Err(OperatorError::OperatorCheckTooEarly)
+        }
+
+        async fn is_operator_for_next_epoch(
+            &self,
+            _: u64,
+        ) -> Result<(bool, Address), OperatorError> {
+            Ok((true, Address::ZERO))
+        }
+
+        async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
+            Ok(true)
+        }
+
+        async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
+            Ok(0)
+        }
+
+        async fn get_handover_window_slots(&self) -> Result<u64, Error> {
+            Ok(HANDOVER_WINDOW_SLOTS)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_status_with_error_too_early_in_execution_layer() {
+        let mut operator = create_operator_with_error_in_execution_layer(Arc::new(
+            ExecutionLayerMockErrorToEarly {},
+        ));
+
+        assert_eq!(
+            operator.get_status(&get_l2_slot_info()).await.unwrap(),
+            Status::new(true, true, true, false, true)
         );
     }
 
@@ -726,8 +769,9 @@ mod tests {
         }
     }
 
-    fn create_operator_with_error_in_execution_layer()
-    -> Operator<ExecutionLayerMockError, MockClock, TaikoMock> {
+    fn create_operator_with_error_in_execution_layer<T: PreconfOperator>(
+        execution_layer: Arc<T>,
+    ) -> Operator<T, MockClock, TaikoMock> {
         let slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         Operator {
             fork_info: ForkInfo::default(),
@@ -737,12 +781,12 @@ mod tests {
             taiko: Arc::new(TaikoMock {
                 end_of_sequencing_block_hash: B256::ZERO,
             }),
-            execution_layer: Arc::new(ExecutionLayerMockError {}),
+            execution_layer,
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS,
             handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
             handover_start_buffer_ms: 1000,
-            next_operator: false,
+            next_operator: true,
             continuing_role: false,
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
