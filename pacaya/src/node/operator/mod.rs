@@ -1,7 +1,8 @@
 mod status;
 mod tests;
 
-use crate::l1::PreconfOperator;
+use crate::l1::{OperatorError, PreconfOperator};
+use alloy::primitives::Address;
 use anyhow::Error;
 use common::{
     fork_info::ForkInfo,
@@ -12,7 +13,7 @@ use common::{
 };
 pub use status::Status;
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     execution_layer: Arc<T>,
@@ -30,6 +31,7 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     operator_transition_slots: u64,
     last_config_reload_epoch: u64,
     fork_info: ForkInfo,
+    current_operator_address: Address,
 }
 
 const OPERATOR_TRANSITION_SLOTS: u64 = 2;
@@ -62,6 +64,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             operator_transition_slots: OPERATOR_TRANSITION_SLOTS,
             last_config_reload_epoch: 0,
             fork_info,
+            current_operator_address: Address::ZERO,
         })
     }
 
@@ -89,40 +92,64 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             self.last_config_reload_epoch = epoch;
         }
 
+        let current_epoch_timestamp = self.slot_clock.get_epoch_begin_timestamp(epoch)?;
+        let current_operator = match self
+            .execution_layer
+            .is_operator_for_current_epoch(current_epoch_timestamp)
+            .await
+        {
+            Ok((current_operator, from_contract_address)) => {
+                if from_contract_address != self.current_operator_address {
+                    info!(
+                        "Operator has changed from {} to {}",
+                        self.current_operator_address, from_contract_address
+                    );
+                    self.current_operator_address = from_contract_address;
+                }
+                current_operator
+            }
+            Err(OperatorError::OperatorCheckTooEarly) => {
+                debug!("====> Operator check too early, using next operator");
+                self.next_operator
+            }
+            Err(OperatorError::Any(e)) => {
+                return Err(Error::msg(format!(
+                    "Failed to check current epoch operator: {e}"
+                )));
+            }
+        };
+        match self
+            .execution_layer
+            .is_operator_for_next_epoch(current_epoch_timestamp)
+            .await
+        {
+            Ok((next_operator, _)) => {
+                self.next_operator = next_operator;
+                self.continuing_role = current_operator && self.next_operator;
+            }
+            Err(OperatorError::OperatorCheckTooEarly) => {}
+            Err(OperatorError::Any(e)) => {
+                return Err(Error::msg(format!(
+                    "Failed to check next epoch operator: {e}"
+                )));
+            }
+        };
+
         // For the first N slots of the new epoch, use the next operator from the previous epoch
         // it's because of the delay that L1 updates the current operator after the epoch has changed.
-        let current_operator = if l1_slot < self.operator_transition_slots {
-            let curr = match self.execution_layer.is_operator_for_current_epoch().await {
-                Ok(val) => format!("{val}"),
-                Err(e) => {
-                    format!("Failed to check current epoch operator: {e}")
-                }
-            };
-            let next = match self.execution_layer.is_operator_for_next_epoch().await {
-                Ok(val) => format!("{val}"),
-                Err(e) => {
-                    format!("Failed to check next epoch operator: {e}")
-                }
-            };
-            tracing::debug!(
-                "Status in transition: l1_slot: {} current_operator: {} next_operator: {}",
-                l1_slot,
-                curr,
-                next
-            );
-            self.next_operator
-        } else {
-            self.next_operator = match self.execution_layer.is_operator_for_next_epoch().await {
-                Ok(val) => val,
-                Err(e) => {
-                    warn!("Failed to check next epoch operator: {:?}", e);
-                    false
-                }
-            };
-            let current_operator = self.execution_layer.is_operator_for_current_epoch().await?;
-            self.continuing_role = current_operator && self.next_operator;
-            current_operator
-        };
+        // let current_operator = if l1_slot < self.operator_transition_slots {
+        //     // tracing::debug!(
+        //     //     "Status in transition: l1_slot: {} current_operator: {} next_operator: {}",
+        //     //     l1_slot,
+        //     //     curr,
+        //     //     next
+        //     // );
+        //     self.next_operator
+        // } else {
+        //     self.next_operator = is_next_from_contract;
+        //     self.continuing_role = is_curr && self.next_operator;
+        //     is_curr
+        // };
 
         let handover_window = self.is_handover_window(l1_slot);
         let driver_status = self.taiko.get_status().await?;

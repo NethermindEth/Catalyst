@@ -1,9 +1,21 @@
+use alloy::primitives::Address;
 use anyhow::Error;
 use std::future::Future;
 
+pub enum OperatorError {
+    OperatorCheckTooEarly,
+    Any(Error),
+}
+
 pub trait PreconfOperator {
-    fn is_operator_for_current_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
-    fn is_operator_for_next_epoch(&self) -> impl Future<Output = Result<bool, Error>> + Send;
+    fn is_operator_for_current_epoch(
+        &self,
+        current_epoch_timestamp: u64,
+    ) -> impl Future<Output = Result<(bool, Address), OperatorError>> + Send;
+    fn is_operator_for_next_epoch(
+        &self,
+        current_epoch_timestamp: u64,
+    ) -> impl Future<Output = Result<(bool, Address), OperatorError>> + Send;
     fn is_preconf_router_specified_in_taiko_wrapper(
         &self,
     ) -> impl Future<Output = Result<bool, Error>> + Send;

@@ -19,7 +19,7 @@ use common::{
         transaction_monitor::TransactionMonitor,
     },
 };
-use pacaya::l1::traits::{PreconfOperator, WhitelistProvider};
+use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 
@@ -140,7 +140,10 @@ impl PreconferProvider for ExecutionLayer {
 }
 
 impl PreconfOperator for ExecutionLayer {
-    async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
+    async fn is_operator_for_current_epoch(
+        &self,
+        current_epoch_timestamp: u64,
+    ) -> Result<(bool, Address), OperatorError> {
         let contract =
             IPreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
         let operator = contract
@@ -149,16 +152,19 @@ impl PreconfOperator for ExecutionLayer {
             .call()
             .await
             .map_err(|e| {
-                Error::msg(format!(
+                OperatorError::Any(Error::msg(format!(
                     "Failed to get operator for current epoch: {}, contract: {:?}",
                     e, self.contract_addresses.proposer_checker
-                ))
+                )))
             })?;
 
-        Ok(operator == self.preconfer_address)
+        Ok((operator == self.preconfer_address, operator))
     }
 
-    async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
+    async fn is_operator_for_next_epoch(
+        &self,
+        current_epoch_timestamp: u64,
+    ) -> Result<(bool, Address), OperatorError> {
         let contract =
             IPreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
         let operator = contract
@@ -167,12 +173,12 @@ impl PreconfOperator for ExecutionLayer {
             .call()
             .await
             .map_err(|e| {
-                Error::msg(format!(
+                OperatorError::Any(Error::msg(format!(
                     "Failed to get operator for next epoch: {}, contract: {:?}",
                     e, self.contract_addresses.proposer_checker
-                ))
+                )))
             })?;
-        Ok(operator == self.preconfer_address)
+        Ok((operator == self.preconfer_address, operator))
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {

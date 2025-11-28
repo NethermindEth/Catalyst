@@ -213,4 +213,15 @@ impl ExecutionLayer {
             })?
             .ok_or_else(|| self.chain_error("Failed to get transaction: value is None", None))
     }
+
+    pub async fn get_latest_block_timestamp(&self) -> Result<u64, Error> {
+        Ok(self
+            .get_block_header(BlockNumberOrTag::Latest)
+            .await
+            .map_err(|e| {
+                self.chain_error("Failed to get latest block timestamp", Some(&e.to_string()))
+            })?
+            .header
+            .timestamp)
+    }
 }
