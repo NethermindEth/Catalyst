@@ -341,6 +341,7 @@ impl ExecutionLayer {
                     e, self.config.contract_addresses.preconf_whitelist
                 ))
             })?;
+        tracing::debug!("get_operator_for_current_epoch: {:?}", operator);
         Ok(operator)
     }
 
@@ -360,6 +361,7 @@ impl ExecutionLayer {
                     e, self.config.contract_addresses.preconf_whitelist
                 ))
             })?;
+        tracing::debug!("get_operator_for_next_epoch: {:?}", operator);
         Ok(operator)
     }
 
