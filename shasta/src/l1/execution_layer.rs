@@ -1,6 +1,10 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
 
+use super::bindings::{IPreconfWhitelist, Inbox, PreconfWhitelist};
+use super::config::EthereumL1Config;
+use super::event_indexer::EventIndexer;
+use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
 use alloy::primitives::Bytes;
@@ -22,15 +26,7 @@ use common::{
 use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
-
-use super::bindings::{IPreconfWhitelist, Inbox, PreconfWhitelist};
-use super::event_indexer::EventIndexer;
-use super::proposal_tx_builder::ProposalTxBuilder;
-use taiko_bindings::i_inbox::IInbox;
-
 use tracing::info;
-
-use super::config::EthereumL1Config;
 
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -72,7 +68,7 @@ impl ELTrait for ExecutionLayer {
         .await
         .map_err(|e| Error::msg(format!("Failed to create TransactionMonitor: {e}")))?;
 
-        let shasta_inbox = IInbox::new(specific_config.shasta_inbox, provider.clone());
+        let shasta_inbox = Inbox::new(specific_config.shasta_inbox, provider.clone());
         let shasta_config = shasta_inbox
             .getConfig()
             .call()
@@ -263,7 +259,7 @@ impl ExecutionLayer {
     }
 
     pub async fn fetch_protocol_config(&self) -> Result<ProtocolConfig, Error> {
-        let shasta_inbox = IInbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
+        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
         let shasta_config = shasta_inbox
             .getConfig()
             .call()
