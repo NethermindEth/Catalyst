@@ -111,13 +111,10 @@ unwrap_used = "deny"
 
 # TODO: remove this once the PR is merged : https://github.com/taikoxyz/taiko-mono/pull/20895
 [patch.'https://github.com/taikoxyz/alethia-reth?branch=main']
-# alethia-reth-block = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
 alethia-reth-chainspec = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
 alethia-reth-consensus = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
-# alethia-reth-db = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
 alethia-reth-evm = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
 alethia-reth-primitives = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
-# alethia-reth-rpc = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
 
 [profile.release]
 overflow-checks = true
