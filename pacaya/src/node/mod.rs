@@ -640,9 +640,8 @@ impl Node {
                 return Err(anyhow::anyhow!("Failed to get block number from L1"));
             }
             TransactionError::EstimationTooEarly => {
-                return Err(anyhow::anyhow!(
-                    "Transaction estimation too early, skipping slot"
-                ));
+                warn!("Transaction estimation too early, skipping slot");
+                return Ok(());
             }
             TransactionError::InsufficientFunds => {
                 self.cancel_token.cancel_on_critical_error();
