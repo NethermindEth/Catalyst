@@ -1,3 +1,4 @@
+use super::bindings::Inbox;
 use super::event_indexer::EventIndexer;
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
@@ -14,7 +15,6 @@ use std::sync::Arc;
 use taiko_bindings::codec_optimized::{
     CodecOptimized::CodecOptimizedInstance, IInbox::ProposeInput, LibBlobs::BlobReference,
 };
-use taiko_bindings::i_inbox::IInbox;
 
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 
@@ -166,7 +166,7 @@ impl ProposalTxBuilder {
             .with_from(from)
             .with_to(to)
             .with_blob_sidecar(sidecar)
-            .with_call(&IInbox::proposeCall {
+            .with_call(&Inbox::proposeCall {
                 _lookahead: Bytes::new(),
                 _data: encoded_proposal_input,
             });

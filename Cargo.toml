@@ -12,20 +12,20 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.23.19"
+version = "1.23.20"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
 
 [workspace.dependencies]
-alloy = { version = "1.0", default-features = false, features = [
+alloy = { version = "1.1.2", default-features = false, features = [
     "full",
     "node-bindings",
     "rlp",
     "rpc-types-beacon",
     "rpc-types",
 ] }
-alloy-json-rpc = { version = "1.0", default-features = false }
+alloy-json-rpc = { version = "1.1.2", default-features = false }
 alloy-rlp = { version = "0.3", default-features = false }
 anyhow = { version = "1", default-features = false }
 async-trait = { version = "0.1", default-features = false }
@@ -79,11 +79,12 @@ serde_json = { version = "1.0", default-features = false }
 shasta = { path = "shasta" }
 strum = { version = "0.27", features = ["derive"] }
 
-taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "12fadbe0909a12be09a906a340733e7afcfe7c83", package = "alethia-reth-consensus", version = "0.5.0" }
-taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "5e18853b253d7c4e8db2d8c547870c11a3af45d9", package = "bindings", version = "2.0.0" }
-taiko_event_indexer = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "5e18853b253d7c4e8db2d8c547870c11a3af45d9", package = "event-indexer", version = "2.0.0" }
-taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "5e18853b253d7c4e8db2d8c547870c11a3af45d9", package = "protocol", version = "2.0.0" }
-taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "5e18853b253d7c4e8db2d8c547870c11a3af45d9", package = "rpc", version = "2.0.0" }
+taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50", package = "alethia-reth-consensus" }
+# taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth", package = "alethia-reth-consensus", branch = "main" }
+taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "96270ae6af8184ddc36432aa05fc0ff92c660802", package = "bindings" }
+taiko_event_indexer = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "96270ae6af8184ddc36432aa05fc0ff92c660802", package = "event-indexer" }
+taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "96270ae6af8184ddc36432aa05fc0ff92c660802", package = "protocol" }
+taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "96270ae6af8184ddc36432aa05fc0ff92c660802", package = "rpc" }
 tiny-keccak = { version = "2.0", default-features = false }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
@@ -107,6 +108,16 @@ cast_sign_loss = "deny"
 needless_return = "deny"
 panicking_overflow_checks = "deny"
 unwrap_used = "deny"
+
+# TODO: remove this once the PR is merged : https://github.com/taikoxyz/taiko-mono/pull/20895
+[patch.'https://github.com/taikoxyz/alethia-reth?branch=main']
+# alethia-reth-block = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
+alethia-reth-chainspec = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
+alethia-reth-consensus = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
+# alethia-reth-db = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
+alethia-reth-evm = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
+alethia-reth-primitives = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
+# alethia-reth-rpc = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "6ff4dea33acf33851d1c5d320d064c5bd4ad1d50" }
 
 [profile.release]
 overflow-checks = true
