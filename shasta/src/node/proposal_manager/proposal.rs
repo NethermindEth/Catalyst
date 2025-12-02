@@ -1,5 +1,5 @@
 use alloy::primitives::{Address, B256, Bytes};
-use common::shared::l2_block_v2::L2BlockV2;
+use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Dummy};
 use common::shared::l2_tx_lists::PreBuiltTxList;
 use std::collections::VecDeque;
 use std::time::Instant;
@@ -133,13 +133,25 @@ impl Proposal {
         timestamp_sec: u64,
         gas_limit: u64,
     ) -> L2BlockV2 {
-        self.total_bytes += tx_list.bytes_length;
         L2BlockV2::new_from(
             tx_list,
             timestamp_sec,
             self.coinbase,
             self.anchor_block_id,
             gas_limit,
+        )
+    }
+
+    pub fn create_block_from_dummy(
+        &mut self,
+        l2_dummy_block: L2BlockV2Dummy,
+    ) -> L2BlockV2 {
+        L2BlockV2::new_from(
+            l2_dummy_block.prebuilt_tx_list,
+            l2_dummy_block.timestamp_sec,
+            self.coinbase,
+            self.anchor_block_id,
+            l2_dummy_block.gas_limit,
         )
     }
 

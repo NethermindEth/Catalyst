@@ -9,7 +9,7 @@ use crate::{
 };
 use alloy::primitives::Address;
 use anyhow::Error;
-use common::{batch_builder::BatchBuilderConfig, shared::{l2_block_v2::L2BlockV2, l2_slot_info_v2::L2SlotContext}};
+use common::{batch_builder::BatchBuilderConfig, shared::{l2_block_v2::{L2BlockV2, L2BlockV2Dummy}, l2_slot_info_v2::L2SlotContext}};
 use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
     shared::anchor_block_info::AnchorBlockInfo,
@@ -44,28 +44,26 @@ impl BatchBuilder {
     }
 
     // TODO use L2BlockV2 here
-    pub fn can_consume_l2_block(&mut self, l2_block: &L2Block, gas_limit: u64) -> bool {
-        let is_time_shift_expired = self.is_time_shift_expired(l2_block.timestamp_sec);
+    pub fn can_consume_l2_block(&mut self, l2_dummy_block: L2BlockV2Dummy) -> bool {
+        let is_time_shift_expired = self.is_time_shift_expired(l2_dummy_block.timestamp_sec);
         self.current_proposal.as_mut().is_some_and(|batch| {
             let new_block_count = match u16::try_from(batch.l2_blocks.len() + 1) {
                 Ok(n) => n,
                 Err(_) => return false,
             };
 
-            let mut new_total_bytes = batch.total_bytes + l2_block.prebuilt_tx_list.bytes_length;
+            let mut new_total_bytes = batch.total_bytes + l2_dummy_block.prebuilt_tx_list.bytes_length;
 
             if !self.config.is_within_bytes_limit(new_total_bytes) {
                 // first compression, compressing the batch without the new L2 block
                 batch.compress();
-                new_total_bytes = batch.total_bytes + l2_block.prebuilt_tx_list.bytes_length;
+                new_total_bytes = batch.total_bytes + l2_dummy_block.prebuilt_tx_list.bytes_length;
                 if !self.config.is_within_bytes_limit(new_total_bytes) {
                     // second compression, compressing the batch with the new L2 block
                     // we can tolerate the processing overhead as it's a very rare case
                     let mut batch_clone = batch.clone();
-                    let l2_block = batch_clone.create_block(
-                        l2_block.prebuilt_tx_list.clone(),
-                        l2_block.timestamp_sec,
-                        gas_limit,
+                    let l2_block = batch_clone.create_block_from_dummy(
+                        l2_dummy_block
                     );
                     batch_clone.add_l2_block(l2_block);
                     batch_clone.compress();
@@ -423,12 +421,16 @@ impl BatchBuilder {
         }
     }
 
-    fn should_new_block_be_created(
+    pub fn should_new_block_be_created(
         &self,
-        number_of_pending_txs: u64,
+        pending_tx_list: Option<&PreBuiltTxList>,
         current_l2_slot_timestamp: u64,
         end_of_sequencing: bool,
     ) -> bool {
+        let number_of_pending_txs = pending_tx_list
+            .map(|tx_list| tx_list.tx_list.len())
+            .unwrap_or(0) as u64;
+
         if self.is_empty_block_required(current_l2_slot_timestamp) || end_of_sequencing {
             return true;
         }
@@ -452,15 +454,11 @@ impl BatchBuilder {
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
         l2_slot_context: &L2SlotContext,
-    ) -> Option<L2BlockV2> {
-        let tx_list_len = pending_tx_list
-            .as_ref()
-            .map(|tx_list| tx_list.tx_list.len())
-            .unwrap_or(0);
+    ) -> Option<L2Block> {
         if self.should_new_block_be_created(
-            tx_list_len as u64,
+            pending_tx_list.as_ref(),
             l2_slot_context.info.slot_timestamp(),
-            end_of_sequencing,
+            l2_slot_context.end_of_sequencing,
         ) {
             if let Some(pending_tx_list) = pending_tx_list {
                 debug!(
@@ -469,9 +467,9 @@ impl BatchBuilder {
                     pending_tx_list.bytes_length
                 );
 
-                Some(L2Block::new_from(pending_tx_list, l2_slot_timestamp))
+                Some(L2Block::new_from(pending_tx_list, l2_slot_context.info.slot_timestamp()))
             } else {
-                Some(L2Block::new_empty(l2_slot_timestamp))
+                Some(L2Block::new_empty(l2_slot_context.info.slot_timestamp()))
             }
         } else {
             debug!("Skipping preconfirmation for the current L2 slot");

@@ -258,7 +258,8 @@ impl Node {
             }
 
             let l2_slot_context = L2SlotContext {
-                info: &l2_slot_info,
+                // TODO remove clone
+                info: l2_slot_info.clone(),
                 end_of_sequencing: current_status.is_end_of_sequencing(),
                 allow_forced_inclusion: self.config.propose_forced_inclusion
                     && current_status.is_submitter()

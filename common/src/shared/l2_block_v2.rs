@@ -2,6 +2,13 @@ use crate::shared::l2_tx_lists::PreBuiltTxList;
 use alloy::primitives::Address;
 
 #[derive(Debug, Clone)]
+pub struct L2BlockV2Dummy {
+    pub prebuilt_tx_list: PreBuiltTxList,
+    pub timestamp_sec: u64,
+    pub gas_limit: u64,
+}
+
+#[derive(Debug, Clone)]
 pub struct L2BlockV2 {
     pub prebuilt_tx_list: PreBuiltTxList,
     pub timestamp_sec: u64,
