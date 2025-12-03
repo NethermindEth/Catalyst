@@ -398,8 +398,9 @@ impl Node {
                         &l2_slot_info,
                     )
                     .await?;
+                } else {
+                    return Err(err);
                 }
-                return Err(err);
             }
         }
 
