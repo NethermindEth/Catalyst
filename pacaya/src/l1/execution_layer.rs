@@ -13,7 +13,7 @@ use super::{
 };
 use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
-    eips::BlockNumberOrTag,
+    eips::{BlockId, BlockNumberOrTag},
     primitives::{Address, U256},
     providers::DynProvider,
 };
@@ -325,13 +325,13 @@ impl ExecutionLayer {
         Ok(balance.min(allowance))
     }
 
-    async fn get_operator_for_current_epoch(
+    async fn get_operators_for_current_and_next_epoch(
         &self,
         current_epoch_timestamp: u64,
-    ) -> Result<Address, OperatorError> {
-        let latest_block_timestamp = self
+    ) -> Result<(Address, Address), OperatorError> {
+        let (latest_block_number, latest_block_timestamp) = self
             .common
-            .get_latest_block_timestamp()
+            .get_latest_block_number_and_timestamp()
             .await
             .map_err(OperatorError::Any)?;
         if latest_block_timestamp < current_epoch_timestamp {
@@ -343,9 +343,11 @@ impl ExecutionLayer {
             &self.provider,
         );
 
-        let operator = contract
+        let current_operator = contract
             .getOperatorForCurrentEpoch()
-            .block(alloy::eips::BlockId::latest())
+            .block(BlockId::Number(BlockNumberOrTag::Number(
+                latest_block_number,
+            )))
             .call()
             .await
             .map_err(|e| {
@@ -354,29 +356,12 @@ impl ExecutionLayer {
                     e, self.config.contract_addresses.preconf_whitelist
                 )))
             })?;
-        Ok(operator)
-    }
 
-    async fn get_operator_for_next_epoch(
-        &self,
-        current_epoch_timestamp: u64,
-    ) -> Result<Address, OperatorError> {
-        let latest_block_timestamp = self
-            .common
-            .get_latest_block_timestamp()
-            .await
-            .map_err(OperatorError::Any)?;
-        if latest_block_timestamp < current_epoch_timestamp {
-            return Err(OperatorError::OperatorCheckTooEarly);
-        }
-
-        let contract = PreconfWhitelist::new(
-            self.config.contract_addresses.preconf_whitelist,
-            &self.provider,
-        );
-        let operator = contract
+        let next_operator = contract
             .getOperatorForNextEpoch()
-            .block(alloy::eips::BlockId::latest())
+            .block(BlockId::Number(BlockNumberOrTag::Number(
+                latest_block_number,
+            )))
             .call()
             .await
             .map_err(|e| {
@@ -385,7 +370,8 @@ impl ExecutionLayer {
                     e, self.config.contract_addresses.preconf_whitelist
                 )))
             })?;
-        Ok(operator)
+
+        Ok((current_operator, next_operator))
     }
 
     pub async fn get_forced_inclusion_head(&self) -> Result<u64, Error> {
@@ -482,24 +468,16 @@ impl WhitelistProvider for ExecutionLayer {
 }
 
 impl PreconfOperator for ExecutionLayer {
-    async fn is_operator_for_current_epoch(
-        &self,
-        current_epoch_timestamp: u64,
-    ) -> Result<(bool, Address), OperatorError> {
-        let operator = self
-            .get_operator_for_current_epoch(current_epoch_timestamp)
-            .await?;
-        Ok((operator == self.preconfer_address, operator))
+    fn get_preconfer_address(&self) -> Address {
+        self.preconfer_address
     }
 
-    async fn is_operator_for_next_epoch(
+    async fn get_operators_for_current_and_next_epoch(
         &self,
         current_epoch_timestamp: u64,
-    ) -> Result<(bool, Address), OperatorError> {
-        let operator = self
-            .get_operator_for_next_epoch(current_epoch_timestamp)
-            .await?;
-        Ok((operator == self.preconfer_address, operator))
+    ) -> Result<(Address, Address), OperatorError> {
+        self.get_operators_for_current_and_next_epoch(current_epoch_timestamp)
+            .await
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {

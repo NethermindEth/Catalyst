@@ -8,14 +8,11 @@ pub enum OperatorError {
 }
 
 pub trait PreconfOperator {
-    fn is_operator_for_current_epoch(
+    fn get_preconfer_address(&self) -> Address;
+    fn get_operators_for_current_and_next_epoch(
         &self,
         current_epoch_timestamp: u64,
-    ) -> impl Future<Output = Result<(bool, Address), OperatorError>> + Send;
-    fn is_operator_for_next_epoch(
-        &self,
-        current_epoch_timestamp: u64,
-    ) -> impl Future<Output = Result<(bool, Address), OperatorError>> + Send;
+    ) -> impl Future<Output = Result<(Address, Address), OperatorError>> + Send;
     fn is_preconf_router_specified_in_taiko_wrapper(
         &self,
     ) -> impl Future<Output = Result<bool, Error>> + Send;

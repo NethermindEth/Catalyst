@@ -2,13 +2,15 @@
 mod tests {
     use crate::l1::traits::OperatorError;
     use crate::node::operator::*;
-    use alloy::primitives::Address;
     use alloy::primitives::B256;
+    use alloy::primitives::{Address, address};
     use chrono::DateTime;
     use common::{l1::slot_clock::Clock, l2::taiko_driver::models, metrics::Metrics};
     use std::time::SystemTime;
 
     const HANDOVER_WINDOW_SLOTS: u64 = 6;
+    const PRECONFER_ADDRESS: Address = address!("0x1234567890123456789012345678901234567890");
+    const OTHER_OPERATOR_ADDRESS: Address = address!("0x1234567890123456789012345678901234567891");
 
     #[derive(Default)]
     pub struct MockClock {
@@ -23,26 +25,23 @@ mod tests {
     }
 
     struct ExecutionLayerMock {
-        current_operator: bool,
-        next_operator: bool,
+        current_operator_address: Address,
+        next_operator_address: Address,
         is_preconf_router_specified: bool,
         taiko_inbox_height: u64,
         handover_window_slots: u64,
     }
 
     impl PreconfOperator for ExecutionLayerMock {
-        async fn is_operator_for_current_epoch(
-            &self,
-            _: u64,
-        ) -> Result<(bool, Address), OperatorError> {
-            Ok((self.current_operator, Address::ZERO))
+        fn get_preconfer_address(&self) -> Address {
+            PRECONFER_ADDRESS
         }
 
-        async fn is_operator_for_next_epoch(
+        async fn get_operators_for_current_and_next_epoch(
             &self,
             _: u64,
-        ) -> Result<(bool, Address), OperatorError> {
-            Ok((self.next_operator, Address::ZERO))
+        ) -> Result<(Address, Address), OperatorError> {
+            Ok((self.current_operator_address, self.next_operator_address))
         }
 
         async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
@@ -60,19 +59,14 @@ mod tests {
 
     struct ExecutionLayerMockError {}
     impl PreconfOperator for ExecutionLayerMockError {
-        async fn is_operator_for_current_epoch(
-            &self,
-            _: u64,
-        ) -> Result<(bool, Address), OperatorError> {
-            Err(OperatorError::Any(Error::from(anyhow::anyhow!(
-                "test error"
-            ))))
+        fn get_preconfer_address(&self) -> Address {
+            PRECONFER_ADDRESS
         }
 
-        async fn is_operator_for_next_epoch(
+        async fn get_operators_for_current_and_next_epoch(
             &self,
             _: u64,
-        ) -> Result<(bool, Address), OperatorError> {
+        ) -> Result<(Address, Address), OperatorError> {
             Err(OperatorError::Any(Error::from(anyhow::anyhow!(
                 "test error"
             ))))
@@ -470,18 +464,15 @@ mod tests {
 
     struct ExecutionLayerMockErrorToEarly {}
     impl PreconfOperator for ExecutionLayerMockErrorToEarly {
-        async fn is_operator_for_current_epoch(
-            &self,
-            _: u64,
-        ) -> Result<(bool, Address), OperatorError> {
-            Err(OperatorError::OperatorCheckTooEarly)
+        fn get_preconfer_address(&self) -> Address {
+            PRECONFER_ADDRESS
         }
 
-        async fn is_operator_for_next_epoch(
+        async fn get_operators_for_current_and_next_epoch(
             &self,
             _: u64,
-        ) -> Result<(bool, Address), OperatorError> {
-            Ok((true, Address::ZERO))
+        ) -> Result<(Address, Address), OperatorError> {
+            Err(OperatorError::OperatorCheckTooEarly)
         }
 
         async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
@@ -606,6 +597,8 @@ mod tests {
     ) -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
+        let (current_operator_address, next_operator_address) =
+            get_operators(current_operator, next_operator);
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
@@ -615,8 +608,8 @@ mod tests {
                 end_of_sequencing_block_hash: B256::ZERO,
             }),
             execution_layer: Arc::new(ExecutionLayerMock {
-                current_operator,
-                next_operator,
+                current_operator_address,
+                next_operator_address,
                 is_preconf_router_specified,
                 taiko_inbox_height: 0,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
@@ -630,8 +623,21 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
+    }
+
+    fn get_operators(current_operator: bool, next_operator: bool) -> (Address, Address) {
+        let current_operator_address = if current_operator {
+            PRECONFER_ADDRESS
+        } else {
+            OTHER_OPERATOR_ADDRESS
+        };
+        let next_operator_address = if next_operator {
+            PRECONFER_ADDRESS
+        } else {
+            OTHER_OPERATOR_ADDRESS
+        };
+        (current_operator_address, next_operator_address)
     }
 
     fn create_operator_with_end_of_sequencing_marker_received(
@@ -642,6 +648,8 @@ mod tests {
     ) -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
+        let (current_operator_address, next_operator_address) =
+            get_operators(current_operator, next_operator);
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
@@ -650,8 +658,8 @@ mod tests {
                 end_of_sequencing_block_hash: get_test_hash(),
             }),
             execution_layer: Arc::new(ExecutionLayerMock {
-                current_operator,
-                next_operator,
+                current_operator_address,
+                next_operator_address,
                 is_preconf_router_specified,
                 taiko_inbox_height: 0,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
@@ -666,7 +674,6 @@ mod tests {
             was_synced_preconfer: false,
             cancel_counter: 0,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -678,6 +685,8 @@ mod tests {
     ) -> Operator<ExecutionLayerMock, MockClock, TaikoUnsyncedMock> {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
+        let (current_operator_address, next_operator_address) =
+            get_operators(current_operator, next_operator);
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
@@ -686,8 +695,8 @@ mod tests {
                 end_of_sequencing_block_hash: get_test_hash(),
             }),
             execution_layer: Arc::new(ExecutionLayerMock {
-                current_operator,
-                next_operator,
+                current_operator_address,
+                next_operator_address,
                 is_preconf_router_specified,
                 taiko_inbox_height: 0,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
@@ -702,7 +711,6 @@ mod tests {
             was_synced_preconfer: false,
             cancel_counter: 0,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -718,8 +726,8 @@ mod tests {
                 end_of_sequencing_block_hash: B256::ZERO,
             }),
             execution_layer: Arc::new(ExecutionLayerMock {
-                current_operator: true,
-                next_operator: true,
+                current_operator_address: PRECONFER_ADDRESS,
+                next_operator_address: PRECONFER_ADDRESS,
                 is_preconf_router_specified: true,
                 taiko_inbox_height: 1000,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
@@ -733,7 +741,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -750,8 +757,8 @@ mod tests {
                 end_of_sequencing_block_hash: B256::ZERO,
             }),
             execution_layer: Arc::new(ExecutionLayerMock {
-                current_operator: true,
-                next_operator: false,
+                current_operator_address: PRECONFER_ADDRESS,
+                next_operator_address: OTHER_OPERATOR_ADDRESS,
                 is_preconf_router_specified: true,
                 taiko_inbox_height: 0,
                 handover_window_slots: 10,
@@ -765,7 +772,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -791,7 +797,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -821,8 +826,8 @@ mod tests {
                 end_of_sequencing_block_hash: B256::ZERO,
             }),
             execution_layer: Arc::new(ExecutionLayerMock {
-                current_operator: true,
-                next_operator: true,
+                current_operator_address: PRECONFER_ADDRESS,
+                next_operator_address: PRECONFER_ADDRESS,
                 is_preconf_router_specified: true,
                 taiko_inbox_height: 0,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
@@ -836,7 +841,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
