@@ -7,9 +7,11 @@ use super::event_indexer::EventIndexer;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
-use alloy::primitives::Bytes;
-use alloy::primitives::aliases::U48;
-use alloy::{eips::BlockNumberOrTag, primitives::Address, providers::DynProvider};
+use alloy::{
+    eips::{BlockId, BlockNumberOrTag},
+    primitives::{Address, Bytes, aliases::U48},
+    providers::DynProvider,
+};
 use anyhow::{Error, anyhow};
 use common::shared::l2_block_v2::L2BlockV2;
 use common::{
@@ -136,13 +138,17 @@ impl PreconferProvider for ExecutionLayer {
 }
 
 impl PreconfOperator for ExecutionLayer {
-    async fn is_operator_for_current_epoch(
+    fn get_preconfer_address(&self) -> Address {
+        self.preconfer_address
+    }
+
+    async fn get_operators_for_current_and_next_epoch(
         &self,
         current_epoch_timestamp: u64,
-    ) -> Result<(bool, Address), OperatorError> {
-        let latest_block_timestamp = self
+    ) -> Result<(Address, Address), OperatorError> {
+        let (latest_block_number, latest_block_timestamp) = self
             .common
-            .get_latest_block_timestamp()
+            .get_latest_block_number_and_timestamp()
             .await
             .map_err(OperatorError::Any)?;
         if latest_block_timestamp < current_epoch_timestamp {
@@ -151,9 +157,12 @@ impl PreconfOperator for ExecutionLayer {
 
         let contract =
             IPreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
-        let operator = contract
+
+        let current_operator = contract
             .getOperatorForCurrentEpoch()
-            .block(alloy::eips::BlockId::latest())
+            .block(BlockId::Number(BlockNumberOrTag::Number(
+                latest_block_number,
+            )))
             .call()
             .await
             .map_err(|e| {
@@ -163,27 +172,11 @@ impl PreconfOperator for ExecutionLayer {
                 )))
             })?;
 
-        Ok((operator == self.preconfer_address, operator))
-    }
-
-    async fn is_operator_for_next_epoch(
-        &self,
-        current_epoch_timestamp: u64,
-    ) -> Result<(bool, Address), OperatorError> {
-        let latest_block_timestamp = self
-            .common
-            .get_latest_block_timestamp()
-            .await
-            .map_err(OperatorError::Any)?;
-        if latest_block_timestamp < current_epoch_timestamp {
-            return Err(OperatorError::OperatorCheckTooEarly);
-        }
-
-        let contract =
-            IPreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
-        let operator = contract
+        let next_operator = contract
             .getOperatorForNextEpoch()
-            .block(alloy::eips::BlockId::latest())
+            .block(BlockId::Number(BlockNumberOrTag::Number(
+                latest_block_number,
+            )))
             .call()
             .await
             .map_err(|e| {
@@ -192,7 +185,8 @@ impl PreconfOperator for ExecutionLayer {
                     e, self.contract_addresses.proposer_checker
                 )))
             })?;
-        Ok((operator == self.preconfer_address, operator))
+
+        Ok((current_operator, next_operator))
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
