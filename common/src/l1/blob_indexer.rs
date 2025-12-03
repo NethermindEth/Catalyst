@@ -77,8 +77,6 @@ impl BlobIndexer {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::crypto::kzg::blob_to_kzg_commitment;
-    use alloy::{consensus::EnvKzgSettings, eips::eip4844::kzg_to_versioned_hash};
     use hex::FromHex;
     use tokio;
 
@@ -95,10 +93,9 @@ pub mod tests {
         let cl = BlobIndexer::new(server.url().as_str(), Duration::from_secs(1)).unwrap();
 
         let blob = cl.get_blob(hash).await.unwrap();
-
-        let kzg_settings = EnvKzgSettings::Default.get();
-        let commitment = blob_to_kzg_commitment(blob, kzg_settings).unwrap();
-        let versioned_hash = kzg_to_versioned_hash(commitment.as_ref());
+        let sidecar =
+            alloy::consensus::BlobTransactionSidecar::try_from_blobs_bytes(vec![blob]).unwrap();
+        let versioned_hash = sidecar.versioned_hash_for_blob(0).unwrap();
 
         assert_eq!(
             versioned_hash, hash,

@@ -1,46 +1,13 @@
-use alloy::consensus::{Blob, BlobTransactionSidecar, Bytes48, EnvKzgSettings};
-use anyhow::Error;
-
-mod blob_coder;
 mod blob_decoder;
 pub mod blob_parser;
 pub mod constants;
 
-use crate::crypto::kzg::{blob_to_kzg_commitment, compute_blob_kzg_proof};
-use blob_coder::BlobCoder;
+use alloy::consensus::{Blob, EnvKzgSettings};
+use anyhow::Error;
 use blob_decoder::BlobDecoder;
-use constants::MAX_BLOB_DATA_SIZE;
 
 pub fn build_default_kzg_settings() {
     EnvKzgSettings::Default.get();
-}
-
-pub fn build_blob_sidecar(data: &[u8]) -> Result<BlobTransactionSidecar, Error> {
-    // Split to blob chunks
-    let chunks: Vec<&[u8]> = data.chunks(MAX_BLOB_DATA_SIZE).collect();
-
-    let mut blobs: Vec<Blob> = Vec::with_capacity(chunks.len());
-    let mut commitments: Vec<Bytes48> = Vec::with_capacity(chunks.len());
-    let mut proofs: Vec<Bytes48> = Vec::with_capacity(chunks.len());
-
-    for raw_data_blob in chunks {
-        // Encode blob data
-        let encoded_blob: Blob = BlobCoder::encode_blob(raw_data_blob)?;
-        // Compute commitment and proof
-        let kzg_settings = EnvKzgSettings::Default.get();
-        let commitment = blob_to_kzg_commitment(encoded_blob, kzg_settings)?;
-        let proof = compute_blob_kzg_proof(encoded_blob, &commitment, kzg_settings)?;
-        // Build sidecar
-        blobs.push(encoded_blob);
-        commitments.push(Bytes48::try_from(commitment.as_ref())?);
-        proofs.push(Bytes48::try_from(proof.as_ref())?);
-    }
-
-    Ok(BlobTransactionSidecar {
-        blobs,
-        commitments,
-        proofs,
-    })
 }
 
 pub fn decode_blob(blob: &Blob) -> Result<Vec<u8>, Error> {
@@ -50,17 +17,9 @@ pub fn decode_blob(blob: &Blob) -> Result<Vec<u8>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy::consensus::SidecarBuilder;
     use alloy::primitives::FixedBytes;
-
-    #[test]
-    fn test_build_blob_sidecar() {
-        build_default_kzg_settings();
-        let data = vec![3u8; 400];
-        let sidecar = build_blob_sidecar(&data).expect("assert: can build taiko blob sidecar");
-        for s in sidecar.into_iter() {
-            assert!(s.verify_blob_kzg_proof().is_ok());
-        }
-    }
+    use taiko_protocol::shasta::BlobCoder;
 
     #[test]
     fn test_encode_and_decode_blob() {
@@ -82,8 +41,9 @@ mod tests {
             0x61, 0x58, 0xF1, 0x1D,
         ];
 
-        let encoded_blob: Blob =
-            BlobCoder::encode_blob(&data).expect("assert: can encode taiko blob");
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&data);
+        let sidecar = sidecar_builder.build().unwrap();
+        let encoded_blob: Blob = sidecar.blobs[0];
 
         assert_eq!(
             alloy::primitives::keccak256(encoded_blob),
@@ -116,8 +76,9 @@ mod tests {
             0xE4, 0xD2, 0xEE,
         ];
 
-        let encoded_blob: Blob =
-            BlobCoder::encode_blob(&data).expect("assert: can encode taiko blob");
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&data);
+        let sidecar = sidecar_builder.build().unwrap();
+        let encoded_blob: Blob = sidecar.blobs[0];
 
         assert_eq!(
             alloy::primitives::keccak256(encoded_blob),

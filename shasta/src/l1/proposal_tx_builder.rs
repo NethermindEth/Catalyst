@@ -1,6 +1,7 @@
 use super::bindings::Inbox;
 use super::event_indexer::EventIndexer;
 use alloy::{
+    consensus::SidecarBuilder,
     network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{
         Address, Bytes,
@@ -9,17 +10,18 @@ use alloy::{
     providers::{DynProvider, Provider},
     rpc::types::TransactionRequest,
 };
+use alloy_json_rpc::RpcError;
 use anyhow::Error;
+use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use common::shared::l2_block_v2::L2BlockV2;
 use std::sync::Arc;
 use taiko_bindings::codec_optimized::{
     CodecOptimized::CodecOptimizedInstance, IInbox::ProposeInput, LibBlobs::BlobReference,
 };
-
-use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
-
-use alloy_json_rpc::RpcError;
-use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
+use taiko_protocol::shasta::{
+    BlobCoder,
+    manifest::{BlockManifest, DerivationSourceManifest},
+};
 use tracing::{info, warn};
 
 pub struct ProposalTxBuilder {
@@ -142,7 +144,8 @@ impl ProposalTxBuilder {
             .encode_and_compress()
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
-        let sidecar = common::blob::build_blob_sidecar(&manifest_data)?;
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
+        let sidecar = sidecar_builder.build()?;
 
         // Build the propose input.
         let input = ProposeInput {
