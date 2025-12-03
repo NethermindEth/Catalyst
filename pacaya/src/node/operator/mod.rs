@@ -31,7 +31,6 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     last_config_reload_epoch: u64,
     fork_info: ForkInfo,
     current_operator_address: Address,
-    next_operator_address: Address,
 }
 
 impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
@@ -62,7 +61,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             last_config_reload_epoch: 0,
             fork_info,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         })
     }
 
@@ -140,7 +138,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
                         next_operator_address
                     );
                     self.current_operator_address = current_operator_address;
-                    self.next_operator_address = next_operator_address;
                 }
                 let current_operator =
                     current_operator_address == self.execution_layer.get_preconfer_address();

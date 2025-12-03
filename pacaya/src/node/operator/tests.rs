@@ -623,7 +623,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -675,7 +674,6 @@ mod tests {
             was_synced_preconfer: false,
             cancel_counter: 0,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -713,7 +711,6 @@ mod tests {
             was_synced_preconfer: false,
             cancel_counter: 0,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -744,7 +741,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -776,7 +772,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -802,7 +797,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
@@ -847,7 +841,6 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
-            next_operator_address: Address::ZERO,
         }
     }
 
