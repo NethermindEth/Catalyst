@@ -22,6 +22,16 @@ mod tests {
     use taiko_protocol::shasta::BlobCoder;
 
     #[test]
+    fn test_encode_data_with_two_blobs() {
+        const BLOB_MAX_DATA_SIZE: usize = (4 * 31 + 3) * 1024 - 4;
+        let data: Vec<u8> = vec![0u8; BLOB_MAX_DATA_SIZE * 2];
+
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&data);
+        let sidecar = sidecar_builder.build().unwrap();
+        assert_eq!(sidecar.blobs.len(), 2);
+    }
+
+    #[test]
     fn test_encode_and_decode_blob() {
         let data: Vec<u8> = vec![
             0xBE, 0x68, 0xB2, 0x32, 0x82, 0xC8, 0xEC, 0x40, 0x4B, 0x0F, 0xF8, 0x77, 0x33, 0x02,
