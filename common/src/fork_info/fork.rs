@@ -1,10 +1,7 @@
-use anyhow::Error;
-use std::{
-    fmt::{Display, Formatter, Result},
-    str::FromStr,
-};
+use std::fmt::{Display, Formatter, Result as FmtResult};
+use strum::{EnumIter, IntoEnumIterator};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, EnumIter)]
 pub enum Fork {
     Pacaya,
     Shasta,
@@ -12,26 +9,12 @@ pub enum Fork {
 
 impl Fork {
     pub fn next(&self) -> Option<Self> {
-        match self {
-            Fork::Pacaya => Some(Fork::Shasta),
-            Fork::Shasta => None,
-        }
+        Fork::iter().skip_while(|f| f != self).nth(1)
     }
 }
 
 impl Display for Fork {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "{:?}", self)
-    }
-}
-
-impl FromStr for Fork {
-    type Err = Error;
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "pacaya" => Ok(Fork::Pacaya),
-            "shasta" => Ok(Fork::Shasta),
-            _ => Err(Error::msg(format!("Invalid fork: {}", s))),
-        }
     }
 }

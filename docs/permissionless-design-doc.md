@@ -238,12 +238,10 @@ struct Preconfirmation {
     address coinbase;
     // Height of the L1 block chosen as anchor for the preconfed block
     uint256 anchorBlockNumber;
-    // Hash of the raw list of transactions included in the parent block
-    bytes32 parentRawTxListHash;
     // Hash of the raw list of transactions included in the block
     bytes32 rawTxListHash;
-    // The expected submission window of the parent block
-    uint256 parentSubmissionWindowEnd;
+    // The hash of the parent preconfirmation
+    bytes32 parentPreconfirmationHash;
     // The timestamp of the preconfer's slot in the lookahead
     uint256 submissionWindowEnd;
     // Prover authorization for the block
@@ -323,8 +321,7 @@ currentPreconfer: LookaheadSlot
 # https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/pipeline/state.rs#L12-L13
 class ParentState:
     header: Header             # Standard block header (hash, number, timestamp, gasLimit, coinbase, etc.)
-    anchorBlockNumber: uint256 # L1 anchor block ID
-    rawTxListHash: bytes32     # New! Hash of raw transaction list
+    preconfirmationHash: bytes32     # New! Hash of preconfirmation
     proposalId: uint256        # New! Incremental ID for each L1 proposal
     ...
 
@@ -358,8 +355,7 @@ def verifyPreconfirmation(rawTxList: List[Tx], signedCommitment: SignedCommitmen
     assert preconf.submissionWindowEnd == expectedTimestamp
 
     # 5) Verify parent consistency
-    assert preconf.parentRawTxListHash == localL2Head.rawTxListHash
-    assert preconf.parentAnchorId == localL2Head.anchorId
+    assert preconf.parentPreconfirmationHash == localL2Head.preconfirmationHash
 
     # 6) Verify rawTxList consistency
     assert hash(rawTxList) == preconf.rawTxListHash

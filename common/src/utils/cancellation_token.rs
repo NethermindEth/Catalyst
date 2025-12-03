@@ -1,5 +1,6 @@
 use crate::metrics::Metrics;
 use std::sync::Arc;
+use tracing::error;
 
 #[derive(Clone)]
 pub struct CancellationToken {
@@ -22,6 +23,7 @@ impl CancellationToken {
     }
 
     pub fn cancel_on_critical_error(&self) {
+        error!("Critical error occurred, cancelling token");
         self.metrics.inc_critical_errors();
         self.cancel_token.cancel();
     }

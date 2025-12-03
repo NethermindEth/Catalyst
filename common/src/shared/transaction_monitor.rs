@@ -3,7 +3,7 @@ use crate::{metrics::Metrics, shared::alloy_tools, signer::Signer};
 use alloy::{
     consensus::TxType,
     network::{Network, ReceiptResponse, TransactionBuilder, TransactionBuilder4844},
-    primitives::B256,
+    primitives::{B256, FixedBytes},
     providers::{
         DynProvider, PendingTransactionBuilder, PendingTransactionError, Provider, RootProvider,
         WatchTxError,
@@ -22,7 +22,7 @@ use tracing::{debug, error, info, warn};
 // Transaction status enum
 #[derive(Debug, Clone, PartialEq)]
 pub enum TxStatus {
-    Confirmed(u64), // Block number
+    Confirmed,
     Failed(String), // Error message
     Pending,
 }
@@ -45,6 +45,7 @@ pub struct TransactionMonitorThread {
     error_notification_channel: Sender<TransactionError>,
     metrics: Arc<Metrics>,
     chain_id: u64,
+    sent_tx_hashes: Vec<FixedBytes<32>>,
 }
 
 //#[derive(Debug)]
@@ -142,15 +143,16 @@ impl TransactionMonitorThread {
             error_notification_channel,
             metrics,
             chain_id,
+            sent_tx_hashes: Vec::new(),
         }
     }
-    pub fn spawn_monitoring_task(self, tx: TransactionRequest) -> JoinHandle<()> {
+    pub fn spawn_monitoring_task(mut self, tx: TransactionRequest) -> JoinHandle<()> {
         tokio::spawn(async move {
             self.monitor_transaction(tx).await;
         })
     }
 
-    async fn monitor_transaction(&self, mut tx: TransactionRequest) {
+    async fn monitor_transaction(&mut self, mut tx: TransactionRequest) {
         tx.set_nonce(self.nonce);
         if !matches!(tx.buildable_type(), Some(TxType::Eip1559 | TxType::Eip4844)) {
             self.send_error_signal(TransactionError::UnsupportedTransactionType)
@@ -193,7 +195,6 @@ impl TransactionMonitorThread {
 
         self.metrics.inc_batch_proposed();
         // Sending attempts loop
-        let mut tx_hashes = Vec::new();
         for sending_attempt in 0..self.config.max_attempts_to_send_tx {
             let mut tx_clone = tx.clone();
             self.set_tx_parameters(
@@ -213,21 +214,19 @@ impl TransactionMonitorThread {
                 }
             };
 
-            if sending_attempt > 0 && self.verify_tx_included(&tx_hashes, sending_attempt).await {
+            if sending_attempt > 0 && self.verify_tx_included(sending_attempt).await {
                 return;
             }
 
-            let pending_tx = if let Some(pending_tx) = self
-                .send_transaction(tx_clone, &tx_hashes, sending_attempt)
-                .await
-            {
-                pending_tx
-            } else {
-                return;
-            };
+            let pending_tx =
+                if let Some(pending_tx) = self.send_transaction(tx_clone, sending_attempt).await {
+                    pending_tx
+                } else {
+                    return;
+                };
 
             let tx_hash = *pending_tx.tx_hash();
-            tx_hashes.push(tx_hash);
+            self.sent_tx_hashes.push(tx_hash);
 
             if root_provider.is_none() {
                 root_provider = Some(pending_tx.provider().clone());
@@ -274,7 +273,8 @@ impl TransactionMonitorThread {
         let mut wait_attempt = 0;
         if let Some(root_provider) = root_provider {
             // We can use unwrap since tx_hashes is updated before root_provider
-            let tx_hash = tx_hashes
+            let tx_hash = self
+                .sent_tx_hashes
                 .last()
                 .expect("assert: tx_hashes is updated before root_provider");
             while wait_attempt < self.config.max_attempts_to_wait_tx
@@ -287,10 +287,7 @@ impl TransactionMonitorThread {
                     )
                     .await
                 && !self
-                    .verify_tx_included(
-                        &tx_hashes,
-                        wait_attempt + self.config.max_attempts_to_send_tx,
-                    )
+                    .verify_tx_included(wait_attempt + self.config.max_attempts_to_send_tx)
                     .await
             {
                 warn!("🟣 Transaction watcher timed out without a result. Waiting...");
@@ -301,7 +298,7 @@ impl TransactionMonitorThread {
         if wait_attempt >= self.config.max_attempts_to_wait_tx {
             error!(
                 "⛔ Transaction {} with nonce {} not confirmed",
-                if let Some(tx_hash) = tx_hashes.last() {
+                if let Some(tx_hash) = self.sent_tx_hashes.last() {
                     tx_hash.to_string()
                 } else {
                     "unknown".to_string()
@@ -325,7 +322,7 @@ impl TransactionMonitorThread {
             let check_tx = PendingTransactionBuilder::new(root_provider.clone(), tx_hash);
             let tx_status = self.wait_for_tx_receipt(check_tx, sending_attempt).await;
             match tx_status {
-                TxStatus::Confirmed(_) => return true,
+                TxStatus::Confirmed => return true,
                 TxStatus::Failed(err_str) => {
                     if let Some(error) = tools::convert_error_payload(&err_str) {
                         self.send_error_signal(error).await;
@@ -363,7 +360,6 @@ impl TransactionMonitorThread {
     async fn send_transaction(
         &self,
         tx: TransactionRequest,
-        previous_tx_hashes: &Vec<B256>,
         sending_attempt: u64,
     ) -> Option<PendingTransactionBuilder<alloy::network::Ethereum>> {
         match self.provider.send_transaction(tx.clone()).await {
@@ -372,8 +368,7 @@ impl TransactionMonitorThread {
                 Some(pending_tx)
             }
             Err(e) => {
-                self.handle_rpc_error(e, previous_tx_hashes, sending_attempt)
-                    .await;
+                self.handle_rpc_error(e, sending_attempt).await;
                 None
             }
         }
@@ -409,18 +404,10 @@ impl TransactionMonitorThread {
         }
     }
 
-    async fn handle_rpc_error(
-        &self,
-        e: RpcError<TransportErrorKind>,
-        previous_tx_hashes: &Vec<B256>,
-        sending_attempt: u64,
-    ) {
+    async fn handle_rpc_error(&self, e: RpcError<TransportErrorKind>, sending_attempt: u64) {
         if let RpcError::ErrorResp(err) = &e {
             if err.message.contains("nonce too low") {
-                if !self
-                    .verify_tx_included(previous_tx_hashes, sending_attempt)
-                    .await
-                {
+                if !self.verify_tx_included(sending_attempt).await {
                     self.send_error_signal(TransactionError::TransactionReverted)
                         .await;
                 }
@@ -444,14 +431,14 @@ impl TransactionMonitorThread {
         }
     }
 
-    async fn verify_tx_included(&self, tx_hashes: &Vec<B256>, sending_attempt: u64) -> bool {
-        for tx_hash in tx_hashes {
+    async fn verify_tx_included(&self, sending_attempt: u64) -> bool {
+        for tx_hash in self.sent_tx_hashes.iter() {
             let tx = self.provider.get_transaction_by_hash(*tx_hash).await;
             if let Ok(Some(tx)) = tx
                 && let Some(block_number) = tx.block_number
             {
                 info!(
-                    "✅ Transaction {} confirmed in block {} while trying to replace it",
+                    "✅ Transaction {} confirmed in block {} by checking its hash",
                     tx_hash, block_number
                 );
                 self.metrics.observe_batch_propose_tries(sending_attempt);
@@ -460,7 +447,10 @@ impl TransactionMonitorThread {
             }
         }
 
-        let warning = format!("Transaction not found, checked hashes: {tx_hashes:?}");
+        let warning = format!(
+            "Transaction not found, checked hashes: {:?}",
+            self.sent_tx_hashes
+        );
         warn!("{}", warning);
         false
     }
@@ -492,7 +482,7 @@ impl TransactionMonitorThread {
                     );
                     self.metrics.observe_batch_propose_tries(sending_attempt);
                     self.metrics.inc_batch_confirmed();
-                    TxStatus::Confirmed(block_number)
+                    TxStatus::Confirmed
                 } else if let Some(block_number) = receipt.block_number() {
                     let revert_reason = crate::shared::alloy_tools::check_for_revert_reason(
                         &self.provider,
@@ -515,7 +505,11 @@ impl TransactionMonitorThread {
                     TxStatus::Pending
                 }
                 _ => {
-                    error!("Error checking transaction {}: {}", tx_hash, e);
+                    if self.verify_tx_included(sending_attempt).await {
+                        debug!("Transaction included even though got response from the RPC: {e}");
+                        return TxStatus::Confirmed;
+                    }
+                    error!("Error checking transaction {}: {:?}", tx_hash, e);
                     TxStatus::Pending
                 }
             },

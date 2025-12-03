@@ -1,4 +1,4 @@
-use taiko_bindings::i_inbox::IInbox::Config;
+use super::bindings::Inbox::Config;
 
 #[derive(Clone, Default)]
 pub struct ProtocolConfig {

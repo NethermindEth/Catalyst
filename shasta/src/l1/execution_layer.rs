@@ -1,11 +1,17 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
 
+use super::bindings::{IPreconfWhitelist, Inbox, PreconfWhitelist};
+use super::config::EthereumL1Config;
+use super::event_indexer::EventIndexer;
+use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
-use alloy::primitives::Bytes;
-use alloy::primitives::aliases::U48;
-use alloy::{eips::BlockNumberOrTag, primitives::Address, providers::DynProvider};
+use alloy::{
+    eips::{BlockId, BlockNumberOrTag},
+    primitives::{Address, Bytes, aliases::U48},
+    providers::DynProvider,
+};
 use anyhow::{Error, anyhow};
 use common::shared::l2_block_v2::L2BlockV2;
 use common::{
@@ -19,18 +25,10 @@ use common::{
         transaction_monitor::TransactionMonitor,
     },
 };
-use pacaya::l1::traits::{PreconfOperator, WhitelistProvider};
+use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
-
-use super::bindings::{IPreconfWhitelist, Inbox, PreconfWhitelist};
-use super::event_indexer::EventIndexer;
-use super::proposal_tx_builder::ProposalTxBuilder;
-use taiko_bindings::i_inbox::IInbox;
-
 use tracing::info;
-
-use super::config::EthereumL1Config;
 
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -72,7 +70,7 @@ impl ELTrait for ExecutionLayer {
         .await
         .map_err(|e| Error::msg(format!("Failed to create TransactionMonitor: {e}")))?;
 
-        let shasta_inbox = IInbox::new(specific_config.shasta_inbox, provider.clone());
+        let shasta_inbox = Inbox::new(specific_config.shasta_inbox, provider.clone());
         let shasta_config = shasta_inbox
             .getConfig()
             .call()
@@ -140,39 +138,55 @@ impl PreconferProvider for ExecutionLayer {
 }
 
 impl PreconfOperator for ExecutionLayer {
-    async fn is_operator_for_current_epoch(&self) -> Result<bool, Error> {
-        let contract =
-            IPreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
-        let operator = contract
-            .getOperatorForCurrentEpoch()
-            .block(alloy::eips::BlockId::pending())
-            .call()
-            .await
-            .map_err(|e| {
-                Error::msg(format!(
-                    "Failed to get operator for current epoch: {}, contract: {:?}",
-                    e, self.contract_addresses.proposer_checker
-                ))
-            })?;
-
-        Ok(operator == self.preconfer_address)
+    fn get_preconfer_address(&self) -> Address {
+        self.preconfer_address
     }
 
-    async fn is_operator_for_next_epoch(&self) -> Result<bool, Error> {
+    async fn get_operators_for_current_and_next_epoch(
+        &self,
+        current_epoch_timestamp: u64,
+    ) -> Result<(Address, Address), OperatorError> {
+        let (latest_block_number, latest_block_timestamp) = self
+            .common
+            .get_latest_block_number_and_timestamp()
+            .await
+            .map_err(OperatorError::Any)?;
+        if latest_block_timestamp < current_epoch_timestamp {
+            return Err(OperatorError::OperatorCheckTooEarly);
+        }
+
         let contract =
             IPreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
-        let operator = contract
-            .getOperatorForNextEpoch()
-            .block(alloy::eips::BlockId::pending())
+
+        let current_operator = contract
+            .getOperatorForCurrentEpoch()
+            .block(BlockId::Number(BlockNumberOrTag::Number(
+                latest_block_number,
+            )))
             .call()
             .await
             .map_err(|e| {
-                Error::msg(format!(
+                OperatorError::Any(Error::msg(format!(
+                    "Failed to get operator for current epoch: {}, contract: {:?}",
+                    e, self.contract_addresses.proposer_checker
+                )))
+            })?;
+
+        let next_operator = contract
+            .getOperatorForNextEpoch()
+            .block(BlockId::Number(BlockNumberOrTag::Number(
+                latest_block_number,
+            )))
+            .call()
+            .await
+            .map_err(|e| {
+                OperatorError::Any(Error::msg(format!(
                     "Failed to get operator for next epoch: {}, contract: {:?}",
                     e, self.contract_addresses.proposer_checker
-                ))
+                )))
             })?;
-        Ok(operator == self.preconfer_address)
+
+        Ok((current_operator, next_operator))
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
@@ -239,7 +253,7 @@ impl ExecutionLayer {
     }
 
     pub async fn fetch_protocol_config(&self) -> Result<ProtocolConfig, Error> {
-        let shasta_inbox = IInbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
+        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
         let shasta_config = shasta_inbox
             .getConfig()
             .call()
