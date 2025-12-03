@@ -438,7 +438,7 @@ impl TransactionMonitorThread {
                 && let Some(block_number) = tx.block_number
             {
                 info!(
-                    "✅ Transaction {} confirmed in block {} while trying to replace it",
+                    "✅ Transaction {} confirmed in block {} by checking its hash",
                     tx_hash, block_number
                 );
                 self.metrics.observe_batch_propose_tries(sending_attempt);
@@ -505,7 +505,11 @@ impl TransactionMonitorThread {
                     TxStatus::Pending
                 }
                 _ => {
-                    error!("Error checking transaction {}: {}", tx_hash, e);
+                    if self.verify_tx_included(sending_attempt).await {
+                        debug!("Transaction included even though got response from the RPC: {e}");
+                        return TxStatus::Confirmed;
+                    }
+                    error!("Error checking transaction {}: {:?}", tx_hash, e);
                     TxStatus::Pending
                 }
             },
