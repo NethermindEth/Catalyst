@@ -444,6 +444,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
+ "arbitrary",
  "serde",
 ]
 
@@ -493,8 +494,10 @@ dependencies = [
  "alloy-primitives",
  "alloy-sol-type-parser",
  "alloy-sol-types",
+ "arbitrary",
  "derive_more",
  "itoa",
+ "proptest",
  "serde",
  "serde_json",
  "winnow",
@@ -966,6 +969,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
+ "arbitrary",
  "derive_more",
  "ethereum_ssz",
  "ethereum_ssz_derive",
@@ -989,6 +993,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-serde",
  "alloy-sol-types",
+ "arbitrary",
  "itertools 0.14.0",
  "serde",
  "serde_json",
@@ -2516,14 +2521,13 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.23.22"
+version = "1.23.23"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
  "alloy-rlp",
  "anyhow",
  "async-trait",
- "c-kzg",
  "chrono",
  "dotenvy",
  "ecdsa",
@@ -2538,6 +2542,7 @@ dependencies = [
  "lazy_static",
  "mockito",
  "prometheus",
+ "protocol",
  "reqwest",
  "serde",
  "serde_json",
@@ -5906,7 +5911,7 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.23.22"
+version = "1.23.23"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6348,7 +6353,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.23.22"
+version = "1.23.23"
 dependencies = [
  "anyhow",
  "discv5 0.9.1",
@@ -6360,14 +6365,13 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.23.22"
+version = "1.23.23"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
  "alloy-rlp",
  "anyhow",
  "async-trait",
- "c-kzg",
  "chrono",
  "common",
  "dotenvy",
@@ -6383,6 +6387,7 @@ dependencies = [
  "lazy_static",
  "mockito",
  "prometheus",
+ "protocol",
  "reqwest",
  "serde",
  "serde_json",
@@ -6504,7 +6509,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.23.22"
+version = "1.23.23"
 dependencies = [
  "alloy",
  "anyhow",
@@ -10833,7 +10838,7 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.23.22"
+version = "1.23.23"
 dependencies = [
  "alethia-reth-consensus 0.5.0",
  "alloy",
@@ -10842,7 +10847,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bindings",
- "c-kzg",
  "chrono",
  "common",
  "dotenvy",
@@ -12257,7 +12261,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.23.22"
+version = "1.23.23"
 dependencies = [
  "alloy",
  "alloy-json-rpc",

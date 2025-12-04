@@ -15,7 +15,6 @@ alloy-json-rpc = { workspace = true }
 alloy-rlp = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-c-kzg = { workspace = true }
 chrono = { workspace = true }
 dotenvy = { workspace = true }
 ecdsa = { workspace = true }
@@ -33,6 +32,7 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
+taiko_protocol = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
@@ -40,6 +40,7 @@ tracing-subscriber = { workspace = true }
 warp = { workspace = true }
 
 [dev-dependencies]
+alloy = { workspace = true, features = ["arbitrary"] }
 mockito = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 

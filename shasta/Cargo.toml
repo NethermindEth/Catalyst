@@ -12,7 +12,6 @@ alloy-json-rpc = { workspace = true }
 alloy-rlp = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-c-kzg = { workspace = true }
 chrono = { workspace = true }
 common = { workspace = true }
 dotenvy = { workspace = true }

@@ -1,7 +1,7 @@
 use super::bindings::*;
 use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
-    consensus::transaction::RlpEcdsaEncodableTx,
+    consensus::{SidecarBuilder, transaction::RlpEcdsaEncodableTx},
     network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{Address, Bytes, FixedBytes},
     providers::{DynProvider, Provider},
@@ -12,6 +12,7 @@ use alloy_json_rpc::RpcError;
 use alloy_rlp::BufMut;
 use anyhow::{Error, anyhow};
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
+use taiko_protocol::shasta::BlobCoder;
 use tracing::{debug, warn};
 
 pub struct ProposeBatchBuilder {
@@ -289,8 +290,9 @@ impl ProposeBatchBuilder {
             Bytes::new()
         };
 
-        // Build sidecar
-        let sidecar = common::blob::build_blob_sidecar(tx_list)?;
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(tx_list);
+        let sidecar = sidecar_builder.build()?;
+
         let num_blobs = u8::try_from(sidecar.blobs.len())?;
 
         let batch_params = BatchParams {
