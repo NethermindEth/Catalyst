@@ -12,6 +12,7 @@ use alloy::{
     transports::TransportErrorKind,
 };
 use alloy_json_rpc::RpcError;
+use alloy_rlp::Encodable;
 use anyhow::Error;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
@@ -25,6 +26,12 @@ pub enum TxStatus {
     Confirmed,
     Failed(String), // Error message
     Pending,
+}
+
+#[derive(Debug)]
+enum InternalTransactionError {
+    Rpc(RpcError<TransportErrorKind>),
+    Other(Error),
 }
 
 #[derive(Debug, Clone)]
@@ -362,7 +369,7 @@ impl TransactionMonitorThread {
         tx: TransactionRequest,
         sending_attempt: u64,
     ) -> Option<PendingTransactionBuilder<alloy::network::Ethereum>> {
-        match self.provider.send_transaction(tx.clone()).await {
+        match Self::send_transaction_with_conversion_to_7594(&self.provider, tx.clone()).await {
             Ok(pending_tx) => {
                 self.propagate_transaction_to_other_backup_nodes(tx).await;
                 Some(pending_tx)
@@ -374,6 +381,33 @@ impl TransactionMonitorThread {
         }
     }
 
+    async fn send_transaction_with_conversion_to_7594(
+        provider: &DynProvider,
+        tx: TransactionRequest,
+    ) -> Result<PendingTransactionBuilder<alloy::network::Ethereum>, InternalTransactionError> {
+        if tx.has_eip4844_fields() {
+            // Build 4844 transaction with sidecar and convert back to TransactionRequest
+            let tx_4844 = tx
+                .build_4844_with_sidecar()
+                .map_err(|e| InternalTransactionError::Other(e.into()))?;
+            let tx_7594 = tx_4844
+                .try_into_7594()
+                .map_err(|e| InternalTransactionError::Other(e.into()))?;
+            let tx = tx_7594.tx();
+            let mut out = Vec::<u8>::new();
+            tx.encode(&mut out);
+            provider
+                .send_raw_transaction(&out)
+                .await
+                .map_err(InternalTransactionError::Rpc)
+        } else {
+            provider
+                .send_transaction(tx)
+                .await
+                .map_err(InternalTransactionError::Rpc)
+        }
+    }
+
     /// Recreates each backup node every time to avoid connection issues
     async fn propagate_transaction_to_other_backup_nodes(&self, tx: TransactionRequest) {
         // Skip the first RPC URL since it is the main one
@@ -381,14 +415,16 @@ impl TransactionMonitorThread {
             let provider = alloy_tools::construct_alloy_provider(&self.config.signer, url).await;
             match provider {
                 Ok(provider) => {
-                    let tx = provider.send_transaction(tx.clone()).await;
+                    let tx =
+                        Self::send_transaction_with_conversion_to_7594(&provider, tx.clone()).await;
                     if let Err(e) = tx {
-                        if e.to_string().contains("AlreadyKnown")
-                            || e.to_string().to_lowercase().contains("already known")
+                        if let InternalTransactionError::Rpc(ref e) = e
+                            && (e.to_string().contains("AlreadyKnown")
+                                || e.to_string().to_lowercase().contains("already known"))
                         {
                             debug!("Transaction already known to backup node {}", url);
                         } else {
-                            warn!("Failed to send transaction to backup node {}: {}", url, e);
+                            warn!("Failed to send transaction to backup node {}: {:?}", url, e);
                         }
                     } else {
                         info!("Transaction sent to backup node {}", url);
@@ -404,25 +440,31 @@ impl TransactionMonitorThread {
         }
     }
 
-    async fn handle_rpc_error(&self, e: RpcError<TransportErrorKind>, sending_attempt: u64) {
-        if let RpcError::ErrorResp(err) = &e {
-            if err.message.contains("nonce too low") {
-                if !self.verify_tx_included(sending_attempt).await {
-                    self.send_error_signal(TransactionError::TransactionReverted)
-                        .await;
+    async fn handle_rpc_error(&self, err: InternalTransactionError, sending_attempt: u64) {
+        match err {
+            InternalTransactionError::Rpc(RpcError::ErrorResp(err)) => {
+                if err.message.contains("nonce too low") {
+                    if !self.verify_tx_included(sending_attempt).await {
+                        self.send_error_signal(TransactionError::TransactionReverted)
+                            .await;
+                    }
+                } else if let Some(error) = tools::convert_error_payload(&err.message) {
+                    error!("Failed to send transaction: {}", error);
+                    self.send_error_signal(error).await;
                 }
-                return;
-            } else if let Some(error) = tools::convert_error_payload(&err.message) {
-                error!("Failed to send transaction: {}", error);
-                self.send_error_signal(error).await;
-                return;
+            }
+            InternalTransactionError::Other(err) => {
+                error!("Failed to send transaction: {}", err);
+                self.send_error_signal(TransactionError::UnsupportedTransactionType)
+                    .await;
+            }
+            _ => {
+                // TODO if it is not revert then rebuild rpc client and retry on rpc error
+                error!("Failed to send transaction: {:?}", err);
+                self.send_error_signal(TransactionError::TransactionReverted)
+                    .await;
             }
         }
-
-        // TODO if it is not revert then rebuild rpc client and retry on rpc error
-        error!("Failed to send transaction: {}", e);
-        self.send_error_signal(TransactionError::TransactionReverted)
-            .await;
     }
 
     async fn send_error_signal(&self, error: TransactionError) {
