@@ -1,5 +1,5 @@
 use alloy::primitives::{Address, B256, Bytes};
-use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Dummy};
+use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
 use common::shared::l2_tx_lists::PreBuiltTxList;
 use std::collections::VecDeque;
 use std::time::Instant;
@@ -142,22 +142,24 @@ impl Proposal {
         )
     }
 
-    pub fn create_block_from_dummy(
-        &mut self,
-        l2_dummy_block: L2BlockV2Dummy,
-    ) -> L2BlockV2 {
+    pub fn create_block_from_draft(&mut self, l2_draft_block: L2BlockV2Draft) -> L2BlockV2 {
         L2BlockV2::new_from(
-            l2_dummy_block.prebuilt_tx_list,
-            l2_dummy_block.timestamp_sec,
+            l2_draft_block.prebuilt_tx_list,
+            l2_draft_block.timestamp_sec,
             self.coinbase,
             self.anchor_block_id,
-            l2_dummy_block.gas_limit,
+            l2_draft_block.gas_limit,
         )
     }
 
     pub fn add_l2_block(&mut self, l2_block: L2BlockV2) {
         self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
         self.l2_blocks.push(l2_block);
+    }
+
+    pub fn add_l2_draft_block(&mut self, l2_draft_block: L2BlockV2Draft) {
+        let l2_block = self.create_block_from_draft(l2_draft_block);
+        self.add_l2_block(l2_block);
     }
 }
 

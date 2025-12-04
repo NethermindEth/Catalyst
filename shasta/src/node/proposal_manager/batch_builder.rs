@@ -5,11 +5,14 @@ use crate::{
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::proposal_manager::proposal::{BondInstructionData, Proposal},
-    shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
+    shared::l2_tx_lists::PreBuiltTxList,
 };
 use alloy::primitives::Address;
 use anyhow::Error;
-use common::{batch_builder::BatchBuilderConfig, shared::{l2_block_v2::{L2BlockV2, L2BlockV2Dummy}, l2_slot_info_v2::L2SlotContext}};
+use common::{
+    batch_builder::BatchBuilderConfig,
+    shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft},
+};
 use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
     shared::anchor_block_info::AnchorBlockInfo,
@@ -44,32 +47,33 @@ impl BatchBuilder {
     }
 
     // TODO use L2BlockV2 here
-    pub fn can_consume_l2_block(&mut self, l2_dummy_block: L2BlockV2Dummy) -> bool {
-        let is_time_shift_expired = self.is_time_shift_expired(l2_dummy_block.timestamp_sec);
+    pub fn can_consume_l2_block(&mut self, l2_draft_block: &L2BlockV2Draft) -> bool {
+        let is_time_shift_expired = self.is_time_shift_expired(l2_draft_block.timestamp_sec);
         self.current_proposal.as_mut().is_some_and(|batch| {
             let new_block_count = match u16::try_from(batch.l2_blocks.len() + 1) {
                 Ok(n) => n,
                 Err(_) => return false,
             };
 
-            let mut new_total_bytes = batch.total_bytes + l2_dummy_block.prebuilt_tx_list.bytes_length;
+            let mut new_total_bytes =
+                batch.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
 
             if !self.config.is_within_bytes_limit(new_total_bytes) {
                 // first compression, compressing the batch without the new L2 block
                 batch.compress();
-                new_total_bytes = batch.total_bytes + l2_dummy_block.prebuilt_tx_list.bytes_length;
+                new_total_bytes = batch.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
                 if !self.config.is_within_bytes_limit(new_total_bytes) {
                     // second compression, compressing the batch with the new L2 block
                     // we can tolerate the processing overhead as it's a very rare case
+                    let start = std::time::Instant::now();
                     let mut batch_clone = batch.clone();
-                    let l2_block = batch_clone.create_block_from_dummy(
-                        l2_dummy_block
-                    );
+                    let l2_block = batch_clone.create_block_from_draft(l2_draft_block.clone());
                     batch_clone.add_l2_block(l2_block);
                     batch_clone.compress();
                     new_total_bytes = batch_clone.total_bytes;
                     debug!(
-                        "can_consume_l2_block: Second compression, new total bytes: {}",
+                        "can_consume_l2_block: Second compression took {} ms, new total bytes: {}",
+                        start.elapsed().as_millis(),
                         new_total_bytes
                     );
                 }
@@ -111,6 +115,24 @@ impl BatchBuilder {
 
     pub fn remove_current_proposal(&mut self) {
         self.current_proposal = None;
+    }
+
+    pub fn add_l2_draft_block_and_get_current_proposal(
+        &mut self,
+        l2_draft_block: L2BlockV2Draft,
+    ) -> Result<&Proposal, Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            current_proposal.add_l2_draft_block(l2_draft_block);
+
+            debug!(
+                "Added L2 draft block to batch: l2 blocks: {}, total bytes: {}",
+                current_proposal.l2_blocks.len(),
+                current_proposal.total_bytes
+            );
+            Ok(current_proposal)
+        } else {
+            Err(anyhow::anyhow!("No current batch"))
+        }
     }
 
     pub fn add_l2_block_and_get_current_proposal(
@@ -448,34 +470,6 @@ impl BatchBuilder {
         }
 
         true
-    }
-
-    pub fn try_creating_l2_block(
-        &mut self,
-        pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_context: &L2SlotContext,
-    ) -> Option<L2Block> {
-        if self.should_new_block_be_created(
-            pending_tx_list.as_ref(),
-            l2_slot_context.info.slot_timestamp(),
-            l2_slot_context.end_of_sequencing,
-        ) {
-            if let Some(pending_tx_list) = pending_tx_list {
-                debug!(
-                    "Creating new block with pending tx list length: {}, bytes length: {}",
-                    pending_tx_list.tx_list.len(),
-                    pending_tx_list.bytes_length
-                );
-
-                Some(L2Block::new_from(pending_tx_list, l2_slot_context.info.slot_timestamp()))
-            } else {
-                Some(L2Block::new_empty(l2_slot_context.info.slot_timestamp()))
-            }
-        } else {
-            debug!("Skipping preconfirmation for the current L2 slot");
-            self.metrics.inc_skipped_l2_slots_by_low_txs_count();
-            None
-        }
     }
 
     pub fn has_current_forced_inclusion(&self) -> bool {

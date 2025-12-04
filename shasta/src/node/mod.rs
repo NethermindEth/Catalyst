@@ -162,10 +162,7 @@ impl Node {
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let result = self
             .proposal_manager
-            .preconfirm_block(
-                pending_tx_list,
-                l2_slot_context,
-            )
+            .preconfirm_block(pending_tx_list, l2_slot_context)
             .await?;
         Ok(result)
     }
@@ -267,10 +264,7 @@ impl Node {
             };
 
             let preconfed_block = self
-                .preconfirm_block(
-                    pending_tx_list,
-                    &l2_slot_context,
-                )
+                .preconfirm_block(pending_tx_list, &l2_slot_context)
                 .await?;
 
             self.verify_preconfed_block(preconfed_block).await?;

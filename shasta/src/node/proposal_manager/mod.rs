@@ -5,7 +5,7 @@ use crate::{
     l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
     metrics::Metrics,
-    shared::{ l2_tx_lists::PreBuiltTxList,l2_block_v2::L2BlockV2Dummy},
+    shared::{l2_block_v2::L2BlockV2Draft, l2_tx_lists::PreBuiltTxList},
 };
 use alloy::{consensus::BlockHeader, consensus::Transaction};
 use anyhow::Error;
@@ -93,11 +93,11 @@ impl BatchManager {
         pending_tx_list: Option<PreBuiltTxList>,
         l2_slot_context: &L2SlotContext,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        let result =
-        if self.batch_builder.should_new_block_be_created(
+        let result = if self.batch_builder.should_new_block_be_created(
             pending_tx_list.as_ref(),
             l2_slot_context.info.slot_timestamp(),
-            l2_slot_context.end_of_sequencing,){
+            l2_slot_context.end_of_sequencing,
+        ) {
             self.add_new_l2_block(
                 pending_tx_list.unwrap_or_else(PreBuiltTxList::empty),
                 l2_slot_context,
@@ -202,16 +202,13 @@ impl BatchManager {
             l2_slot_context.allow_forced_inclusion,
         );
 
-        let l2_dummy_block = L2BlockV2Dummy {
+        let l2_draft_block = L2BlockV2Draft {
             prebuilt_tx_list: prebuilt_tx_list.clone(),
             timestamp_sec: l2_slot_context.info.slot_timestamp(),
             gas_limit: l2_slot_context.info.parent_gas_limit_without_anchor(),
         };
 
-        if !self
-            .batch_builder
-            .can_consume_l2_block(l2_dummy_block)
-        {
+        if !self.batch_builder.can_consume_l2_block(&l2_draft_block) {
             // Create new batch
             let _ = self.create_new_batch().await?;
 
@@ -231,32 +228,21 @@ impl BatchManager {
         }
 
         let preconfed_block = self
-            .add_new_l2_block_to_batch(
-                prebuilt_tx_list,
-                l2_slot_context,
-                operation_type,
-            )
+            .add_draft_block_to_proposal(l2_draft_block, l2_slot_context, operation_type)
             .await?;
 
         Ok(preconfed_block)
     }
 
-    async fn add_new_l2_block_to_batch(
+    async fn add_draft_block_to_proposal(
         &mut self,
-        prebuilt_tx_list: PreBuiltTxList,
+        l2_draft_block: L2BlockV2Draft,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        // TODO fix block production
-        let l2_block_v2 = self.batch_builder.create_block(
-            prebuilt_tx_list,
-            l2_slot_context.info.slot_timestamp(),
-            l2_slot_context.info.parent_gas_limit_without_anchor(),
-        )?;
-
         let proposal = self
             .batch_builder
-            .add_l2_block_and_get_current_proposal(l2_block_v2)?;
+            .add_l2_draft_block_and_get_current_proposal(l2_draft_block)?;
 
         match self
             .taiko
@@ -566,11 +552,7 @@ impl BatchManager {
         // TODO handle forced inclusion properly
 
         let block = self
-            .add_new_l2_block(
-                pending_tx_list,
-                &l2_slot_context,
-                OperationType::Reanchor,
-            )
+            .add_new_l2_block(pending_tx_list, &l2_slot_context, OperationType::Reanchor)
             .await?;
 
         Ok(block)
