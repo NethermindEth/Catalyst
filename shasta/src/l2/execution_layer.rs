@@ -1,6 +1,6 @@
 use crate::l2::bindings::BondManager;
 
-use crate::node::proposal_manager::proposal::BondInstructionData;
+use crate::node::proposal_manager::bond_instruction_data::BondInstructionData;
 use alloy::{
     consensus::Transaction as AnchorTransaction,
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},

@@ -3,7 +3,7 @@
 
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
-use crate::node::proposal_manager::proposal::BondInstructionData;
+use crate::node::proposal_manager::bond_instruction_data::BondInstructionData;
 use crate::node::proposal_manager::proposal::Proposal;
 use alloy::{
     consensus::BlockHeader,

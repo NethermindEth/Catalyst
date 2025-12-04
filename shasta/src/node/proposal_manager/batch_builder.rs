@@ -4,7 +4,8 @@ use super::proposal::Proposals;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
-    node::proposal_manager::proposal::{BondInstructionData, Proposal},
+    node::proposal_manager::proposal::{ Proposal},
+    node::proposal_manager::bond_instruction_data::BondInstructionData,
     shared::l2_tx_lists::PreBuiltTxList,
 };
 use alloy::primitives::Address;

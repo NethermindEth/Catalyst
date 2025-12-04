@@ -3,35 +3,11 @@ use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
 use common::shared::l2_tx_lists::PreBuiltTxList;
 use std::collections::VecDeque;
 use std::time::Instant;
-use taiko_bindings::anchor::LibBonds::BondInstruction;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
+use crate::node::proposal_manager::bond_instruction_data::BondInstructionData;
 
 pub type Proposals = VecDeque<Proposal>;
-
-#[derive(Default, Clone)]
-pub struct BondInstructionData {
-    instructions: Vec<BondInstruction>,
-    hash: B256,
-}
-
-impl BondInstructionData {
-    pub fn new(instructions: Vec<BondInstruction>, hash: B256) -> Self {
-        Self { instructions, hash }
-    }
-
-    pub fn instructions(&self) -> &Vec<BondInstruction> {
-        &self.instructions
-    }
-
-    pub fn instructions_mut(self) -> Vec<BondInstruction> {
-        self.instructions
-    }
-
-    pub fn hash(&self) -> B256 {
-        self.hash
-    }
-}
 
 #[derive(Default, Clone)]
 pub struct Proposal {

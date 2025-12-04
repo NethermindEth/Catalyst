@@ -1,5 +1,7 @@
 mod batch_builder;
 pub mod proposal;
+pub mod l2_block_payload;
+pub mod bond_instruction_data;
 
 use crate::{
     l1::execution_layer::ExecutionLayer,
@@ -22,7 +24,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::forced_inclusion::ForcedInclusion;
 use crate::node::L2SlotInfoV2;
-use crate::node::proposal_manager::proposal::BondInstructionData;
+use crate::node::proposal_manager::bond_instruction_data::BondInstructionData;
 use alloy::primitives::{B256, U256};
 use proposal::Proposals;
 use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
