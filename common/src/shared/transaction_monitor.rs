@@ -13,11 +13,21 @@ use alloy::{
 };
 use alloy_json_rpc::RpcError;
 use anyhow::Error;
+use std::str::FromStr;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
+
+use alloy::{
+    consensus::{EnvKzgSettings, EthereumTxEnvelope, TxEip4844WithSidecar},
+    eips::{
+        Encodable2718, eip4844::BlobTransactionSidecar, eip7594::BlobTransactionSidecarEip7594,
+    },
+    network::EthereumWallet,
+    signers::local::PrivateKeySigner,
+};
 
 // Transaction status enum
 #[derive(Debug, Clone, PartialEq)]
@@ -362,7 +372,57 @@ impl TransactionMonitorThread {
         tx: TransactionRequest,
         sending_attempt: u64,
     ) -> Option<PendingTransactionBuilder<alloy::network::Ethereum>> {
-        match self.provider.send_transaction(tx.clone()).await {
+        let pending_result = if tx.has_eip4844_fields() {
+            tracing::debug!("Sending EIP-4844 transaction with sidecar");
+            let mut t = tx.clone().build_typed_tx().ok()?;
+
+            let envelop = match self.config.signer.as_ref() {
+                Signer::PrivateKey(private_key, _) => {
+                    let signer = PrivateKeySigner::from_str(private_key.as_str()).ok()?;
+                    let wallet: EthereumWallet = signer.into();
+                    let signature = wallet
+                        .default_signer()
+                        .sign_transaction(&mut t)
+                        .await
+                        .ok()?;
+                    t.into_envelope(signature)
+                }
+                Signer::Web3signer(web3signer, preconfer_address) => {
+                    let tx_signer = crate::signer::web3signer::Web3TxSigner::new(
+                        web3signer.clone(),
+                        *preconfer_address,
+                    )
+                    .ok()?;
+                    let wallet = EthereumWallet::new(tx_signer);
+                    let signature = wallet
+                        .default_signer()
+                        .sign_transaction(&mut t)
+                        .await
+                        .ok()?;
+                    t.into_envelope(signature)
+                }
+            };
+            tracing::debug!("Signed EIP-4844 transaction envelope");
+            let pooled = envelop.try_into_pooled().ok()?;
+            tracing::debug!("Created pooled EIP-4844 transaction");
+            let tx_eip7594: EthereumTxEnvelope<
+                TxEip4844WithSidecar<BlobTransactionSidecarEip7594>,
+            > = pooled
+                .try_map_eip4844(|tx| {
+                    tx.try_map_sidecar(|sidecar: BlobTransactionSidecar| {
+                        sidecar.try_into_7594(EnvKzgSettings::Default.get())
+                    })
+                })
+                .ok()?;
+            tracing::debug!("Converted to EIP-4844 tx with EIP-7594 sidecar");
+            let encoded_tx = tx_eip7594.encoded_2718();
+            tracing::debug!("Encoded EIP-4844 tx size: {}", encoded_tx.len());
+            self.provider.send_raw_transaction(&encoded_tx).await
+        } else {
+            self.provider.send_transaction(tx.clone()).await
+        };
+        tracing::debug!("Sent transaction attempt {}", sending_attempt);
+        match pending_result {
             Ok(pending_tx) => {
                 self.propagate_transaction_to_other_backup_nodes(tx).await;
                 Some(pending_tx)
