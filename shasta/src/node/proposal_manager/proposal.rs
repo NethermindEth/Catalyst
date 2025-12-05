@@ -1,37 +1,13 @@
 use alloy::primitives::{Address, B256, Bytes};
-use common::shared::l2_block_v2::L2BlockV2;
+use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
 use common::shared::l2_tx_lists::PreBuiltTxList;
 use std::collections::VecDeque;
 use std::time::Instant;
-use taiko_bindings::anchor::LibBonds::BondInstruction;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
+use crate::node::proposal_manager::bond_instruction_data::BondInstructionData;
 
 pub type Proposals = VecDeque<Proposal>;
-
-#[derive(Default, Clone)]
-pub struct BondInstructionData {
-    instructions: Vec<BondInstruction>,
-    hash: B256,
-}
-
-impl BondInstructionData {
-    pub fn new(instructions: Vec<BondInstruction>, hash: B256) -> Self {
-        Self { instructions, hash }
-    }
-
-    pub fn instructions(&self) -> &Vec<BondInstruction> {
-        &self.instructions
-    }
-
-    pub fn instructions_mut(self) -> Vec<BondInstruction> {
-        self.instructions
-    }
-
-    pub fn hash(&self) -> B256 {
-        self.hash
-    }
-}
 
 #[derive(Default, Clone)]
 pub struct Proposal {
@@ -133,7 +109,6 @@ impl Proposal {
         timestamp_sec: u64,
         gas_limit: u64,
     ) -> L2BlockV2 {
-        self.total_bytes += tx_list.bytes_length;
         L2BlockV2::new_from(
             tx_list,
             timestamp_sec,
@@ -143,9 +118,24 @@ impl Proposal {
         )
     }
 
+    pub fn create_block_from_draft(&mut self, l2_draft_block: L2BlockV2Draft) -> L2BlockV2 {
+        L2BlockV2::new_from(
+            l2_draft_block.prebuilt_tx_list,
+            l2_draft_block.timestamp_sec,
+            self.coinbase,
+            self.anchor_block_id,
+            l2_draft_block.gas_limit,
+        )
+    }
+
     pub fn add_l2_block(&mut self, l2_block: L2BlockV2) {
         self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
         self.l2_blocks.push(l2_block);
+    }
+
+    pub fn add_l2_draft_block(&mut self, l2_draft_block: L2BlockV2Draft) {
+        let l2_block = self.create_block_from_draft(l2_draft_block);
+        self.add_l2_block(l2_block);
     }
 }
 
