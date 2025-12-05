@@ -15,7 +15,9 @@ use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, U256},
-    providers::DynProvider,
+    providers::{DynProvider, Provider},
+    rpc::client::BatchRequest,
+    sol_types::SolCall,
 };
 use anyhow::{Error, anyhow};
 use common::l1::traits::PreconferBondProvider;
@@ -31,6 +33,7 @@ use common::{
     shared::{alloy_tools, l2_block::L2Block, l2_tx_lists::encode_and_compress},
 };
 use hex;
+use serde_json::json;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
@@ -326,20 +329,13 @@ impl ExecutionLayer {
         Ok(balance.min(allowance))
     }
 
-    async fn get_operators_for_current_and_next_epoch(
-        &self,
+    pub async fn get_operators_for_current_and_next_epoch(
+        provider: &DynProvider,
+        whitelist_address: Address,
         current_epoch_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
-        use alloy::providers::Provider;
-        use alloy::rpc::client::BatchRequest;
-        use alloy::sol_types::SolCall;
-        use serde_json::json;
-
         // Prepare contract calls and encode them
-        let contract = PreconfWhitelist::new(
-            self.config.contract_addresses.preconf_whitelist,
-            &self.provider,
-        );
+        let contract = PreconfWhitelist::new(whitelist_address, provider);
 
         // Get the call data for both contract methods
         let current_epoch_tx_req = contract
@@ -360,7 +356,7 @@ impl ExecutionLayer {
 
         // Use BatchRequest to send all calls in a single RPC request
         // This ensures the load balancer forwards all calls to the same RPC node
-        let client = self.provider.client();
+        let client = provider.client();
         let mut batch = BatchRequest::new(client);
 
         // Add block request
@@ -374,7 +370,7 @@ impl ExecutionLayer {
 
         // Add contract call for current operator
         let current_operator_call_params = json!([{
-            "to": self.config.contract_addresses.preconf_whitelist,
+            "to": whitelist_address,
             "data": format!("0x{}", hex::encode(current_epoch_call_data))
         }, "latest"]);
         let current_operator_waiter = batch
@@ -387,7 +383,7 @@ impl ExecutionLayer {
 
         // Add contract call for next operator
         let next_operator_call_params = json!([{
-            "to": self.config.contract_addresses.preconf_whitelist,
+            "to": whitelist_address,
             "data": format!("0x{}", hex::encode(next_epoch_call_data))
         }, "latest"]);
         let next_operator_waiter = batch
@@ -412,14 +408,14 @@ impl ExecutionLayer {
             current_operator_waiter.await.map_err(|e| {
                 OperatorError::Any(Error::msg(format!(
                     "Failed to get current operator from batch: {}, contract: {:?}",
-                    e, self.config.contract_addresses.preconf_whitelist
+                    e, whitelist_address
                 )))
             })?;
 
         let next_operator_result: serde_json::Value = next_operator_waiter.await.map_err(|e| {
             OperatorError::Any(Error::msg(format!(
                 "Failed to get next operator from batch: {}, contract: {:?}",
-                e, self.config.contract_addresses.preconf_whitelist
+                e, whitelist_address
             )))
         })?;
 
@@ -588,8 +584,12 @@ impl PreconfOperator for ExecutionLayer {
         &self,
         current_epoch_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
-        self.get_operators_for_current_and_next_epoch(current_epoch_timestamp)
-            .await
+        Self::get_operators_for_current_and_next_epoch(
+            &self.provider,
+            self.config.contract_addresses.preconf_whitelist,
+            current_epoch_timestamp,
+        )
+        .await
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
