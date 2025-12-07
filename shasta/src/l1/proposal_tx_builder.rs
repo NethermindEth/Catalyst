@@ -1,5 +1,4 @@
 use super::bindings::Inbox;
-use super::event_indexer::EventIndexer;
 use alloy::{
     network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{
@@ -11,7 +10,6 @@ use alloy::{
 };
 use anyhow::Error;
 use common::shared::l2_block_v2::L2BlockV2;
-use std::sync::Arc;
 use taiko_bindings::codec_optimized::{
     CodecOptimized::CodecOptimizedInstance, IInbox::ProposeInput, LibBlobs::BlobReference,
 };
@@ -20,7 +18,7 @@ use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 
 use alloy_json_rpc::RpcError;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
-use tracing::{info, warn};
+use tracing::{warn};
 
 pub struct ProposalTxBuilder {
     provider: DynProvider,
@@ -44,7 +42,6 @@ impl ProposalTxBuilder {
         from: Address,
         to: Address,
         prover_auth_bytes: Bytes,
-        event_indexer: Arc<EventIndexer>,
         num_forced_inclusion: u8,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
@@ -53,7 +50,6 @@ impl ProposalTxBuilder {
                 from,
                 to,
                 prover_auth_bytes,
-                event_indexer,
                 num_forced_inclusion,
             )
             .await?;
@@ -100,21 +96,8 @@ impl ProposalTxBuilder {
         from: Address,
         to: Address,
         prover_auth_bytes: Bytes,
-        event_indexer: Arc<EventIndexer>,
         num_forced_inclusion: u8,
     ) -> Result<TransactionRequest, Error> {
-        // Read cached propose input params from the event indexer.
-        let cached_input_params = event_indexer
-            .get_propose_input()
-            .ok_or(Error::msg("Can't read shasta propose input"))?;
-        info!(
-            core_state = ?cached_input_params.core_state,
-            proposals_count = cached_input_params.proposals.len(),
-            transition_records_count = cached_input_params.transition_records.len(),
-            checkpoint = ?cached_input_params.checkpoint,
-            "cached propose input params"
-        );
-
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(l2_blocks.len());
         for l2_block in &l2_blocks {
             // Build the block manifests.
@@ -147,15 +130,11 @@ impl ProposalTxBuilder {
         // Build the propose input.
         let input = ProposeInput {
             deadline: U48::ZERO,
-            coreState: cached_input_params.core_state,
-            parentProposals: cached_input_params.proposals,
             blobReference: BlobReference {
                 blobStartIndex: 0,
                 numBlobs: sidecar.blobs.len().try_into()?,
                 offset: U24::ZERO,
             },
-            transitionRecords: cached_input_params.transition_records,
-            checkpoint: cached_input_params.checkpoint,
             numForcedInclusions: num_forced_inclusion,
         };
 

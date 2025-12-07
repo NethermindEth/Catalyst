@@ -3,7 +3,6 @@
 
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
-use crate::node::proposal_manager::proposal::BondInstructionData;
 use crate::node::proposal_manager::proposal::Proposal;
 use alloy::{
     consensus::BlockHeader,
@@ -281,25 +280,12 @@ impl Taiko {
             }
         };
 
-        let use_full_instructions = (is_forced_inclusion && proposal.is_empty())
-            || (!is_forced_inclusion && proposal.has_only_one_common_block());
-
-        let bond_instructions = if use_full_instructions {
-            BondInstructionData::new(
-                proposal.bond_instructions.instructions().clone(),
-                proposal.bond_instructions.hash(),
-            )
-        } else {
-            BondInstructionData::new(vec![], proposal.bond_instructions.hash())
-        };
-
         let anchor_tx = self
             .l2_execution_layer
             .construct_anchor_tx(
                 proposal.id,
                 l2_slot_info,
                 anchor_block_params,
-                bond_instructions,
             )
             .await
             .map_err(|e| {

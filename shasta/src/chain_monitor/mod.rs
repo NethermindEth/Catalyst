@@ -1,11 +1,14 @@
 use common::chain_monitor::ChainMonitor;
 use taiko_bindings::inbox::Inbox;
-use taiko_protocol::shasta::codec_optimized;
-use tracing::{info, warn};
+//use taiko_bindings::codec_optimized;
+use tracing::{info};
 
 pub type ShastaChainMonitor = ChainMonitor<Inbox::Proposed>;
 
-pub fn print_proposed_info(event: &Inbox::Proposed) {
+pub fn print_proposed_info(_event: &Inbox::Proposed) {
+    // TODO: fix the decoding
+    info!("Proposed event → id = ?");
+    /*
     match codec_optimized::decode_proposed_event(&event.data) {
         Ok(payload) => {
             info!(
@@ -17,4 +20,5 @@ pub fn print_proposed_info(event: &Inbox::Proposed) {
             warn!("Failed to decode Proposed event data: {:?}", e);
         }
     }
+    */
 }

@@ -21,10 +21,7 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::forced_inclusion::ForcedInclusion;
-use crate::node::proposal_manager::proposal::BondInstructionData;
-use alloy::primitives::{B256, U256};
 use proposal::Proposals;
-use taiko_protocol::shasta::constants::BOND_PROCESSING_DELAY;
 
 const MIN_ANCHOR_OFFSET: u64 = 2;
 
@@ -279,38 +276,6 @@ impl BatchManager {
         }
     }
 
-    async fn get_bond_instructions(&self, proposal_id: u64) -> Result<BondInstructionData, Error> {
-        if proposal_id <= BOND_PROCESSING_DELAY {
-            return Ok(BondInstructionData::new(Vec::new(), B256::ZERO));
-        }
-
-        // Calculate the proposal ID to query, adjusting for processing delay
-        let target_id = proposal_id.saturating_sub(BOND_PROCESSING_DELAY);
-
-        // Fetch the proposal payload from the event indexer
-        let target_payload = self
-            .ethereum_l1
-            .execution_layer
-            .event_indexer
-            .get_indexer()
-            .get_proposal_by_id(U256::from(target_id))
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Can't get bond instruction from event indexer (id: {})",
-                    target_id
-                )
-            })?;
-
-        // Extract the bond instructions hash
-        let target_hash =
-            B256::from_slice(target_payload.core_state.bondInstructionsHash.as_slice());
-
-        Ok(BondInstructionData::new(
-            target_payload.bond_instructions,
-            target_hash,
-        ))
-    }
-
     async fn get_next_proposal_id(&self) -> Result<u64, Error> {
         if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
             return Ok(current_proposal_id + 1);
@@ -325,22 +290,9 @@ impl BatchManager {
         {
             Ok(id) => Ok(id + 1),
             // If fetching from L2 fails (e.g., no blocks in Shasta), fallback to event indexer
-            Err(_) => self.get_proposal_id_from_indexer_fallback().await,
-        }
-    }
-
-    async fn get_proposal_id_from_indexer_fallback(&self) -> Result<u64, Error> {
-        let id = self
-            .ethereum_l1
-            .execution_layer
-            .get_proposal_id_from_indexer()
-            .await?;
-        if id == 0 {
-            Ok(1)
-        } else {
-            Err(anyhow::anyhow!(
-                "Fallback to event indexer failed: proposal ID is nonzero"
-            ))
+            // TODO how can we get proposal id from L1 without event indexer?
+            // Err(_) => self.get_proposal_id_from_indexer_fallback().await,
+            Err(_) => Ok(1),
         }
     }
 
@@ -364,13 +316,11 @@ impl BatchManager {
         .await?;
 
         let proposal_id = self.get_next_proposal_id().await?;
-        // Get bond instructions for the proposal
-        let bond_instructions = self.get_bond_instructions(proposal_id).await?;
 
         let anchor_block_id = anchor_block_info.id();
         // Create new batch
         self.batch_builder
-            .create_new_batch(proposal_id, anchor_block_info, bond_instructions);
+            .create_new_batch(proposal_id, anchor_block_info);
 
         Ok(anchor_block_id)
     }
@@ -509,10 +459,6 @@ impl BatchManager {
                 proposal_id,
                 anchor_info,
                 coinbase,
-                BondInstructionData::new(
-                    anchor_tx_data._proposalParams.bondInstructions,
-                    anchor_tx_data._proposalParams.bondInstructionsHash,
-                ),
                 txs,
                 block.header.timestamp(),
                 gas_limit,
