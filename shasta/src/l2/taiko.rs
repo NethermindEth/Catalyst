@@ -282,11 +282,7 @@ impl Taiko {
 
         let anchor_tx = self
             .l2_execution_layer
-            .construct_anchor_tx(
-                proposal.id,
-                l2_slot_info,
-                anchor_block_params,
-            )
+            .construct_anchor_tx(proposal.id, l2_slot_info, anchor_block_params)
             .await
             .map_err(|e| {
                 anyhow::anyhow!(

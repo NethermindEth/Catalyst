@@ -18,7 +18,7 @@ use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 
 use alloy_json_rpc::RpcError;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
-use tracing::{warn};
+use tracing::warn;
 
 pub struct ProposalTxBuilder {
     provider: DynProvider,
@@ -45,13 +45,7 @@ impl ProposalTxBuilder {
         num_forced_inclusion: u8,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
-            .build_propose_blob(
-                l2_blocks,
-                from,
-                to,
-                prover_auth_bytes,
-                num_forced_inclusion,
-            )
+            .build_propose_blob(l2_blocks, from, to, prover_auth_bytes, num_forced_inclusion)
             .await?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
             Ok(gas) => gas,

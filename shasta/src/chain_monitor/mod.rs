@@ -1,7 +1,7 @@
 use common::chain_monitor::ChainMonitor;
 use taiko_bindings::inbox::Inbox;
 //use taiko_bindings::codec_optimized;
-use tracing::{info};
+use tracing::info;
 
 pub type ShastaChainMonitor = ChainMonitor<Inbox::Proposed>;
 

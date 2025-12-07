@@ -12,10 +12,7 @@ pub async fn get_l2_height_from_l1(
         Err(err) => {
             // On error, check proposal_id
             // TODO fix this logic properly
-            tracing::error!(
-                "Failed to get L2 head from get_head_l1_origin: {}",
-                err
-            );
+            tracing::error!("Failed to get L2 head from get_head_l1_origin: {}", err);
             Ok(0)
             /*let proposal_id = ethereum_l1
                 .execution_layer

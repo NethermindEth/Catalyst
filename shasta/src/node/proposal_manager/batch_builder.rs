@@ -4,7 +4,7 @@ use super::proposal::Proposals;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
-    node::proposal_manager::proposal::{Proposal},
+    node::proposal_manager::proposal::Proposal,
     shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
 };
 use alloy::primitives::Address;
@@ -89,11 +89,7 @@ impl BatchBuilder {
             .is_none_or(|b| b.l2_blocks.is_empty())
     }
 
-    pub fn create_new_batch(
-        &mut self,
-        id: u64,
-        anchor_block: AnchorBlockInfo,
-    ) {
+    pub fn create_new_batch(&mut self, id: u64, anchor_block: AnchorBlockInfo) {
         self.finalize_current_batch();
 
         self.current_proposal = Some(Proposal {
