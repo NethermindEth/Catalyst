@@ -68,8 +68,9 @@ impl BatchBuilder {
                     // we can tolerate the processing overhead as it's a very rare case
                     let start = std::time::Instant::now();
                     let mut batch_clone = batch.clone();
-                    let l2_block = batch_clone.create_block_from_draft(l2_draft_block.clone());
-                    batch_clone.add_l2_block(l2_block);
+                    batch_clone.add_l2_draft_block(
+                        l2_draft_block.clone(),
+                    );
                     batch_clone.compress();
                     new_total_bytes = batch_clone.total_bytes;
                     debug!(
@@ -487,7 +488,7 @@ impl BatchBuilder {
             .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
     }
 
-    pub fn create_block(
+    /*pub fn create_block(
         &mut self,
         tx_list: PreBuiltTxList,
         timestamp_sec: u64,
@@ -497,7 +498,7 @@ impl BatchBuilder {
             .as_mut()
             .map(|proposal| proposal.create_block(tx_list, timestamp_sec, gas_limit))
             .ok_or_else(|| anyhow::anyhow!("No current proposal to create block"))
-    }
+    }*/
 
     pub fn get_current_proposal(&self) -> Option<&Proposal> {
         self.current_proposal.as_ref()

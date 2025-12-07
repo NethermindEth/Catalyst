@@ -1,11 +1,11 @@
 use alloy::primitives::{Address, B256, Bytes};
 use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
-use common::shared::l2_tx_lists::PreBuiltTxList;
 use std::collections::VecDeque;
 use std::time::Instant;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
 use crate::node::proposal_manager::bond_instruction_data::BondInstructionData;
+use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 
 pub type Proposals = VecDeque<Proposal>;
 
@@ -103,22 +103,7 @@ impl Proposal {
         self.total_bytes
     }
 
-    pub fn create_block(
-        &mut self,
-        tx_list: PreBuiltTxList,
-        timestamp_sec: u64,
-        gas_limit: u64,
-    ) -> L2BlockV2 {
-        L2BlockV2::new_from(
-            tx_list,
-            timestamp_sec,
-            self.coinbase,
-            self.anchor_block_id,
-            gas_limit,
-        )
-    }
-
-    pub fn create_block_from_draft(&mut self, l2_draft_block: L2BlockV2Draft) -> L2BlockV2 {
+    fn create_block_from_draft(&mut self, l2_draft_block: L2BlockV2Draft) -> L2BlockV2 {
         L2BlockV2::new_from(
             l2_draft_block.prebuilt_tx_list,
             l2_draft_block.timestamp_sec,
@@ -128,9 +113,22 @@ impl Proposal {
         )
     }
 
-    pub fn add_l2_block(&mut self, l2_block: L2BlockV2) {
+    pub fn add_l2_block(&mut self, l2_block: L2BlockV2) -> L2BlockV2Payload {
         self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
         self.l2_blocks.push(l2_block);
+        L2BlockV2Payload {
+            proposal_id: self.id,
+            block_id: self.l2_blocks.len() as u64 - 1,
+            coinbase: self.coinbase,
+            prebuilt_tx_list: l2_block.prebuilt_tx_list.clone(),
+            timestamp_sec: self.l2_blocks.last().unwrap().timestamp_sec,
+            gas_limit_without_anchor: self.l2_blocks.last().unwrap().gas_limit,
+            anchor_block_id: self.anchor_block_id,
+            anchor_block_hash: self.anchor_block_hash,
+            anchor_state_root: self.anchor_state_root,
+            bond_instructions: self.bond_instructions.clone(),
+            base_fee_per_gas: 0, // TODO: set base fee per gas
+        }
     }
 
     pub fn add_l2_draft_block(&mut self, l2_draft_block: L2BlockV2Draft) {
