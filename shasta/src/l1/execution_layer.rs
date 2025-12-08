@@ -1,14 +1,14 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
 
-use super::bindings::{IPreconfWhitelist, Inbox, PreconfWhitelist};
+use super::bindings::{Inbox, PreconfWhitelist};
 use super::config::EthereumL1Config;
 use super::event_indexer::EventIndexer;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
 use alloy::{
-    eips::{BlockId, BlockNumberOrTag},
+    eips::BlockNumberOrTag,
     primitives::{Address, Bytes, aliases::U48},
     providers::DynProvider,
 };
@@ -146,47 +146,12 @@ impl PreconfOperator for ExecutionLayer {
         &self,
         current_epoch_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
-        let (latest_block_number, latest_block_timestamp) = self
-            .common
-            .get_latest_block_number_and_timestamp()
-            .await
-            .map_err(OperatorError::Any)?;
-        if latest_block_timestamp < current_epoch_timestamp {
-            return Err(OperatorError::OperatorCheckTooEarly);
-        }
-
-        let contract =
-            IPreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
-
-        let current_operator = contract
-            .getOperatorForCurrentEpoch()
-            .block(BlockId::Number(BlockNumberOrTag::Number(
-                latest_block_number,
-            )))
-            .call()
-            .await
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to get operator for current epoch: {}, contract: {:?}",
-                    e, self.contract_addresses.proposer_checker
-                )))
-            })?;
-
-        let next_operator = contract
-            .getOperatorForNextEpoch()
-            .block(BlockId::Number(BlockNumberOrTag::Number(
-                latest_block_number,
-            )))
-            .call()
-            .await
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to get operator for next epoch: {}, contract: {:?}",
-                    e, self.contract_addresses.proposer_checker
-                )))
-            })?;
-
-        Ok((current_operator, next_operator))
+        pacaya::l1::execution_layer::ExecutionLayer::get_operators_for_current_and_next_epoch(
+            &self.provider,
+            self.contract_addresses.proposer_checker,
+            current_epoch_timestamp,
+        )
+        .await
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
