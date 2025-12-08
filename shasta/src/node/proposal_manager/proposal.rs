@@ -4,7 +4,6 @@ use std::collections::VecDeque;
 use std::time::Instant;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
-use crate::node::proposal_manager::bond_instruction_data::BondInstructionData;
 //use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 
 pub type Proposals = VecDeque<Proposal>;

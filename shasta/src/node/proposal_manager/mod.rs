@@ -1,7 +1,6 @@
 mod batch_builder;
 pub mod proposal;
 pub mod l2_block_payload;
-pub mod bond_instruction_data;
 
 use crate::{
     l1::execution_layer::ExecutionLayer,
@@ -24,7 +23,6 @@ use tracing::{debug, error, info, warn};
 
 use crate::forced_inclusion::ForcedInclusion;
 use crate::node::L2SlotInfoV2;
-use alloy::primitives::{B256, U256};
 use proposal::Proposals;
 
 const MIN_ANCHOR_OFFSET: u64 = 2;
