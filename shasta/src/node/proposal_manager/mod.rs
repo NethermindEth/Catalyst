@@ -293,7 +293,10 @@ impl BatchManager {
             // TODO how can we get proposal id from L1 without event indexer?
             // TODO go to L1 and try to find latest proposal event
             // Err(_) => self.get_proposal_id_from_indexer_fallback().await,
-            Err(_) => Ok(1),
+            Err(_) => {
+                error!("Failed to get last synced proposal id from Taiko Geth");
+                Ok(1)
+            }
         }
     }
 
