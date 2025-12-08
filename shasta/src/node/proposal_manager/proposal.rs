@@ -5,7 +5,7 @@ use std::time::Instant;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
 use crate::node::proposal_manager::bond_instruction_data::BondInstructionData;
-use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
+//use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 
 pub type Proposals = VecDeque<Proposal>;
 
@@ -113,10 +113,10 @@ impl Proposal {
         )
     }
 
-    pub fn add_l2_block(&mut self, l2_block: L2BlockV2) -> L2BlockV2Payload {
+    pub fn add_l2_block(&mut self, l2_block: L2BlockV2) {
         self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
         self.l2_blocks.push(l2_block);
-        L2BlockV2Payload {
+       /*  L2BlockV2Payload {
             proposal_id: self.id,
             block_id: self.l2_blocks.len() as u64 - 1,
             coinbase: self.coinbase,
@@ -128,7 +128,7 @@ impl Proposal {
             anchor_state_root: self.anchor_state_root,
             bond_instructions: self.bond_instructions.clone(),
             base_fee_per_gas: 0, // TODO: set base fee per gas
-        }
+        }*/
     }
 
     pub fn add_l2_draft_block(&mut self, l2_draft_block: L2BlockV2Draft) {
