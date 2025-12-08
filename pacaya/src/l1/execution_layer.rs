@@ -13,9 +13,11 @@ use super::{
 };
 use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
-    eips::{BlockId, BlockNumberOrTag},
+    eips::BlockNumberOrTag,
     primitives::{Address, U256},
-    providers::DynProvider,
+    providers::{DynProvider, Provider},
+    rpc::client::BatchRequest,
+    sol_types::SolCall,
 };
 use anyhow::{Error, anyhow};
 use common::l1::traits::PreconferBondProvider;
@@ -30,7 +32,9 @@ use common::{
     shared::transaction_monitor::TransactionMonitor,
     shared::{alloy_tools, l2_block::L2Block, l2_tx_lists::encode_and_compress},
 };
-use std::sync::Arc;
+use hex;
+use serde_json::json;
+use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, info, warn};
@@ -325,49 +329,155 @@ impl ExecutionLayer {
         Ok(balance.min(allowance))
     }
 
-    async fn get_operators_for_current_and_next_epoch(
-        &self,
+    /// cached as constant since function has no parameters
+    fn get_current_epoch_call_data(
+        contract: &PreconfWhitelist::PreconfWhitelistInstance<&DynProvider>,
+    ) -> &'static [u8] {
+        static CALL_DATA: OnceLock<Vec<u8>> = OnceLock::new();
+        CALL_DATA.get_or_init(|| {
+            let tx_req = contract
+                .getOperatorForCurrentEpoch()
+                .into_transaction_request();
+            tx_req
+                .input
+                .input
+                .as_ref()
+                .expect("get_current_epoch_call_data: Failed to get current epoch call data. Check the whitelist contract bindings.")
+                .to_vec()
+        })
+    }
+
+    /// cached as constant since function has no parameters
+    fn get_next_epoch_call_data(
+        contract: &PreconfWhitelist::PreconfWhitelistInstance<&DynProvider>,
+    ) -> &'static [u8] {
+        static CALL_DATA: OnceLock<Vec<u8>> = OnceLock::new();
+        CALL_DATA.get_or_init(|| {
+            let tx_req = contract
+                .getOperatorForNextEpoch()
+                .into_transaction_request();
+            tx_req.input.input.as_ref().expect("get_next_epoch_call_data: Failed to get next epoch call data. Check the whitelist contract bindings.").to_vec()
+        })
+    }
+
+    pub async fn get_operators_for_current_and_next_epoch(
+        provider: &DynProvider,
+        whitelist_address: Address,
         current_epoch_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
-        let (latest_block_number, latest_block_timestamp) = self
-            .common
-            .get_latest_block_number_and_timestamp()
-            .await
-            .map_err(OperatorError::Any)?;
+        let contract = PreconfWhitelist::new(whitelist_address, provider);
+        let current_epoch_call_data = Self::get_current_epoch_call_data(&contract);
+        let next_epoch_call_data = Self::get_next_epoch_call_data(&contract);
+
+        // Use BatchRequest to send all calls in a single RPC request
+        // This ensures the load balancer forwards all calls to the same RPC node
+        let client = provider.client();
+        let mut batch = BatchRequest::new(client);
+
+        let block_waiter = batch
+            .add_call("eth_getBlockByNumber", &("latest", false))
+            .map_err(|e| {
+                OperatorError::Any(Error::msg(format!(
+                    "Failed to add block call to batch: {e}"
+                )))
+            })?;
+
+        let current_operator_call_params = json!([{
+            "to": whitelist_address,
+            "data": format!("0x{}", hex::encode(current_epoch_call_data))
+        }, "latest"]);
+        let current_operator_waiter = batch
+            .add_call("eth_call", &current_operator_call_params)
+            .map_err(|e| {
+                OperatorError::Any(Error::msg(format!(
+                    "Failed to add current operator call to batch: {e}"
+                )))
+            })?;
+
+        let next_operator_call_params = json!([{
+            "to": whitelist_address,
+            "data": format!("0x{}", hex::encode(next_epoch_call_data))
+        }, "latest"]);
+        let next_operator_waiter = batch
+            .add_call("eth_call", &next_operator_call_params)
+            .map_err(|e| {
+                OperatorError::Any(Error::msg(format!(
+                    "Failed to add next operator call to batch: {e}"
+                )))
+            })?;
+
+        batch.send().await.map_err(|e| {
+            OperatorError::Any(Error::msg(format!("Failed to send batch request: {e}")))
+        })?;
+
+        let block_result: serde_json::Value = block_waiter.await.map_err(|e| {
+            OperatorError::Any(Error::msg(format!("Failed to get block from batch: {e}")))
+        })?;
+        let block: alloy::rpc::types::Block = serde_json::from_value(block_result)
+            .map_err(|e| OperatorError::Any(Error::msg(format!("Failed to parse block: {e}"))))?;
+        let latest_block_timestamp = block.header.timestamp;
         if latest_block_timestamp < current_epoch_timestamp {
             return Err(OperatorError::OperatorCheckTooEarly);
         }
 
-        let contract = PreconfWhitelist::new(
-            self.config.contract_addresses.preconf_whitelist,
-            &self.provider,
-        );
-
-        let current_operator = contract
-            .getOperatorForCurrentEpoch()
-            .block(BlockId::Number(BlockNumberOrTag::Number(
-                latest_block_number,
-            )))
-            .call()
-            .await
-            .map_err(|e| {
+        let current_operator_result: serde_json::Value =
+            current_operator_waiter.await.map_err(|e| {
                 OperatorError::Any(Error::msg(format!(
-                    "Failed to get operator for current epoch: {}, contract: {:?}",
-                    e, self.config.contract_addresses.preconf_whitelist
+                    "Failed to get current operator from batch: {}, contract: {:?}",
+                    e, whitelist_address
                 )))
             })?;
 
-        let next_operator = contract
-            .getOperatorForNextEpoch()
-            .block(BlockId::Number(BlockNumberOrTag::Number(
-                latest_block_number,
+        let next_operator_result: serde_json::Value = next_operator_waiter.await.map_err(|e| {
+            OperatorError::Any(Error::msg(format!(
+                "Failed to get next operator from batch: {}, contract: {:?}",
+                e, whitelist_address
             )))
-            .call()
-            .await
+        })?;
+
+        let current_operator_bytes = hex::decode(
+            current_operator_result
+                .as_str()
+                .ok_or_else(|| {
+                    OperatorError::Any(Error::msg("Invalid current operator result format"))
+                })?
+                .strip_prefix("0x")
+                .unwrap_or_default(),
+        )
+        .map_err(|e| {
+            OperatorError::Any(Error::msg(format!(
+                "Failed to decode current operator: {e}"
+            )))
+        })?;
+        let current_operator =
+            <PreconfWhitelist::getOperatorForCurrentEpochCall as SolCall>::abi_decode_returns(
+                &current_operator_bytes,
+            )
             .map_err(|e| {
                 OperatorError::Any(Error::msg(format!(
-                    "Failed to get operator for next epoch: {}, contract: {:?}",
-                    e, self.config.contract_addresses.preconf_whitelist
+                    "Failed to decode current operator response: {e}"
+                )))
+            })?;
+
+        let next_operator_bytes = hex::decode(
+            next_operator_result
+                .as_str()
+                .ok_or_else(|| {
+                    OperatorError::Any(Error::msg("Invalid next operator result format"))
+                })?
+                .strip_prefix("0x")
+                .unwrap_or_default(),
+        )
+        .map_err(|e| {
+            OperatorError::Any(Error::msg(format!("Failed to decode next operator: {e}")))
+        })?;
+        let next_operator =
+            <PreconfWhitelist::getOperatorForNextEpochCall as SolCall>::abi_decode_returns(
+                &next_operator_bytes,
+            )
+            .map_err(|e| {
+                OperatorError::Any(Error::msg(format!(
+                    "Failed to decode next operator response: {e}"
                 )))
             })?;
 
@@ -476,8 +586,12 @@ impl PreconfOperator for ExecutionLayer {
         &self,
         current_epoch_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
-        self.get_operators_for_current_and_next_epoch(current_epoch_timestamp)
-            .await
+        Self::get_operators_for_current_and_next_epoch(
+            &self.provider,
+            self.config.contract_addresses.preconf_whitelist,
+            current_epoch_timestamp,
+        )
+        .await
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
