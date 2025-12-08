@@ -1,6 +1,5 @@
 use crate::l2::bindings::BondManager;
 
-use crate::node::proposal_manager::bond_instruction_data::BondInstructionData;
 use alloy::{
     consensus::Transaction as AnchorTransaction,
     consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
@@ -72,7 +71,6 @@ impl L2ExecutionLayer {
         proposal_id: u64,
         l2_slot_info: &L2SlotInfoV2,
         anchor_block_params: Anchor::BlockParams,
-        bond_instructions: BondInstructionData,
     ) -> Result<Transaction, Error> {
         debug!(
             "Constructing anchor transaction for block number: {}",
@@ -95,8 +93,6 @@ impl L2ExecutionLayer {
                     proposalId: proposal_id.try_into()?,
                     proposer: self.config.signer.get_address(),
                     proverAuth: Bytes::new(), // no prover designation for now
-                    bondInstructionsHash: bond_instructions.hash(),
-                    bondInstructions: bond_instructions.instructions_mut(),
                 },
                 anchor_block_params,
             )

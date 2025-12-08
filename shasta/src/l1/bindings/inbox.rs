@@ -9,7 +9,7 @@ sol!(
         /// @notice The token used for bonds
         address bondToken;
         /// @notice The signal service contract address
-        address checkpointStore;
+        address signalService;
         /// @notice The proof verifier contract
         address proofVerifier;
         /// @notice The proposer checker contract
@@ -18,10 +18,6 @@ sol!(
         uint48 provingWindow;
         /// @notice The extended proving window in seconds
         uint48 extendedProvingWindow;
-        /// @notice The maximum number of finalized proposals in one block
-        uint256 maxFinalizationCount;
-        /// @notice The finalization grace period in seconds
-        uint48 finalizationGracePeriod;
         /// @notice The ring buffer size for storing proposal hashes
         uint256 ringBufferSize;
         /// @notice The percentage of basefee paid to coinbase
@@ -41,8 +37,6 @@ sol!(
         /// @notice The multiplier to determine when a forced inclusion is too old so that proposing
         /// becomes permissionless
         uint8 permissionlessInclusionMultiplier;
-        /// @notice Version identifier for composite key generation
-        uint16 compositeKeyVersion;
     }
 
     struct BlobSlice {

@@ -5,7 +5,6 @@ use crate::{
     l1::execution_layer::ExecutionLayer,
     metrics::Metrics,
     node::proposal_manager::proposal::{ Proposal},
-    node::proposal_manager::bond_instruction_data::BondInstructionData,
     shared::l2_tx_lists::PreBuiltTxList,
 };
 use alloy::primitives::Address;
@@ -93,12 +92,7 @@ impl BatchBuilder {
             .is_none_or(|b| b.l2_blocks.is_empty())
     }
 
-    pub fn create_new_batch(
-        &mut self,
-        id: u64,
-        anchor_block: AnchorBlockInfo,
-        bond_instructions: BondInstructionData,
-    ) {
+    pub fn create_new_batch(&mut self, id: u64, anchor_block: AnchorBlockInfo) {
         self.finalize_current_batch();
 
         self.current_proposal = Some(Proposal {
@@ -110,7 +104,6 @@ impl BatchBuilder {
             anchor_block_timestamp_sec: anchor_block.timestamp_sec(),
             anchor_block_hash: anchor_block.hash(),
             anchor_state_root: anchor_block.state_root(),
-            bond_instructions,
             num_forced_inclusion: 0,
         });
     }
@@ -178,7 +171,6 @@ impl BatchBuilder {
         proposal_id: u64,
         anchor_info: AnchorBlockInfo,
         coinbase: Address,
-        bond_instructions: BondInstructionData,
         tx_list: Vec<alloy::rpc::types::Transaction>,
         l2_block_timestamp_sec: u64,
         gas_limit: u64,
@@ -203,7 +195,6 @@ impl BatchBuilder {
                 anchor_block_timestamp_sec: anchor_info.timestamp_sec(),
                 anchor_block_hash: anchor_info.hash(),
                 anchor_state_root: anchor_info.state_root(),
-                bond_instructions,
                 num_forced_inclusion: 0,
             });
         }

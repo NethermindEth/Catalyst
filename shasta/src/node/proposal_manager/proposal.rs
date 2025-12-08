@@ -19,7 +19,6 @@ pub struct Proposal {
     pub anchor_block_timestamp_sec: u64,
     pub anchor_block_hash: B256,
     pub anchor_state_root: B256,
-    pub bond_instructions: BondInstructionData,
     pub num_forced_inclusion: u8,
 }
 
@@ -194,7 +193,6 @@ mod test {
             anchor_block_timestamp_sec: 0,
             anchor_block_hash: B256::ZERO,
             anchor_state_root: B256::ZERO,
-            bond_instructions: BondInstructionData::default(),
             num_forced_inclusion: 0,
         };
 
