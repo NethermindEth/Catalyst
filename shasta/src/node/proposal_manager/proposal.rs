@@ -114,7 +114,7 @@ impl Proposal {
     pub fn add_l2_block(&mut self, l2_block: L2BlockV2) {
         self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
         self.l2_blocks.push(l2_block);
-       /*  L2BlockV2Payload {
+        /*  L2BlockV2Payload {
             proposal_id: self.id,
             block_id: self.l2_blocks.len() as u64 - 1,
             coinbase: self.coinbase,

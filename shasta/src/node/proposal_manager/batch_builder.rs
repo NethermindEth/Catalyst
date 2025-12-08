@@ -2,10 +2,8 @@ use std::{collections::VecDeque, sync::Arc};
 
 use super::proposal::Proposals;
 use crate::{
-    l1::execution_layer::ExecutionLayer,
-    metrics::Metrics,
-    node::proposal_manager::proposal::{ Proposal},
-    shared::l2_tx_lists::PreBuiltTxList,
+    l1::execution_layer::ExecutionLayer, metrics::Metrics,
+    node::proposal_manager::proposal::Proposal, shared::l2_tx_lists::PreBuiltTxList,
 };
 use alloy::primitives::Address;
 use anyhow::Error;
@@ -67,9 +65,7 @@ impl BatchBuilder {
                     // we can tolerate the processing overhead as it's a very rare case
                     let start = std::time::Instant::now();
                     let mut batch_clone = batch.clone();
-                    batch_clone.add_l2_draft_block(
-                        l2_draft_block.clone(),
-                    );
+                    batch_clone.add_l2_draft_block(l2_draft_block.clone());
                     batch_clone.compress();
                     new_total_bytes = batch_clone.total_bytes;
                     debug!(
