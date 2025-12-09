@@ -3,7 +3,6 @@
 
 use super::bindings::{Inbox, PreconfWhitelist};
 use super::config::EthereumL1Config;
-use super::event_indexer::EventIndexer;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
@@ -39,7 +38,6 @@ pub struct ExecutionLayer {
     metrics: Arc<Metrics>,
     extra_gas_percentage: u64,
     contract_addresses: ContractAddresses,
-    pub event_indexer: Arc<EventIndexer>,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -83,18 +81,6 @@ impl ELTrait for ExecutionLayer {
             proposer_checker: shasta_config.proposerChecker,
         };
 
-        let event_indexer = Arc::new(
-            EventIndexer::new(
-                common_config
-                    .execution_rpc_urls
-                    .first()
-                    .expect("L1 RPC URL is required")
-                    .clone(),
-                specific_config.shasta_inbox,
-            )
-            .await?,
-        );
-
         Ok(Self {
             common,
             provider,
@@ -104,7 +90,6 @@ impl ELTrait for ExecutionLayer {
             metrics,
             extra_gas_percentage: common_config.extra_gas_percentage,
             contract_addresses,
-            event_indexer,
         })
     }
 
@@ -198,7 +183,6 @@ impl ExecutionLayer {
                 self.preconfer_address,
                 self.contract_addresses.shasta_inbox,
                 Bytes::new(), // TODO fill prover_auth_bytes
-                self.event_indexer.clone(),
                 num_forced_inclusion,
             )
             .await?;
@@ -231,16 +215,6 @@ impl ExecutionLayer {
         );
 
         Ok(ProtocolConfig::from(&shasta_config))
-    }
-
-    pub async fn get_proposal_id_from_indexer(&self) -> Result<u64, Error> {
-        let proposal = self
-            .event_indexer
-            .get_indexer()
-            .get_last_proposal()
-            .ok_or_else(|| anyhow::anyhow!("No last proposal in event indexer"))?;
-
-        Ok(proposal.proposal.id.to::<u64>())
     }
 
     pub async fn get_activation_timestamp(&self) -> Result<u64, Error> {

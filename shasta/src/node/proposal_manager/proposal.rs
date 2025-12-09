@@ -3,35 +3,10 @@ use common::shared::l2_block_v2::L2BlockV2;
 use common::shared::l2_tx_lists::PreBuiltTxList;
 use std::collections::VecDeque;
 use std::time::Instant;
-use taiko_bindings::anchor::LibBonds::BondInstruction;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
 
 pub type Proposals = VecDeque<Proposal>;
-
-#[derive(Default, Clone)]
-pub struct BondInstructionData {
-    instructions: Vec<BondInstruction>,
-    hash: B256,
-}
-
-impl BondInstructionData {
-    pub fn new(instructions: Vec<BondInstruction>, hash: B256) -> Self {
-        Self { instructions, hash }
-    }
-
-    pub fn instructions(&self) -> &Vec<BondInstruction> {
-        &self.instructions
-    }
-
-    pub fn instructions_mut(self) -> Vec<BondInstruction> {
-        self.instructions
-    }
-
-    pub fn hash(&self) -> B256 {
-        self.hash
-    }
-}
 
 #[derive(Default, Clone)]
 pub struct Proposal {
@@ -43,7 +18,6 @@ pub struct Proposal {
     pub anchor_block_timestamp_sec: u64,
     pub anchor_block_hash: B256,
     pub anchor_state_root: B256,
-    pub bond_instructions: BondInstructionData,
     pub num_forced_inclusion: u8,
 }
 
@@ -206,7 +180,6 @@ mod test {
             anchor_block_timestamp_sec: 0,
             anchor_block_hash: B256::ZERO,
             anchor_state_root: B256::ZERO,
-            bond_instructions: BondInstructionData::default(),
             num_forced_inclusion: 0,
         };
 
