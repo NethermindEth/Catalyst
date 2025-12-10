@@ -22,7 +22,6 @@ impl ChainMonitorEventHandler<Inbox::Proposed> for ProposedHandler {
         let cloned = self.clone();
         let event_data = event.data.clone();
 
-        // Spawn a blocking task to run the async code
         tokio::task::spawn(async move {
             match cloned.codec.decodeProposedEvent(event_data).call().await {
                 Ok(payload) => {
