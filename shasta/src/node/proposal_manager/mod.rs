@@ -289,13 +289,20 @@ impl BatchManager {
             .await
         {
             Ok(id) => Ok(id + 1),
-            // If fetching from L2 fails (e.g., no blocks in Shasta), fallback to event indexer
-            // TODO how can we get proposal id from L1 without event indexer?
-            // TODO go to L1 and try to find latest proposal event
-            // Err(_) => self.get_proposal_id_from_indexer_fallback().await,
             Err(_) => {
-                error!("Failed to get last synced proposal id from Taiko Geth");
-                Ok(1)
+                // We can't retrieve the proposal ID from the latest L2 anchor block.
+                // This can occur when there are no L2 blocks in Shasta yet.
+                // Therefore, we verify it using the inbox state.
+                warn!("Failed to get last synced proposal id from Taiko Geth");
+                let inbox_state = self.ethereum_l1.execution_layer.get_inbox_state().await?;
+                if inbox_state.nextProposalId == 1 {
+                    Ok(1)
+                } else {
+                    Err(anyhow::anyhow!(
+                        "Failed to get last synced proposal id from Taiko Geth, next_proposal_id = {}",
+                        inbox_state.nextProposalId
+                    ))
+                }
             }
         }
     }

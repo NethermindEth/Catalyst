@@ -268,6 +268,17 @@ impl ExecutionLayer {
 
         Ok(inclusion.clone())
     }
+
+    pub async fn get_inbox_state(&self) -> Result<Inbox::CoreState, Error> {
+        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
+        let state = shasta_inbox
+            .getState()
+            .call()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to call getInboxState for Inbox: {e}"))?;
+
+        Ok(state)
+    }
 }
 
 impl WhitelistProvider for ExecutionLayer {
