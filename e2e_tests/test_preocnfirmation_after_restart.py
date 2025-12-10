@@ -34,7 +34,7 @@ def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1
         print("delay", delay)
         spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 3 * env_vars.max_blocks_per_batch, delay)
         # wait for transactions to be included on L1
-        wait_for_batch_proposed_event(l1_client, env_vars.taiko_inbox_address, l1_client.eth.block_number)
+        wait_for_batch_proposed_event(l1_client, env_vars.taiko_inbox_address, l1_client.eth.block_number, env_vars)
         # verify
         slot = get_slot_in_epoch(beacon_client)
         print("Slot: ", slot)

@@ -23,6 +23,7 @@ class EnvVars:
     preconf_heartbeat_ms: int
     l2_private_key: str
     max_blocks_per_batch: int
+    protocol: str
 
     @classmethod
     def from_env(cls):
@@ -64,6 +65,10 @@ class EnvVars:
         if not max_blocks_per_batch:
             raise Exception("Environment variable MAX_BLOCKS_PER_BATCH not set")
 
+        protocol = os.getenv("PROTOCOL")
+        if not protocol:
+            raise Exception("Environment variable PROTOCOL not set")
+
         return cls(
             l2_prefunded_priv_key=l2_prefunded_priv_key,
             l2_prefunded_priv_key_2=l2_prefunded_priv_key_2,
@@ -74,7 +79,14 @@ class EnvVars:
             preconf_heartbeat_ms=preconf_heartbeat_ms,
             l2_private_key=l2_private_key,
             max_blocks_per_batch=max_blocks_per_batch,
+            protocol=protocol,
         )
+
+    def is_shasta(self):
+        return self.protocol == "shasta"
+
+    def is_pacaya(self):
+        return self.protocol == "pacaya"
 
 @pytest.fixture(scope="session")
 def env_vars():
@@ -131,6 +143,11 @@ def forced_inclusion_teardown(l1_client, l2_client_node1, env_vars):
 @pytest.fixture(scope="session", autouse=True)
 def global_setup(l1_client, l2_client_node1, l2_client_node2, env_vars):
     """Run once before all tests"""
+
+    if env_vars.protocol == "shasta":
+        yield
+        return
+
     print("Wait for Geth sync with TaikoInbox")
     block_number_contract = get_last_block_id(l1_client, env_vars.taiko_inbox_address)
 
