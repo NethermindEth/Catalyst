@@ -399,17 +399,31 @@ def verifyPreconfirmation(rawTxList: List[Tx], signedCommitment: SignedCommitmen
     if preconf.eop:
         currentPreconfer = lookaheadStore.getNextPreconfer()
 
-def verifyGasLimit(gasLimit: uint256, parentState: ParentState):
+def verifyGasLimit(gasLimit: uint64, parentState: ParentState):
     """
     Verifies that the gas limit is within acceptable bounds based on parent gas limit.
+    Constants are defined in the derivation spec.
+    Based on:
+    https://github.com/taikoxyz/taiko-mono/blob/f42d402dc02daf6144300223a843847467fe515f/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/validation.rs#L174-L175
     """
-    parent_gas = parentState.gasLimit
-    effective_parent = parent_gas - 250000  # 250K
-    lower_bound = effective_parent * 999990 // 1000000  # 0.999990
-    upper_bound = effective_parent * 1000010 // 1000000  # 1.000010
+    parent_gas = parentState.header.gasLimit
     
-    assert lower_bound <= gasLimit <= upper_bound, \
-        f"Gas limit {gasLimit} is outside bounds [{lower_bound}, {upper_bound}]"
+    # Calculate effective parent (subtract anchor gas if not genesis)
+    if parentState.header.number == 0:
+        effective_parent = parent_gas
+    else:
+        effective_parent = parent_gas - ANCHOR_V3_V4_GAS_LIMIT
+    
+    # Calculate bounds
+    upper = (effective_parent * (GAS_LIMIT_DENOMINATOR + BLOCK_GAS_LIMIT_MAX_CHANGE)) // GAS_LIMIT_DENOMINATOR
+    upper = min(upper, MAX_BLOCK_GAS_LIMIT)
+    
+    lower = (effective_parent * (GAS_LIMIT_DENOMINATOR - BLOCK_GAS_LIMIT_MAX_CHANGE)) // GAS_LIMIT_DENOMINATOR
+    lower = max(lower, MIN_BLOCK_GAS_LIMIT)
+    lower = min(lower, upper)
+    
+    assert lower <= gasLimit <= upper, \
+        f"Gas limit {gasLimit} outside bounds [{lower}, {upper}]"
 
 def verifyTimestamp(timestamp: uint256, submissionWindowEnd: uint256, parentState: ParentState):
     """
