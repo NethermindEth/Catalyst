@@ -11,16 +11,18 @@ mod l2;
 
 use crate::utils::config::ShastaConfig;
 use anyhow::Error;
-use common::{l1::traits::PreconferProvider, metrics, shared};
-
 use common::{
     batch_builder::BatchBuilderConfig,
     config::Config,
     config::ConfigTrait,
     fork_info::ForkInfo,
     funds_controller::FundsController,
-    l1::{self as common_l1},
+    l1::{
+        self as common_l1,
+        traits::{ELTrait, PreconferProvider},
+    },
     l2::engine::{L2Engine, L2EngineConfig},
+    metrics, shared,
     utils::cancellation_token::CancellationToken,
 };
 use l1::execution_layer::ExecutionLayer;
@@ -71,7 +73,7 @@ pub async fn create_shasta_node(
 
     let taiko = crate::l2::taiko::Taiko::new(
         ethereum_l1.slot_clock.clone(),
-        protocol_config,
+        protocol_config.clone(),
         metrics.clone(),
         taiko_config,
         l2_engine,
@@ -120,7 +122,10 @@ pub async fn create_shasta_node(
             shasta_config.shasta_inbox.clone(),
             cancel_token.clone(),
             "Proposed",
-            chain_monitor::print_proposed_info,
+            Arc::new(chain_monitor::ProposedHandler::new(
+                protocol_config.get_codec_address(),
+                ethereum_l1.execution_layer.common().provider().clone(),
+            )),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create ShastaChainMonitor: {}", e))?,
     );
