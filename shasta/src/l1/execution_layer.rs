@@ -1,7 +1,7 @@
 // TODO remove allow dead_code when the module is used
 #![allow(dead_code)]
 
-use super::bindings::{Inbox, PreconfWhitelist};
+use super::bindings::PreconfWhitelist;
 use super::config::EthereumL1Config;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
@@ -26,6 +26,9 @@ use common::{
 };
 use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
 use std::sync::Arc;
+use taiko_bindings::{
+    inbox::IForcedInclusionStore::ForcedInclusion, inbox::IInbox::CoreState, inbox::Inbox,
+};
 use tokio::sync::mpsc::Sender;
 use tracing::info;
 
@@ -254,7 +257,7 @@ impl ExecutionLayer {
         Ok(state.tail_.to::<u64>())
     }
 
-    pub async fn get_forced_inclusion(&self, index: u64) -> Result<Inbox::ForcedInclusion, Error> {
+    pub async fn get_forced_inclusion(&self, index: u64) -> Result<ForcedInclusion, Error> {
         let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
         let inclusions = shasta_inbox
             .getForcedInclusions(U48::from(index), U48::ONE)
@@ -269,7 +272,7 @@ impl ExecutionLayer {
         Ok(inclusion.clone())
     }
 
-    pub async fn get_inbox_state(&self) -> Result<Inbox::CoreState, Error> {
+    pub async fn get_inbox_state(&self) -> Result<CoreState, Error> {
         let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
         let state = shasta_inbox
             .getState()

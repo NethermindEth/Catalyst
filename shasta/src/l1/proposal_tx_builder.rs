@@ -1,4 +1,3 @@
-use super::bindings::Inbox;
 use alloy::{
     consensus::SidecarBuilder,
     network::{TransactionBuilder, TransactionBuilder4844},
@@ -13,9 +12,9 @@ use alloy_json_rpc::RpcError;
 use anyhow::Error;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use common::shared::l2_block_v2::L2BlockV2;
-use taiko_bindings::codec_optimized::{
+use taiko_bindings::{codec_optimized::{
     CodecOptimized::CodecOptimizedInstance, IInbox::ProposeInput, LibBlobs::BlobReference,
-};
+}, inbox::Inbox};
 use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},
