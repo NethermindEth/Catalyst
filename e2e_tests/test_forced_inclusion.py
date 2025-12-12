@@ -14,10 +14,14 @@ from forced_inclusion_store import check_empty_forced_inclusion_store, get_force
 from chain_info import ChainInfo
 
 
-def send_forced_inclusion(nonce_delta):
+def send_forced_inclusion(nonce_delta, env_vars):
+    if env_vars.is_pacaya():
+        image = "nethswitchboard/taiko-forced-inclusion-toolbox"
+    else:
+        image = "nethswitchboard/taiko-forced-inclusion-toolbox:shasta"
     cmd = [
         "docker", "run", "--network", "host", "--env-file", ".env", "--rm",
-        "nethswitchboard/taiko-forced-inclusion-toolbox", "send",
+        image, "send",
         "--nonce-delta", str(nonce_delta)
     ]
     try:
@@ -50,11 +54,11 @@ def test_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars, f
 
     check_empty_forced_inclusion_store(l1_client, env_vars)
     fi_account = Account.from_key(env_vars.l2_private_key)
-    # print chain info
-    ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    # TODO
+    # ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
 
     #send forced inclusion
-    forced_inclusion_tx_hash = send_forced_inclusion(0)
+    forced_inclusion_tx_hash = send_forced_inclusion(0, env_vars)
     print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
 
     # Spam 41 transactions to L2 Node to at least one batch which will include the forced inclusion tx
@@ -84,9 +88,9 @@ def test_three_consecutive_forced_inclusion(l1_client, beacon_client, l2_client_
     check_empty_forced_inclusion_store(l1_client, env_vars)
 
     # send 3 forced inclusion
-    tx_1 = send_forced_inclusion(0)
-    tx_2 = send_forced_inclusion(1)
-    tx_3 = send_forced_inclusion(2)
+    tx_1 = send_forced_inclusion(0, env_vars)
+    tx_2 = send_forced_inclusion(1, env_vars)
+    tx_3 = send_forced_inclusion(2, env_vars)
     # Synchronize transaction sending with slot time
     wait_for_next_slot(beacon_client)
     # spam transactions
@@ -115,7 +119,7 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
     # get chain info
     chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
     # send 1 forced inclusion
-    forced_inclusion_tx_hash = send_forced_inclusion(0)
+    forced_inclusion_tx_hash = send_forced_inclusion(0, env_vars)
     # wait for handower window
     wait_for_slot_beginning(beacon_client, 25)
 
@@ -172,7 +176,7 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
 
     # Send forced inclusion
-    forced_inclusion_tx_hash = send_forced_inclusion(0)
+    forced_inclusion_tx_hash = send_forced_inclusion(0, env_vars)
 
     # Synchronize transaction sending with L1 slot time
     wait_for_next_slot(beacon_client)
@@ -210,7 +214,7 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     start_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
     # start_block = l1_client.eth.block_number
 
-    forced_inclusion_tx_hash = send_forced_inclusion(0)
+    forced_inclusion_tx_hash = send_forced_inclusion(0, env_vars)
 
     wait_for_new_block(l2_client_node1, start_chain_info.block_number)
 
@@ -243,7 +247,7 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
     op1_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
 
     # Send 2 forced inclusions
-    send_forced_inclusion(0)
+    send_forced_inclusion(0, env_vars)
     send_forced_inclusion(1)
 
     # Synchronize transaction sending with L1 slot time

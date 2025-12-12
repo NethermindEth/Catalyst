@@ -175,7 +175,7 @@ def get_proposed_event_filter(eth_client, taiko_inbox_address, from_block, env_v
 def wait_for_forced_inclusion_store_to_be_empty(l1_client, env_vars):
     TIMEOUT = 300
     i = 0
-    while not forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address):
+    while not forced_inclusion_store_is_empty(l1_client, env_vars):
         if i >= TIMEOUT:
             assert False, "Error: waited {} seconds for forced inclusion store to be empty".format(TIMEOUT)
         time.sleep(1)
