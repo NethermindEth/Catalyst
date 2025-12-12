@@ -88,5 +88,50 @@
             }
         ],
         "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "getState",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "state_",
+                "type": "tuple",
+                "internalType": "struct Inbox.CoreState",
+                "components": [
+                    {
+                        "name": "nextProposalId",
+                        "type": "uint48",
+                        "internalType": "uint48"
+                    },
+                    {
+                        "name": "lastProposalBlockId",
+                        "type": "uint48",
+                        "internalType": "uint48"
+                    },
+                    {
+                        "name": "lastFinalizedProposalId",
+                        "type": "uint48",
+                        "internalType": "uint48"
+                    },
+                    {
+                        "name": "lastFinalizedTimestamp",
+                        "type": "uint48",
+                        "internalType": "uint48"
+                    },
+                    {
+                        "name": "lastCheckpointTimestamp",
+                        "type": "uint48",
+                        "internalType": "uint48"
+                    },
+                    {
+                        "name": "lastFinalizedTransitionHash",
+                        "type": "bytes32",
+                        "internalType": "bytes32"
+                    }
+                ]
+            }
+        ],
+        "stateMutability": "view"
     }
 ]

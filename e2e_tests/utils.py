@@ -133,9 +133,9 @@ def send_n_txs_without_waiting(eth_client, private_key, n):
     for i in range(n):
         send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
 
-def wait_for_batch_proposed_event(eth_client, taiko_inbox_address, from_block, env_vars):
+def wait_for_batch_proposed_event(eth_client, from_block, env_vars):
     print(f"Waiting for BatchProposed event from block {from_block}")
-    proposed_filter = get_proposed_event_filter(eth_client, taiko_inbox_address, from_block, env_vars)
+    proposed_filter = get_proposed_event_filter(eth_client, from_block, env_vars)
 
     WAIT_TIME = 100
     for i in range(WAIT_TIME):
@@ -149,11 +149,11 @@ def wait_for_batch_proposed_event(eth_client, taiko_inbox_address, from_block, e
         time.sleep(1)
     assert False, "Warning waited {} seconds for BatchProposed event without getting one".format(WAIT_TIME)
 
-def get_proposed_event_filter(eth_client, taiko_inbox_address, from_block, env_vars):
+def get_proposed_event_filter(eth_client, from_block, env_vars):
     if env_vars.is_pacaya():
         with open("../pacaya/src/l1/abi/ITaikoInbox.json") as f:
             abi = json.load(f)
-        contract = eth_client.eth.contract(address=taiko_inbox_address, abi=abi)
+        contract = eth_client.eth.contract(address=env_vars.taiko_inbox_address, abi=abi)
         return contract.events.BatchProposed.create_filter(
             from_block=from_block
         )
@@ -165,7 +165,7 @@ def get_proposed_event_filter(eth_client, taiko_inbox_address, from_block, env_v
             "anonymous": False
         }]
 
-        contract = eth_client.eth.contract(address=taiko_inbox_address, abi=proposed_event_abi)
+        contract = eth_client.eth.contract(address=env_vars.taiko_inbox_address, abi=proposed_event_abi)
         return contract.events.Proposed().create_filter(
             from_block=from_block
         )
@@ -215,19 +215,19 @@ def spam_txs_until_new_batch_is_proposed(l1_eth_client, l2_eth_client, beacon_cl
     for i in range(number_of_blocks):
         spam_n_blocks(l2_eth_client, env_vars.l2_prefunded_priv_key, 1, env_vars.preconf_min_txs)
         wait_till_next_l1_slot(beacon_client)
-        event = get_last_batch_proposed_event(l1_eth_client, env_vars.taiko_inbox_address, current_block, env_vars)
+        event = get_last_batch_proposed_event(l1_eth_client, current_block, env_vars)
         if event is not None:
             return event
 
-    wait_for_batch_proposed_event(l1_eth_client, env_vars.taiko_inbox_address, current_block, env_vars)
+    wait_for_batch_proposed_event(l1_eth_client, current_block, env_vars)
 
 def wait_till_next_l1_slot(beacon_client):
     l1_slot_duration = int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
     current_time = int(time.time()) % l1_slot_duration
     time.sleep(l1_slot_duration - current_time)
 
-def get_last_batch_proposed_event(eth_client, taiko_inbox_address, from_block, env_vars):
-    proposed_filter = get_proposed_event_filter(eth_client, taiko_inbox_address, from_block, env_vars)
+def get_last_batch_proposed_event(eth_client, from_block, env_vars):
+    proposed_filter = get_proposed_event_filter(eth_client, from_block, env_vars)
     new_entries = proposed_filter.get_all_entries()
     if len(new_entries) > 0:
         event = new_entries[-1]

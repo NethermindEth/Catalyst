@@ -9,9 +9,9 @@ import subprocess
 import re
 import time
 from eth_account import Account
-from taiko_inbox import get_last_batch_id
-from forced_inclusion_store import check_empty_forced_inclusion_store, get_forced_inclusion_store_head, forced_inclusion_store_is_empty
+from forced_inclusion_store import check_empty_forced_inclusion_store, get_forced_inclusion_store_head
 from chain_info import ChainInfo
+from taiko_inbox import get_last_block_id
 
 
 def send_forced_inclusion(nonce_delta, env_vars):
@@ -54,19 +54,22 @@ def test_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars, f
 
     check_empty_forced_inclusion_store(l1_client, env_vars)
     fi_account = Account.from_key(env_vars.l2_private_key)
-    # TODO
-    # ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
+    get_last_block_id(l1_client, env_vars)
 
     #send forced inclusion
     forced_inclusion_tx_hash = send_forced_inclusion(0, env_vars)
     print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
 
-    # Spam 41 transactions to L2 Node to at least one batch which will include the forced inclusion tx
+#TODO sprawdzić czy to potrzebne...
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
     print("spam 41 transactions with delay", delay)
     # Synchronize transaction sending with L1 slot time
     wait_for_next_slot(beacon_client)
-    spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 41, delay)
+    spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 10, delay)
+    wait_for_batch_proposed_event(l1_client, l1_client.eth.block_number, env_vars)
+
+    get_last_block_id(l1_client, env_vars)
 
     assert wait_for_tx_to_be_included(l2_client_node1, forced_inclusion_tx_hash), "Forced inclusion tx should be included in L2 Node 1"
 
@@ -117,7 +120,7 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
     wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, env_vars.preconf_whitelist_address, 19)
 
     # get chain info
-    chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     # send 1 forced inclusion
     forced_inclusion_tx_hash = send_forced_inclusion(0, env_vars)
     # wait for handower window
@@ -127,13 +130,13 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
     wait_for_next_slot(beacon_client)
     # send transactions to create batch
     spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
-    after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     # wait for transactions to be included on L1
     wait_for_slot_beginning(beacon_client, 3)
     # Verify reorg after L1 inclusion
     after_spam_chain_info.check_reorg(l2_client_node1)
     # check chain info
-    after_handover_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    after_handover_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     # we should not have forced inclusions after handover
     assert chain_info.fi_sender_nonce == after_handover_chain_info.fi_sender_nonce, "Transaction not included after handover"
     # Synchronize transaction sending with L1 slot time
@@ -173,7 +176,7 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     time.sleep(slot_duration_sec * 3)
 
     # Validate chain info
-    chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
 
     # Send forced inclusion
     forced_inclusion_tx_hash = send_forced_inclusion(0, env_vars)
@@ -190,7 +193,7 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     )
 
     # Get chain info
-    before_l1_inclusion_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    before_l1_inclusion_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
 
     # Wait for transactions to be included on L1
     time.sleep(slot_duration_sec * 3)
@@ -211,7 +214,7 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
 
     # wait_for_slot_beginning(beacon_client, 1)
 
-    start_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    start_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     # start_block = l1_client.eth.block_number
 
     forced_inclusion_tx_hash = send_forced_inclusion(0, env_vars)
@@ -223,7 +226,7 @@ def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     restart_catalyst_node(2)
 
     wait_for_forced_inclusion_store_to_be_empty(l1_client, env_vars)
-    chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     assert start_chain_info.fi_sender_nonce + 1 == chain_info.fi_sender_nonce, "FI transaction not included after restart"
     start_chain_info.check_reorg(l2_client_node1)
 
@@ -244,7 +247,7 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
     wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, env_vars.preconf_whitelist_address, 1)
     node_number = get_current_operator_number(l1_client, env_vars.l2_prefunded_priv_key, env_vars.preconf_whitelist_address)
 
-    op1_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    op1_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
 
     # Send 2 forced inclusions
     send_forced_inclusion(0, env_vars)
@@ -256,7 +259,7 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
     # send transactions but don't create batch
     spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch-1, delay)
 
-    op1_stop_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    op1_stop_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     assert op1_chain_info.fi_sender_nonce + 1 == op1_stop_chain_info.fi_sender_nonce, "FI transaction not included"
 
     # Stop current operator
@@ -275,13 +278,13 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
 
     # send transactions to create batch
     spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
-    after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
 
     # wait for new epoch
     wait_for_slot_beginning(beacon_client, 0)
 
     # we started verifier but result not ready yet
-    new_epoch_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    new_epoch_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
 
     # Validate chain info
     after_spam_chain_info.check_reorg(l2_client_node1)
@@ -294,14 +297,14 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
     op1_stop_chain_info.check_reorg(l2_client_node1)
     after_spam_chain_info.check_reorg(l2_client_node1)
     new_epoch_chain_info.check_reorg(l2_client_node1)
-    after_inclusion_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    after_inclusion_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     assert new_epoch_chain_info.fi_sender_nonce == after_inclusion_chain_info.fi_sender_nonce, "FI transaction not included"
 
     # Synchronize transaction sending with L1 slot time
     wait_for_next_slot(beacon_client)
     # send transactions to create batch with FI
     spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
-    after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     assert after_inclusion_chain_info.fi_sender_nonce + 1 == after_spam_chain_info.fi_sender_nonce, "FI transaction not included"
 
     # wait for transactions to be included on L1
@@ -309,5 +312,5 @@ def test_verify_forced_inclusion_after_previous_operator_stop(l1_client, beacon_
 
     # Validate chain info
     after_spam_chain_info.check_reorg(l2_client_node1)
-    chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     assert after_spam_chain_info.fi_sender_nonce == chain_info.fi_sender_nonce, "FI transaction not included"
