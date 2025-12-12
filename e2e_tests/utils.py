@@ -3,6 +3,8 @@ import web3
 import subprocess
 import json
 import os
+import requests
+import re
 from forced_inclusion_store import forced_inclusion_store_is_empty
 
 def send_transaction(nonce : int, account, amount, eth_client, private_key):
@@ -308,3 +310,61 @@ def wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, preco
         if current_operator != next_operator:
             break
     assert current_operator != next_operator, "Current operator should be different from next operator"
+
+def read_shasta_inbox_config(l1_client, shasta_inbox_address):
+    with open("./bindings/inbox.json") as f:
+        abi = json.load(f)
+    # TODO: move to rust bindings when they are consistent
+    # commit = get_taiko_bindings_commit()
+    # url = f"https://raw.githubusercontent.com/taikoxyz/taiko-mono/{commit}/packages/taiko-client-rs/crates/bindings/src/inbox.rs"
+    # abi = read_json_abi_from_rust_bindings(url)
+    contract = l1_client.eth.contract(address=shasta_inbox_address, abi=abi)
+    config = contract.functions.getConfig().call()
+    print(f"Shasta inbox config: {config}")
+    return config
+
+def get_taiko_bindings_commit():
+    """Read the commit hash from Cargo.toml for taiko_bindings dependency"""
+    cargo_toml_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Cargo.toml")
+    with open(cargo_toml_path, 'r') as f:
+        content = f.read()
+
+    # Find the taiko_bindings dependency and extract the rev value
+    pattern = r'taiko_bindings\s*=\s*\{[^}]*rev\s*=\s*"([^"]+)"'
+    match = re.search(pattern, content)
+
+    if not match:
+        raise ValueError("Could not find taiko_bindings rev in Cargo.toml")
+
+    return match.group(1)
+
+def decode_proposal_payload(l1_client, shasta_inbox_address, payload):
+    commit = get_taiko_bindings_commit()
+    url = f"https://raw.githubusercontent.com/taikoxyz/taiko-mono/{commit}/packages/taiko-client-rs/crates/bindings/src/codec_optimized.rs"
+    abi = read_json_abi_from_rust_bindings(url)
+    config = read_shasta_inbox_config(l1_client, shasta_inbox_address)
+    codec = config[0]
+    codec_contract = l1_client.eth.contract(address=codec, abi=abi)
+    return codec_contract.functions.decodeProposedEvent(payload).call()
+
+def read_json_abi_from_rust_bindings(url):
+    # Convert GitHub blob URL to raw URL if needed
+    if 'github.com' in url and '/blob/' in url:
+        url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
+
+    response = requests.get(url)
+    response.raise_for_status()  # Raise an exception for bad status codes
+
+    content = response.text
+
+    # Find the ```json code block
+    pattern = r'```json\s*\n(.*?)\n```'
+    match = re.search(pattern, content, re.DOTALL)
+
+    if not match:
+        raise ValueError(f"Could not find ```json code block in the file at {url}")
+
+    json_content = match.group(1).strip()
+
+    # Parse and return the JSON
+    return json.loads(json_content)

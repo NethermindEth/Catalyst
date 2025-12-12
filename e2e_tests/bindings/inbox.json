@@ -1,0 +1,92 @@
+[
+    {
+        "type": "function",
+        "name": "getConfig",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "config_",
+                "type": "tuple",
+                "internalType": "struct Inbox.Config",
+                "components": [
+                    {
+                        "name": "codec",
+                        "type": "address",
+                        "internalType": "address"
+                    },
+                    {
+                        "name": "bondToken",
+                        "type": "address",
+                        "internalType": "address"
+                    },
+                    {
+                        "name": "signalService",
+                        "type": "address",
+                        "internalType": "address"
+                    },
+                    {
+                        "name": "proofVerifier",
+                        "type": "address",
+                        "internalType": "address"
+                    },
+                    {
+                        "name": "proposerChecker",
+                        "type": "address",
+                        "internalType": "address"
+                    },
+                    {
+                        "name": "provingWindow",
+                        "type": "uint48",
+                        "internalType": "uint48"
+                    },
+                    {
+                        "name": "extendedProvingWindow",
+                        "type": "uint48",
+                        "internalType": "uint48"
+                    },
+                    {
+                        "name": "ringBufferSize",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    },
+                    {
+                        "name": "basefeeSharingPctg",
+                        "type": "uint8",
+                        "internalType": "uint8"
+                    },
+                    {
+                        "name": "minForcedInclusionCount",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    },
+                    {
+                        "name": "forcedInclusionDelay",
+                        "type": "uint16",
+                        "internalType": "uint16"
+                    },
+                    {
+                        "name": "forcedInclusionFeeInGwei",
+                        "type": "uint64",
+                        "internalType": "uint64"
+                    },
+                    {
+                        "name": "forcedInclusionFeeDoubleThreshold",
+                        "type": "uint64",
+                        "internalType": "uint64"
+                    },
+                    {
+                        "name": "minCheckpointDelay",
+                        "type": "uint16",
+                        "internalType": "uint16"
+                    },
+                    {
+                        "name": "permissionlessInclusionMultiplier",
+                        "type": "uint8",
+                        "internalType": "uint8"
+                    }
+                ]
+            }
+        ],
+        "stateMutability": "view"
+    }
+]
