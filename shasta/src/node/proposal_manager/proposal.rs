@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use std::time::Instant;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
-//use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
+use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 
 pub type Proposals = VecDeque<Proposal>;
 
@@ -32,7 +32,7 @@ impl Proposal {
                 timestamp: l2_block.timestamp_sec,
                 coinbase: l2_block.coinbase,
                 anchor_block_number: l2_block.anchor_block_number,
-                gas_limit: l2_block.gas_limit,
+                gas_limit: l2_block.gas_limit_without_anchor,
                 transactions: l2_block
                     .prebuilt_tx_list
                     .tx_list
@@ -107,31 +107,29 @@ impl Proposal {
             l2_draft_block.timestamp_sec,
             self.coinbase,
             self.anchor_block_id,
-            l2_draft_block.gas_limit,
+            l2_draft_block.gas_limit_without_anchor,
         )
     }
 
-    pub fn add_l2_block(&mut self, l2_block: L2BlockV2) {
-        self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
-        self.l2_blocks.push(l2_block);
-        /*  L2BlockV2Payload {
+    pub fn add_l2_block(&mut self, l2_block: L2BlockV2) -> L2BlockV2Payload {
+        let l2_payload = L2BlockV2Payload {
             proposal_id: self.id,
-            block_id: self.l2_blocks.len() as u64 - 1,
             coinbase: self.coinbase,
             prebuilt_tx_list: l2_block.prebuilt_tx_list.clone(),
-            timestamp_sec: self.l2_blocks.last().unwrap().timestamp_sec,
-            gas_limit_without_anchor: self.l2_blocks.last().unwrap().gas_limit,
+            timestamp_sec: l2_block.timestamp_sec,
+            gas_limit_without_anchor: l2_block.gas_limit_without_anchor,
             anchor_block_id: self.anchor_block_id,
             anchor_block_hash: self.anchor_block_hash,
             anchor_state_root: self.anchor_state_root,
-            bond_instructions: self.bond_instructions.clone(),
-            base_fee_per_gas: 0, // TODO: set base fee per gas
-        }*/
+        };
+        self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
+        self.l2_blocks.push(l2_block);
+        l2_payload
     }
 
-    pub fn add_l2_draft_block(&mut self, l2_draft_block: L2BlockV2Draft) {
+    pub fn add_l2_draft_block(&mut self, l2_draft_block: L2BlockV2Draft) -> L2BlockV2Payload {
         let l2_block = self.create_block_from_draft(l2_draft_block);
-        self.add_l2_block(l2_block);
+        self.add_l2_block(l2_block)
     }
 }
 
@@ -177,7 +175,7 @@ mod test {
             timestamp_sec: 0,
             coinbase: Address::ZERO,
             anchor_block_number: 0,
-            gas_limit: 0,
+            gas_limit_without_anchor: 0,
         };
 
         // RLP encode the transactions

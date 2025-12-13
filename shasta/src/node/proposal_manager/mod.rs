@@ -203,7 +203,7 @@ impl BatchManager {
         let l2_draft_block = L2BlockV2Draft {
             prebuilt_tx_list: prebuilt_tx_list.clone(),
             timestamp_sec: l2_slot_context.info.slot_timestamp(),
-            gas_limit: l2_slot_context.info.parent_gas_limit_without_anchor(),
+            gas_limit_without_anchor: l2_slot_context.info.parent_gas_limit_without_anchor(),
         };
 
         if !self.batch_builder.can_consume_l2_block(&l2_draft_block) {

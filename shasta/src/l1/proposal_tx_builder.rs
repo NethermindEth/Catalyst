@@ -99,7 +99,7 @@ impl ProposalTxBuilder {
                 timestamp: l2_block.timestamp_sec,
                 coinbase: l2_block.coinbase,
                 anchor_block_number: l2_block.anchor_block_number,
-                gas_limit: l2_block.gas_limit,
+                gas_limit: l2_block.gas_limit_without_anchor,
                 transactions: l2_block
                     .prebuilt_tx_list
                     .tx_list
