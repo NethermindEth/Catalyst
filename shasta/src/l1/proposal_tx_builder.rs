@@ -12,9 +12,10 @@ use alloy_json_rpc::RpcError;
 use anyhow::Error;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use common::shared::l2_block_v2::L2BlockV2;
-use taiko_bindings::{codec_optimized::{
-    CodecOptimized::CodecOptimizedInstance, IInbox::ProposeInput, LibBlobs::BlobReference,
-}, inbox::Inbox};
+use taiko_bindings::{
+    codec::{Codec::CodecInstance, IInbox::ProposeInput, LibBlobs::BlobReference},
+    inbox::Inbox,
+};
 use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},
@@ -134,7 +135,7 @@ impl ProposalTxBuilder {
             numForcedInclusions: num_forced_inclusion,
         };
 
-        let codec = CodecOptimizedInstance::new(self.codec_address, self.provider.clone());
+        let codec = CodecInstance::new(self.codec_address, self.provider.clone());
         let encoded_proposal_input = codec.encodeProposeInput(input).call().await?;
 
         let tx = TransactionRequest::default()

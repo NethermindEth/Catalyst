@@ -80,9 +80,9 @@ shasta = { path = "shasta" }
 strum = { version = "0.27", features = ["derive"] }
 
 taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "e07c13fc011798adfa5436f24646b7305337cdf3", package = "alethia-reth-consensus" }
-taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "4a495188afbdbddf41457d440762b89023b32d84", package = "bindings" }
-taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "4a495188afbdbddf41457d440762b89023b32d84", package = "protocol" }
-taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "4a495188afbdbddf41457d440762b89023b32d84", package = "rpc" }
+taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d8741f16b36db30c200b1592310c3d85b625a16c", package = "bindings" }
+taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d8741f16b36db30c200b1592310c3d85b625a16c", package = "protocol" }
+taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d8741f16b36db30c200b1592310c3d85b625a16c", package = "rpc" }
 tiny-keccak = { version = "2.0", default-features = false }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
