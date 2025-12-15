@@ -348,10 +348,6 @@ def decode_proposal_payload(l1_client, shasta_inbox_address, payload):
     return codec_contract.functions.decodeProposedEvent(payload).call()
 
 def read_json_abi_from_rust_bindings(url):
-    # Convert GitHub blob URL to raw URL if needed
-    if 'github.com' in url and '/blob/' in url:
-        url = url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/')
-
     response = requests.get(url)
     response.raise_for_status()  # Raise an exception for bad status codes
 
