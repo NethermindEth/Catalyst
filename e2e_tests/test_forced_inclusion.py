@@ -1,15 +1,10 @@
 from unittest import skip
-import pytest
-import requests
 from web3 import Web3
-import os
-import sys
 from utils import *
 import subprocess
 import re
 import time
 from eth_account import Account
-from forced_inclusion_store import check_empty_forced_inclusion_store, get_forced_inclusion_store_head
 from chain_info import ChainInfo
 from taiko_inbox import get_last_block_id
 
@@ -61,12 +56,11 @@ def test_forced_inclusion(l1_client, beacon_client, l2_client_node1, env_vars, f
     forced_inclusion_tx_hash = send_forced_inclusion(0, env_vars)
     print(f"Extracted forced inclusion tx hash: {forced_inclusion_tx_hash}")
 
-#TODO sprawdzić czy to potrzebne...
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
     print("spam 41 transactions with delay", delay)
     # Synchronize transaction sending with L1 slot time
     wait_for_next_slot(beacon_client)
-    spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 10, delay)
+    spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, 41, delay)
     wait_for_batch_proposed_event(l1_client, l1_client.eth.block_number, env_vars)
 
     get_last_block_id(l1_client, env_vars)

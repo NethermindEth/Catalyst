@@ -4,8 +4,7 @@ from web3.beacon import Beacon
 from eth_account import Account
 import os
 from dotenv import load_dotenv
-from utils import ensure_catalyst_node_running, spam_n_blocks
-from forced_inclusion_store import forced_inclusion_store_is_empty, check_empty_forced_inclusion_store
+from utils import ensure_catalyst_node_running, spam_n_blocks, forced_inclusion_store_is_empty, check_empty_forced_inclusion_store
 from dataclasses import dataclass
 from taiko_inbox import get_last_block_id
 

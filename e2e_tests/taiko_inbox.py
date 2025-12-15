@@ -1,11 +1,9 @@
 from web3 import Web3
 import json
+from utils import get_shasta_inbox_abi
 
 with open("../pacaya/src/l1/abi/ITaikoInbox.json") as f:
     pacaya_abi = json.load(f)
-
-with open("./bindings/inbox.json") as f:
-    shasta_abi = json.load(f)
 
 def get_last_batch_id(l1_client, env_vars):
     if env_vars.is_pacaya():
@@ -32,6 +30,7 @@ def get_last_block_id(l1_client, env_vars):
         return last_block_id
 
 def get_core_state(l1_client, env_vars):
+    shasta_abi = get_shasta_inbox_abi()
     contract = l1_client.eth.contract(address=env_vars.taiko_inbox_address, abi=shasta_abi)
-    result = contract.functions.getState().call()
+    result = contract.functions.getCoreState().call()
     return result

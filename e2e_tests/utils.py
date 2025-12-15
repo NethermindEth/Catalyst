@@ -5,7 +5,7 @@ import json
 import os
 import requests
 import re
-from forced_inclusion_store import forced_inclusion_store_is_empty
+from forced_inclusion_store import pacaya_fi_abi
 
 def send_transaction(nonce : int, account, amount, eth_client, private_key):
     base_fee = eth_client.eth.get_block('latest')['baseFeePerGas']
@@ -312,16 +312,16 @@ def wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, preco
     assert current_operator != next_operator, "Current operator should be different from next operator"
 
 def read_shasta_inbox_config(l1_client, shasta_inbox_address):
-    with open("./bindings/inbox.json") as f:
-        abi = json.load(f)
-    # TODO: move to rust bindings when they are consistent
-    # commit = get_taiko_bindings_commit()
-    # url = f"https://raw.githubusercontent.com/taikoxyz/taiko-mono/{commit}/packages/taiko-client-rs/crates/bindings/src/inbox.rs"
-    # abi = read_json_abi_from_rust_bindings(url)
+    abi = get_shasta_inbox_abi()
     contract = l1_client.eth.contract(address=shasta_inbox_address, abi=abi)
     config = contract.functions.getConfig().call()
     print(f"Shasta inbox config: {config}")
     return config
+
+def get_shasta_inbox_abi():
+    commit = get_taiko_bindings_commit()
+    url = f"https://raw.githubusercontent.com/taikoxyz/taiko-mono/{commit}/packages/taiko-client-rs/crates/bindings/src/inbox.rs"
+    return read_json_abi_from_rust_bindings(url)
 
 def get_taiko_bindings_commit():
     """Read the commit hash from Cargo.toml for taiko_bindings dependency"""
@@ -340,7 +340,7 @@ def get_taiko_bindings_commit():
 
 def decode_proposal_payload(l1_client, shasta_inbox_address, payload):
     commit = get_taiko_bindings_commit()
-    url = f"https://raw.githubusercontent.com/taikoxyz/taiko-mono/{commit}/packages/taiko-client-rs/crates/bindings/src/codec_optimized.rs"
+    url = f"https://raw.githubusercontent.com/taikoxyz/taiko-mono/{commit}/packages/taiko-client-rs/crates/bindings/src/codec.rs"
     abi = read_json_abi_from_rust_bindings(url)
     config = read_shasta_inbox_config(l1_client, shasta_inbox_address)
     codec = config[0]
@@ -368,3 +368,29 @@ def read_json_abi_from_rust_bindings(url):
 
     # Parse and return the JSON
     return json.loads(json_content)
+
+def get_forced_inclusion_store_head(l1_client, env_vars):
+    if env_vars.is_pacaya():
+        contract = l1_client.eth.contract(address=env_vars.forced_inclusion_store_address, abi=pacaya_fi_abi)
+        head = contract.functions.head().call()
+        return int(head)
+    else:
+        shasta_abi = get_shasta_inbox_abi()
+        contract = l1_client.eth.contract(address=env_vars.forced_inclusion_store_address, abi=shasta_abi)
+        head, tail = contract.functions.getForcedInclusionState().call()
+        return int(head)
+
+def forced_inclusion_store_is_empty(l1_client, env_vars):
+    if env_vars.is_pacaya():
+        contract = l1_client.eth.contract(address=env_vars.forced_inclusion_store_address, abi=pacaya_fi_abi)
+        head = contract.functions.head().call()
+        tail = contract.functions.tail().call()
+    else:
+        shasta_abi = get_shasta_inbox_abi()
+        contract = l1_client.eth.contract(address=env_vars.forced_inclusion_store_address, abi=shasta_abi)
+        head, tail = contract.functions.getForcedInclusionState().call()
+        print("Forced Inclusion head:", head, "tail: ", tail)
+    return head == tail
+
+def check_empty_forced_inclusion_store(l1_client, env_vars):
+    assert forced_inclusion_store_is_empty(l1_client, env_vars), "Forced inclusion store should be empty"
