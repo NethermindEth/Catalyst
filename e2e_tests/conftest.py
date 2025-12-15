@@ -148,7 +148,7 @@ def global_setup(l1_client, l2_client_node1, l2_client_node2, env_vars):
         return
 
     print("Wait for Geth sync with TaikoInbox")
-    block_number_contract = get_last_block_id(l1_client, env_vars.taiko_inbox_address)
+    block_number_contract = get_last_block_id(l1_client, env_vars)
 
     while True:
         block_number_node1 = l2_client_node1.eth.block_number
