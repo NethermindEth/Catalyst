@@ -76,10 +76,21 @@ def test_propose_batch_to_l1_after_reaching_max_blocks_per_batch(l2_client_node1
     current_block_timestamp = l1_client.eth.get_block(current_block).timestamp
     spam_n_txs(l2_client_node1, env_vars.l2_prefunded_priv_key, 11)
 
-    event = wait_for_batch_proposed_event(l1_client, env_vars.taiko_inbox_address, current_block)
+    event = wait_for_batch_proposed_event(l1_client, current_block, env_vars)
 
-    assert event['args']['meta']['proposer'] in [l1_client.eth.account.from_key(env_vars.l2_prefunded_priv_key).address, l1_client.eth.account.from_key(env_vars.l2_prefunded_priv_key_2).address], "Proposer should be L2 Node 1 or L2 Node 2"
-    assert event['args']['meta']['proposedAt'] > current_block_timestamp, "Proposed at timestamp should be larger than current block timestamp"
+    if env_vars.is_pacaya():
+        proposer = event['args']['meta']['proposer']
+        proposed_at = event['args']['meta']['proposedAt']
+
+    else:
+        payload = decode_proposal_payload(l1_client, env_vars.taiko_inbox_address, event['args']['data'])
+        print(f"Payload[0]: {payload[0]}")
+        proposer = payload[0][3]
+        proposed_at = payload[0][1]
+
+    assert proposer in [l1_client.eth.account.from_key(env_vars.l2_prefunded_priv_key).address, l1_client.eth.account.from_key(env_vars.l2_prefunded_priv_key_2).address], "Proposer should be L2 Node 1 or L2 Node 2"
+    assert proposed_at > current_block_timestamp, "Proposed at timestamp should be larger than current block timestamp"
+
 
 def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_client, catalyst_node_teardown, env_vars):
     catalyst_node_teardown
@@ -92,7 +103,7 @@ def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_clie
 
     node_number = get_current_operator_number(l1_client, env_vars.l2_prefunded_priv_key, env_vars.preconf_whitelist_address)
 
-    spam_txs_until_new_batch_is_proposed(l1_client, l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.taiko_inbox_address, beacon_client, env_vars.preconf_min_txs)
+    spam_txs_until_new_batch_is_proposed(l1_client, l2_client_node1, beacon_client, env_vars)
 
     # should create new block in new batch
     tx_hash = spam_n_txs(l2_client_node1, env_vars.l2_prefunded_priv_key, 1)
@@ -101,7 +112,7 @@ def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_clie
     stop_catalyst_node(node_number)
 
     wait_for_slot_beginning(beacon_client, 0)
-    wait_for_batch_proposed_event(l1_client, env_vars.taiko_inbox_address, l1_client.eth.block_number)
+    wait_for_batch_proposed_event(l1_client, l1_client.eth.block_number, env_vars)
 
     # sent tx should still be included, no reorg
     wait_for_tx_to_be_included(l2_client_node1, tx_hash)
@@ -113,7 +124,7 @@ def test_verification_after_node_restart(l1_client, l2_client_node1, catalyst_no
 
     wait_for_slot_beginning(beacon_client, 5)
 
-    spam_txs_until_new_batch_is_proposed(l1_client, l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.taiko_inbox_address, beacon_client, env_vars.preconf_min_txs)
+    spam_txs_until_new_batch_is_proposed(l1_client, l2_client_node1, beacon_client, env_vars)
     current_block = l1_client.eth.block_number
 
     # spam additional block
@@ -123,7 +134,7 @@ def test_verification_after_node_restart(l1_client, l2_client_node1, catalyst_no
     stop_catalyst_node(current_node)
     start_catalyst_node(current_node)
 
-    wait_for_batch_proposed_event(l1_client, env_vars.taiko_inbox_address, current_block)
+    wait_for_batch_proposed_event(l1_client, current_block, env_vars)
 
 def test_end_of_sequencing(l2_client_node1, beacon_client, l1_client, env_vars):
     wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, env_vars.preconf_whitelist_address, 25) # handover window

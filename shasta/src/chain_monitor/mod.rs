@@ -1,18 +1,18 @@
 use alloy::{primitives::Address, providers::DynProvider};
 use common::chain_monitor::{ChainMonitor, ChainMonitorEventHandler};
-use taiko_bindings::{codec_optimized::CodecOptimized::CodecOptimizedInstance, inbox::Inbox};
+use taiko_bindings::{codec::Codec::CodecInstance, inbox::Inbox};
 use tracing::{info, warn};
 
 pub type ShastaChainMonitor = ChainMonitor<Inbox::Proposed>;
 
 #[derive(Clone)]
 pub struct ProposedHandler {
-    codec: CodecOptimizedInstance<DynProvider>,
+    codec: CodecInstance<DynProvider>,
 }
 
 impl ProposedHandler {
     pub fn new(codec_address: Address, provider: DynProvider) -> Self {
-        let codec = CodecOptimizedInstance::new(codec_address, provider);
+        let codec = CodecInstance::new(codec_address, provider);
         Self { codec }
     }
 }
