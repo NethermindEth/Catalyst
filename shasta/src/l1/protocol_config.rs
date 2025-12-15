@@ -1,5 +1,5 @@
-use super::bindings::Inbox::Config;
 use alloy::primitives::Address;
+use taiko_bindings::inbox::IInbox::Config;
 
 #[derive(Clone, Default)]
 pub struct ProtocolConfig {
