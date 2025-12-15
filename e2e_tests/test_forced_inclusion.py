@@ -139,7 +139,7 @@ def test_end_of_sequencing_forced_inclusion(l1_client, beacon_client, l2_client_
 
     # create new batch and forced inclusion
     spam_n_txs_wait_only_for_the_last(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, delay)
-    after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars.taiko_inbox_address, beacon_client)
+    after_spam_chain_info = ChainInfo.from_chain(fi_account.address, l2_client_node1, l1_client, env_vars, beacon_client)
     # wait for transactions to be included on L1
     time.sleep(slot_duration_sec * 3)
     # Verify reorg after L1 inclusion
