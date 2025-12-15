@@ -1,10 +1,11 @@
+use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 use alloy::primitives::{Address, B256, Bytes};
 use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
 use std::collections::VecDeque;
 use std::time::Instant;
+use taiko_bindings::anchor::Anchor;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
-use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 
 pub type Proposals = VecDeque<Proposal>;
 
@@ -111,16 +112,37 @@ impl Proposal {
         )
     }
 
+    pub fn add_forced_inclusion(
+        &mut self,
+        fi_block: L2BlockV2Draft,
+        anchor_params: Anchor::BlockParams,
+    ) -> L2BlockV2Payload {
+        let l2_payload = L2BlockV2Payload {
+            proposal_id: self.id,
+            coinbase: self.coinbase,
+            tx_list: fi_block.prebuilt_tx_list.tx_list,
+            timestamp_sec: fi_block.timestamp_sec,
+            gas_limit_without_anchor: fi_block.gas_limit_without_anchor,
+            anchor_block_id: anchor_params.anchorBlockNumber.to::<u64>(),
+            anchor_block_hash: anchor_params.anchorBlockHash,
+            anchor_state_root: anchor_params.anchorStateRoot,
+            is_forced_inclusion: true,
+        };
+        self.num_forced_inclusion += 1;
+        l2_payload
+    }
+
     pub fn add_l2_block(&mut self, l2_block: L2BlockV2) -> L2BlockV2Payload {
         let l2_payload = L2BlockV2Payload {
             proposal_id: self.id,
             coinbase: self.coinbase,
-            prebuilt_tx_list: l2_block.prebuilt_tx_list.clone(),
+            tx_list: l2_block.prebuilt_tx_list.tx_list.clone(),
             timestamp_sec: l2_block.timestamp_sec,
             gas_limit_without_anchor: l2_block.gas_limit_without_anchor,
             anchor_block_id: self.anchor_block_id,
             anchor_block_hash: self.anchor_block_hash,
             anchor_state_root: self.anchor_state_root,
+            is_forced_inclusion: false,
         };
         self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
         self.l2_blocks.push(l2_block);

@@ -120,7 +120,7 @@ impl BatchManager {
 
     async fn add_new_l2_block_with_forced_inclusion_when_needed(
         &mut self,
-        l2_slot_info: &L2SlotInfoV2,
+        l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         if self.has_current_forced_inclusion() {
@@ -142,27 +142,29 @@ impl BatchManager {
         );
 
         if let Some(forced_inclusion) = forced_inclusion {
-            let proposal = self
-                .batch_builder
-                .get_current_proposal()
-                .ok_or_else(|| anyhow::anyhow!("No current proposal available"))?;
+            let fi_block = L2BlockV2Draft {
+                prebuilt_tx_list: PreBuiltTxList {
+                    tx_list: forced_inclusion,
+                    estimated_gas_used: 0,
+                    bytes_length: 0,
+                },
+                timestamp_sec: l2_slot_context.info.parent_timestamp() + 1,
+                gas_limit_without_anchor: l2_slot_context.info.parent_gas_limit_without_anchor(),
+            };
 
+            let anchor_params = self
+                .taiko
+                .l2_execution_layer()
+                .get_last_synced_block_params_from_geth()
+                .await?;
+
+            let pyaload = self.batch_builder.add_fi_block(fi_block, anchor_params)?;
             match self
                 .taiko
-                .advance_head_to_new_l2_block(
-                    proposal,
-                    l2_slot_info,
-                    forced_inclusion,
-                    false,
-                    true,
-                    operation_type,
-                )
+                .advance_head_to_new_l2_block(pyaload, l2_slot_context, operation_type)
                 .await
             {
                 Ok(fi_preconfed_block) => {
-                    // set fi to batch builder
-                    self.batch_builder.inc_forced_inclusion()?;
-
                     debug!(
                         "Preconfirmed forced inclusion L2 block: {:?}",
                         fi_preconfed_block
@@ -216,7 +218,7 @@ impl BatchManager {
                 && !l2_slot_context.end_of_sequencing
                 && let Some(fi_block) = self
                     .add_new_l2_block_with_forced_inclusion_when_needed(
-                        &l2_slot_context.info,
+                        l2_slot_context,
                         operation_type,
                     )
                     .await?
@@ -238,20 +240,11 @@ impl BatchManager {
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        let proposal = self
-            .batch_builder
-            .add_l2_draft_block_and_get_current_proposal(l2_draft_block)?;
+        let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
 
         match self
             .taiko
-            .advance_head_to_new_l2_block(
-                proposal,
-                &l2_slot_context.info,
-                proposal.get_last_block_tx_list_copy()?,
-                l2_slot_context.end_of_sequencing,
-                false,
-                operation_type,
-            )
+            .advance_head_to_new_l2_block(payload, l2_slot_context, operation_type)
             .await
         {
             Ok(preconfed_block) => Ok(preconfed_block),

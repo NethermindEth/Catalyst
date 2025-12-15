@@ -3,14 +3,15 @@
 
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
-use crate::node::proposal_manager::proposal::Proposal;
+use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
     primitives::{Address, B256},
-    rpc::types::{Block, Transaction},
+    rpc::types::Block,
 };
 use anyhow::Error;
+use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::{
     l1::slot_clock::SlotClock,
     l2::{
@@ -236,19 +237,15 @@ impl Taiko {
     #[allow(clippy::too_many_arguments)]
     pub async fn advance_head_to_new_l2_block(
         &self,
-        proposal: &Proposal,
-        l2_slot_info: &L2SlotInfoV2,
-        tx_list: Vec<Transaction>,
-        end_of_sequencing: bool,
-        is_forced_inclusion: bool,
+        l2_block_payload: L2BlockV2Payload,
+        l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         tracing::debug!(
             "Submitting new L2 block to the Taiko driver with {} txs",
-            tx_list.len()
+            l2_block_payload.tx_list.len()
         );
-
-        let timestamp = if is_forced_inclusion {
+        /*let timestamp = if is_forced_inclusion {
             l2_slot_info.parent_timestamp() + 1
         } else {
             proposal.get_last_block_timestamp()?
@@ -264,11 +261,20 @@ impl Taiko {
                 anchorBlockHash: proposal.anchor_block_hash,
                 anchorStateRoot: proposal.anchor_state_root,
             }
+        };*/
+        let anchor_block_params = Anchor::BlockParams {
+            anchorBlockNumber: l2_block_payload.anchor_block_id.try_into()?,
+            anchorBlockHash: l2_block_payload.anchor_block_hash,
+            anchorStateRoot: l2_block_payload.anchor_state_root,
         };
 
         let anchor_tx = self
             .l2_execution_layer
-            .construct_anchor_tx(proposal.id, l2_slot_info, anchor_block_params)
+            .construct_anchor_tx(
+                l2_block_payload.proposal_id,
+                &l2_slot_context.info,
+                anchor_block_params,
+            )
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -277,7 +283,7 @@ impl Taiko {
                 )
             })?;
         let tx_list = std::iter::once(anchor_tx)
-            .chain(tx_list.into_iter())
+            .chain(l2_block_payload.tx_list.into_iter())
             .collect::<Vec<_>>();
 
         let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
@@ -286,20 +292,21 @@ impl Taiko {
         let extra_data = Self::encode_extra_data(sharing_pctg, false);
 
         let executable_data = ExecutableData {
-            base_fee_per_gas: l2_slot_info.base_fee(),
-            block_number: l2_slot_info.parent_id() + 1,
+            base_fee_per_gas: l2_slot_context.info.base_fee(),
+            block_number: l2_slot_context.info.parent_id() + 1,
             extra_data: format!("0x{:04x}", extra_data),
-            fee_recipient: proposal.coinbase.to_string(),
-            gas_limit: l2_slot_info.parent_gas_limit_without_anchor() + ANCHOR_V3_V4_GAS_LIMIT,
-            parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
-            timestamp,
+            fee_recipient: l2_block_payload.coinbase.to_string(),
+            gas_limit: l2_slot_context.info.parent_gas_limit_without_anchor()
+                + ANCHOR_V3_V4_GAS_LIMIT,
+            parent_hash: format!("0x{}", hex::encode(l2_slot_context.info.parent_hash())),
+            timestamp: l2_block_payload.timestamp_sec,
             transactions: format!("0x{}", hex::encode(tx_list_bytes)),
         };
 
         let request_body = BuildPreconfBlockRequestBody {
             executable_data,
-            end_of_sequencing,
-            is_forced_inclusion,
+            end_of_sequencing: l2_slot_context.end_of_sequencing,
+            is_forced_inclusion: l2_block_payload.is_forced_inclusion,
         };
 
         self.driver

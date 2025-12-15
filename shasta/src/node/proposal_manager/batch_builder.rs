@@ -1,6 +1,7 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use super::proposal::Proposals;
+use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 use crate::{
     l1::execution_layer::ExecutionLayer, metrics::Metrics,
     node::proposal_manager::proposal::Proposal, shared::l2_tx_lists::PreBuiltTxList,
@@ -15,6 +16,7 @@ use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
     shared::anchor_block_info::AnchorBlockInfo,
 };
+use taiko_bindings::anchor::Anchor;
 use tracing::{debug, trace, warn};
 
 pub struct BatchBuilder {
@@ -108,19 +110,38 @@ impl BatchBuilder {
         self.current_proposal = None;
     }
 
-    pub fn add_l2_draft_block_and_get_current_proposal(
+    pub fn add_l2_draft_block(
         &mut self,
         l2_draft_block: L2BlockV2Draft,
-    ) -> Result<&Proposal, Error> {
+    ) -> Result<L2BlockV2Payload, Error> {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
-            current_proposal.add_l2_draft_block(l2_draft_block);
+            let payload = current_proposal.add_l2_draft_block(l2_draft_block);
 
             debug!(
                 "Added L2 draft block to batch: l2 blocks: {}, total bytes: {}",
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
-            Ok(current_proposal)
+            Ok(payload)
+        } else {
+            Err(anyhow::anyhow!("No current batch"))
+        }
+    }
+
+    pub fn add_fi_block(
+        &mut self,
+        fi_block: L2BlockV2Draft,
+        anchor_params: Anchor::BlockParams,
+    ) -> Result<L2BlockV2Payload, Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            let payload = current_proposal.add_forced_inclusion(fi_block, anchor_params);
+
+            debug!(
+                "Added forced inclusion L2 draft block to batch: l2 blocks: {}, total bytes: {}",
+                current_proposal.l2_blocks.len(),
+                current_proposal.total_bytes
+            );
+            Ok(payload)
         } else {
             Err(anyhow::anyhow!("No current batch"))
         }
