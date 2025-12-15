@@ -154,7 +154,7 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     """
     forced_inclusion_teardown
 
-    assert get_forced_inclusion_store_head(l1_client, env_vars.forced_inclusion_store_address) > 0, "Forced inclusion head should be greater than 0"
+    assert get_forced_inclusion_store_head(l1_client, env_vars) > 0, "Forced inclusion head should be greater than 0"
 
     slot_duration_sec = get_slot_duration_sec(beacon_client)
     delay = get_two_l2_slots_duration_sec(env_vars.preconf_heartbeat_ms)
