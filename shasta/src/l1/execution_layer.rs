@@ -1,7 +1,3 @@
-// TODO remove allow dead_code when the module is used
-#![allow(dead_code)]
-
-use super::bindings::PreconfWhitelist;
 use super::config::EthereumL1Config;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
@@ -36,10 +32,7 @@ pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
     preconfer_address: Address,
-    config: EthereumL1Config,
     pub transaction_monitor: TransactionMonitor,
-    metrics: Arc<Metrics>,
-    extra_gas_percentage: u64,
     contract_addresses: ContractAddresses,
 }
 
@@ -88,10 +81,7 @@ impl ELTrait for ExecutionLayer {
             common,
             provider,
             preconfer_address: common_config.signer.get_address(),
-            config: specific_config,
             transaction_monitor,
-            metrics,
-            extra_gas_percentage: common_config.extra_gas_percentage,
             contract_addresses,
         })
     }
@@ -286,8 +276,10 @@ impl ExecutionLayer {
 
 impl WhitelistProvider for ExecutionLayer {
     async fn is_operator_whitelisted(&self) -> Result<bool, Error> {
-        let contract =
-            PreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
+        let contract = taiko_bindings::preconf_whitelist::PreconfWhitelist::new(
+            self.contract_addresses.proposer_checker,
+            &self.provider,
+        );
         let operators = contract
             .operators(self.preconfer_address)
             .call()
@@ -299,7 +291,6 @@ impl WhitelistProvider for ExecutionLayer {
                 ))
             })?;
 
-        // _0 is the activeSince field
-        Ok(operators._0 > 0)
+        Ok(operators.activeSince > 0)
     }
 }
