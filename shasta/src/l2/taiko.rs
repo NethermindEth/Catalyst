@@ -245,23 +245,7 @@ impl Taiko {
             "Submitting new L2 block to the Taiko driver with {} txs",
             l2_block_payload.tx_list.len()
         );
-        /*let timestamp = if is_forced_inclusion {
-            l2_slot_info.parent_timestamp() + 1
-        } else {
-            proposal.get_last_block_timestamp()?
-        };
 
-        let anchor_block_params = if is_forced_inclusion {
-            self.l2_execution_layer
-                .get_last_synced_block_params_from_geth()
-                .await?
-        } else {
-            Anchor::BlockParams {
-                anchorBlockNumber: proposal.anchor_block_id.try_into()?,
-                anchorBlockHash: proposal.anchor_block_hash,
-                anchorStateRoot: proposal.anchor_state_root,
-            }
-        };*/
         let anchor_block_params = Anchor::BlockParams {
             anchorBlockNumber: l2_block_payload.anchor_block_id.try_into()?,
             anchorBlockHash: l2_block_payload.anchor_block_hash,

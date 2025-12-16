@@ -496,18 +496,6 @@ impl BatchBuilder {
             .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
     }
 
-    /*pub fn create_block(
-        &mut self,
-        tx_list: PreBuiltTxList,
-        timestamp_sec: u64,
-        gas_limit: u64,
-    ) -> Result<L2BlockV2, Error> {
-        self.current_proposal
-            .as_mut()
-            .map(|proposal| proposal.create_block(tx_list, timestamp_sec, gas_limit))
-            .ok_or_else(|| anyhow::anyhow!("No current proposal to create block"))
-    }*/
-
     pub fn get_current_proposal(&self) -> Option<&Proposal> {
         self.current_proposal.as_ref()
     }
