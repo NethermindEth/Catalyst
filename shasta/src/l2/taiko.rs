@@ -29,10 +29,9 @@ use common::{
 };
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
+use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
 use taiko_bindings::anchor::Anchor;
 use tracing::{debug, trace};
-use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
-
 
 pub struct Taiko {
     protocol_config: ProtocolConfig,

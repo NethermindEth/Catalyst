@@ -3,7 +3,7 @@ pub mod proposal;
 
 use crate::{
     l1::execution_layer::ExecutionLayer,
-    l2::taiko::{self, Taiko},
+    l2::taiko::Taiko,
     metrics::Metrics,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
 };
