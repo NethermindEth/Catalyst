@@ -3,14 +3,15 @@
 
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
-use crate::node::proposal_manager::proposal::Proposal;
+use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
     primitives::{Address, B256},
-    rpc::types::Transaction,
+    rpc::types::Block,
 };
 use anyhow::Error;
+use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::{
     l1::slot_clock::SlotClock,
     l2::{
@@ -23,7 +24,7 @@ use common::{
     },
     metrics::Metrics,
     shared::{
-        l2_slot_info::L2SlotInfo,
+        l2_slot_info_v2::L2SlotInfoV2,
         l2_tx_lists::{self, PreBuiltTxList},
     },
 };
@@ -147,26 +148,25 @@ impl Taiko {
             .await
     }
 
-    pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfo, Error> {
+    pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfoV2, Error> {
         self.get_l2_slot_info_by_parent_block(BlockNumberOrTag::Latest)
             .await
     }
 
     pub async fn get_l2_slot_info_by_parent_block(
         &self,
-        block: BlockNumberOrTag,
-    ) -> Result<L2SlotInfo, Error> {
+        parent: BlockNumberOrTag,
+    ) -> Result<L2SlotInfoV2, Error> {
         let l2_slot_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
-        let block_info = self
+        let parent_block = self
             .l2_execution_layer
             .common()
-            .get_block_header(block)
+            .get_block_header(parent)
             .await?;
-        let parent_id = block_info.header.number();
-        let parent_hash = block_info.header.hash;
-        let parent_gas_used = block_info.header.gas_used();
-        let parent_gas_limit = block_info.header.gas_limit();
-        let parent_timestamp = block_info.header.timestamp();
+        let parent_id = parent_block.header.number();
+        let parent_hash = parent_block.header.hash;
+        let parent_gas_limit = parent_block.header.gas_limit();
+        let parent_timestamp = parent_block.header.timestamp();
 
         let parent_gas_limit_without_anchor = if parent_id != 0 {
             parent_gas_limit
@@ -182,41 +182,28 @@ impl Taiko {
             parent_gas_limit
         };
 
-        // Safe conversion with overflow check
-        let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
-            anyhow::anyhow!("parent_gas_used {} exceeds u32 max value", parent_gas_used)
-        })?;
-
-        let base_fee: u64 = self.get_base_fee(block).await?;
+        let base_fee: u64 = self.get_base_fee(parent_block).await?;
 
         trace!(
             timestamp = %l2_slot_timestamp,
             parent_hash = %parent_hash,
-            parent_gas_used = %parent_gas_used_u32,
             parent_gas_limit_without_anchor = %parent_gas_limit_without_anchor,
             parent_timestamp = %parent_timestamp,
             base_fee = %base_fee,
             "L2 slot info"
         );
 
-        Ok(L2SlotInfo::new(
+        Ok(L2SlotInfoV2::new(
             base_fee,
             l2_slot_timestamp,
             parent_id,
             parent_hash,
-            parent_gas_used_u32,
             parent_gas_limit_without_anchor,
             parent_timestamp,
         ))
     }
 
-    async fn get_base_fee(&self, block: BlockNumberOrTag) -> Result<u64, Error> {
-        let parent_block = self
-            .l2_execution_layer
-            .common()
-            .get_block_header(block)
-            .await?;
-
+    async fn get_base_fee(&self, parent_block: Block) -> Result<u64, Error> {
         if parent_block.header.number() == 0 {
             return Ok(taiko_alethia_reth::eip4396::SHASTA_INITIAL_BASE_FEE);
         }
@@ -248,39 +235,28 @@ impl Taiko {
     #[allow(clippy::too_many_arguments)]
     pub async fn advance_head_to_new_l2_block(
         &self,
-        proposal: &Proposal,
-        l2_slot_info: &L2SlotInfo,
-        tx_list: Vec<Transaction>,
-        end_of_sequencing: bool,
-        is_forced_inclusion: bool,
+        l2_block_payload: L2BlockV2Payload,
+        l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         tracing::debug!(
             "Submitting new L2 block to the Taiko driver with {} txs",
-            tx_list.len()
+            l2_block_payload.tx_list.len()
         );
 
-        let timestamp = if is_forced_inclusion {
-            l2_slot_info.parent_timestamp() + 1
-        } else {
-            proposal.get_last_block_timestamp()?
-        };
-
-        let anchor_block_params = if is_forced_inclusion {
-            self.l2_execution_layer
-                .get_last_synced_block_params_from_geth()
-                .await?
-        } else {
-            Anchor::BlockParams {
-                anchorBlockNumber: proposal.anchor_block_id.try_into()?,
-                anchorBlockHash: proposal.anchor_block_hash,
-                anchorStateRoot: proposal.anchor_state_root,
-            }
+        let anchor_block_params = Anchor::BlockParams {
+            anchorBlockNumber: l2_block_payload.anchor_block_id.try_into()?,
+            anchorBlockHash: l2_block_payload.anchor_block_hash,
+            anchorStateRoot: l2_block_payload.anchor_state_root,
         };
 
         let anchor_tx = self
             .l2_execution_layer
-            .construct_anchor_tx(proposal.id, l2_slot_info, anchor_block_params)
+            .construct_anchor_tx(
+                l2_block_payload.proposal_id,
+                &l2_slot_context.info,
+                anchor_block_params,
+            )
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -289,7 +265,7 @@ impl Taiko {
                 )
             })?;
         let tx_list = std::iter::once(anchor_tx)
-            .chain(tx_list.into_iter())
+            .chain(l2_block_payload.tx_list.into_iter())
             .collect::<Vec<_>>();
 
         let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
@@ -298,20 +274,21 @@ impl Taiko {
         let extra_data = Self::encode_extra_data(sharing_pctg, false);
 
         let executable_data = ExecutableData {
-            base_fee_per_gas: l2_slot_info.base_fee(),
-            block_number: l2_slot_info.parent_id() + 1,
+            base_fee_per_gas: l2_slot_context.info.base_fee(),
+            block_number: l2_slot_context.info.parent_id() + 1,
             extra_data: format!("0x{:04x}", extra_data),
-            fee_recipient: proposal.coinbase.to_string(),
-            gas_limit: l2_slot_info.parent_gas_limit_without_anchor() + ANCHOR_V3_V4_GAS_LIMIT,
-            parent_hash: format!("0x{}", hex::encode(l2_slot_info.parent_hash())),
-            timestamp,
+            fee_recipient: l2_block_payload.coinbase.to_string(),
+            gas_limit: l2_slot_context.info.parent_gas_limit_without_anchor()
+                + ANCHOR_V3_V4_GAS_LIMIT,
+            parent_hash: format!("0x{}", hex::encode(l2_slot_context.info.parent_hash())),
+            timestamp: l2_block_payload.timestamp_sec,
             transactions: format!("0x{}", hex::encode(tx_list_bytes)),
         };
 
         let request_body = BuildPreconfBlockRequestBody {
             executable_data,
-            end_of_sequencing,
-            is_forced_inclusion,
+            end_of_sequencing: l2_slot_context.end_of_sequencing,
+            is_forced_inclusion: l2_block_payload.is_forced_inclusion,
         };
 
         self.driver

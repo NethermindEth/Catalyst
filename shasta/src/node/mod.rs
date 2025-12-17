@@ -6,9 +6,8 @@ use common::{
     fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
-    shared::{l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
-    utils as common_utils,
-    utils::cancellation_token::CancellationToken,
+    shared::{l2_slot_info_v2::L2SlotContext, l2_tx_lists::PreBuiltTxList},
+    utils::{self as common_utils, cancellation_token::CancellationToken},
 };
 use pacaya::node::operator::Status as OperatorStatus;
 use pacaya::node::{config::NodeConfig, operator::Operator};
@@ -19,6 +18,7 @@ use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
 use common::batch_builder::BatchBuilderConfig;
 use common::l1::traits::PreconferProvider;
 use common::shared::head_verifier::HeadVerifier;
+use common::shared::l2_slot_info_v2::L2SlotInfoV2;
 use proposal_manager::BatchManager;
 
 use tokio::{
@@ -158,18 +158,11 @@ impl Node {
     async fn preconfirm_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_info: &L2SlotInfo,
-        end_of_sequencing: bool,
-        allow_forced_inclusion: bool,
+        l2_slot_context: &L2SlotContext,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let result = self
             .proposal_manager
-            .preconfirm_block(
-                pending_tx_list,
-                l2_slot_info,
-                end_of_sequencing,
-                allow_forced_inclusion,
-            )
+            .preconfirm_block(pending_tx_list, l2_slot_context)
             .await?;
         Ok(result)
     }
@@ -260,15 +253,18 @@ impl Node {
                     "Unexpected L2 head detected. Restarting node..."
                 ));
             }
+
+            let l2_slot_context = L2SlotContext {
+                // TODO remove clone
+                info: l2_slot_info.clone(),
+                end_of_sequencing: current_status.is_end_of_sequencing(),
+                allow_forced_inclusion: self.config.propose_forced_inclusion
+                    && current_status.is_submitter()
+                    && self.verifier.is_none(),
+            };
+
             let preconfed_block = self
-                .preconfirm_block(
-                    pending_tx_list,
-                    &l2_slot_info,
-                    current_status.is_end_of_sequencing(),
-                    self.config.propose_forced_inclusion
-                        && current_status.is_submitter()
-                        && self.verifier.is_none(),
-                )
+                .preconfirm_block(pending_tx_list, &l2_slot_context)
                 .await?;
 
             self.verify_preconfed_block(preconfed_block).await?;
@@ -408,7 +404,7 @@ impl Node {
         &mut self,
         error: &TransactionError,
         _current_status: &OperatorStatus,
-        _l2_slot_info: &L2SlotInfo,
+        _l2_slot_info: &L2SlotInfoV2,
     ) -> Result<(), Error> {
         info!("Handling transaction error: {error}");
         Ok(())
@@ -416,7 +412,7 @@ impl Node {
 
     async fn get_slot_info_and_status(
         &mut self,
-    ) -> Result<(L2SlotInfo, OperatorStatus, Option<PreBuiltTxList>), Error> {
+    ) -> Result<(L2SlotInfoV2, OperatorStatus, Option<PreBuiltTxList>), Error> {
         let l2_slot_info = self.taiko.get_l2_slot_info().await;
         let current_status = match &l2_slot_info {
             Ok(info) => self.operator.get_status(info).await,
@@ -483,7 +479,7 @@ impl Node {
     /// Returns true if reanchor was triggered.
     async fn check_and_handle_anchor_offset_for_unsafe_l2_blocks(
         &mut self,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
     ) -> Result<bool, Error> {
         debug!("Checking anchor offset for unsafe L2 blocks to do fast reanchor when needed");
         let taiko_inbox_height =
@@ -536,7 +532,7 @@ impl Node {
     async fn check_transaction_error_channel(
         &mut self,
         current_status: &OperatorStatus,
-        l2_slot_info: &L2SlotInfo,
+        l2_slot_info: &L2SlotInfoV2,
     ) -> Result<(), Error> {
         match self.transaction_error_channel.try_recv() {
             Ok(error) => {
@@ -562,7 +558,7 @@ impl Node {
         &self,
         current_status: &Result<OperatorStatus, Error>,
         pending_tx_list: &Result<Option<PreBuiltTxList>, Error>,
-        l2_slot_info: &Result<L2SlotInfo, Error>,
+        l2_slot_info: &Result<L2SlotInfoV2, Error>,
         batches_number: u64,
     ) -> Result<(), Error> {
         let l1_slot = self.ethereum_l1.slot_clock.get_current_slot()?;

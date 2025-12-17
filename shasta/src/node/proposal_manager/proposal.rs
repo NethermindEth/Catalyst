@@ -1,8 +1,9 @@
+use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 use alloy::primitives::{Address, B256, Bytes};
-use common::shared::l2_block_v2::L2BlockV2;
-use common::shared::l2_tx_lists::PreBuiltTxList;
+use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
 use std::collections::VecDeque;
 use std::time::Instant;
+use taiko_bindings::anchor::Anchor;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
 
@@ -32,7 +33,7 @@ impl Proposal {
                 timestamp: l2_block.timestamp_sec,
                 coinbase: l2_block.coinbase,
                 anchor_block_number: l2_block.anchor_block_number,
-                gas_limit: l2_block.gas_limit,
+                gas_limit: l2_block.gas_limit_without_anchor,
                 transactions: l2_block
                     .prebuilt_tx_list
                     .tx_list
@@ -101,25 +102,56 @@ impl Proposal {
         self.total_bytes
     }
 
-    pub fn create_block(
-        &mut self,
-        tx_list: PreBuiltTxList,
-        timestamp_sec: u64,
-        gas_limit: u64,
-    ) -> L2BlockV2 {
-        self.total_bytes += tx_list.bytes_length;
+    fn create_block_from_draft(&mut self, l2_draft_block: L2BlockV2Draft) -> L2BlockV2 {
         L2BlockV2::new_from(
-            tx_list,
-            timestamp_sec,
+            l2_draft_block.prebuilt_tx_list,
+            l2_draft_block.timestamp_sec,
             self.coinbase,
             self.anchor_block_id,
-            gas_limit,
+            l2_draft_block.gas_limit_without_anchor,
         )
     }
 
-    pub fn add_l2_block(&mut self, l2_block: L2BlockV2) {
+    pub fn add_forced_inclusion(
+        &mut self,
+        fi_block: L2BlockV2Draft,
+        anchor_params: Anchor::BlockParams,
+    ) -> L2BlockV2Payload {
+        let l2_payload = L2BlockV2Payload {
+            proposal_id: self.id,
+            coinbase: self.coinbase,
+            tx_list: fi_block.prebuilt_tx_list.tx_list,
+            timestamp_sec: fi_block.timestamp_sec,
+            gas_limit_without_anchor: fi_block.gas_limit_without_anchor,
+            anchor_block_id: anchor_params.anchorBlockNumber.to::<u64>(),
+            anchor_block_hash: anchor_params.anchorBlockHash,
+            anchor_state_root: anchor_params.anchorStateRoot,
+            is_forced_inclusion: true,
+        };
+        self.num_forced_inclusion += 1;
+        l2_payload
+    }
+
+    pub fn add_l2_block(&mut self, l2_block: L2BlockV2) -> L2BlockV2Payload {
+        let l2_payload = L2BlockV2Payload {
+            proposal_id: self.id,
+            coinbase: self.coinbase,
+            tx_list: l2_block.prebuilt_tx_list.tx_list.clone(),
+            timestamp_sec: l2_block.timestamp_sec,
+            gas_limit_without_anchor: l2_block.gas_limit_without_anchor,
+            anchor_block_id: self.anchor_block_id,
+            anchor_block_hash: self.anchor_block_hash,
+            anchor_state_root: self.anchor_state_root,
+            is_forced_inclusion: false,
+        };
         self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
         self.l2_blocks.push(l2_block);
+        l2_payload
+    }
+
+    pub fn add_l2_draft_block(&mut self, l2_draft_block: L2BlockV2Draft) -> L2BlockV2Payload {
+        let l2_block = self.create_block_from_draft(l2_draft_block);
+        self.add_l2_block(l2_block)
     }
 }
 
@@ -165,7 +197,7 @@ mod test {
             timestamp_sec: 0,
             coinbase: Address::ZERO,
             anchor_block_number: 0,
-            gas_limit: 0,
+            gas_limit_without_anchor: 0,
         };
 
         // RLP encode the transactions

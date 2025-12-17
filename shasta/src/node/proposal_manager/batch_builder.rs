@@ -1,19 +1,22 @@
 use std::{collections::VecDeque, sync::Arc};
 
 use super::proposal::Proposals;
+use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 use crate::{
-    l1::execution_layer::ExecutionLayer,
-    metrics::Metrics,
-    node::proposal_manager::proposal::Proposal,
-    shared::{l2_block::L2Block, l2_tx_lists::PreBuiltTxList},
+    l1::execution_layer::ExecutionLayer, metrics::Metrics,
+    node::proposal_manager::proposal::Proposal, shared::l2_tx_lists::PreBuiltTxList,
 };
 use alloy::primitives::Address;
 use anyhow::Error;
-use common::{batch_builder::BatchBuilderConfig, shared::l2_block_v2::L2BlockV2};
+use common::{
+    batch_builder::BatchBuilderConfig,
+    shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft},
+};
 use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
     shared::anchor_block_info::AnchorBlockInfo,
 };
+use taiko_bindings::anchor::Anchor;
 use tracing::{debug, trace, warn};
 
 pub struct BatchBuilder {
@@ -44,34 +47,32 @@ impl BatchBuilder {
     }
 
     // TODO use L2BlockV2 here
-    pub fn can_consume_l2_block(&mut self, l2_block: &L2Block, gas_limit: u64) -> bool {
-        let is_time_shift_expired = self.is_time_shift_expired(l2_block.timestamp_sec);
+    pub fn can_consume_l2_block(&mut self, l2_draft_block: &L2BlockV2Draft) -> bool {
+        let is_time_shift_expired = self.is_time_shift_expired(l2_draft_block.timestamp_sec);
         self.current_proposal.as_mut().is_some_and(|batch| {
             let new_block_count = match u16::try_from(batch.l2_blocks.len() + 1) {
                 Ok(n) => n,
                 Err(_) => return false,
             };
 
-            let mut new_total_bytes = batch.total_bytes + l2_block.prebuilt_tx_list.bytes_length;
+            let mut new_total_bytes =
+                batch.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
 
             if !self.config.is_within_bytes_limit(new_total_bytes) {
                 // first compression, compressing the batch without the new L2 block
                 batch.compress();
-                new_total_bytes = batch.total_bytes + l2_block.prebuilt_tx_list.bytes_length;
+                new_total_bytes = batch.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
                 if !self.config.is_within_bytes_limit(new_total_bytes) {
                     // second compression, compressing the batch with the new L2 block
                     // we can tolerate the processing overhead as it's a very rare case
+                    let start = std::time::Instant::now();
                     let mut batch_clone = batch.clone();
-                    let l2_block = batch_clone.create_block(
-                        l2_block.prebuilt_tx_list.clone(),
-                        l2_block.timestamp_sec,
-                        gas_limit,
-                    );
-                    batch_clone.add_l2_block(l2_block);
+                    batch_clone.add_l2_draft_block(l2_draft_block.clone());
                     batch_clone.compress();
                     new_total_bytes = batch_clone.total_bytes;
                     debug!(
-                        "can_consume_l2_block: Second compression, new total bytes: {}",
+                        "can_consume_l2_block: Second compression took {} ms, new total bytes: {}",
+                        start.elapsed().as_millis(),
                         new_total_bytes
                     );
                 }
@@ -107,6 +108,43 @@ impl BatchBuilder {
 
     pub fn remove_current_proposal(&mut self) {
         self.current_proposal = None;
+    }
+
+    pub fn add_l2_draft_block(
+        &mut self,
+        l2_draft_block: L2BlockV2Draft,
+    ) -> Result<L2BlockV2Payload, Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            let payload = current_proposal.add_l2_draft_block(l2_draft_block);
+
+            debug!(
+                "Added L2 draft block to batch: l2 blocks: {}, total bytes: {}",
+                current_proposal.l2_blocks.len(),
+                current_proposal.total_bytes
+            );
+            Ok(payload)
+        } else {
+            Err(anyhow::anyhow!("No current batch"))
+        }
+    }
+
+    pub fn add_fi_block(
+        &mut self,
+        fi_block: L2BlockV2Draft,
+        anchor_params: Anchor::BlockParams,
+    ) -> Result<L2BlockV2Payload, Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            let payload = current_proposal.add_forced_inclusion(fi_block, anchor_params);
+
+            debug!(
+                "Added forced inclusion L2 draft block to batch: l2 blocks: {}, total bytes: {}",
+                current_proposal.l2_blocks.len(),
+                current_proposal.total_bytes
+            );
+            Ok(payload)
+        } else {
+            Err(anyhow::anyhow!("No current batch"))
+        }
     }
 
     pub fn add_l2_block_and_get_current_proposal(
@@ -415,12 +453,16 @@ impl BatchBuilder {
         }
     }
 
-    fn should_new_block_be_created(
+    pub fn should_new_block_be_created(
         &self,
-        number_of_pending_txs: u64,
+        pending_tx_list: Option<&PreBuiltTxList>,
         current_l2_slot_timestamp: u64,
         end_of_sequencing: bool,
     ) -> bool {
+        let number_of_pending_txs = pending_tx_list
+            .map(|tx_list| tx_list.tx_list.len())
+            .unwrap_or(0) as u64;
+
         if self.is_empty_block_required(current_l2_slot_timestamp) || end_of_sequencing {
             return true;
         }
@@ -440,39 +482,6 @@ impl BatchBuilder {
         true
     }
 
-    pub fn try_creating_l2_block(
-        &mut self,
-        pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_timestamp: u64,
-        end_of_sequencing: bool,
-    ) -> Option<L2Block> {
-        let tx_list_len = pending_tx_list
-            .as_ref()
-            .map(|tx_list| tx_list.tx_list.len())
-            .unwrap_or(0);
-        if self.should_new_block_be_created(
-            tx_list_len as u64,
-            l2_slot_timestamp,
-            end_of_sequencing,
-        ) {
-            if let Some(pending_tx_list) = pending_tx_list {
-                debug!(
-                    "Creating new block with pending tx list length: {}, bytes length: {}",
-                    pending_tx_list.tx_list.len(),
-                    pending_tx_list.bytes_length
-                );
-
-                Some(L2Block::new_from(pending_tx_list, l2_slot_timestamp))
-            } else {
-                Some(L2Block::new_empty(l2_slot_timestamp))
-            }
-        } else {
-            debug!("Skipping preconfirmation for the current L2 slot");
-            self.metrics.inc_skipped_l2_slots_by_low_txs_count();
-            None
-        }
-    }
-
     pub fn has_current_forced_inclusion(&self) -> bool {
         self.current_proposal
             .as_ref()
@@ -485,18 +494,6 @@ impl BatchBuilder {
             .as_mut()
             .map(|proposal| proposal.num_forced_inclusion += 1)
             .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
-    }
-
-    pub fn create_block(
-        &mut self,
-        tx_list: PreBuiltTxList,
-        timestamp_sec: u64,
-        gas_limit: u64,
-    ) -> Result<L2BlockV2, Error> {
-        self.current_proposal
-            .as_mut()
-            .map(|proposal| proposal.create_block(tx_list, timestamp_sec, gas_limit))
-            .ok_or_else(|| anyhow::anyhow!("No current proposal to create block"))
     }
 
     pub fn get_current_proposal(&self) -> Option<&Proposal> {

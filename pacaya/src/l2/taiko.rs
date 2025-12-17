@@ -163,8 +163,6 @@ impl Taiko {
         let parent_id = block_info.header.number();
         let parent_hash = block_info.header.hash;
         let parent_gas_used = block_info.header.gas_used();
-        // For Pacaya we do not use that value so we can set it to zero
-        let parent_gas_limit_without_anchor = 0;
         let parent_timestamp = block_info.header.timestamp();
         // Safe conversion with overflow check
         let parent_gas_used_u32 = u32::try_from(parent_gas_used).map_err(|_| {
@@ -196,7 +194,6 @@ impl Taiko {
             parent_id,
             parent_hash,
             parent_gas_used_u32,
-            parent_gas_limit_without_anchor,
             parent_timestamp,
         ))
     }
