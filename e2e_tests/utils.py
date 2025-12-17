@@ -3,7 +3,9 @@ import web3
 import subprocess
 import json
 import os
-from forced_inclusion_store import forced_inclusion_store_is_empty
+import requests
+import re
+from forced_inclusion_store import pacaya_fi_abi
 
 def send_transaction(nonce : int, account, amount, eth_client, private_key):
     base_fee = eth_client.eth.get_block('latest')['baseFeePerGas']
@@ -106,6 +108,7 @@ def spam_n_txs(eth_client, private_key, n):
 
 def spam_n_blocks(eth_client, private_key, n, preconf_min_txs):
     """Spam as many tx to create n blocks, wait for each block to be mined"""
+    print(f"Spamming {n} blocks with {preconf_min_txs} transactions per block")
     account = eth_client.eth.account.from_key(private_key)
     last_tx_hash = None
     for i in range(n):
@@ -131,50 +134,72 @@ def send_n_txs_without_waiting(eth_client, private_key, n):
     for i in range(n):
         send_transaction(nonce+i, account, '0.00009', eth_client, private_key)
 
-def wait_for_batch_proposed_event(eth_client, taiko_inbox_address, from_block):
+def wait_for_batch_proposed_event(eth_client, from_block, env_vars):
     print(f"Waiting for BatchProposed event from block {from_block}")
-    with open("../pacaya/src/l1/abi/ITaikoInbox.json") as f:
-        abi = json.load(f)
+    proposed_filter = get_proposed_event_filter(eth_client, from_block, env_vars)
 
-    contract = eth_client.eth.contract(address=taiko_inbox_address, abi=abi)
-
-    # Create an event filter for BatchProposed events
-    batch_proposed_filter = contract.events.BatchProposed.create_filter(
-        from_block=from_block
-    )
-
-    wait_time = 0;
-    while True:
-        if wait_time > 100:
-            assert False, "Warning waited 100 seconds for BatchProposed event without getting one"
-
-        new_entries = batch_proposed_filter.get_all_entries()
+    WAIT_TIME = 100
+    for i in range(WAIT_TIME):
+        new_entries = proposed_filter.get_all_entries()
         if len(new_entries) > 0:
+            print(f"Got BatchProposed event after {i} seconds")
             event = new_entries[-1]
-            print_batch_info(event)
+            print_batch_info(eth_client, event, env_vars)
             return event
-
         time.sleep(1)
-        wait_time += 1
+    assert False, "Warning waited {} seconds for BatchProposed event without getting one".format(WAIT_TIME)
+
+def get_proposed_event_filter(eth_client, from_block, env_vars):
+    if env_vars.is_pacaya():
+        with open("../pacaya/src/l1/abi/ITaikoInbox.json") as f:
+            abi = json.load(f)
+        contract = eth_client.eth.contract(address=env_vars.taiko_inbox_address, abi=abi)
+        return contract.events.BatchProposed.create_filter(
+            from_block=from_block
+        )
+    elif env_vars.is_shasta():
+        proposed_event_abi = [{
+            "type": "event",
+            "name": "Proposed",
+            "inputs": [{"name": "data", "type": "bytes", "indexed": False, "internalType": "bytes"}],
+            "anonymous": False
+        }]
+
+        contract = eth_client.eth.contract(address=env_vars.taiko_inbox_address, abi=proposed_event_abi)
+        return contract.events.Proposed().create_filter(
+            from_block=from_block
+        )
+    else:
+        raise Exception("Invalid protocol")
 
 def wait_for_forced_inclusion_store_to_be_empty(l1_client, env_vars):
     TIMEOUT = 300
     i = 0
-    while not forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address):
+    while not forced_inclusion_store_is_empty(l1_client, env_vars):
         if i >= TIMEOUT:
             assert False, "Error: waited {} seconds for forced inclusion store to be empty".format(TIMEOUT)
         time.sleep(1)
         i += 1
 
-def print_batch_info(event):
+def print_batch_info(l1_client, event, env_vars):
     print("BatchProposed event detected:")
-    print(f"  Batch ID: {event['args']['meta']['batchId']}")
-    print(f"  Proposer: {event['args']['meta']['proposer']}")
-    print(f"  Proposed At: {event['args']['meta']['proposedAt']}")
-    print(f"  Last Block ID: {event['args']['info']['lastBlockId']}")
-    print(f"  Last Block Timestamp: {event['args']['info']['lastBlockTimestamp']}")
-    print(f"  Transaction Hash: {event['transactionHash'].hex()}")
-    print(f"  Block Number: {event['blockNumber']}")
+    if env_vars.is_pacaya():
+        print(f"  Batch ID: {event['args']['meta']['batchId']}")
+        print(f"  Proposer: {event['args']['meta']['proposer']}")
+        print(f"  Proposed At: {event['args']['meta']['proposedAt']}")
+        print(f"  Last Block ID: {event['args']['info']['lastBlockId']}")
+        print(f"  Last Block Timestamp: {event['args']['info']['lastBlockTimestamp']}")
+        print(f"  Transaction Hash: {event['transactionHash'].hex()}")
+        print(f"  Block Number: {event['blockNumber']}")
+    else:
+        payload = decode_proposal_payload(l1_client, env_vars.taiko_inbox_address, event['args']['data'])
+        print(f"  Proposal ID: {payload[0][0]}")
+        print(f"  Proposer: {payload[0][3]}")
+        print(f"  Proposed timestamp: {payload[0][1]}")
+        print(f"  Origin block number: {payload[1][0]}")
+        print(f"  Origin block hash: {payload[1][1].hex()}")
+        print(f"  Transaction Hash: {event['transactionHash'].hex()}")
+        print(f"  Block number: {event['blockNumber']}")
     print("---")
 
 def get_current_operator(eth_client, l1_contract_address):
@@ -192,37 +217,31 @@ def get_next_operator(eth_client, l1_contract_address):
     contract = eth_client.eth.contract(address=l1_contract_address, abi=abi)
     return contract.functions.getOperatorForNextEpoch().call()
 
-def spam_txs_until_new_batch_is_proposed(l1_eth_client, l2_eth_client, private_key, taiko_inbox_address, beacon_client, preconf_min_txs):
+def spam_txs_until_new_batch_is_proposed(l1_eth_client, l2_eth_client, beacon_client, env_vars):
     current_block = l1_eth_client.eth.block_number
     l1_slot_duration = int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
 
     number_of_blocks = 10
     for i in range(number_of_blocks):
-        spam_n_blocks(l2_eth_client, private_key, 1, preconf_min_txs)
+        spam_n_blocks(l2_eth_client, env_vars.l2_prefunded_priv_key, 1, env_vars.preconf_min_txs)
         wait_till_next_l1_slot(beacon_client)
-        event = get_last_batch_proposed_event(l1_eth_client, taiko_inbox_address, current_block)
+        event = get_last_batch_proposed_event(l1_eth_client, current_block, env_vars)
         if event is not None:
             return event
 
-    wait_for_batch_proposed_event(l1_eth_client, taiko_inbox_address, current_block)
+    wait_for_batch_proposed_event(l1_eth_client, current_block, env_vars)
 
 def wait_till_next_l1_slot(beacon_client):
     l1_slot_duration = int(beacon_client.get_spec()['data']['SECONDS_PER_SLOT'])
     current_time = int(time.time()) % l1_slot_duration
     time.sleep(l1_slot_duration - current_time)
 
-def get_last_batch_proposed_event(eth_client, taiko_inbox_address, from_block):
-    with open("../pacaya/src/l1/abi/ITaikoInbox.json") as f:
-        abi = json.load(f)
-
-    contract = eth_client.eth.contract(address=taiko_inbox_address, abi=abi)
-    batch_proposed_filter = contract.events.BatchProposed.create_filter(
-        from_block=from_block
-    )
-    new_entries = batch_proposed_filter.get_all_entries()
+def get_last_batch_proposed_event(eth_client, from_block, env_vars):
+    proposed_filter = get_proposed_event_filter(eth_client, from_block, env_vars)
+    new_entries = proposed_filter.get_all_entries()
     if len(new_entries) > 0:
         event = new_entries[-1]
-        print_batch_info(event)
+        print_batch_info(eth_client, event, env_vars)
         return event
     return None
 
@@ -300,3 +319,82 @@ def wait_for_epoch_with_operator_switch_and_slot(beacon_client, l1_client, preco
         if current_operator != next_operator:
             break
     assert current_operator != next_operator, "Current operator should be different from next operator"
+
+def read_shasta_inbox_config(l1_client, shasta_inbox_address):
+    abi = get_shasta_inbox_abi()
+    contract = l1_client.eth.contract(address=shasta_inbox_address, abi=abi)
+    config = contract.functions.getConfig().call()
+    return config
+
+def get_shasta_inbox_abi():
+    commit = get_taiko_bindings_commit()
+    url = f"https://raw.githubusercontent.com/taikoxyz/taiko-mono/{commit}/packages/taiko-client-rs/crates/bindings/src/inbox.rs"
+    return read_json_abi_from_rust_bindings(url)
+
+def get_taiko_bindings_commit():
+    """Read the commit hash from Cargo.toml for taiko_bindings dependency"""
+    cargo_toml_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Cargo.toml")
+    with open(cargo_toml_path, 'r') as f:
+        content = f.read()
+
+    # Find the taiko_bindings dependency and extract the rev value
+    pattern = r'taiko_bindings\s*=\s*\{[^}]*rev\s*=\s*"([^"]+)"'
+    match = re.search(pattern, content)
+
+    if not match:
+        raise ValueError("Could not find taiko_bindings rev in Cargo.toml")
+
+    return match.group(1)
+
+def decode_proposal_payload(l1_client, shasta_inbox_address, payload):
+    commit = get_taiko_bindings_commit()
+    url = f"https://raw.githubusercontent.com/taikoxyz/taiko-mono/{commit}/packages/taiko-client-rs/crates/bindings/src/codec.rs"
+    abi = read_json_abi_from_rust_bindings(url)
+    config = read_shasta_inbox_config(l1_client, shasta_inbox_address)
+    codec = config[0]
+    codec_contract = l1_client.eth.contract(address=codec, abi=abi)
+    return codec_contract.functions.decodeProposedEvent(payload).call()
+
+def read_json_abi_from_rust_bindings(url):
+    response = requests.get(url)
+    response.raise_for_status()  # Raise an exception for bad status codes
+
+    content = response.text
+
+    # Find the ```json code block
+    pattern = r'```json\s*\n(.*?)\n```'
+    match = re.search(pattern, content, re.DOTALL)
+
+    if not match:
+        raise ValueError(f"Could not find ```json code block in the file at {url}")
+
+    json_content = match.group(1).strip()
+
+    # Parse and return the JSON
+    return json.loads(json_content)
+
+def get_forced_inclusion_store_head(l1_client, env_vars):
+    if env_vars.is_pacaya():
+        contract = l1_client.eth.contract(address=env_vars.forced_inclusion_store_address, abi=pacaya_fi_abi)
+        head = contract.functions.head().call()
+        return int(head)
+    else:
+        shasta_abi = get_shasta_inbox_abi()
+        contract = l1_client.eth.contract(address=env_vars.forced_inclusion_store_address, abi=shasta_abi)
+        head, tail = contract.functions.getForcedInclusionState().call()
+        return int(head)
+
+def forced_inclusion_store_is_empty(l1_client, env_vars):
+    if env_vars.is_pacaya():
+        contract = l1_client.eth.contract(address=env_vars.forced_inclusion_store_address, abi=pacaya_fi_abi)
+        head = contract.functions.head().call()
+        tail = contract.functions.tail().call()
+    else:
+        shasta_abi = get_shasta_inbox_abi()
+        contract = l1_client.eth.contract(address=env_vars.forced_inclusion_store_address, abi=shasta_abi)
+        head, tail = contract.functions.getForcedInclusionState().call()
+        print("Forced Inclusion head:", head, "tail: ", tail)
+    return head == tail
+
+def check_empty_forced_inclusion_store(l1_client, env_vars):
+    assert forced_inclusion_store_is_empty(l1_client, env_vars), "Forced inclusion store should be empty"

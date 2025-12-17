@@ -13,10 +13,10 @@ class ChainInfo:
     block_hash: HexBytes
 
     @classmethod
-    def from_chain(cls, fi_account_address, l2_client_node1, l1_client, taiko_inbox_address, beacon_client, verbose: bool = True):
+    def from_chain(cls, fi_account_address, l2_client_node1, l1_client, env_vars, beacon_client, verbose: bool = True):
         """Create ChainInfo instance from current chain state"""
         fi_sender_nonce = l2_client_node1.eth.get_transaction_count(fi_account_address)
-        batch_id = get_last_batch_id(l1_client, taiko_inbox_address)
+        batch_id = get_last_batch_id(l1_client, env_vars)
         block_number = l2_client_node1.eth.block_number
         block_hash = l2_client_node1.eth.get_block(block_number).hash
 

@@ -4,8 +4,7 @@ from web3.beacon import Beacon
 from eth_account import Account
 import os
 from dotenv import load_dotenv
-from utils import ensure_catalyst_node_running, spam_n_blocks
-from forced_inclusion_store import forced_inclusion_store_is_empty, check_empty_forced_inclusion_store
+from utils import ensure_catalyst_node_running, spam_n_blocks, forced_inclusion_store_is_empty, check_empty_forced_inclusion_store
 from dataclasses import dataclass
 from taiko_inbox import get_last_block_id
 
@@ -23,6 +22,7 @@ class EnvVars:
     preconf_heartbeat_ms: int
     l2_private_key: str
     max_blocks_per_batch: int
+    protocol: str
 
     @classmethod
     def from_env(cls):
@@ -64,6 +64,10 @@ class EnvVars:
         if not max_blocks_per_batch:
             raise Exception("Environment variable MAX_BLOCKS_PER_BATCH not set")
 
+        protocol = os.getenv("PROTOCOL")
+        if not protocol:
+            raise Exception("Environment variable PROTOCOL not set")
+
         return cls(
             l2_prefunded_priv_key=l2_prefunded_priv_key,
             l2_prefunded_priv_key_2=l2_prefunded_priv_key_2,
@@ -74,7 +78,14 @@ class EnvVars:
             preconf_heartbeat_ms=preconf_heartbeat_ms,
             l2_private_key=l2_private_key,
             max_blocks_per_batch=max_blocks_per_batch,
+            protocol=protocol,
         )
+
+    def is_shasta(self):
+        return self.protocol == "shasta"
+
+    def is_pacaya(self):
+        return self.protocol == "pacaya"
 
 @pytest.fixture(scope="session")
 def env_vars():
@@ -124,15 +135,20 @@ def forced_inclusion_teardown(l1_client, l2_client_node1, env_vars):
     """Fixture to ensure forced inclusion store is empty after test"""
     yield None
     print("Test teardown: ensuring forced inclusion store is empty")
-    if not forced_inclusion_store_is_empty(l1_client, env_vars.forced_inclusion_store_address):
+    if not forced_inclusion_store_is_empty(l1_client, env_vars):
         print("Spamming blocks to ensure forced inclusion store is empty")
         spam_n_blocks(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, env_vars.preconf_min_txs)
 
 @pytest.fixture(scope="session", autouse=True)
 def global_setup(l1_client, l2_client_node1, l2_client_node2, env_vars):
     """Run once before all tests"""
+
+    if env_vars.protocol == "shasta":
+        yield
+        return
+
     print("Wait for Geth sync with TaikoInbox")
-    block_number_contract = get_last_block_id(l1_client, env_vars.taiko_inbox_address)
+    block_number_contract = get_last_block_id(l1_client, env_vars)
 
     while True:
         block_number_node1 = l2_client_node1.eth.block_number

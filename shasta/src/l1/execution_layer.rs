@@ -1,7 +1,3 @@
-// TODO remove allow dead_code when the module is used
-#![allow(dead_code)]
-
-use super::bindings::{Inbox, PreconfWhitelist};
 use super::config::EthereumL1Config;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
@@ -26,6 +22,9 @@ use common::{
 };
 use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
 use std::sync::Arc;
+use taiko_bindings::{
+    inbox::IForcedInclusionStore::ForcedInclusion, inbox::IInbox::CoreState, inbox::Inbox,
+};
 use tokio::sync::mpsc::Sender;
 use tracing::info;
 
@@ -33,10 +32,7 @@ pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
     preconfer_address: Address,
-    config: EthereumL1Config,
     pub transaction_monitor: TransactionMonitor,
-    metrics: Arc<Metrics>,
-    extra_gas_percentage: u64,
     contract_addresses: ContractAddresses,
 }
 
@@ -85,10 +81,7 @@ impl ELTrait for ExecutionLayer {
             common,
             provider,
             preconfer_address: common_config.signer.get_address(),
-            config: specific_config,
             transaction_monitor,
-            metrics,
-            extra_gas_percentage: common_config.extra_gas_percentage,
             contract_addresses,
         })
     }
@@ -254,7 +247,7 @@ impl ExecutionLayer {
         Ok(state.tail_.to::<u64>())
     }
 
-    pub async fn get_forced_inclusion(&self, index: u64) -> Result<Inbox::ForcedInclusion, Error> {
+    pub async fn get_forced_inclusion(&self, index: u64) -> Result<ForcedInclusion, Error> {
         let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
         let inclusions = shasta_inbox
             .getForcedInclusions(U48::from(index), U48::ONE)
@@ -269,10 +262,10 @@ impl ExecutionLayer {
         Ok(inclusion.clone())
     }
 
-    pub async fn get_inbox_state(&self) -> Result<Inbox::CoreState, Error> {
+    pub async fn get_inbox_state(&self) -> Result<CoreState, Error> {
         let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
         let state = shasta_inbox
-            .getState()
+            .getCoreState()
             .call()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to call getInboxState for Inbox: {e}"))?;
@@ -283,8 +276,10 @@ impl ExecutionLayer {
 
 impl WhitelistProvider for ExecutionLayer {
     async fn is_operator_whitelisted(&self) -> Result<bool, Error> {
-        let contract =
-            PreconfWhitelist::new(self.contract_addresses.proposer_checker, &self.provider);
+        let contract = taiko_bindings::preconf_whitelist::PreconfWhitelist::new(
+            self.contract_addresses.proposer_checker,
+            &self.provider,
+        );
         let operators = contract
             .operators(self.preconfer_address)
             .call()
@@ -296,7 +291,6 @@ impl WhitelistProvider for ExecutionLayer {
                 ))
             })?;
 
-        // _0 is the activeSince field
-        Ok(operators._0 > 0)
+        Ok(operators.activeSince > 0)
     }
 }
