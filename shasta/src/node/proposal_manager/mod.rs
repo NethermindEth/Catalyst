@@ -3,7 +3,7 @@ pub mod proposal;
 
 use crate::{
     l1::execution_layer::ExecutionLayer,
-    l2::taiko::Taiko,
+    l2::taiko::{self, Taiko},
     metrics::Metrics,
     shared::{l2_block::L2Block, l2_slot_info::L2SlotInfo, l2_tx_lists::PreBuiltTxList},
 };
@@ -433,7 +433,19 @@ impl BatchManager {
             }
         };
 
-        let gas_limit = block.header.gas_limit();
+        use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
+        let gas_limit = block
+            .header
+            .gas_limit()
+            .checked_sub(ANCHOR_V3_V4_GAS_LIMIT)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "block header gas limit {} is less than ANCHOR_V3_V4_GAS_LIMIT {}",
+                    block.header.gas_limit(),
+                    ANCHOR_V3_V4_GAS_LIMIT
+                )
+            })?;
+
         let coinbase = block.header.beneficiary();
 
         let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
