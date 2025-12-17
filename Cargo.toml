@@ -12,7 +12,7 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.23.29"
+version = "1.23.30"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -83,7 +83,6 @@ taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev
 taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d8741f16b36db30c200b1592310c3d85b625a16c", package = "bindings" }
 taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d8741f16b36db30c200b1592310c3d85b625a16c", package = "protocol" }
 taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d8741f16b36db30c200b1592310c3d85b625a16c", package = "rpc" }
-tiny-keccak = { version = "2.0", default-features = false }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
 tracing = { version = "0.1.41", default-features = false }

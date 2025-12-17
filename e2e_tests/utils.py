@@ -108,6 +108,7 @@ def spam_n_txs(eth_client, private_key, n):
 
 def spam_n_blocks(eth_client, private_key, n, preconf_min_txs):
     """Spam as many tx to create n blocks, wait for each block to be mined"""
+    print(f"Spamming {n} blocks with {preconf_min_txs} transactions per block")
     account = eth_client.eth.account.from_key(private_key)
     last_tx_hash = None
     for i in range(n):
@@ -141,11 +142,10 @@ def wait_for_batch_proposed_event(eth_client, from_block, env_vars):
     for i in range(WAIT_TIME):
         new_entries = proposed_filter.get_all_entries()
         if len(new_entries) > 0:
+            print(f"Got BatchProposed event after {i} seconds")
             event = new_entries[-1]
-            if env_vars.is_pacaya():
-                print_batch_info(event)
+            print_batch_info(eth_client, event, env_vars)
             return event
-
         time.sleep(1)
     assert False, "Warning waited {} seconds for BatchProposed event without getting one".format(WAIT_TIME)
 
@@ -181,15 +181,25 @@ def wait_for_forced_inclusion_store_to_be_empty(l1_client, env_vars):
         time.sleep(1)
         i += 1
 
-def print_batch_info(event):
+def print_batch_info(l1_client, event, env_vars):
     print("BatchProposed event detected:")
-    print(f"  Batch ID: {event['args']['meta']['batchId']}")
-    print(f"  Proposer: {event['args']['meta']['proposer']}")
-    print(f"  Proposed At: {event['args']['meta']['proposedAt']}")
-    print(f"  Last Block ID: {event['args']['info']['lastBlockId']}")
-    print(f"  Last Block Timestamp: {event['args']['info']['lastBlockTimestamp']}")
-    print(f"  Transaction Hash: {event['transactionHash'].hex()}")
-    print(f"  Block Number: {event['blockNumber']}")
+    if env_vars.is_pacaya():
+        print(f"  Batch ID: {event['args']['meta']['batchId']}")
+        print(f"  Proposer: {event['args']['meta']['proposer']}")
+        print(f"  Proposed At: {event['args']['meta']['proposedAt']}")
+        print(f"  Last Block ID: {event['args']['info']['lastBlockId']}")
+        print(f"  Last Block Timestamp: {event['args']['info']['lastBlockTimestamp']}")
+        print(f"  Transaction Hash: {event['transactionHash'].hex()}")
+        print(f"  Block Number: {event['blockNumber']}")
+    else:
+        payload = decode_proposal_payload(l1_client, env_vars.taiko_inbox_address, event['args']['data'])
+        print(f"  Proposal ID: {payload[0][0]}")
+        print(f"  Proposer: {payload[0][3]}")
+        print(f"  Proposed timestamp: {payload[0][1]}")
+        print(f"  Origin block number: {payload[1][0]}")
+        print(f"  Origin block hash: {payload[1][1].hex()}")
+        print(f"  Transaction Hash: {event['transactionHash'].hex()}")
+        print(f"  Block number: {event['blockNumber']}")
     print("---")
 
 def get_current_operator(eth_client, l1_contract_address):
@@ -231,8 +241,7 @@ def get_last_batch_proposed_event(eth_client, from_block, env_vars):
     new_entries = proposed_filter.get_all_entries()
     if len(new_entries) > 0:
         event = new_entries[-1]
-        if env_vars.is_pacaya():
-            print_batch_info(event)
+        print_batch_info(eth_client, event, env_vars)
         return event
     return None
 
@@ -315,7 +324,6 @@ def read_shasta_inbox_config(l1_client, shasta_inbox_address):
     abi = get_shasta_inbox_abi()
     contract = l1_client.eth.contract(address=shasta_inbox_address, abi=abi)
     config = contract.functions.getConfig().call()
-    print(f"Shasta inbox config: {config}")
     return config
 
 def get_shasta_inbox_abi():
