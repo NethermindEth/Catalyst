@@ -106,10 +106,6 @@ impl BatchBuilder {
         });
     }
 
-    pub fn remove_current_proposal(&mut self) {
-        self.current_proposal = None;
-    }
-
     pub fn add_l2_draft_block(
         &mut self,
         l2_draft_block: L2BlockV2Draft,
@@ -417,10 +413,6 @@ impl BatchBuilder {
             }
     }
 
-    pub fn get_number_of_batches_ready_to_send(&self) -> u64 {
-        self.proposals_to_send.len() as u64
-    }
-
     /// Alias for `take_proposals_to_send` for compatibility
     pub fn take_batches_to_send(&mut self) -> VecDeque<Proposal> {
         std::mem::take(&mut self.proposals_to_send)
@@ -494,9 +486,5 @@ impl BatchBuilder {
             .as_mut()
             .map(|proposal| proposal.num_forced_inclusion += 1)
             .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
-    }
-
-    pub fn get_current_proposal(&self) -> Option<&Proposal> {
-        self.current_proposal.as_ref()
     }
 }

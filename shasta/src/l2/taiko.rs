@@ -278,7 +278,7 @@ impl Taiko {
             block_number: l2_slot_context.info.parent_id() + 1,
             extra_data: format!("0x{:04x}", extra_data),
             fee_recipient: l2_block_payload.coinbase.to_string(),
-            gas_limit: l2_slot_context.info.parent_gas_limit_without_anchor()
+            gas_limit: l2_block_payload.gas_limit_without_anchor
                 + ANCHOR_V3_V4_GAS_LIMIT,
             parent_hash: format!("0x{}", hex::encode(l2_slot_context.info.parent_hash())),
             timestamp: l2_block_payload.timestamp_sec,
