@@ -31,7 +31,7 @@ use common::{
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
-use taiko_bindings::anchor::Anchor;
+use taiko_bindings::anchor::{Anchor, ICheckpointStore::Checkpoint};
 use tracing::{debug, trace};
 
 pub struct Taiko {
@@ -244,10 +244,10 @@ impl Taiko {
             l2_block_payload.tx_list.len()
         );
 
-        let anchor_block_params = Anchor::BlockParams {
-            anchorBlockNumber: l2_block_payload.anchor_block_id.try_into()?,
-            anchorBlockHash: l2_block_payload.anchor_block_hash,
-            anchorStateRoot: l2_block_payload.anchor_state_root,
+        let anchor_block_params = Checkpoint {
+            blockNumber: l2_block_payload.anchor_block_id.try_into()?,
+            blockHash: l2_block_payload.anchor_block_hash,
+            stateRoot: l2_block_payload.anchor_state_root,
         };
 
         let anchor_tx = self

@@ -1,39 +1,23 @@
-use alloy::{primitives::Address, providers::DynProvider};
 use common::chain_monitor::{ChainMonitor, ChainMonitorEventHandler};
-use taiko_bindings::{codec::Codec::CodecInstance, inbox::Inbox};
-use tracing::{info, warn};
+use taiko_bindings::inbox::Inbox;
+use tracing::info;
 
 pub type ShastaChainMonitor = ChainMonitor<Inbox::Proposed>;
 
 #[derive(Clone)]
-pub struct ProposedHandler {
-    codec: CodecInstance<DynProvider>,
-}
+pub struct ProposedHandler {}
 
 impl ProposedHandler {
-    pub fn new(codec_address: Address, provider: DynProvider) -> Self {
-        let codec = CodecInstance::new(codec_address, provider);
-        Self { codec }
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
 impl ChainMonitorEventHandler<Inbox::Proposed> for ProposedHandler {
     fn handle_event(&self, event: &Inbox::Proposed) {
-        let cloned = self.clone();
-        let event_data = event.data.clone();
-
-        tokio::task::spawn(async move {
-            match cloned.codec.decodeProposedEvent(event_data).call().await {
-                Ok(payload) => {
-                    info!(
-                        "Proposed event → id = {}, proposer = {}, timestamp = {}",
-                        payload.proposal.id, payload.proposal.proposer, payload.proposal.timestamp
-                    );
-                }
-                Err(e) => {
-                    warn!("Failed to decode Proposed event data: {:?}", e);
-                }
-            }
-        });
+        info!(
+            "Proposed event → id = {}, proposer = {}, end of submission window timestamp = {}",
+            event.id, event.proposer, event.endOfSubmissionWindowTimestamp
+        );
     }
 }

@@ -17,10 +17,7 @@ use common::{
     config::ConfigTrait,
     fork_info::ForkInfo,
     funds_controller::FundsController,
-    l1::{
-        self as common_l1,
-        traits::{ELTrait, PreconferProvider},
-    },
+    l1::{self as common_l1, traits::PreconferProvider},
     l2::engine::{L2Engine, L2EngineConfig},
     metrics, shared,
     utils::cancellation_token::CancellationToken,
@@ -122,10 +119,7 @@ pub async fn create_shasta_node(
             shasta_config.shasta_inbox.clone(),
             cancel_token.clone(),
             "Proposed",
-            Arc::new(chain_monitor::ProposedHandler::new(
-                protocol_config.get_codec_address(),
-                ethereum_l1.execution_layer.common().provider().clone(),
-            )),
+            Arc::new(chain_monitor::ProposedHandler::new()),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create ShastaChainMonitor: {}", e))?,
     );
