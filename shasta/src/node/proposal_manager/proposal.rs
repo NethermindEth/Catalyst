@@ -67,41 +67,6 @@ impl Proposal {
         self.total_bytes = manifest_data.len() as u64;
     }
 
-    pub fn get_last_block_timestamp(&self) -> Result<u64, anyhow::Error> {
-        self.l2_blocks
-            .last()
-            .map(|block| block.timestamp_sec)
-            .ok_or_else(|| anyhow::anyhow!("No L2 blocks in proposal"))
-    }
-
-    pub fn has_only_one_common_block(&self) -> bool {
-        self.num_forced_inclusion == 0 && self.l2_blocks.len() == 1
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.num_forced_inclusion == 0 && self.l2_blocks.is_empty()
-    }
-
-    pub fn get_last_block_tx_list_copy(
-        &self,
-    ) -> Result<Vec<alloy::rpc::types::Transaction>, anyhow::Error> {
-        self.l2_blocks
-            .last()
-            .map(|block| block.prebuilt_tx_list.tx_list.clone())
-            .ok_or_else(|| anyhow::anyhow!("No L2 blocks in proposal"))
-    }
-
-    pub fn get_last_block_tx_len(&self) -> Result<usize, anyhow::Error> {
-        self.l2_blocks
-            .last()
-            .map(|block| block.prebuilt_tx_list.tx_list.len())
-            .ok_or_else(|| anyhow::anyhow!("No L2 blocks in proposal"))
-    }
-
-    pub fn total_bytes(&self) -> u64 {
-        self.total_bytes
-    }
-
     fn create_block_from_draft(&mut self, l2_draft_block: L2BlockV2Draft) -> L2BlockV2 {
         L2BlockV2::new_from(
             l2_draft_block.prebuilt_tx_list,

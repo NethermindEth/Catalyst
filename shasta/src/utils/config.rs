@@ -2,11 +2,6 @@ use common::config::ConfigTrait;
 use tracing::warn;
 
 #[derive(Debug, Clone)]
-pub struct L1ContractAddresses {
-    pub shasta_inbox: String,
-}
-
-#[derive(Debug, Clone)]
 pub struct ShastaConfig {
     pub shasta_inbox: String,
 }
