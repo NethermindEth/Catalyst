@@ -84,8 +84,9 @@ def test_propose_batch_to_l1_after_reaching_max_blocks_per_batch(l2_client_node1
         assert proposed_at > current_block_timestamp, "Proposed at timestamp should be larger than current block timestamp"
 
     else:
-        proposer = event['proposer']
-        print(f"Event: {event}")
+        proposer = event['args']['proposer']
+        block_number = event['blockNumber']
+        assert block_number > current_block, "Block number should be greater than current block"
 
     assert proposer in [l1_client.eth.account.from_key(env_vars.l2_prefunded_priv_key).address, l1_client.eth.account.from_key(env_vars.l2_prefunded_priv_key_2).address], "Proposer should be L2 Node 1 or L2 Node 2"
 
@@ -141,18 +142,3 @@ def test_end_of_sequencing(l2_client_node1, beacon_client, l1_client, env_vars):
     send_n_txs_without_waiting(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.preconf_min_txs)
     time.sleep(2 * env_vars.preconf_heartbeat_ms / 1000)
     assert l2_client_node1.eth.block_number == l2_block_number+1, "L2 Node 1 should have a new block after sending transactions, even in handover buffer"
-
-
-def test_wait_for_batch_proposed_event(l1_client, env_vars):
-    wait_for_batch_proposed_event(l1_client, l1_client.eth.block_number, env_vars)
-    # def handle_event(event):
-    #     print(event)
-
-    # def log_loop(event_filter, poll_interval):
-    #     while True:
-    #         for event in event_filter.get_new_entries():
-    #             handle_event(event)
-    #         time.sleep(poll_interval)
-
-    # block_filter = l1_client.eth.filter('latest')
-    # log_loop(block_filter, 2)
