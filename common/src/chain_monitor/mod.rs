@@ -20,13 +20,6 @@ struct TaikoGethStatus {
     expected_reorg: Option<u64>,
 }
 
-pub trait ChainMonitorEventHandler<T>
-where
-    T: SolEvent + Send + 'static,
-{
-    fn handle_event(&self, event: &T);
-}
-
 pub struct ChainMonitor<T>
 where
     T: SolEvent + Send + 'static,
@@ -37,7 +30,7 @@ where
     taiko_geth_status: Arc<Mutex<TaikoGethStatus>>,
     cancel_token: CancellationToken,
     event_name: &'static str,
-    event_handler: Arc<dyn ChainMonitorEventHandler<T> + Send + Sync>,
+    event_handler: fn(&T),
 }
 
 impl<T> ChainMonitor<T>
@@ -50,7 +43,7 @@ where
         contract: String,
         cancel_token: CancellationToken,
         event_name: &'static str,
-        event_handler: Arc<dyn ChainMonitorEventHandler<T> + Send + Sync>,
+        event_handler: fn(&T),
     ) -> Result<Self, Error> {
         debug!(
             "Creating ChainMonitor (L1: {}, L2: {}, Contract: {}, Event : {})",
@@ -115,7 +108,7 @@ where
             l2_block_rx,
             taiko_geth_status,
             cancel_token,
-            self.event_handler.clone(),
+            self.event_handler,
         ));
 
         Ok(())
@@ -126,7 +119,7 @@ where
         mut l2_block_rx: Receiver<L2BlockInfo>,
         taiko_geth_status: Arc<Mutex<TaikoGethStatus>>,
         cancel_token: CancellationToken,
-        event_handler: Arc<dyn ChainMonitorEventHandler<T> + Send + Sync>,
+        event_handler: fn(&T),
     ) {
         info!("ChainMonitor message loop running");
 
@@ -137,7 +130,7 @@ where
                     break;
                 }
                 Some(event) = event_rx.recv() => {
-                    event_handler.handle_event(&event);
+                    event_handler(&event);
                 }
                 Some(block) = l2_block_rx.recv() => {
                     info!(

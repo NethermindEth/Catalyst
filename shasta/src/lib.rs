@@ -117,7 +117,7 @@ pub async fn create_shasta_node(
             shasta_config.shasta_inbox.clone(),
             cancel_token.clone(),
             "Proposed",
-            Arc::new(chain_monitor::ProposedHandler::new()),
+            chain_monitor::print_proposed_info,
         )
         .map_err(|e| anyhow::anyhow!("Failed to create ShastaChainMonitor: {}", e))?,
     );
