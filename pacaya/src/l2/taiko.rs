@@ -208,7 +208,7 @@ impl Taiko {
         end_of_sequencing: bool,
         is_forced_inclusion: bool,
         operation_type: OperationType,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+    ) -> Result<BuildPreconfBlockResponse, Error> {
         tracing::debug!(
             "Submitting new L2 block to the Taiko driver with {} txs",
             l2_block.prebuilt_tx_list.tx_list.len()

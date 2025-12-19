@@ -48,7 +48,7 @@ impl TaikoDriver {
         &self,
         request_body: BuildPreconfBlockRequestBody,
         operation_type: OperationType,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+    ) -> Result<BuildPreconfBlockResponse, Error> {
         const API_ENDPOINT: &str = "preconfBlocks";
 
         let response = self
@@ -61,15 +61,14 @@ impl TaikoDriver {
             )
             .await?;
 
-        let preconfirmed_block = BuildPreconfBlockResponse::new_from_value(response);
-
-        if preconfirmed_block.is_none() {
-            tracing::error!("Block was preconfirmed, but failed to decode response from driver.");
+        if let Some(preconfirmed_block) = BuildPreconfBlockResponse::new_from_value(response) {
+            self.metrics.inc_blocks_preconfirmed();
+            Ok(preconfirmed_block)
+        } else {
+            Err(anyhow::anyhow!(
+                "Block was preconfirmed, but failed to decode response from driver."
+            ))
         }
-
-        self.metrics.inc_blocks_preconfirmed();
-
-        Ok(preconfirmed_block)
     }
 
     async fn call_driver<T>(

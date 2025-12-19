@@ -780,14 +780,14 @@ impl Node {
                 }
             };
 
-            let tx_list = txs.to_vec();
             let pending_tx_list = crate::shared::l2_tx_lists::PreBuiltTxList {
-                tx_list,
+                tx_list: txs.to_vec(),
                 estimated_gas_used: 0,
                 bytes_length: 0,
             };
 
-            let block = self
+            // if reanchor_block fails restart the node
+            match self
                 .proposal_manager
                 .reanchor_block(
                     pending_tx_list,
@@ -795,19 +795,21 @@ impl Node {
                     *is_forced_inclusion,
                     allow_forced_inclusion,
                 )
-                .await;
-            // if reanchor_block fails restart the node
-            if let Ok(Some(block)) = block {
-                debug!("Reanchored block {} hash {}", block.number, block.hash);
-            } else {
-                let err_msg = match block {
-                    Ok(None) => "Failed to reanchor block: None returned".to_string(),
-                    Err(err) => format!("Failed to reanchor block: {err}"),
-                    Ok(Some(_)) => "Unreachable".to_string(),
-                };
-                error!("{}", err_msg);
-                self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!("{}", err_msg));
+                .await
+            {
+                Ok(reanchored_block) => {
+                    debug!(
+                        "Reanchored block {} hash {}",
+                        reanchored_block.number, reanchored_block.hash
+                    );
+                }
+                Err(err) => {
+                    let err_msg =
+                        format!("Failed to reanchor block {}: {}", block.header.number, err);
+                    error!("{}", err_msg);
+                    self.cancel_token.cancel_on_critical_error();
+                    return Err(anyhow::anyhow!("{}", err_msg));
+                }
             }
         }
 

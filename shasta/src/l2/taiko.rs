@@ -238,7 +238,7 @@ impl Taiko {
         l2_block_payload: L2BlockV2Payload,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+    ) -> Result<BuildPreconfBlockResponse, Error> {
         tracing::debug!(
             "Submitting new L2 block to the Taiko driver with {} txs",
             l2_block_payload.tx_list.len()
