@@ -161,6 +161,12 @@ impl BatchBuilder {
         }
     }
 
+    pub fn get_current_proposal_last_block_timestamp(&self) -> Option<u64> {
+        self.current_proposal
+            .as_ref()
+            .and_then(|p| p.l2_blocks.last().map(|b| b.timestamp_sec))
+    }
+
     pub fn remove_last_l2_block(&mut self) {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
             let removed_block = current_proposal.l2_blocks.pop();
@@ -466,8 +472,9 @@ impl BatchBuilder {
         if let Some(current_proposal) = self.current_proposal.as_ref()
             && let Some(last_block) = current_proposal.l2_blocks.last()
         {
-            let number_of_l2_slots = (current_l2_slot_timestamp - last_block.timestamp_sec) * 1000
-                / self.slot_clock.get_preconf_heartbeat_ms();
+            let number_of_l2_slots =
+                (current_l2_slot_timestamp.saturating_sub(last_block.timestamp_sec)) * 1000
+                    / self.slot_clock.get_preconf_heartbeat_ms();
             return number_of_l2_slots > self.config.preconf_max_skipped_l2_slots;
         }
 

@@ -195,16 +195,29 @@ impl BatchManager {
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+        let timestamp = {
+            if let Some(last_block_timestamp) = self
+                .batch_builder
+                .get_current_proposal_last_block_timestamp()
+            {
+                std::cmp::max(
+                    l2_slot_context.info.slot_timestamp(),
+                    last_block_timestamp + 1,
+                )
+            } else {
+                l2_slot_context.info.slot_timestamp()
+            }
+        };
         info!(
             "Adding new L2 block id: {}, timestamp: {}, allow_forced_inclusion: {}",
             l2_slot_context.info.parent_id() + 1,
-            l2_slot_context.info.slot_timestamp(),
+            timestamp,
             l2_slot_context.allow_forced_inclusion,
         );
 
         let l2_draft_block = L2BlockV2Draft {
             prebuilt_tx_list: prebuilt_tx_list.clone(),
-            timestamp_sec: l2_slot_context.info.slot_timestamp(),
+            timestamp_sec: timestamp,
             gas_limit_without_anchor: l2_slot_context.info.parent_gas_limit_without_anchor(),
         };
 
