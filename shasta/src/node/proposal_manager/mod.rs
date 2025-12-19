@@ -195,19 +195,17 @@ impl BatchManager {
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        let timestamp = {
-            if let Some(last_block_timestamp) = self
-                .batch_builder
-                .get_current_proposal_last_block_timestamp()
-            {
-                std::cmp::max(
-                    l2_slot_context.info.slot_timestamp(),
-                    last_block_timestamp + 1,
-                )
-            } else {
-                l2_slot_context.info.slot_timestamp()
-            }
-        };
+        let timestamp = l2_slot_context.info.slot_timestamp();
+        if let Some(last_block_timestamp) = self
+            .batch_builder
+            .get_current_proposal_last_block_timestamp()
+            && timestamp == last_block_timestamp
+        {
+            return Err(anyhow::anyhow!(
+                "Cannot add another block with the same timestamp as the last block, timestamp: {timestamp}, last block timestamp: {last_block_timestamp}"
+            ));
+        }
+
         info!(
             "Adding new L2 block id: {}, timestamp: {}, allow_forced_inclusion: {}",
             l2_slot_context.info.parent_id() + 1,
@@ -514,13 +512,13 @@ impl BatchManager {
     pub async fn reanchor_block(
         &mut self,
         pending_tx_list: PreBuiltTxList,
-        l2_slot_info: &L2SlotInfoV2,
+        l2_slot_info: L2SlotInfoV2,
         _is_forced_inclusion: bool,
         allow_forced_inclusion: bool,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         // TODO create context outside
         let l2_slot_context = L2SlotContext {
-            info: l2_slot_info.clone(),
+            info: l2_slot_info,
             end_of_sequencing: false,
             allow_forced_inclusion,
         };
