@@ -81,15 +81,14 @@ def test_propose_batch_to_l1_after_reaching_max_blocks_per_batch(l2_client_node1
     if env_vars.is_pacaya():
         proposer = event['args']['meta']['proposer']
         proposed_at = event['args']['meta']['proposedAt']
+        assert proposed_at > current_block_timestamp, "Proposed at timestamp should be larger than current block timestamp"
 
     else:
-        payload = decode_proposal_payload(l1_client, env_vars.taiko_inbox_address, event['args']['data'])
-        print(f"Payload[0]: {payload[0]}")
-        proposer = payload[0][3]
-        proposed_at = payload[0][1]
+        proposer = event['args']['proposer']
+        block_number = event['blockNumber']
+        assert block_number > current_block, "Block number should be greater than current block"
 
     assert proposer in [l1_client.eth.account.from_key(env_vars.l2_prefunded_priv_key).address, l1_client.eth.account.from_key(env_vars.l2_prefunded_priv_key_2).address], "Proposer should be L2 Node 1 or L2 Node 2"
-    assert proposed_at > current_block_timestamp, "Proposed at timestamp should be larger than current block timestamp"
 
 
 def test_proposing_other_operator_blocks(l2_client_node1, l1_client, beacon_client, catalyst_node_teardown, env_vars):

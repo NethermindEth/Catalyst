@@ -18,7 +18,7 @@ use common::{
     l1::traits::PreconferBondProvider,
 };
 use pacaya::l2::config::TaikoConfig;
-use taiko_bindings::anchor::Anchor;
+use taiko_bindings::anchor::{Anchor, ICheckpointStore::Checkpoint};
 use tracing::{debug, info, warn};
 
 use serde_json::Value;
@@ -70,7 +70,7 @@ impl L2ExecutionLayer {
         &self,
         proposal_id: u64,
         l2_slot_info: &L2SlotInfoV2,
-        anchor_block_params: Anchor::BlockParams,
+        anchor_block_params: Checkpoint,
     ) -> Result<Transaction, Error> {
         debug!(
             "Constructing anchor transaction for block number: {}",
@@ -228,7 +228,7 @@ impl L2ExecutionLayer {
         let tx_data =
             <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
                 .map_err(|e| anyhow::anyhow!("Failed to decode anchor id from tx data: {}", e))?;
-        Ok(tx_data._blockParams.anchorBlockNumber.to::<u64>())
+        Ok(tx_data._checkpoint.blockNumber.to::<u64>())
     }
 
     pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
@@ -270,20 +270,18 @@ impl L2ExecutionLayer {
             .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
     }
 
-    pub async fn get_last_synced_block_params_from_geth(
-        &self,
-    ) -> Result<Anchor::BlockParams, Error> {
+    pub async fn get_last_synced_block_params_from_geth(&self) -> Result<Checkpoint, Error> {
         self.get_latest_anchor_transaction_input()
             .await
             .map_err(|e| anyhow::anyhow!("get_last_synced_proposal_id_from_geth: {e}"))
             .and_then(|input| Self::decode_block_params_from_tx_data(&input))
     }
 
-    pub fn decode_block_params_from_tx_data(data: &[u8]) -> Result<Anchor::BlockParams, Error> {
+    pub fn decode_block_params_from_tx_data(data: &[u8]) -> Result<Checkpoint, Error> {
         let tx_data =
             <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
                 .map_err(|e| anyhow::anyhow!("Failed to decode proposal id from tx data: {}", e))?;
-        Ok(tx_data._blockParams)
+        Ok(tx_data._checkpoint)
     }
 }
 

@@ -158,15 +158,9 @@ def get_proposed_event_filter(eth_client, from_block, env_vars):
             from_block=from_block
         )
     elif env_vars.is_shasta():
-        proposed_event_abi = [{
-            "type": "event",
-            "name": "Proposed",
-            "inputs": [{"name": "data", "type": "bytes", "indexed": False, "internalType": "bytes"}],
-            "anonymous": False
-        }]
-
+        proposed_event_abi = get_shasta_inbox_abi()
         contract = eth_client.eth.contract(address=env_vars.taiko_inbox_address, abi=proposed_event_abi)
-        return contract.events.Proposed().create_filter(
+        return contract.events.Proposed.create_filter(
             from_block=from_block
         )
     else:
@@ -192,12 +186,9 @@ def print_batch_info(l1_client, event, env_vars):
         print(f"  Transaction Hash: {event['transactionHash'].hex()}")
         print(f"  Block Number: {event['blockNumber']}")
     else:
-        payload = decode_proposal_payload(l1_client, env_vars.taiko_inbox_address, event['args']['data'])
-        print(f"  Proposal ID: {payload[0][0]}")
-        print(f"  Proposer: {payload[0][3]}")
-        print(f"  Proposed timestamp: {payload[0][1]}")
-        print(f"  Origin block number: {payload[1][0]}")
-        print(f"  Origin block hash: {payload[1][1].hex()}")
+        print(f"  Proposal ID: {event['args']['id']}")
+        print(f"  Proposer: {event['args']['proposer']}")
+        print(f"  End of submission window timestamp: {event['args']['endOfSubmissionWindowTimestamp']}")
         print(f"  Transaction Hash: {event['transactionHash'].hex()}")
         print(f"  Block number: {event['blockNumber']}")
     print("---")
@@ -345,15 +336,6 @@ def get_taiko_bindings_commit():
         raise ValueError("Could not find taiko_bindings rev in Cargo.toml")
 
     return match.group(1)
-
-def decode_proposal_payload(l1_client, shasta_inbox_address, payload):
-    commit = get_taiko_bindings_commit()
-    url = f"https://raw.githubusercontent.com/taikoxyz/taiko-mono/{commit}/packages/taiko-client-rs/crates/bindings/src/codec.rs"
-    abi = read_json_abi_from_rust_bindings(url)
-    config = read_shasta_inbox_config(l1_client, shasta_inbox_address)
-    codec = config[0]
-    codec_contract = l1_client.eth.contract(address=codec, abi=abi)
-    return codec_contract.functions.decodeProposedEvent(payload).call()
 
 def read_json_abi_from_rust_bindings(url):
     response = requests.get(url)

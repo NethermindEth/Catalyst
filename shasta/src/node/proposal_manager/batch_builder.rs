@@ -16,7 +16,7 @@ use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
     shared::anchor_block_info::AnchorBlockInfo,
 };
-use taiko_bindings::anchor::Anchor;
+use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 use tracing::{debug, trace, warn};
 
 pub struct BatchBuilder {
@@ -127,7 +127,7 @@ impl BatchBuilder {
     pub fn add_fi_block(
         &mut self,
         fi_block: L2BlockV2Draft,
-        anchor_params: Anchor::BlockParams,
+        anchor_params: Checkpoint,
     ) -> Result<L2BlockV2Payload, Error> {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
             let payload = current_proposal.add_forced_inclusion(fi_block, anchor_params);
