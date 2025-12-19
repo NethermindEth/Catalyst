@@ -101,7 +101,7 @@ pub async fn create_pacaya_node(
             pacaya_config.contract_addresses.taiko_inbox.clone(),
             cancel_token.clone(),
             "BatchProposed",
-            Arc::new(chain_monitor::BatchProposedHandler {}),
+            chain_monitor::print_batch_proposed_info,
         )
         .map_err(|e| anyhow::anyhow!("Failed to create PacayaChainMonitor: {}", e))?,
     );
