@@ -36,6 +36,17 @@ impl L2SlotInfoV2 {
         }
     }
 
+    pub fn new_from_other(other: L2SlotInfoV2, slot_timestamp: u64) -> Self {
+        Self {
+            base_fee: other.base_fee,
+            slot_timestamp,
+            parent_id: other.parent_id,
+            parent_hash: other.parent_hash,
+            parent_gas_limit_without_anchor: other.parent_gas_limit_without_anchor,
+            parent_timestamp: other.parent_timestamp,
+        }
+    }
+
     pub fn base_fee(&self) -> u64 {
         self.base_fee
     }

@@ -1,6 +1,4 @@
 pub mod proposal_manager;
-use std::sync::Arc;
-
 use anyhow::Error;
 use common::{
     fork_info::ForkInfo,
@@ -11,6 +9,7 @@ use common::{
 };
 use pacaya::node::operator::Status as OperatorStatus;
 use pacaya::node::{config::NodeConfig, operator::Operator};
+use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::metrics::Metrics;
@@ -682,13 +681,6 @@ impl Node {
 
         let start_time = std::time::Instant::now();
 
-        let mut l2_slot_info = self
-            .taiko
-            .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
-                parent_block_id,
-            ))
-            .await?;
-
         // Update self state
         self.verifier = None;
         self.proposal_manager.reset_builder().await?;
@@ -713,14 +705,64 @@ impl Node {
             );
         }
 
+        self.reanchor_blocks_internal(
+            &blocks,
+            &forced_inclusion_flags,
+            start_block_id,
+            parent_block_id,
+            allow_forced_inclusion,
+        )
+        .await?;
+
+        let last_l2_slot_info = self.taiko.get_l2_slot_info().await?;
+        self.head_verifier
+            .set(
+                last_l2_slot_info.parent_id(),
+                *last_l2_slot_info.parent_hash(),
+            )
+            .await;
+
+        self.metrics.inc_by_blocks_reanchored(blocks_reanchored);
+
+        debug!(
+            "Finished reanchoring blocks for parent block {} in {} ms",
+            parent_block_id,
+            start_time.elapsed().as_millis()
+        );
+        Ok(())
+    }
+
+    async fn reanchor_blocks_internal(
+        &mut self,
+        blocks: &[alloy::rpc::types::Block],
+        forced_inclusion_flags: &[bool],
+        start_block_id: u64,
+        parent_block_id: u64,
+        allow_forced_inclusion: bool,
+    ) -> Result<(), Error> {
         for (block, is_forced_inclusion) in blocks.iter().zip(forced_inclusion_flags) {
+            let l2_slot_info = if block.header.number == start_block_id {
+                self.taiko
+                    .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
+                        parent_block_id,
+                    ))
+                    .await?
+            } else {
+                self.taiko.get_l2_slot_info().await?
+            };
+            // use block timestamp as l2 slot timestamp,
+            // otherwise it can be the same as the previous block
+            // which is forbidden by the protocol
+            let l2_slot_info = L2SlotInfoV2::new_from_other(l2_slot_info, block.header.timestamp);
+
             debug!(
-                "Reanchoring block {} with {} transactions, parent_id {}, parent_hash {}, is_forced_inclusion: {}",
+                "Reanchoring block {} with {} transactions, parent_id {}, parent_hash {}, is_forced_inclusion: {}, timestamp: {}",
                 block.header.number,
                 block.transactions.len(),
                 l2_slot_info.parent_id(),
                 l2_slot_info.parent_hash(),
                 is_forced_inclusion,
+                l2_slot_info.slot_timestamp(),
             );
 
             let (_, txs) = match block.transactions.as_transactions() {
@@ -749,8 +791,8 @@ impl Node {
                 .proposal_manager
                 .reanchor_block(
                     pending_tx_list,
-                    &l2_slot_info,
-                    is_forced_inclusion,
+                    l2_slot_info,
+                    *is_forced_inclusion,
                     allow_forced_inclusion,
                 )
                 .await;
@@ -767,23 +809,8 @@ impl Node {
                 self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!("{}", err_msg));
             }
-
-            // TODO reduce 1 geth call
-            // We can get previous L2 slot info from BuildPreconfBlockResponse
-            l2_slot_info = self.taiko.get_l2_slot_info().await?;
         }
 
-        self.head_verifier
-            .set(l2_slot_info.parent_id(), *l2_slot_info.parent_hash())
-            .await;
-
-        self.metrics.inc_by_blocks_reanchored(blocks_reanchored);
-
-        debug!(
-            "Finished reanchoring blocks for parent block {} in {} ms",
-            parent_block_id,
-            start_time.elapsed().as_millis()
-        );
         Ok(())
     }
 }
