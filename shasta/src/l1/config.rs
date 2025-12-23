@@ -7,7 +7,6 @@ use alloy::primitives::Address;
 #[derive(Clone)]
 pub struct ContractAddresses {
     pub shasta_inbox: Address,
-    pub codec: Address,
     pub proposer_checker: Address,
 }
 

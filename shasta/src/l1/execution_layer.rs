@@ -71,9 +71,13 @@ impl ELTrait for ExecutionLayer {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to call getConfig for Inbox: {e}"))?;
 
+        tracing::info!(
+            "Shasta inbox: {}, Proposer checker {}",
+            specific_config.shasta_inbox,
+            shasta_config.proposerChecker
+        );
         let contract_addresses = ContractAddresses {
             shasta_inbox: specific_config.shasta_inbox,
-            codec: shasta_config.codec,
             proposer_checker: shasta_config.proposerChecker,
         };
 
@@ -168,8 +172,7 @@ impl ExecutionLayer {
 
         // Build propose transaction
         // TODO fill extra gas percentege from config
-        let builder =
-            ProposalTxBuilder::new(self.provider.clone(), self.contract_addresses.codec, 10);
+        let builder = ProposalTxBuilder::new(self.provider.clone(), 10);
         let tx = builder
             .build_propose_tx(
                 l2_blocks,

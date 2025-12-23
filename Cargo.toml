@@ -12,7 +12,7 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.24.2"
+version = "1.24.3"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -79,10 +79,10 @@ serde_json = { version = "1.0", default-features = false }
 shasta = { path = "shasta" }
 strum = { version = "0.27", features = ["derive"] }
 
-taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "e07c13fc011798adfa5436f24646b7305337cdf3", package = "alethia-reth-consensus" }
-taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d0e5806150aacb6318ba1a6e4e5d47ae5de945b7", package = "bindings" }
-taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d0e5806150aacb6318ba1a6e4e5d47ae5de945b7", package = "protocol" }
-taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d0e5806150aacb6318ba1a6e4e5d47ae5de945b7", package = "rpc" }
+taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "f87699fc736caeb59d87be1e3170fecf15a3cc6f", package = "alethia-reth-consensus" }
+taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d8303f8b7688ef5527c5099fb9ebdc086cebd21b", package = "bindings" }
+taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d8303f8b7688ef5527c5099fb9ebdc086cebd21b", package = "protocol" }
+taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "d8303f8b7688ef5527c5099fb9ebdc086cebd21b", package = "rpc" }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
 tracing = { version = "0.1.41", default-features = false }
