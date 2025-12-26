@@ -43,5 +43,5 @@ jobs:
 
       - name: Run audit-check action
         run: |
-          cargo install cargo-deny --locked
+          cargo install cargo-deny --locked --force
           cargo deny check
