@@ -38,6 +38,7 @@ warp = { workspace = true }
 
 [features]
 default = ["get_status_duration"]
+test = []
 get_status_duration = []
 
 [dev-dependencies]

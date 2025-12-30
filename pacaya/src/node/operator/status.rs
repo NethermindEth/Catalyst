@@ -1,4 +1,5 @@
 #[cfg(feature = "get_status_duration")]
+#[cfg_attr(test, derive(Debug))]
 pub struct StatusCheckDurations {
     pub check_taiko_wrapper: std::time::Duration,
     pub check_handover_window_slots: std::time::Duration,
@@ -12,6 +13,7 @@ pub struct StatusCheckDurations {
     pub check_end_of_sequencing: std::time::Duration,
 }
 
+#[cfg_attr(test, derive(Debug))]
 pub struct Status {
     preconfer: bool,
     submitter: bool,
@@ -20,6 +22,17 @@ pub struct Status {
     is_driver_synced: bool,
     #[cfg(feature = "get_status_duration")]
     durations: Option<StatusCheckDurations>,
+}
+
+#[cfg(test)]
+impl PartialEq for Status {
+    fn eq(&self, other: &Self) -> bool {
+        self.preconfer == other.preconfer
+            && self.submitter == other.submitter
+            && self.preconfirmation_started == other.preconfirmation_started
+            && self.end_of_sequencing == other.end_of_sequencing
+            && self.is_driver_synced == other.is_driver_synced
+    }
 }
 
 impl Status {
