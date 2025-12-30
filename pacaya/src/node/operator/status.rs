@@ -1,10 +1,25 @@
-#[derive(Debug, PartialEq, Eq)]
+#[cfg(feature = "get_status_duration")]
+pub struct StatusCheckDurations {
+    pub check_taiko_wraper: std::time::Duration,
+    pub check_handover_window_slots: std::time::Duration,
+    pub check_current_operator: std::time::Duration,
+    pub check_handover_window: std::time::Duration,
+    pub check_driver_status: std::time::Duration,
+    pub check_driver_synced: std::time::Duration,
+    pub check_preconfer: std::time::Duration,
+    pub check_preconfirmation_started: std::time::Duration,
+    pub check_submitter: std::time::Duration,
+    pub check_end_of_sequencing: std::time::Duration,
+}
+
 pub struct Status {
     preconfer: bool,
     submitter: bool,
     preconfirmation_started: bool,
     end_of_sequencing: bool,
     is_driver_synced: bool,
+    #[cfg(feature = "get_status_duration")]
+    durations: Option<StatusCheckDurations>,
 }
 
 impl Status {
@@ -14,6 +29,7 @@ impl Status {
         preconfirmation_started: bool,
         end_of_sequencing: bool,
         is_driver_synced: bool,
+        #[cfg(feature = "get_status_duration")] durations: Option<StatusCheckDurations>,
     ) -> Self {
         Self {
             preconfer,
@@ -21,6 +37,8 @@ impl Status {
             preconfirmation_started,
             end_of_sequencing,
             is_driver_synced,
+            #[cfg(feature = "get_status_duration")]
+            durations,
         }
     }
 
@@ -42,6 +60,11 @@ impl Status {
 
     pub fn is_end_of_sequencing(&self) -> bool {
         self.end_of_sequencing
+    }
+
+    #[cfg(feature = "get_status_duration")]
+    pub fn get_durations(&self) -> Option<&StatusCheckDurations> {
+        self.durations.as_ref()
     }
 }
 

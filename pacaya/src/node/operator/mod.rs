@@ -66,6 +66,9 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
 
     /// Get the current status of the operator based on the current L1 and L2 slots
     pub async fn get_status<S: SlotData>(&mut self, l2_slot_info: &S) -> Result<Status, Error> {
+        // feature get_status_duration
+        #[cfg(feature = "get_status_duration")]
+        let start = std::time::Instant::now();
         if !self
             .execution_layer
             .is_preconf_router_specified_in_taiko_wrapper()
@@ -73,10 +76,20 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         {
             warn!("PreconfRouter is not specified in TaikoWrapper");
             self.reset();
-            return Ok(Status::new(false, false, false, false, false));
+            return Ok(Status::new(
+                false,
+                false,
+                false,
+                false,
+                false,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            ));
         }
+        #[cfg(feature = "get_status_duration")]
+        let check_taiko_wraper = start.elapsed();
 
-        let l1_slot = self.slot_clock.get_current_slot_of_epoch()?;
+        let l1_slot: u64 = self.slot_clock.get_current_slot_of_epoch()?;
 
         let epoch = self.slot_clock.get_current_epoch()?;
         if epoch > self.last_config_reload_epoch {
@@ -87,11 +100,21 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             );
             self.last_config_reload_epoch = epoch;
         }
+        #[cfg(feature = "get_status_duration")]
+        let check_handover_window_slots = start.elapsed();
 
         let current_operator = self.is_current_operator(epoch).await?;
+        #[cfg(feature = "get_status_duration")]
+        let check_current_operator = start.elapsed();
         let handover_window = self.is_handover_window(l1_slot);
+        #[cfg(feature = "get_status_duration")]
+        let check_handover_window = start.elapsed();
         let driver_status = self.taiko.get_status().await?;
+        #[cfg(feature = "get_status_duration")]
+        let check_driver_status = start.elapsed();
         let is_driver_synced = self.is_driver_synced(l2_slot_info, &driver_status).await?;
+        #[cfg(feature = "get_status_duration")]
+        let check_driver_synced = start.elapsed();
         let preconfer = self
             .is_preconfer(
                 current_operator,
@@ -101,8 +124,12 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
                 &driver_status,
             )
             .await?;
+        #[cfg(feature = "get_status_duration")]
+        let check_preconfer = start.elapsed();
         let preconfirmation_started =
             self.is_preconfirmation_start_l2_slot(preconfer, is_driver_synced);
+        #[cfg(feature = "get_status_duration")]
+        let check_preconfirmation_started = start.elapsed();
         if preconfirmation_started {
             self.was_synced_preconfer = true;
         }
@@ -111,14 +138,33 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         }
 
         let submitter = self.is_submitter(current_operator, handover_window);
+        #[cfg(feature = "get_status_duration")]
+        let check_submitter = start.elapsed();
         let end_of_sequencing = self.is_end_of_sequencing(preconfer, submitter, l1_slot)?;
+        #[cfg(feature = "get_status_duration")]
+        let check_end_of_sequencing = start.elapsed();
 
+        #[cfg(feature = "get_status_duration")]
+        let durations = status::StatusCheckDurations {
+            check_taiko_wraper,
+            check_handover_window_slots,
+            check_current_operator,
+            check_handover_window,
+            check_driver_status,
+            check_driver_synced,
+            check_preconfer,
+            check_preconfirmation_started,
+            check_submitter,
+            check_end_of_sequencing,
+        };
         Ok(Status::new(
             preconfer,
             submitter,
             preconfirmation_started,
             end_of_sequencing,
             is_driver_synced,
+            #[cfg(feature = "get_status_duration")]
+            Some(durations),
         ))
     }
 
