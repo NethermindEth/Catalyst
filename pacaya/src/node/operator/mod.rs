@@ -87,7 +87,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             ));
         }
         #[cfg(feature = "get_status_duration")]
-        let check_taiko_wraper = start.elapsed();
+        let check_taiko_wrapper = start.elapsed();
 
         let l1_slot: u64 = self.slot_clock.get_current_slot_of_epoch()?;
 
@@ -146,7 +146,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
 
         #[cfg(feature = "get_status_duration")]
         let durations = status::StatusCheckDurations {
-            check_taiko_wraper,
+            check_taiko_wrapper,
             check_handover_window_slots,
             check_current_operator,
             check_handover_window,

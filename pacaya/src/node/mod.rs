@@ -535,9 +535,9 @@ impl Node {
                     current_status.as_ref().ok().and_then(|s| s.get_durations())
                 {
                     error!(
-                        "Get status durations: check_taiko_wraper: {} ms, check_handover_window_slots: {} ms, check_current_operator: {} ms, check_handover_window: {} ms, check_driver_status: {} ms, check_driver_synced: {} ms, check_preconfer: {} ms, check_preconfirmation_started: {} ms, check_submitter: {} ms, check_end_of_sequencing: {} ms",
-                        durations.check_taiko_wraper.as_millis(),
-                        (durations.check_handover_window_slots - durations.check_taiko_wraper)
+                        "Get status durations: check_taiko_wrapper: {} ms, check_handover_window_slots: {} ms, check_current_operator: {} ms, check_handover_window: {} ms, check_driver_status: {} ms, check_driver_synced: {} ms, check_preconfer: {} ms, check_preconfirmation_started: {} ms, check_submitter: {} ms, check_end_of_sequencing: {} ms",
+                        durations.check_taiko_wrapper.as_millis(),
+                        (durations.check_handover_window_slots - durations.check_taiko_wrapper)
                             .as_millis(),
                         (durations.check_current_operator - durations.check_handover_window_slots)
                             .as_millis(),
