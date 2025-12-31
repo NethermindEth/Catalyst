@@ -361,6 +361,7 @@ impl Metrics {
     }
 
     pub fn inc_critical_errors(&self) {
+        tracing::debug!("Incrementing critical errors metric");
         self.critical_errors.inc();
     }
 
