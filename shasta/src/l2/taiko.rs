@@ -252,11 +252,7 @@ impl Taiko {
 
         let anchor_tx = self
             .l2_execution_layer
-            .construct_anchor_tx(
-                l2_block_payload.proposal_id,
-                &l2_slot_context.info,
-                anchor_block_params,
-            )
+            .construct_anchor_tx(&l2_slot_context.info, anchor_block_params)
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -271,12 +267,20 @@ impl Taiko {
         let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
 
         let sharing_pctg = self.protocol_config.get_basefee_sharing_pctg();
-        let extra_data = Self::encode_extra_data(sharing_pctg, false);
+        let extra_data =
+            super::tools::encode_extra_data(sharing_pctg, l2_block_payload.proposal_id).map_err(
+                |e| {
+                    anyhow::anyhow!(
+                        "advance_head_to_new_l2_block: Failed to encode extra data: {}",
+                        e
+                    )
+                },
+            )?;
 
         let executable_data = ExecutableData {
             base_fee_per_gas: l2_slot_context.info.base_fee(),
             block_number: l2_slot_context.info.parent_id() + 1,
-            extra_data: format!("0x{:04x}", extra_data),
+            extra_data: format!("0x{}", hex::encode(extra_data)),
             fee_recipient: l2_block_payload.coinbase.to_string(),
             gas_limit: l2_block_payload.gas_limit_without_anchor + ANCHOR_V3_V4_GAS_LIMIT,
             parent_hash: format!("0x{}", hex::encode(l2_slot_context.info.parent_hash())),
@@ -293,10 +297,6 @@ impl Taiko {
         self.driver
             .preconf_blocks(request_body, operation_type)
             .await
-    }
-
-    fn encode_extra_data(basefee_sharing_pctg: u8, is_low_bond_proposal: bool) -> u16 {
-        u16::from(basefee_sharing_pctg) << 8 | u16::from(is_low_bond_proposal)
     }
 
     pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
@@ -332,18 +332,5 @@ impl Bridgeable for Taiko {
         self.l2_execution_layer
             .transfer_eth_from_l2_to_l1(amount, dest_chain_id, address, bridge_relayer_fee)
             .await
-    }
-}
-
-mod tests {
-    #[test]
-    fn test_encode_extra_data() {
-        use super::Taiko;
-
-        let extra_data = Taiko::encode_extra_data(30, true);
-        assert_eq!(extra_data, 0b00011110_00000001);
-
-        let extra_data = Taiko::encode_extra_data(50, false);
-        assert_eq!(extra_data, 0b00110010_00000000);
     }
 }

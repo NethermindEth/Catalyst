@@ -159,7 +159,6 @@ pub async fn create_pacaya_node(
     let funds_controller = FundsController::new(
         (&config).into(),
         ethereum_l1.execution_layer.clone(),
-        ethereum_l1.execution_layer.clone(),
         taiko.clone(),
         metrics.clone(),
         cancel_token.clone(),

@@ -38,11 +38,10 @@ impl ProposalTxBuilder {
         l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
-        prover_auth_bytes: Bytes,
         num_forced_inclusion: u8,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
-            .build_propose_blob(l2_blocks, from, to, prover_auth_bytes, num_forced_inclusion)
+            .build_propose_blob(l2_blocks, from, to, num_forced_inclusion)
             .await?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
             Ok(gas) => gas,
@@ -86,7 +85,6 @@ impl ProposalTxBuilder {
         l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
-        prover_auth_bytes: Bytes,
         num_forced_inclusion: u8,
     ) -> Result<TransactionRequest, Error> {
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(l2_blocks.len());
@@ -108,7 +106,6 @@ impl ProposalTxBuilder {
 
         // Build the proposal manifest.
         let manifest = DerivationSourceManifest {
-            prover_auth_bytes,
             blocks: block_manifests,
         };
 
