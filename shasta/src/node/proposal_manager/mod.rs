@@ -455,7 +455,7 @@ impl BatchManager {
 
         let is_forced_inclusion = self.is_forced_inclusion(block_height).await?;
 
-        // TODO imporvee output
+        // TODO improve output
         debug!(
             "Recovering from L2 block {}, proposal_id: {} transactions: {} is_forced_inclusion: {}, timestamp: {}, anchor_block_number: {} coinbase: {}, gas_limit: {}",
             block_height,
