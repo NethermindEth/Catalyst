@@ -1,5 +1,5 @@
 use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
-use alloy::primitives::{Address, B256, Bytes};
+use alloy::primitives::{Address, B256};
 use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
 use std::collections::VecDeque;
 use std::time::Instant;
@@ -45,7 +45,6 @@ impl Proposal {
 
         // Build the proposal manifest.
         let manifest = DerivationSourceManifest {
-            prover_auth_bytes: Bytes::new(),
             blocks: block_manifests,
         };
 

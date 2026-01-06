@@ -1,0 +1,59 @@
+use alloy::primitives::Bytes;
+use anyhow::Error;
+
+/// Encode the extra data field for a Shasta block header.
+pub fn encode_extra_data(basefee_sharing_pctg: u8, proposal_id: u64) -> Bytes {
+    let mut data = [0u8; 7];
+    data[0] = basefee_sharing_pctg;
+    let proposal_bytes = proposal_id.to_be_bytes();
+    data[1..7].copy_from_slice(&proposal_bytes[2..8]);
+    Bytes::from(data.to_vec())
+}
+
+pub fn decode_extra_data(extra_data: &[u8]) -> Result<(u8, u64), Error> {
+    if extra_data.len() != 7 {
+        return Err(anyhow::anyhow!(
+            "Invalid extra data length: expected 7, got {}",
+            extra_data.len()
+        ));
+    }
+    let basefee_sharing_pctg = extra_data[0];
+    let proposal_bytes = &extra_data[1..7];
+    let mut full_proposal_bytes = [0u8; 8];
+    full_proposal_bytes[2..8].copy_from_slice(proposal_bytes);
+    let proposal_id = u64::from_be_bytes(full_proposal_bytes);
+    Ok((basefee_sharing_pctg, proposal_id))
+}
+
+mod tests {
+    #[test]
+    fn test_encode_decode_extra_data() {
+        use super::*;
+
+        // Test encoding with basefee_sharing_pctg=30, proposal_id=1
+        let extra_data = encode_extra_data(30, 1);
+        let expected_bytes = vec![30, 0, 0, 0, 0, 0, 1];
+        assert_eq!(extra_data.as_ref(), expected_bytes.as_slice());
+
+        // Test decoding
+        let (decoded_pctg, decoded_proposal_id) = decode_extra_data(&extra_data).unwrap();
+        assert_eq!(decoded_pctg, 30);
+        assert_eq!(decoded_proposal_id, 1);
+
+        // Test encoding with basefee_sharing_pctg=50, proposal_id=0
+        let extra_data = encode_extra_data(50, 0);
+        let expected_bytes = vec![50, 0, 0, 0, 0, 0, 0];
+        assert_eq!(extra_data.as_ref(), expected_bytes.as_slice());
+
+        // Test decoding
+        let (decoded_pctg, decoded_proposal_id) = decode_extra_data(&extra_data).unwrap();
+        assert_eq!(decoded_pctg, 50);
+        assert_eq!(decoded_proposal_id, 0);
+
+        // Test with larger proposal_id
+        let extra_data = encode_extra_data(100, 0x123456789ABC);
+        let (decoded_pctg, decoded_proposal_id) = decode_extra_data(&extra_data).unwrap();
+        assert_eq!(decoded_pctg, 100);
+        assert_eq!(decoded_proposal_id, 0x123456789ABC);
+    }
+}

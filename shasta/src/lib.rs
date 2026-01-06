@@ -146,7 +146,6 @@ pub async fn create_shasta_node(
 
     let funds_controller = FundsController::new(
         (&config).into(),
-        taiko.l2_execution_layer(),
         ethereum_l1.execution_layer.clone(),
         taiko.clone(),
         metrics.clone(),
