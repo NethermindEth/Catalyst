@@ -268,7 +268,14 @@ impl Taiko {
 
         let sharing_pctg = self.protocol_config.get_basefee_sharing_pctg();
         let extra_data =
-            super::tools::encode_extra_data(sharing_pctg, l2_block_payload.proposal_id);
+            super::tools::encode_extra_data(sharing_pctg, l2_block_payload.proposal_id).map_err(
+                |e| {
+                    anyhow::anyhow!(
+                        "advance_head_to_new_l2_block: Failed to encode extra data: {}",
+                        e
+                    )
+                },
+            )?;
 
         let executable_data = ExecutableData {
             base_fee_per_gas: l2_slot_context.info.base_fee(),
