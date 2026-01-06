@@ -10,6 +10,14 @@ pub fn encode_extra_data(basefee_sharing_pctg: u8, proposal_id: u64) -> Bytes {
     Bytes::from(data.to_vec())
 }
 
+/// Decode the extra data field of a Shasta block header.
+///
+/// The expected format of `extra_data` is exactly 7 bytes:
+/// - byte 0: `basefee_sharing_pctg` (the base fee sharing percentage)
+/// - bytes 1..7: the most significant 6 bytes of the big-endian `proposal_id`
+///
+/// On success, returns a tuple `(basefee_sharing_pctg, proposal_id)`.
+/// Returns an error if `extra_data` is not exactly 7 bytes long.
 pub fn decode_extra_data(extra_data: &[u8]) -> Result<(u8, u64), Error> {
     if extra_data.len() != 7 {
         return Err(anyhow::anyhow!(
