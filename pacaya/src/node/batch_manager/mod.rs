@@ -120,7 +120,7 @@ impl BatchManager {
                 // set it to batch builder
                 if !self
                     .batch_builder
-                    .set_forced_inclusion(Some(forced_inclusion_batch))
+                    .set_forced_inclusion(forced_inclusion_batch)
                 {
                     error!("Failed to set forced inclusion batch");
                     return Err(anyhow::anyhow!("Failed to set forced inclusion batch"));
@@ -372,7 +372,7 @@ impl BatchManager {
             // set it to batch builder
             if !self
                 .batch_builder
-                .set_forced_inclusion(Some(forced_inclusion_batch))
+                .set_forced_inclusion(forced_inclusion_batch)
             {
                 error!("Failed to set forced inclusion to batch");
                 return Err(anyhow::anyhow!("Failed to set forced inclusion to batch"));
@@ -469,7 +469,7 @@ impl BatchManager {
             // set it to batch builder
             if !self
                 .batch_builder
-                .set_forced_inclusion(Some(forced_inclusion_batch))
+                .set_forced_inclusion(forced_inclusion_batch)
             {
                 // We should never enter here because it means we already have a forced inclusion
                 // but we didn't set it yet. And at the beginning of the function we checked if

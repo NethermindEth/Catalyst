@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::config::{BatchesToSend, ForcedInclusionBatch};
+use super::config::BatchesToSend;
 use crate::l1::bindings::BatchParams;
 use crate::{
     l1::execution_layer::ExecutionLayer,
@@ -74,11 +74,11 @@ impl BatchBuilder {
         Ok(())
     }
 
-    pub fn set_forced_inclusion(&mut self, forced_inclusion_batch: ForcedInclusionBatch) -> bool {
+    pub fn set_forced_inclusion(&mut self, forced_inclusion_batch: BatchParams) -> bool {
         if self.core.current_forced_inclusion.is_some() {
             return false;
         }
-        self.core.current_forced_inclusion = forced_inclusion_batch;
+        self.core.current_forced_inclusion = Some(forced_inclusion_batch);
         true
     }
 

@@ -154,18 +154,6 @@ impl Node {
         }
     }
 
-    async fn preconfirm_block(
-        &mut self,
-        pending_tx_list: Option<PreBuiltTxList>,
-        l2_slot_context: &L2SlotContext,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        let result = self
-            .proposal_manager
-            .preconfirm_block(pending_tx_list, l2_slot_context)
-            .await?;
-        Ok(result)
-    }
-
     async fn main_block_preconfirmation_step(&mut self) -> Result<(), Error> {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
@@ -262,11 +250,17 @@ impl Node {
                     && self.verifier.is_none(),
             };
 
-            let preconfed_block = self
-                .preconfirm_block(pending_tx_list, &l2_slot_context)
-                .await?;
+            if self
+                .proposal_manager
+                .should_new_block_be_created(&pending_tx_list, &l2_slot_context)
+            {
+                let preconfed_block = self
+                    .proposal_manager
+                    .preconfirm_block(pending_tx_list, &l2_slot_context)
+                    .await?;
 
-            self.verify_preconfed_block(preconfed_block).await?;
+                self.verify_preconfed_block(preconfed_block).await?;
+            }
         }
 
         if current_status.is_submitter() && !transaction_in_progress {
@@ -457,13 +451,12 @@ impl Node {
 
     async fn verify_preconfed_block(
         &self,
-        l2_block: Option<BuildPreconfBlockResponse>,
+        l2_block: BuildPreconfBlockResponse,
     ) -> Result<(), Error> {
-        if let Some(l2_block) = l2_block
-            && !self
-                .head_verifier
-                .verify_next_and_set(l2_block.number, l2_block.hash, l2_block.parent_hash)
-                .await
+        if !self
+            .head_verifier
+            .verify_next_and_set(l2_block.number, l2_block.hash, l2_block.parent_hash)
+            .await
         {
             self.head_verifier.log_error().await;
             self.cancel_token.cancel_on_critical_error();

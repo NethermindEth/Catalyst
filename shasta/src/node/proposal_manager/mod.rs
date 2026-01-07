@@ -86,28 +86,30 @@ impl BatchManager {
             .await
     }
 
+    pub fn should_new_block_be_created(
+        &self,
+        pending_tx_list: &Option<PreBuiltTxList>,
+        l2_slot_context: &L2SlotContext,
+    ) -> bool {
+        self.batch_builder.should_new_block_be_created(
+            pending_tx_list,
+            l2_slot_context.info.slot_timestamp(),
+            l2_slot_context.end_of_sequencing,
+        )
+    }
+
     pub async fn preconfirm_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
         l2_slot_context: &L2SlotContext,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        let result = if self.batch_builder.should_new_block_be_created(
-            pending_tx_list.as_ref(),
-            l2_slot_context.info.slot_timestamp(),
-            l2_slot_context.end_of_sequencing,
-        ) {
-            Some(
-                self.add_new_l2_block(
-                    pending_tx_list.unwrap_or_else(PreBuiltTxList::empty),
-                    l2_slot_context,
-                    OperationType::Preconfirm,
-                )
-                .await?,
+    ) -> Result<BuildPreconfBlockResponse, Error> {
+        let result = self
+            .add_new_l2_block(
+                pending_tx_list.unwrap_or_else(PreBuiltTxList::empty),
+                l2_slot_context,
+                OperationType::Preconfirm,
             )
-        } else {
-            None
-        };
-
+            .await?;
         if self
             .batch_builder
             .is_greater_than_max_anchor_height_offset()?
@@ -196,7 +198,7 @@ impl BatchManager {
         prebuilt_tx_list: PreBuiltTxList,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+    ) -> Result<BuildPreconfBlockResponse, Error> {
         let timestamp = l2_slot_context.info.slot_timestamp();
         if let Some(last_block_timestamp) = self
             .batch_builder
