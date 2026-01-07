@@ -138,7 +138,15 @@ mod tests {
         operator.continuing_role = false;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, false, false, false, false),
+            Status::new(
+                false,
+                false,
+                false,
+                false,
+                false,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            ),
         );
     }
 
@@ -156,7 +164,15 @@ mod tests {
         operator.continuing_role = false;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, true, true)
+            Status::new(
+                true,
+                true,
+                false,
+                true,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
         // Not a preconfer and submiter
         let mut operator = create_operator(
@@ -170,7 +186,15 @@ mod tests {
         operator.continuing_role = false;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, false, false, false, true)
+            Status::new(
+                false,
+                false,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
         // Continuing role
         let mut operator = create_operator(
@@ -184,7 +208,15 @@ mod tests {
         operator.continuing_role = true;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, true)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
         // Not correct l2 slot
         let mut operator = create_operator(
@@ -198,7 +230,15 @@ mod tests {
         operator.continuing_role = false;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, true)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -215,7 +255,15 @@ mod tests {
         operator.continuing_role = false;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, true)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         let mut operator = create_operator(
@@ -228,7 +276,15 @@ mod tests {
         operator.continuing_role = true;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, false, false, false, true)
+            Status::new(
+                false,
+                false,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -244,7 +300,15 @@ mod tests {
         operator.was_synced_preconfer = true;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, true)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         let mut operator = create_operator(
@@ -256,7 +320,15 @@ mod tests {
         operator.was_synced_preconfer = true;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, false, false, false, true)
+            Status::new(
+                false,
+                false,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -271,13 +343,29 @@ mod tests {
         operator.was_synced_preconfer = true;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, false, false, false, false)
+            Status::new(
+                true,
+                false,
+                false,
+                false,
+                false,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         let mut operator = create_operator_with_high_taiko_inbox_height();
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, false)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                false,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -291,7 +379,15 @@ mod tests {
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, false, true, false, true)
+            Status::new(
+                true,
+                false,
+                true,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         let mut operator = create_operator(
@@ -305,7 +401,15 @@ mod tests {
         operator.continuing_role = false;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, true)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         let mut operator = create_operator(
@@ -319,7 +423,15 @@ mod tests {
         operator.continuing_role = true;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, true)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -334,7 +446,15 @@ mod tests {
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, false, false, false, true)
+            Status::new(
+                false,
+                false,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         // First slot of epoch, not nominated
@@ -346,7 +466,15 @@ mod tests {
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, false, false, false, true)
+            Status::new(
+                false,
+                false,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         let mut operator = create_operator(
@@ -357,7 +485,15 @@ mod tests {
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, false, false, false, true)
+            Status::new(
+                false,
+                false,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -373,7 +509,15 @@ mod tests {
         // Override the handover start buffer to be larger than the mock timestamp
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, false, false, false, true)
+            Status::new(
+                false,
+                false,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         let mut operator = create_operator(
@@ -385,7 +529,15 @@ mod tests {
         // Override the handover start buffer to be larger than the mock timestamp
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, false, true, false, true)
+            Status::new(
+                true,
+                false,
+                true,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -404,7 +556,15 @@ mod tests {
                 .get_status(&L2SlotInfo::new(0, 0, 0, get_test_hash(), 0, 0))
                 .await
                 .unwrap(),
-            Status::new(true, false, true, false, true)
+            Status::new(
+                true,
+                false,
+                true,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -419,7 +579,15 @@ mod tests {
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, true, false, true)
+            Status::new(
+                true,
+                true,
+                true,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         // Current operator outside handover window
@@ -431,7 +599,15 @@ mod tests {
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, true, false, true)
+            Status::new(
+                true,
+                true,
+                true,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -441,7 +617,15 @@ mod tests {
         assert_eq!(operator.handover_window_slots, HANDOVER_WINDOW_SLOTS);
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, true, false, false, true)
+            Status::new(
+                false,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         // during get_status, new handover window slots should be loaded from config
@@ -496,7 +680,15 @@ mod tests {
 
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, true, false, true)
+            Status::new(
+                true,
+                true,
+                true,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -511,7 +703,15 @@ mod tests {
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(false, true, false, false, true)
+            Status::new(
+                false,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -527,7 +727,15 @@ mod tests {
 
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, true)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         let mut operator = create_operator(
@@ -539,7 +747,15 @@ mod tests {
         operator.was_synced_preconfer = true;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, true)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         let mut operator = create_operator(
@@ -552,7 +768,15 @@ mod tests {
         operator.was_synced_preconfer = true;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, true, false, false, true)
+            Status::new(
+                true,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -567,13 +791,29 @@ mod tests {
         operator.was_synced_preconfer = false;
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, false, true, false, true)
+            Status::new(
+                true,
+                false,
+                true,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
 
         // second get_status call, preconfirmation_started should be false
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(true, false, false, false, true)
+            Status::new(
+                true,
+                false,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 
@@ -585,7 +825,15 @@ mod tests {
         let l2_slot_info = L2SlotInfo::new(0, CURRENT_TIMESTAMP, 0, get_test_hash(), 0, 0);
         assert_eq!(
             operator.get_status(&l2_slot_info).await.unwrap(),
-            Status::new(false, true, false, false, true)
+            Status::new(
+                false,
+                true,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
         );
     }
 

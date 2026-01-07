@@ -5,6 +5,12 @@ on:
     paths:
       - '**/Cargo.toml'
       - '**/Cargo.lock'
+      - '.github/workflows/rust_dependency_audit.yml'
+  pull_request:
+    paths:
+      - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - '.github/workflows/rust_dependency_audit.yml'
 
 env:
   CARGO_TERM_COLOR: always
@@ -37,5 +43,5 @@ jobs:
 
       - name: Run audit-check action
         run: |
-          which cargo-deny || cargo install cargo-deny
+          cargo install cargo-deny --locked --force
           cargo deny check

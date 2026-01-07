@@ -6,6 +6,11 @@ repository.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+default = ["get_status_duration"]
+test = []
+get_status_duration = []
+
 [dependencies]
 alloy = { workspace = true }
 alloy-json-rpc = { workspace = true }

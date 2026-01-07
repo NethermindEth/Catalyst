@@ -12,10 +12,7 @@ use alloy_json_rpc::RpcError;
 use anyhow::Error;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use common::shared::l2_block_v2::L2BlockV2;
-use taiko_bindings::{
-    codec::{Codec::CodecInstance, IInbox::ProposeInput, LibBlobs::BlobReference},
-    inbox::Inbox,
-};
+use taiko_bindings::inbox::{IInbox::ProposeInput, Inbox, LibBlobs::BlobReference};
 use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},
@@ -24,15 +21,13 @@ use tracing::warn;
 
 pub struct ProposalTxBuilder {
     provider: DynProvider,
-    codec_address: Address,
     extra_gas_percentage: u64,
 }
 
 impl ProposalTxBuilder {
-    pub fn new(provider: DynProvider, codec_address: Address, extra_gas_percentage: u64) -> Self {
+    pub fn new(provider: DynProvider, extra_gas_percentage: u64) -> Self {
         Self {
             provider,
-            codec_address,
             extra_gas_percentage,
         }
     }
@@ -43,11 +38,10 @@ impl ProposalTxBuilder {
         l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
-        prover_auth_bytes: Bytes,
         num_forced_inclusion: u8,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
-            .build_propose_blob(l2_blocks, from, to, prover_auth_bytes, num_forced_inclusion)
+            .build_propose_blob(l2_blocks, from, to, num_forced_inclusion)
             .await?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
             Ok(gas) => gas,
@@ -91,7 +85,6 @@ impl ProposalTxBuilder {
         l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
-        prover_auth_bytes: Bytes,
         num_forced_inclusion: u8,
     ) -> Result<TransactionRequest, Error> {
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(l2_blocks.len());
@@ -113,7 +106,6 @@ impl ProposalTxBuilder {
 
         // Build the proposal manifest.
         let manifest = DerivationSourceManifest {
-            prover_auth_bytes,
             blocks: block_manifests,
         };
 
@@ -135,8 +127,8 @@ impl ProposalTxBuilder {
             numForcedInclusions: num_forced_inclusion,
         };
 
-        let codec = CodecInstance::new(self.codec_address, self.provider.clone());
-        let encoded_proposal_input = codec.encodeProposeInput(input).call().await?;
+        let inbox = Inbox::new(to, self.provider.clone());
+        let encoded_proposal_input = inbox.encodeProposeInput(input).call().await?;
 
         let tx = TransactionRequest::default()
             .with_from(from)

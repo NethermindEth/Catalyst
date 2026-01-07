@@ -101,7 +101,7 @@ impl ProposeBatchBuilder {
         let blob_count = tx_blob
             .sidecar
             .as_ref()
-            .map_or(0, |sidecar| sidecar.blobs.len() as u64);
+            .map_or(0, |sidecar| sidecar.blobs().len() as u64);
 
         // Calculate the cost of the eip4844 transaction
         let eip4844_cost = fees_per_gas.get_eip4844_cost(blob_count, tx_blob_gas).await;

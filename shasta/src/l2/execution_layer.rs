@@ -1,21 +1,18 @@
-use crate::l2::bindings::BondManager;
-
 use alloy::{
-    consensus::Transaction as AnchorTransaction,
-    consensus::{SignableTransaction, TxEnvelope, transaction::Recovered},
-    primitives::{Address, B256, Bytes},
+    consensus::{
+        BlockHeader, SignableTransaction, Transaction as AnchorTransaction, TxEnvelope,
+        transaction::Recovered,
+    },
+    primitives::{Address, B256},
     providers::{DynProvider, Provider},
     rpc::types::Transaction,
     signers::Signature,
 };
 use anyhow::Error;
+use common::crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
 use common::shared::{
     alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon,
     l2_slot_info_v2::L2SlotInfoV2,
-};
-use common::{
-    crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY},
-    l1::traits::PreconferBondProvider,
 };
 use pacaya::l2::config::TaikoConfig;
 use taiko_bindings::anchor::{Anchor, ICheckpointStore::Checkpoint};
@@ -26,7 +23,6 @@ pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
     shasta_anchor: Anchor::AnchorInstance<DynProvider>,
-    bond_manager: Address,
     chain_id: u64,
     pub config: TaikoConfig,
 }
@@ -46,17 +42,10 @@ impl L2ExecutionLayer {
 
         let common = ExecutionLayerCommon::new(provider.clone()).await?;
 
-        let bond_manager = shasta_anchor.bondManager().call().await.map_err(|e| {
-            anyhow::anyhow!("Failed to get BondManager address from TaikoAnchor: {e}")
-        })?;
-
-        info!("Bond manager address: {}", bond_manager);
-
         Ok(Self {
             common,
             provider,
             shasta_anchor,
-            bond_manager,
             chain_id,
             config: taiko_config,
         })
@@ -68,7 +57,6 @@ impl L2ExecutionLayer {
 
     pub async fn construct_anchor_tx(
         &self,
-        proposal_id: u64,
         l2_slot_info: &L2SlotInfoV2,
         anchor_block_params: Checkpoint,
     ) -> Result<Transaction, Error> {
@@ -88,14 +76,7 @@ impl L2ExecutionLayer {
 
         let call_builder = self
             .shasta_anchor
-            .anchorV4(
-                Anchor::ProposalParams {
-                    proposalId: proposal_id.try_into()?,
-                    proposer: self.config.signer.get_address(),
-                    proverAuth: Bytes::new(), // no prover designation for now
-                },
-                anchor_block_params,
-            )
+            .anchorV4(anchor_block_params)
             .gas(1_000_000) // value expected by Taiko
             .max_fee_per_gas(u128::from(l2_slot_info.base_fee())) // value expected by Taiko
             .max_priority_fee_per_gas(0) // value expected by Taiko
@@ -130,16 +111,6 @@ impl L2ExecutionLayer {
 
     fn sign_hash_deterministic(&self, hash: B256) -> Result<Signature, Error> {
         common::crypto::fixed_k_signer::sign_hash_deterministic(GOLDEN_TOUCH_PRIVATE_KEY, hash)
-    }
-
-    async fn get_preconfer_deposited_bonds(&self) -> Result<alloy::primitives::U256, Error> {
-        let contract = BondManager::new(self.bond_manager, &self.provider);
-        let bonds = contract
-            .bond(self.config.signer.get_address())
-            .call()
-            .await
-            .map_err(|e| Error::msg(format!("Failed to get bonds balance: {e}")))?;
-        Ok(bonds.balance)
     }
 
     pub async fn transfer_eth_from_l2_to_l1(
@@ -184,17 +155,9 @@ impl L2ExecutionLayer {
     }
 
     pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
-        self.get_latest_anchor_transaction_input()
-            .await
-            .map_err(|e| anyhow::anyhow!("get_last_synced_proposal_id_from_geth: {e}"))
-            .and_then(|input| Self::decode_proposal_id_from_tx_data(&input))
-    }
-
-    pub fn decode_proposal_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
-        let tx_data =
-            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
-                .map_err(|e| anyhow::anyhow!("Failed to decode proposal id from tx data: {}", e))?;
-        Ok(tx_data._proposalParams.proposalId.to::<u64>())
+        let block = self.common.get_latest_block_with_txs().await?;
+        let (_, proposal_id) = super::tools::decode_extra_data(block.header.extra_data())?;
+        Ok(proposal_id)
     }
 
     async fn get_latest_anchor_transaction_input(&self) -> Result<Vec<u8>, Error> {
@@ -282,17 +245,5 @@ impl L2ExecutionLayer {
             <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
                 .map_err(|e| anyhow::anyhow!("Failed to decode proposal id from tx data: {}", e))?;
         Ok(tx_data._checkpoint)
-    }
-}
-
-impl PreconferBondProvider for L2ExecutionLayer {
-    async fn get_preconfer_total_bonds(&self) -> Result<alloy::primitives::U256, Error> {
-        // Check TAIKO TOKEN balance
-        let bond_balance = self
-            .get_preconfer_deposited_bonds()
-            .await
-            .map_err(|e| Error::msg(format!("Failed to fetch bond balance: {e}")))?;
-
-        Ok(bond_balance)
     }
 }

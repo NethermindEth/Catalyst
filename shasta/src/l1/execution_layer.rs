@@ -4,7 +4,7 @@ use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
 use alloy::{
     eips::BlockNumberOrTag,
-    primitives::{Address, Bytes, aliases::U48},
+    primitives::{Address, U256, aliases::U48},
     providers::DynProvider,
 };
 use anyhow::{Error, anyhow};
@@ -22,8 +22,10 @@ use common::{
 };
 use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
 use std::sync::Arc;
-use taiko_bindings::{
-    inbox::IForcedInclusionStore::ForcedInclusion, inbox::IInbox::CoreState, inbox::Inbox,
+use taiko_bindings::inbox::{
+    IForcedInclusionStore::ForcedInclusion,
+    IInbox::CoreState,
+    Inbox::{self, InboxInstance},
 };
 use tokio::sync::mpsc::Sender;
 use tracing::info;
@@ -34,6 +36,7 @@ pub struct ExecutionLayer {
     preconfer_address: Address,
     pub transaction_monitor: TransactionMonitor,
     contract_addresses: ContractAddresses,
+    inbox_instance: InboxInstance<DynProvider>,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -64,16 +67,20 @@ impl ELTrait for ExecutionLayer {
         .await
         .map_err(|e| Error::msg(format!("Failed to create TransactionMonitor: {e}")))?;
 
-        let shasta_inbox = Inbox::new(specific_config.shasta_inbox, provider.clone());
-        let shasta_config = shasta_inbox
+        let inbox_instance = Inbox::new(specific_config.shasta_inbox, provider.clone());
+        let shasta_config = inbox_instance
             .getConfig()
             .call()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to call getConfig for Inbox: {e}"))?;
 
+        tracing::info!(
+            "Shasta inbox: {}, Proposer checker {}",
+            specific_config.shasta_inbox,
+            shasta_config.proposerChecker
+        );
         let contract_addresses = ContractAddresses {
             shasta_inbox: specific_config.shasta_inbox,
-            codec: shasta_config.codec,
             proposer_checker: shasta_config.proposerChecker,
         };
 
@@ -83,6 +90,7 @@ impl ELTrait for ExecutionLayer {
             preconfer_address: common_config.signer.get_address(),
             transaction_monitor,
             contract_addresses,
+            inbox_instance,
         })
     }
 
@@ -168,14 +176,12 @@ impl ExecutionLayer {
 
         // Build propose transaction
         // TODO fill extra gas percentege from config
-        let builder =
-            ProposalTxBuilder::new(self.provider.clone(), self.contract_addresses.codec, 10);
+        let builder = ProposalTxBuilder::new(self.provider.clone(), 10);
         let tx = builder
             .build_propose_tx(
                 l2_blocks,
                 self.preconfer_address,
                 self.contract_addresses.shasta_inbox,
-                Bytes::new(), // TODO fill prover_auth_bytes
                 num_forced_inclusion,
             )
             .await?;
@@ -195,8 +201,8 @@ impl ExecutionLayer {
     }
 
     pub async fn fetch_protocol_config(&self) -> Result<ProtocolConfig, Error> {
-        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
-        let shasta_config = shasta_inbox
+        let shasta_config = self
+            .inbox_instance
             .getConfig()
             .call()
             .await
@@ -211,8 +217,8 @@ impl ExecutionLayer {
     }
 
     pub async fn get_activation_timestamp(&self) -> Result<u64, Error> {
-        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
-        let timestamp = shasta_inbox
+        let timestamp = self
+            .inbox_instance
             .activationTimestamp()
             .call()
             .await
@@ -222,8 +228,8 @@ impl ExecutionLayer {
     }
 
     pub async fn get_forced_inclusion_head(&self) -> Result<u64, Error> {
-        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
-        let state = shasta_inbox
+        let state = self
+            .inbox_instance
             .getForcedInclusionState()
             .call()
             .await
@@ -235,8 +241,8 @@ impl ExecutionLayer {
     }
 
     pub async fn get_forced_inclusion_tail(&self) -> Result<u64, Error> {
-        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
-        let state = shasta_inbox
+        let state = self
+            .inbox_instance
             .getForcedInclusionState()
             .call()
             .await
@@ -248,8 +254,8 @@ impl ExecutionLayer {
     }
 
     pub async fn get_forced_inclusion(&self, index: u64) -> Result<ForcedInclusion, Error> {
-        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
-        let inclusions = shasta_inbox
+        let inclusions = self
+            .inbox_instance
             .getForcedInclusions(U48::from(index), U48::ONE)
             .call()
             .await
@@ -263,8 +269,8 @@ impl ExecutionLayer {
     }
 
     pub async fn get_inbox_state(&self) -> Result<CoreState, Error> {
-        let shasta_inbox = Inbox::new(self.contract_addresses.shasta_inbox, self.provider.clone());
-        let state = shasta_inbox
+        let state = self
+            .inbox_instance
             .getCoreState()
             .call()
             .await
@@ -292,5 +298,22 @@ impl WhitelistProvider for ExecutionLayer {
             })?;
 
         Ok(operators.activeSince > 0)
+    }
+}
+
+impl common::l1::traits::PreconferBondProvider for ExecutionLayer {
+    async fn get_preconfer_total_bonds(&self) -> Result<U256, Error> {
+        let bond = self
+            .inbox_instance
+            .getBond(self.preconfer_address)
+            .call()
+            .await
+            .map_err(|e| {
+                Error::msg(format!(
+                    "Failed to get bond value for the preconfer from inbox: {e}",
+                ))
+            })?;
+
+        Ok(U256::from(bond.balance))
     }
 }

@@ -196,7 +196,7 @@ impl BatchManager {
         prebuilt_tx_list: PreBuiltTxList,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
-    ) -> Result<BuildPreconfBlockResponse, Error> {
+    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         let timestamp = l2_slot_context.info.slot_timestamp();
         if let Some(last_block_timestamp) = self
             .batch_builder
@@ -444,8 +444,9 @@ impl BatchManager {
 
         let coinbase = block.header.beneficiary();
 
-        let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
+        let (_, proposal_id) = crate::l2::tools::decode_extra_data(block.header.extra_data())?;
 
+        let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
         let anchor_info = AnchorBlockInfo::from_precomputed_data(
             self.ethereum_l1.execution_layer.common(),
             anchor_tx_data._checkpoint.blockNumber.to::<u64>(),
@@ -456,8 +457,7 @@ impl BatchManager {
 
         let is_forced_inclusion = self.is_forced_inclusion(block_height).await?;
 
-        // TODO imporvee output
-        let proposal_id = anchor_tx_data._proposalParams.proposalId.to::<u64>();
+        // TODO improve output
         debug!(
             "Recovering from L2 block {}, proposal_id: {} transactions: {} is_forced_inclusion: {}, timestamp: {}, anchor_block_number: {} coinbase: {}, gas_limit: {}",
             block_height,

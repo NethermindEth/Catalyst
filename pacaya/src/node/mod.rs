@@ -493,11 +493,16 @@ impl Node {
     async fn get_slot_info_and_status(
         &mut self,
     ) -> Result<(L2SlotInfo, OperatorStatus, Option<PreBuiltTxList>), Error> {
+        let start = std::time::Instant::now();
         let l2_slot_info = self.taiko.get_l2_slot_info().await;
+        let elapsed_l2_slot = start.elapsed();
+
         let current_status = match &l2_slot_info {
             Ok(info) => self.operator.get_status(info).await,
             Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
         };
+        let elapsed_status = start.elapsed();
+
         let batches_ready_to_send = self.batch_manager.get_number_of_batches_ready_to_send();
         let pending_tx_list = match &l2_slot_info {
             Ok(info) => {
@@ -507,12 +512,56 @@ impl Node {
             }
             Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
         };
+        let elapsed_pending_tx = start.elapsed();
+
         self.print_current_slots_info(
             &current_status,
             &pending_tx_list,
             &l2_slot_info,
             self.batch_manager.get_number_of_batches(),
         )?;
+
+        if elapsed_pending_tx.as_millis() > (self.config.preconf_heartbeat_ms / 2).into() {
+            error!(
+                "Critical error: getting slot info and status is taking too long: total {} ms (l2_slot_info: {} ms, status: {} ms, pending_tx_list: {} ms)",
+                elapsed_pending_tx.as_millis(),
+                elapsed_l2_slot.as_millis(),
+                (elapsed_status - elapsed_l2_slot).as_millis(),
+                (elapsed_pending_tx - elapsed_status).as_millis()
+            );
+            #[cfg(feature = "get_status_duration")]
+            {
+                if let Some(durations) =
+                    current_status.as_ref().ok().and_then(|s| s.get_durations())
+                {
+                    error!(
+                        "Get status durations: check_taiko_wrapper: {} ms, check_handover_window_slots: {} ms, check_current_operator: {} ms, check_handover_window: {} ms, check_driver_status: {} ms, check_driver_synced: {} ms, check_preconfer: {} ms, check_preconfirmation_started: {} ms, check_submitter: {} ms, check_end_of_sequencing: {} ms",
+                        durations.check_taiko_wrapper.as_millis(),
+                        (durations.check_handover_window_slots - durations.check_taiko_wrapper)
+                            .as_millis(),
+                        (durations.check_current_operator - durations.check_handover_window_slots)
+                            .as_millis(),
+                        (durations.check_handover_window - durations.check_current_operator)
+                            .as_millis(),
+                        (durations.check_driver_status - durations.check_handover_window)
+                            .as_millis(),
+                        (durations.check_driver_synced - durations.check_driver_status).as_millis(),
+                        (durations.check_preconfer - durations.check_driver_synced).as_millis(),
+                        (durations.check_preconfirmation_started - durations.check_preconfer)
+                            .as_millis(),
+                        (durations.check_submitter - durations.check_preconfirmation_started)
+                            .as_millis(),
+                        (durations.check_end_of_sequencing - durations.check_submitter).as_millis(),
+                    );
+                } else {
+                    error!("Get status durations not available (None)");
+                }
+            }
+            self.metrics.inc_critical_errors();
+            return Err(anyhow::anyhow!(
+                "Getting slot info and status is taking too long"
+            ));
+        }
 
         Ok((l2_slot_info?, current_status?, pending_tx_list?))
     }
