@@ -37,6 +37,7 @@ async fn main() -> Result<(), Error> {
             }
             Err(e) => {
                 error!("Failed to run node: {}", e);
+                metrics.inc_critical_errors();
                 info!(
                     "Waiting {WAIT_BEFORE_RECREATING_NODE_SECS} second before recreating node..."
                 );
