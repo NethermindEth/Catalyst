@@ -86,6 +86,7 @@ taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "9f
 taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "9fadda25747b9d04984de5f23792ad83390648bd", package = "rpc" }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
+tower = { version = "0.5", default-features = false }
 tracing = { version = "0.1.41", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false, features = [
     "fmt",

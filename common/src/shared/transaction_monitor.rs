@@ -1,5 +1,5 @@
 use crate::l1::{config::EthereumL1Config, tools, transaction_error::TransactionError};
-use crate::{metrics::Metrics, shared::alloy_tools, signer::Signer};
+use crate::metrics::Metrics;
 use alloy::{
     consensus::TxType,
     network::{Network, ReceiptResponse, TransactionBuilder, TransactionBuilder4844},
@@ -34,8 +34,6 @@ pub struct TransactionMonitorConfig {
     max_attempts_to_send_tx: u64,
     max_attempts_to_wait_tx: u64,
     delay_between_tx_attempts: Duration,
-    execution_rpc_urls: Vec<String>,
-    signer: Arc<Signer>,
 }
 
 pub struct TransactionMonitorThread {
@@ -77,8 +75,6 @@ impl TransactionMonitor {
                 delay_between_tx_attempts: Duration::from_secs(
                     config.delay_between_tx_attempts_sec,
                 ),
-                execution_rpc_urls: config.execution_rpc_urls.clone(),
-                signer: config.signer.clone(),
             },
             join_handle: Mutex::new(None),
             error_notification_channel,
@@ -363,43 +359,10 @@ impl TransactionMonitorThread {
         sending_attempt: u64,
     ) -> Option<PendingTransactionBuilder<alloy::network::Ethereum>> {
         match self.provider.send_transaction(tx.clone()).await {
-            Ok(pending_tx) => {
-                self.propagate_transaction_to_other_backup_nodes(tx).await;
-                Some(pending_tx)
-            }
+            Ok(pending_tx) => Some(pending_tx),
             Err(e) => {
                 self.handle_rpc_error(e, sending_attempt).await;
                 None
-            }
-        }
-    }
-
-    /// Recreates each backup node every time to avoid connection issues
-    async fn propagate_transaction_to_other_backup_nodes(&self, tx: TransactionRequest) {
-        // Skip the first RPC URL since it is the main one
-        for url in self.config.execution_rpc_urls.iter().skip(1) {
-            let provider = alloy_tools::construct_alloy_provider(&self.config.signer, url).await;
-            match provider {
-                Ok(provider) => {
-                    let tx = provider.send_transaction(tx.clone()).await;
-                    if let Err(e) = tx {
-                        if e.to_string().contains("AlreadyKnown")
-                            || e.to_string().to_lowercase().contains("already known")
-                        {
-                            debug!("Transaction already known to backup node {}", url);
-                        } else {
-                            warn!("Failed to send transaction to backup node {}: {}", url, e);
-                        }
-                    } else {
-                        info!("Transaction sent to backup node {}", url);
-                    }
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to construct alloy provider for backup node {}: {}",
-                        url, e
-                    );
-                }
             }
         }
     }

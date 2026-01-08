@@ -7,7 +7,7 @@ use alloy::{
     primitives::{Address, U256, aliases::U48},
     providers::DynProvider,
 };
-use anyhow::{Error, anyhow};
+use anyhow::Error;
 use common::shared::l2_block_v2::L2BlockV2;
 use common::{
     l1::{
@@ -49,10 +49,7 @@ impl ELTrait for ExecutionLayer {
     ) -> Result<Self, Error> {
         let provider = alloy_tools::construct_alloy_provider(
             &common_config.signer,
-            common_config
-                .execution_rpc_urls
-                .first()
-                .ok_or_else(|| anyhow!("L1 RPC URL is required"))?,
+            &common_config.execution_rpc_urls,
         )
         .await?;
         let common = ExecutionLayerCommon::new(provider.clone()).await?;
