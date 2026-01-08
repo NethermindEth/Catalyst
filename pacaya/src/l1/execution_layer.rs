@@ -60,10 +60,7 @@ impl ELTrait for ExecutionLayer {
     ) -> Result<Self, Error> {
         let provider = alloy_tools::construct_alloy_provider(
             &common_config.signer,
-            common_config
-                .execution_rpc_urls
-                .first()
-                .ok_or_else(|| anyhow!("L1 RPC URL is required"))?,
+            &common_config.execution_rpc_urls,
         )
         .await?;
         let common = ExecutionLayerCommon::new(provider.clone()).await?;

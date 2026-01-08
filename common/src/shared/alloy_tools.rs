@@ -3,12 +3,20 @@ use alloy::{
     network::{Ethereum, EthereumWallet},
     primitives::B256,
     providers::{DynProvider, Provider, ProviderBuilder, WsConnect, ext::DebugApi},
+    pubsub::{PubSubConnect, PubSubFrontend},
+    rpc::client::RpcClient,
     rpc::types::{Transaction, TransactionRequest, trace::geth::GethDebugTracingOptions},
     signers::local::PrivateKeySigner,
+    transports::{
+        http::{Http, reqwest::Url},
+        layers::FallbackLayer,
+    },
 };
 use anyhow::Error;
-use std::str::FromStr;
-use tracing::debug;
+use futures_util::future;
+use std::{num::NonZeroUsize, str::FromStr};
+use tower::ServiceBuilder;
+use tracing::{debug, warn};
 
 pub async fn check_for_revert_reason<P: Provider<Ethereum>>(
     provider: &P,
@@ -75,22 +83,22 @@ fn find_errors_from_trace(trace_str: &str) -> Option<String> {
 
 pub async fn construct_alloy_provider(
     signer: &Signer,
-    execution_ws_rpc_url: &str,
+    execution_ws_rpc_urls: &[String],
 ) -> Result<DynProvider, Error> {
     match signer {
         Signer::PrivateKey(private_key, _) => {
             debug!(
-                "Creating alloy provider with URL: {} and private key signer.",
-                execution_ws_rpc_url
+                "Creating alloy provider with URLs: {:?} and private key signer.",
+                execution_ws_rpc_urls
             );
             let signer = PrivateKeySigner::from_str(private_key.as_str())?;
 
-            Ok(create_alloy_provider_with_wallet(signer.into(), execution_ws_rpc_url).await?)
+            Ok(create_alloy_provider_with_wallet(signer.into(), execution_ws_rpc_urls).await?)
         }
         Signer::Web3signer(web3signer, address) => {
             debug!(
-                "Creating alloy provider with URL: {} and web3signer signer.",
-                execution_ws_rpc_url
+                "Creating alloy provider with URLs: {:?} and web3signer signer.",
+                execution_ws_rpc_urls
             );
             let preconfer_address = *address;
 
@@ -100,34 +108,100 @@ pub async fn construct_alloy_provider(
             )?;
             let wallet = EthereumWallet::new(tx_signer);
 
-            Ok(create_alloy_provider_with_wallet(wallet, execution_ws_rpc_url).await?)
+            Ok(create_alloy_provider_with_wallet(wallet, execution_ws_rpc_urls).await?)
         }
     }
 }
 
 async fn create_alloy_provider_with_wallet(
     wallet: EthereumWallet,
-    url: &str,
+    urls: &[String],
 ) -> Result<DynProvider, Error> {
-    if url.contains("ws://") || url.contains("wss://") {
-        let ws = WsConnect::new(url);
-        Ok(ProviderBuilder::new()
-            .wallet(wallet)
-            .connect_ws(ws.clone())
-            .await
-            .map_err(|e| Error::msg(format!("Execution layer: Failed to connect to WS: {e}")))?
-            .erased())
-    } else if url.contains("http://") || url.contains("https://") {
-        Ok(ProviderBuilder::new()
-            .wallet(wallet)
-            .connect_http(url.parse::<reqwest::Url>()?)
-            .erased())
+    let client = if urls
+        .iter()
+        .all(|url| url.starts_with("ws://") || url.starts_with("wss://"))
+    {
+        let transports = create_websocket_transports(urls).await?;
+
+        let fallback_layer = FallbackLayer::default().with_active_transport_count(
+            NonZeroUsize::new(transports.len()).ok_or_else(|| {
+                anyhow::anyhow!("Failed to create NonZeroUsize from transports.len()")
+            })?,
+        );
+        RpcClient::builder().transport(
+            ServiceBuilder::new()
+                .layer(fallback_layer)
+                .service(transports),
+            false,
+        )
+    } else if urls
+        .iter()
+        .all(|url| url.contains("http://") || url.contains("https://"))
+    {
+        let transports = create_http_transports(urls)?;
+
+        let fallback_layer = FallbackLayer::default().with_active_transport_count(
+            NonZeroUsize::new(transports.len()).ok_or_else(|| {
+                anyhow::anyhow!("Failed to create NonZeroUsize from transports.len()")
+            })?,
+        );
+        RpcClient::builder().transport(
+            ServiceBuilder::new()
+                .layer(fallback_layer)
+                .service(transports),
+            false,
+        )
     } else {
-        Err(anyhow::anyhow!(
-            "Invalid URL, only websocket and http are supported: {}",
-            url
-        ))
+        return Err(anyhow::anyhow!(
+            "Invalid URL list, only websocket and http are supported, you cannot mix websockets and HTTP URLs: {}",
+            urls.join(", ")
+        ));
+    };
+
+    Ok(ProviderBuilder::new()
+        .wallet(wallet)
+        .connect_client(client)
+        .erased())
+}
+
+async fn create_websocket_transports(urls: &[String]) -> Result<Vec<PubSubFrontend>, Error> {
+    let connection_futures = urls.iter().map(|url| async move {
+        WsConnect::new(url)
+            .into_service()
+            .await
+            .map(|ws| (url, ws))
+            .inspect(|_| debug!("Connected to {url}"))
+            .inspect_err(|e| warn!("Failed to connect to {url}: {e}"))
+    });
+
+    let transports: Vec<_> = future::join_all(connection_futures)
+        .await
+        .into_iter()
+        .filter_map(Result::ok)
+        .map(|(_, ws)| ws)
+        .collect();
+
+    if transports.is_empty() {
+        return Err(anyhow::anyhow!(
+            "No valid WebSocket connections established"
+        ));
     }
+
+    Ok(transports)
+}
+
+fn create_http_transports(urls: &[String]) -> Result<Vec<Http<reqwest::Client>>, Error> {
+    urls.iter()
+        .map(|url| {
+            Url::parse(url)
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to parse URL while creating HTTP transport for alloy provider: {e}"
+                    )
+                })
+                .map(Http::new)
+        })
+        .collect()
 }
 
 pub async fn create_alloy_provider_without_wallet(url: &str) -> Result<DynProvider, Error> {
