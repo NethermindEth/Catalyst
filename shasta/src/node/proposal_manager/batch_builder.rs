@@ -453,11 +453,12 @@ impl BatchBuilder {
 
     pub fn should_new_block_be_created(
         &self,
-        pending_tx_list: Option<&PreBuiltTxList>,
+        pending_tx_list: &Option<PreBuiltTxList>,
         current_l2_slot_timestamp: u64,
         end_of_sequencing: bool,
     ) -> bool {
         let number_of_pending_txs = pending_tx_list
+            .as_ref()
             .map(|tx_list| tx_list.tx_list.len())
             .unwrap_or(0) as u64;
 
