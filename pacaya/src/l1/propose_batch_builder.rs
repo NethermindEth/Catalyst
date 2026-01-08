@@ -2,7 +2,7 @@ use super::bindings::*;
 use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
     consensus::{SidecarBuilder, transaction::RlpEcdsaEncodableTx},
-    network::{TransactionBuilder, TransactionBuilder7594},
+    network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{Address, Bytes, FixedBytes},
     providers::{DynProvider, Provider},
     rpc::types::TransactionRequest,
@@ -291,7 +291,7 @@ impl ProposeBatchBuilder {
         };
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(tx_list);
-        let sidecar = sidecar_builder.build_7594()?;
+        let sidecar = sidecar_builder.build()?;
 
         let num_blobs = u8::try_from(sidecar.blobs.len())?;
 

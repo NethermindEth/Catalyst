@@ -27,7 +27,7 @@ mod tests {
         let data: Vec<u8> = vec![0u8; BLOB_MAX_DATA_SIZE * 2];
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&data);
-        let sidecar = sidecar_builder.build_7594().unwrap();
+        let sidecar = sidecar_builder.build().unwrap();
         assert_eq!(sidecar.blobs.len(), 2);
     }
 
@@ -52,7 +52,7 @@ mod tests {
         ];
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&data);
-        let sidecar = sidecar_builder.build_7594().unwrap();
+        let sidecar = sidecar_builder.build().unwrap();
         let encoded_blob: Blob = sidecar.blobs[0];
 
         assert_eq!(
@@ -87,7 +87,7 @@ mod tests {
         ];
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&data);
-        let sidecar = sidecar_builder.build_7594().unwrap();
+        let sidecar = sidecar_builder.build().unwrap();
         let encoded_blob: Blob = sidecar.blobs[0];
 
         assert_eq!(
