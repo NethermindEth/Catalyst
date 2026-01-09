@@ -313,16 +313,20 @@ class LookaheadSlot:
 # Address of the preconf slasher
 PRECONFER_SLASHER_ADDRESS = ....
 
+# Constants for validation
+MAX_TIMESTAMP_DRIFT = ...  # Maximum allowed timestamp drift from current time
+MAX_ANCHOR_DRIFT = ...     # Maximum allowed anchor block drift from last seen L1 head
+
 # The currently expected preconfer
 currentPreconfer: LookaheadSlot
 
 # Node's preconfed L2 head state
-# Based on `ParentState` in Rust implementation, but extended with `rawTxListHash`:
-# https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/pipeline/state.rs#L12-L13
 class ParentState:
     header: Header             # Standard block header (hash, number, timestamp, gasLimit, coinbase, etc.)
     preconfirmationHash: bytes32     # New! Hash of preconfirmation
     proposalId: uint256        # New! Incremental ID for each L1 proposal
+    anchorId: uint256          # New! Anchor ID of the preconfed block
+    gasLimit: uint256          # New! Gas limit of the preconfed block
     ...
 
 localL2Head: ParentState
@@ -363,14 +367,13 @@ def verifyPreconfirmation(rawTxList: List[Tx], signedCommitment: SignedCommitmen
     # 7) Verify timestamp does not drift too far from current time
     assert abs(preconf.timestamp - now()) <= MAX_TIMESTAMP_DRIFT
 
-    # 8) Verify timestamp, gasLimit, coinbase, proverAuth, based on
+    # 8) Verify timestamp, gasLimit, anchorBlockNumber, and bond, based on
     #    logic in derivation.
-    # TODO: Revisit once derivation is refactored 
-    #       to handle per-block derivation.
-    verifyTimestamp(preconf.timestamp, preconf.proposalId, parentState)
-    verifyGasLimit(preconf.gasLimit, parentState)
-    verifyCoinbase(preconf.coinbase, currentPreconfer.committer)
-    verifyProverAuth(preconf.proverAuth)
+    lastSeenL1Head = getL1Head()  # Get the last seen L1 head block number
+    verifyTimestamp(preconf.timestamp, preconf.submissionWindowEnd, localL2Head)
+    verifyGasLimit(preconf.gasLimit, localL2Head)
+    verifyAnchorBlockNumber(preconf.anchorBlockNumber, preconf.proposalId, localL2Head, lastSeenL1Head)
+    verifySufficientBond(signer)
 
     # 9) Derive L2 block from preconfirmation and execute it
     # First construct block manifest from preconfirmation parameters.
@@ -389,12 +392,78 @@ def verifyPreconfirmation(rawTxList: List[Tx], signedCommitment: SignedCommitmen
     # This validates constraints, constructs anchor tx, and executes the block.
     # Corresponds to `process_block_manifest` in Rust implementation:
     # https://github.com/taikoxyz/taiko-mono/blob/0ca71a425ecb75bec7ed737c258f1a35362f4873/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/pipeline/payload.rs#L290
-    # Note: This function will update the `parentState` with the newly processed block.
-    processBlockManifest(manifest, parentState)
+    # Note: This function will update the `localL2Head` with the newly processed block.
+    processBlockManifest(manifest, localL2Head)
 
     # 10) Handle explicit EOP handoff
     if preconf.eop:
         currentPreconfer = lookaheadStore.getNextPreconfer()
+
+def verifyGasLimit(gasLimit: uint64, parentState: ParentState):
+    """
+    Verifies that the gas limit is within acceptable bounds based on parent gas limit.
+    Constants are defined in the derivation spec.
+    Based on:
+    https://github.com/taikoxyz/taiko-mono/blob/f42d402dc02daf6144300223a843847467fe515f/packages/taiko-client-rs/crates/driver/src/derivation/pipeline/shasta/validation.rs#L174-L175
+    """
+    parent_gas = parentState.header.gasLimit
+    
+    # Calculate effective parent (subtract anchor gas if not genesis)
+    if parentState.header.number == 0:
+        effective_parent = parent_gas
+    else:
+        effective_parent = parent_gas - ANCHOR_V3_V4_GAS_LIMIT
+    
+    # Calculate bounds
+    upper = (effective_parent * (GAS_LIMIT_DENOMINATOR + BLOCK_GAS_LIMIT_MAX_CHANGE)) // GAS_LIMIT_DENOMINATOR
+    upper = min(upper, MAX_BLOCK_GAS_LIMIT)
+    
+    lower = (effective_parent * (GAS_LIMIT_DENOMINATOR - BLOCK_GAS_LIMIT_MAX_CHANGE)) // GAS_LIMIT_DENOMINATOR
+    lower = max(lower, MIN_BLOCK_GAS_LIMIT)
+    lower = min(lower, upper)
+    
+    assert lower <= gasLimit <= upper, \
+        f"Gas limit {gasLimit} outside bounds [{lower}, {upper}]"
+
+def verifyTimestamp(timestamp: uint256, submissionWindowEnd: uint256, parentState: ParentState):
+    """
+    Verifies that the timestamp is within acceptable bounds.
+    """
+    parent_timestamp = parentState.header.timestamp
+    current_time = now()
+    
+    lower_bound = max(parent_timestamp + 1, current_time - MAX_TIMESTAMP_DRIFT)
+    upper_bound = min(submissionWindowEnd, current_time + MAX_TIMESTAMP_DRIFT)
+    
+    assert lower_bound <= timestamp <= upper_bound, \
+        f"Timestamp {timestamp} is outside bounds [{lower_bound}, {upper_bound}]"
+
+def verifyAnchorBlockNumber(anchorBlockNumber: uint256, proposalId: uint256, parentState: ParentState, lastSeenL1Head: uint256):
+    """
+    Verifies that the anchor block number is within acceptable bounds.
+    Also checks that anchor block number increments by at least one for the first block of a proposal.
+    """
+    parent_anchor_block_num = parentState.anchorId
+    is_first_block_of_proposal = proposalId != parentState.proposalId
+    
+    lower_bound = max(lastSeenL1Head - MAX_ANCHOR_DRIFT, parent_anchor_block_num)
+    upper_bound = lastSeenL1Head
+    
+    assert lower_bound <= anchorBlockNumber <= upper_bound, \
+        f"Anchor block number {anchorBlockNumber} is outside bounds [{lower_bound}, {upper_bound}]"
+    
+    # For the first block of a proposal, ensure anchor block number increments by at least one
+    if is_first_block_of_proposal:
+        assert anchorBlockNumber >= parent_anchor_block_num + 1, \
+            f"First block of proposal must increment anchor block number by at least one. " \
+            f"Parent: {parent_anchor_block_num}, Current: {anchorBlockNumber}"
+
+def verifySufficientBond(proposer: address):
+    """
+    Verifies that the proposer has sufficient bond funds.
+    """
+    assert hasSufficientBond(proposer), \
+        f"Proposer {proposer} does not have sufficient bond funds"
 
 # Hook function called on L1 reorgs
 def handleL1Reorg(reorgedAnchorIds: List[int]):
