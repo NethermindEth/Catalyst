@@ -1,6 +1,8 @@
 mod config_trait;
 pub use config_trait::ConfigTrait;
 
+use alloy::primitives::Address;
+use std::str::FromStr;
 use std::time::Duration;
 use tracing::{info, warn};
 
@@ -9,7 +11,7 @@ use crate::blob::constants::MAX_BLOB_DATA_SIZE;
 #[derive(Debug, Clone)]
 pub struct Config {
     // Signer
-    pub preconfer_address: Option<String>,
+    pub preconfer_address: Option<Address>,
     pub web3signer_l1_url: Option<String>,
     pub web3signer_l2_url: Option<String>,
     pub catalyst_node_ecdsa_private_key: Option<String>,
@@ -30,8 +32,8 @@ pub struct Config {
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
     // Taiko contracts
-    pub taiko_anchor_address: String,
-    pub taiko_bridge_address: String,
+    pub taiko_anchor_address: Address,
+    pub taiko_bridge_address: Address,
     // Batch building parameters
     pub max_bytes_size_of_batch: u64,
     pub max_blocks_per_batch: u16,
@@ -67,6 +69,21 @@ pub struct Config {
     pub whitelist_monitor_interval_sec: u64,
 }
 
+/// Creates a formatted error message for address parsing failures.
+pub fn address_parse_error(
+    env_var: &str,
+    error: impl std::fmt::Display,
+    value: &str,
+) -> anyhow::Error {
+    anyhow::anyhow!(
+        "Failed to parse {}: {}. Address must be exactly 42 characters (0x followed by 40 hex characters). Got: '{}' (length: {})",
+        env_var,
+        error,
+        value,
+        value.len()
+    )
+}
+
 impl Config {
     pub fn read_env_variables() -> Self {
         // Load environment variables from .env file
@@ -77,7 +94,11 @@ impl Config {
         const CATALYST_NODE_ECDSA_PRIVATE_KEY: &str = "CATALYST_NODE_ECDSA_PRIVATE_KEY";
         let catalyst_node_ecdsa_private_key = std::env::var(CATALYST_NODE_ECDSA_PRIVATE_KEY).ok();
         const PRECONFER_ADDRESS: &str = "PRECONFER_ADDRESS";
-        let preconfer_address = std::env::var(PRECONFER_ADDRESS).ok();
+        let preconfer_address = std::env::var(PRECONFER_ADDRESS).ok().map(|s| {
+            Address::from_str(&s)
+                .map_err(|e| address_parse_error(PRECONFER_ADDRESS, e, &s))
+                .expect("Failed to parse PRECONFER_ADDRESS")
+        });
         const WEB3SIGNER_L1_URL: &str = "WEB3SIGNER_L1_URL";
         let web3signer_l1_url = std::env::var(WEB3SIGNER_L1_URL).ok();
         const WEB3SIGNER_L2_URL: &str = "WEB3SIGNER_L2_URL";
@@ -173,17 +194,24 @@ impl Config {
             .expect("RPC_L2_EXECUTION_LAYER_TIMEOUT_MS must be a number");
         let rpc_l2_execution_layer_timeout = Duration::from_millis(rpc_l2_execution_layer_timeout);
 
-        let taiko_anchor_address = std::env::var("TAIKO_ANCHOR_ADDRESS")
+        const TAIKO_ANCHOR_ADDRESS: &str = "TAIKO_ANCHOR_ADDRESS";
+        let taiko_anchor_address_str = std::env::var(TAIKO_ANCHOR_ADDRESS)
             .unwrap_or("0x1670010000000000000000000000000000010001".to_string());
+        let taiko_anchor_address = Address::from_str(&taiko_anchor_address_str)
+            .map_err(|e| address_parse_error(TAIKO_ANCHOR_ADDRESS, e, &taiko_anchor_address_str))
+            .expect("Failed to parse TAIKO_ANCHOR_ADDRESS");
 
         const BRIDGE_ADDRESS: &str = "TAIKO_BRIDGE_L2_ADDRESS";
-        let taiko_bridge_address = std::env::var(BRIDGE_ADDRESS).unwrap_or_else(|_| {
+        let taiko_bridge_address_str = std::env::var(BRIDGE_ADDRESS).unwrap_or_else(|_| {
             warn!(
                 "No Bridge contract address found in {} env var, using default",
                 BRIDGE_ADDRESS
             );
             default_empty_address.clone()
         });
+        let taiko_bridge_address = Address::from_str(&taiko_bridge_address_str)
+            .map_err(|e| address_parse_error(BRIDGE_ADDRESS, e, &taiko_bridge_address_str))
+            .expect("Failed to parse TAIKO_BRIDGE_L2_ADDRESS");
 
         let blobs_per_batch = std::env::var("BLOBS_PER_BATCH")
             .unwrap_or("3".to_string())

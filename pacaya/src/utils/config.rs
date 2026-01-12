@@ -1,14 +1,15 @@
-use common::config::ConfigTrait;
+use alloy::primitives::Address;
+use common::config::{ConfigTrait, address_parse_error};
+use std::str::FromStr;
 use tracing::warn;
 
 #[derive(Debug, Clone)]
 pub struct L1ContractAddresses {
-    pub taiko_inbox: String,
-    pub preconf_whitelist: String,
-    pub preconf_router: String,
-    pub taiko_wrapper: String,
-    pub forced_inclusion_store: String,
-    pub anchor_address: String,
+    pub taiko_inbox: Address,
+    pub preconf_whitelist: Address,
+    pub preconf_router: Address,
+    pub taiko_wrapper: Address,
+    pub forced_inclusion_store: Address,
 }
 
 #[derive(Debug, Clone)]
@@ -25,15 +26,18 @@ impl ConfigTrait for PacayaConfig {
     fn read_env_variables() -> Self {
         let default_empty_address = "0x0000000000000000000000000000000000000000".to_string();
 
-        // Helper function to read contract address from environment variable
+        // Helper function to read and parse contract address from environment variable
         let read_contract_address = |env_var: &str, contract_name: &str| {
-            std::env::var(env_var).unwrap_or_else(|_| {
+            let address_str = std::env::var(env_var).unwrap_or_else(|_| {
                 warn!(
                     "No {} contract address found in {} env var, using default",
                     contract_name, env_var
                 );
                 default_empty_address.clone()
-            })
+            });
+            Address::from_str(&address_str)
+                .map_err(|e| address_parse_error(env_var, e, &address_str))
+                .expect(&format!("Failed to parse {}", env_var))
         };
 
         let taiko_inbox = read_contract_address("TAIKO_INBOX_ADDRESS", "TaikoL1");
@@ -43,14 +47,12 @@ impl ConfigTrait for PacayaConfig {
         let taiko_wrapper = read_contract_address("TAIKO_WRAPPER_ADDRESS", "TaikoWrapper");
         let forced_inclusion_store =
             read_contract_address("FORCED_INCLUSION_STORE_ADDRESS", "ForcedInclusionStore");
-        let anchor_address = read_contract_address("ANCHOR_ADDRESS", "Anchor");
         let contract_addresses = L1ContractAddresses {
             taiko_inbox,
             preconf_whitelist,
             preconf_router,
             taiko_wrapper,
             forced_inclusion_store,
-            anchor_address,
         };
 
         let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")

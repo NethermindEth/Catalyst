@@ -19,7 +19,7 @@ impl TryFrom<ShastaConfig> for EthereumL1Config {
 
     fn try_from(config: ShastaConfig) -> Result<Self, Self::Error> {
         Ok(EthereumL1Config {
-            shasta_inbox: config.shasta_inbox.parse()?,
+            shasta_inbox: config.shasta_inbox,
         })
     }
 }
