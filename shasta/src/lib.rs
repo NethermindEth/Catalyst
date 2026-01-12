@@ -40,7 +40,8 @@ pub async fn create_shasta_node(
         ));
     }
 
-    let shasta_config = ShastaConfig::read_env_variables();
+    let shasta_config = ShastaConfig::read_env_variables()
+        .map_err(|e| anyhow::anyhow!("Failed to read Shasta configuration: {}", e))?;
     info!("Shasta config: {}", shasta_config);
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);

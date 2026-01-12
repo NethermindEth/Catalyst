@@ -1,4 +1,5 @@
 use alloy::primitives::Address;
+use anyhow::Error;
 use common::config::{ConfigTrait, address_parse_error};
 use std::str::FromStr;
 use tracing::warn;
@@ -23,30 +24,30 @@ pub struct PacayaConfig {
 }
 
 impl ConfigTrait for PacayaConfig {
-    fn read_env_variables() -> Self {
+    fn read_env_variables() -> Result<Self, Error> {
         let default_empty_address = "0x0000000000000000000000000000000000000000".to_string();
 
         // Helper function to read and parse contract address from environment variable
-        let read_contract_address = |env_var: &str, contract_name: &str| {
-            let address_str = std::env::var(env_var).unwrap_or_else(|_| {
-                warn!(
-                    "No {} contract address found in {} env var, using default",
-                    contract_name, env_var
-                );
-                default_empty_address.clone()
-            });
-            Address::from_str(&address_str)
-                .map_err(|e| address_parse_error(env_var, e, &address_str))
-                .expect(&format!("Failed to parse {}", env_var))
-        };
+        let read_contract_address =
+            |env_var: &str, contract_name: &str| -> Result<Address, Error> {
+                let address_str = std::env::var(env_var).unwrap_or_else(|_| {
+                    warn!(
+                        "No {} contract address found in {} env var, using default",
+                        contract_name, env_var
+                    );
+                    default_empty_address.clone()
+                });
+                Address::from_str(&address_str)
+                    .map_err(|e| address_parse_error(env_var, e, &address_str))
+            };
 
-        let taiko_inbox = read_contract_address("TAIKO_INBOX_ADDRESS", "TaikoL1");
+        let taiko_inbox = read_contract_address("TAIKO_INBOX_ADDRESS", "TaikoL1")?;
         let preconf_whitelist =
-            read_contract_address("PRECONF_WHITELIST_ADDRESS", "PreconfWhitelist");
-        let preconf_router = read_contract_address("PRECONF_ROUTER_ADDRESS", "PreconfRouter");
-        let taiko_wrapper = read_contract_address("TAIKO_WRAPPER_ADDRESS", "TaikoWrapper");
+            read_contract_address("PRECONF_WHITELIST_ADDRESS", "PreconfWhitelist")?;
+        let preconf_router = read_contract_address("PRECONF_ROUTER_ADDRESS", "PreconfRouter")?;
+        let taiko_wrapper = read_contract_address("TAIKO_WRAPPER_ADDRESS", "TaikoWrapper")?;
         let forced_inclusion_store =
-            read_contract_address("FORCED_INCLUSION_STORE_ADDRESS", "ForcedInclusionStore");
+            read_contract_address("FORCED_INCLUSION_STORE_ADDRESS", "ForcedInclusionStore")?;
         let contract_addresses = L1ContractAddresses {
             taiko_inbox,
             preconf_whitelist,
@@ -58,37 +59,42 @@ impl ConfigTrait for PacayaConfig {
         let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")
             .unwrap_or("4".to_string())
             .parse::<u64>()
-            .expect("HANDOVER_WINDOW_SLOTS must be a number");
+            .map_err(|e| anyhow::anyhow!("HANDOVER_WINDOW_SLOTS must be a number: {}", e))?;
 
         let handover_start_buffer_ms = std::env::var("HANDOVER_START_BUFFER_MS")
             .unwrap_or("6000".to_string())
             .parse::<u64>()
-            .expect("HANDOVER_START_BUFFER_MS must be a number");
+            .map_err(|e| anyhow::anyhow!("HANDOVER_START_BUFFER_MS must be a number: {}", e))?;
 
         let l1_height_lag = std::env::var("L1_HEIGHT_LAG")
             .unwrap_or("4".to_string())
             .parse::<u64>()
-            .expect("L1_HEIGHT_LAG must be a number");
+            .map_err(|e| anyhow::anyhow!("L1_HEIGHT_LAG must be a number: {}", e))?;
 
         let propose_forced_inclusion = std::env::var("PROPOSE_FORCED_INCLUSION")
             .unwrap_or("true".to_string())
             .parse::<bool>()
-            .expect("PROPOSE_FORCED_INCLUSION must be a boolean");
+            .map_err(|e| anyhow::anyhow!("PROPOSE_FORCED_INCLUSION must be a boolean: {}", e))?;
 
         let simulate_not_submitting_at_the_end_of_epoch =
             std::env::var("SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH")
                 .unwrap_or("false".to_string())
                 .parse::<bool>()
-                .expect("SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH must be a boolean");
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "SIMULATE_NOT_SUBMITTING_AT_THE_END_OF_EPOCH must be a boolean: {}",
+                        e
+                    )
+                })?;
 
-        PacayaConfig {
+        Ok(PacayaConfig {
             contract_addresses,
             handover_window_slots,
             handover_start_buffer_ms,
             l1_height_lag,
             propose_forced_inclusion,
             simulate_not_submitting_at_the_end_of_epoch,
-        }
+        })
     }
 }
 

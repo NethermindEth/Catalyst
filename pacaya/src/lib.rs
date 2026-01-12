@@ -29,7 +29,8 @@ pub async fn create_pacaya_node(
     fork_info: ForkInfo,
 ) -> Result<(), Error> {
     // Read specific config from environment variables
-    let pacaya_config = PacayaConfig::read_env_variables();
+    let pacaya_config = PacayaConfig::read_env_variables()
+        .map_err(|e| anyhow::anyhow!("Failed to read Pacaya configuration: {}", e))?;
     info!("Pacaya config: {}", pacaya_config);
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
