@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use alloy::{
     consensus::Transaction,
     primitives::Address,
