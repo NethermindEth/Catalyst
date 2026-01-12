@@ -22,28 +22,15 @@ pub struct Config {
 
 impl ConfigTrait for Config {
     fn read_env_variables() -> Result<Self, Error> {
-        let default_empty_address = "0x0000000000000000000000000000000000000000".to_string();
-
         const REGISTRY_ADDRESS: &str = "REGISTRY_ADDRESS";
-        let registry_address_str = std::env::var(REGISTRY_ADDRESS).unwrap_or_else(|_| {
-            warn!(
-                "No Registry contract address found in {} env var, using default",
-                REGISTRY_ADDRESS
-            );
-            default_empty_address.clone()
-        });
+        let registry_address_str = std::env::var(REGISTRY_ADDRESS)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", REGISTRY_ADDRESS, e))?;
         let registry_address = Address::from_str(&registry_address_str)
             .map_err(|e| address_parse_error(REGISTRY_ADDRESS, e, &registry_address_str))?;
 
         const LOOKAHEAD_STORE_ADDRESS: &str = "LOOKAHEAD_STORE_ADDRESS";
-        let lookahead_store_address_str =
-            std::env::var(LOOKAHEAD_STORE_ADDRESS).unwrap_or_else(|_| {
-                warn!(
-                    "No Lookahead Store contract address found in {} env var, using default",
-                    LOOKAHEAD_STORE_ADDRESS
-                );
-                default_empty_address.clone()
-            });
+        let lookahead_store_address_str = std::env::var(LOOKAHEAD_STORE_ADDRESS)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", LOOKAHEAD_STORE_ADDRESS, e))?;
         let lookahead_store_address =
             Address::from_str(&lookahead_store_address_str).map_err(|e| {
                 address_parse_error(LOOKAHEAD_STORE_ADDRESS, e, &lookahead_store_address_str)
@@ -51,27 +38,15 @@ impl ConfigTrait for Config {
 
         const LOOKAHEAD_SLASHER_ADDRESS: &str = "LOOKAHEAD_SLASHER_ADDRESS";
         let lookahead_slasher_address_str = std::env::var(LOOKAHEAD_SLASHER_ADDRESS)
-            .unwrap_or_else(|_| {
-                warn!(
-                    "No Lookahead Slasher contract address found in {} env var, using default",
-                    LOOKAHEAD_SLASHER_ADDRESS
-                );
-                default_empty_address.clone()
-            });
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", LOOKAHEAD_SLASHER_ADDRESS, e))?;
         let lookahead_slasher_address =
             Address::from_str(&lookahead_slasher_address_str).map_err(|e| {
                 address_parse_error(LOOKAHEAD_SLASHER_ADDRESS, e, &lookahead_slasher_address_str)
             })?;
 
         const PRECONF_SLASHER_ADDRESS: &str = "PRECONF_SLASHER_ADDRESS";
-        let preconf_slasher_address_str =
-            std::env::var(PRECONF_SLASHER_ADDRESS).unwrap_or_else(|_| {
-                warn!(
-                    "No Preconf Slasher contract address found in {} env var, using default",
-                    PRECONF_SLASHER_ADDRESS
-                );
-                default_empty_address.clone()
-            });
+        let preconf_slasher_address_str = std::env::var(PRECONF_SLASHER_ADDRESS)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", PRECONF_SLASHER_ADDRESS, e))?;
         let preconf_slasher_address =
             Address::from_str(&preconf_slasher_address_str).map_err(|e| {
                 address_parse_error(PRECONF_SLASHER_ADDRESS, e, &preconf_slasher_address_str)

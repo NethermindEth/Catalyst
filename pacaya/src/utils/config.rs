@@ -2,7 +2,6 @@ use alloy::primitives::Address;
 use anyhow::Error;
 use common::config::{ConfigTrait, address_parse_error};
 use std::str::FromStr;
-use tracing::warn;
 
 #[derive(Debug, Clone)]
 pub struct L1ContractAddresses {
@@ -25,29 +24,18 @@ pub struct PacayaConfig {
 
 impl ConfigTrait for PacayaConfig {
     fn read_env_variables() -> Result<Self, Error> {
-        let default_empty_address = "0x0000000000000000000000000000000000000000".to_string();
+        let read_contract_address = |env_var: &str| -> Result<Address, Error> {
+            let address_str = std::env::var(env_var)
+                .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", env_var, e))?;
+            Address::from_str(&address_str)
+                .map_err(|e| address_parse_error(env_var, e, &address_str))
+        };
 
-        // Helper function to read and parse contract address from environment variable
-        let read_contract_address =
-            |env_var: &str, contract_name: &str| -> Result<Address, Error> {
-                let address_str = std::env::var(env_var).unwrap_or_else(|_| {
-                    warn!(
-                        "No {} contract address found in {} env var, using default",
-                        contract_name, env_var
-                    );
-                    default_empty_address.clone()
-                });
-                Address::from_str(&address_str)
-                    .map_err(|e| address_parse_error(env_var, e, &address_str))
-            };
-
-        let taiko_inbox = read_contract_address("TAIKO_INBOX_ADDRESS", "TaikoL1")?;
-        let preconf_whitelist =
-            read_contract_address("PRECONF_WHITELIST_ADDRESS", "PreconfWhitelist")?;
-        let preconf_router = read_contract_address("PRECONF_ROUTER_ADDRESS", "PreconfRouter")?;
-        let taiko_wrapper = read_contract_address("TAIKO_WRAPPER_ADDRESS", "TaikoWrapper")?;
-        let forced_inclusion_store =
-            read_contract_address("FORCED_INCLUSION_STORE_ADDRESS", "ForcedInclusionStore")?;
+        let taiko_inbox = read_contract_address("TAIKO_INBOX_ADDRESS")?;
+        let preconf_whitelist = read_contract_address("PRECONF_WHITELIST_ADDRESS")?;
+        let preconf_router = read_contract_address("PRECONF_ROUTER_ADDRESS")?;
+        let taiko_wrapper = read_contract_address("TAIKO_WRAPPER_ADDRESS")?;
+        let forced_inclusion_store = read_contract_address("FORCED_INCLUSION_STORE_ADDRESS")?;
         let contract_addresses = L1ContractAddresses {
             taiko_inbox,
             preconf_whitelist,
