@@ -99,7 +99,7 @@ pub async fn create_pacaya_node(
                 .expect("L1 RPC URL is required")
                 .clone(),
             config.taiko_geth_rpc_url.clone(),
-            pacaya_config.contract_addresses.taiko_inbox.clone(),
+            pacaya_config.contract_addresses.taiko_inbox,
             cancel_token.clone(),
             "BatchProposed",
             chain_monitor::print_batch_proposed_info,

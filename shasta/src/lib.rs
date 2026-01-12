@@ -116,7 +116,7 @@ pub async fn create_shasta_node(
                 .expect("L1 RPC URL is required")
                 .clone(),
             config.taiko_geth_rpc_url.clone(),
-            shasta_config.shasta_inbox.clone(),
+            shasta_config.shasta_inbox,
             cancel_token.clone(),
             "Proposed",
             chain_monitor::print_proposed_info,

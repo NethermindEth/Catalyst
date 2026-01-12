@@ -26,7 +26,7 @@ impl TaikoConfig {
         let signer = create_signer(
             config.web3signer_l2_url.clone(),
             config.catalyst_node_ecdsa_private_key.clone(),
-            config.preconfer_address.clone(),
+            config.preconfer_address,
         )
         .await?;
 
