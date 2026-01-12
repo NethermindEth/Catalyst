@@ -15,16 +15,11 @@ impl TryFrom<L1ContractAddresses> for ContractAddresses {
     type Error = anyhow::Error;
 
     fn try_from(l1_contract_addresses: L1ContractAddresses) -> Result<Self, Self::Error> {
-        let registry_address = l1_contract_addresses.registry_address.parse()?;
-        let lookahead_store_address = l1_contract_addresses.lookahead_store_address.parse()?;
-        let lookahead_slasher_address = l1_contract_addresses.lookahead_slasher_address.parse()?;
-        let preconf_slasher_address = l1_contract_addresses.preconf_slasher_address.parse()?;
-
         Ok(ContractAddresses {
-            registry_address,
-            lookahead_store_address,
-            lookahead_slasher_address,
-            preconf_slasher_address,
+            registry_address: l1_contract_addresses.registry_address,
+            lookahead_store_address: l1_contract_addresses.lookahead_store_address,
+            lookahead_slasher_address: l1_contract_addresses.lookahead_slasher_address,
+            preconf_slasher_address: l1_contract_addresses.preconf_slasher_address,
         })
     }
 }

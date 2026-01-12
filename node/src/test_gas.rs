@@ -32,9 +32,11 @@ async fn main() -> Result<(), Error> {
 
     let args = Args::parse();
 
-    let config = common::config::Config::read_env_variables();
+    let config = common::config::Config::read_env_variables()
+        .map_err(|e| anyhow::anyhow!("Failed to read configuration: {}", e))?;
 
-    let pacaya_config = PacayaConfig::read_env_variables();
+    let pacaya_config = PacayaConfig::read_env_variables()
+        .map_err(|e| anyhow::anyhow!("Failed to read Pacaya configuration: {}", e))?;
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
 

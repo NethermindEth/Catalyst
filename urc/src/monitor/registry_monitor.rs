@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use alloy::{
     consensus::Transaction,
     primitives::Address,
@@ -32,7 +30,7 @@ impl RegistryMonitor {
             .connect_http(config.l1_rpc_url.parse()?)
             .erased();
 
-        let registry_address = Address::from_str(config.registry_address.as_str())?;
+        let registry_address = config.registry_address;
 
         Ok(Self {
             indexed_block,

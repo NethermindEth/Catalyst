@@ -56,7 +56,8 @@ async fn main() -> Result<(), Error> {
 async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStopped, Error> {
     info!("Running node iteration: {iteration}");
 
-    let config = common::config::Config::read_env_variables();
+    let config = common::config::Config::read_env_variables()
+        .map_err(|e| anyhow::anyhow!("Failed to read configuration: {}", e))?;
 
     let fork_info = ForkInfo::from_config((&config).into())
         .map_err(|e| anyhow::anyhow!("Failed to get fork info: {}", e))?;

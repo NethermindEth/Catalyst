@@ -1,10 +1,10 @@
 use crate::utils::cancellation_token::CancellationToken;
 use alloy::primitives::{Address, B256};
 use alloy::sol_types::SolEvent;
-use anyhow::{Error, anyhow};
+use anyhow::Error;
 use batch_proposed_receiver::EventReceiver;
 use l2_block_receiver::{L2BlockInfo, L2BlockReceiver};
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::{self, Receiver};
 use tracing::{debug, info};
@@ -40,7 +40,7 @@ where
     pub fn new(
         ws_l1_rpc_url: String,
         ws_l2_rpc_url: String,
-        contract: String,
+        contract: Address,
         cancel_token: CancellationToken,
         event_name: &'static str,
         event_handler: fn(&T),
@@ -49,9 +49,6 @@ where
             "Creating ChainMonitor (L1: {}, L2: {}, Contract: {}, Event : {})",
             ws_l1_rpc_url, ws_l2_rpc_url, contract, event_name
         );
-
-        let contract = Address::from_str(&contract)
-            .map_err(|e| anyhow!("Invalid contract address: {:?}", e))?;
 
         let taiko_geth_status = Arc::new(Mutex::new(TaikoGethStatus {
             height: 0,

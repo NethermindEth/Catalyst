@@ -27,8 +27,10 @@ async fn main() -> Result<(), Error> {
         env!("CARGO_PKG_VERSION")
     );
 
-    let config = common::config::Config::read_env_variables();
-    let permissionless_config = crate::utils::config::Config::read_env_variables();
+    let config = common::config::Config::read_env_variables()
+        .map_err(|e| anyhow::anyhow!("Failed to read configuration: {}", e))?;
+    let permissionless_config = crate::utils::config::Config::read_env_variables()
+        .map_err(|e| anyhow::anyhow!("Failed to read permissionless configuration: {}", e))?;
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let metrics = Arc::new(Metrics::new());

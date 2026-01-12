@@ -1,6 +1,9 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
+use alloy::primitives::Address;
 use anyhow::Error;
+use common::config::address_parse_error;
 
 #[derive(Debug, Clone)]
 pub enum DatabaseConfig {
@@ -20,7 +23,7 @@ impl DatabaseConfig {
 pub struct Config {
     pub database: DatabaseConfig,
     pub l1_rpc_url: String,
-    pub registry_address: String,
+    pub registry_address: Address,
     pub l1_start_block: u64,
     pub max_l1_fork_depth: u64,
     pub index_block_batch_size: u64,
@@ -66,8 +69,11 @@ impl Config {
         let l1_rpc_url = std::env::var("L1_RPC_URL")
             .map_err(|_| anyhow::anyhow!("L1_RPC_URL env var not found"))?;
 
-        let registry_address = std::env::var("REGISTRY_ADDRESS")
-            .map_err(|_| anyhow::anyhow!("REGISTRY_ADDRESS env var not found"))?;
+        const REGISTRY_ADDRESS: &str = "REGISTRY_ADDRESS";
+        let registry_address_str = std::env::var(REGISTRY_ADDRESS)
+            .map_err(|_| anyhow::anyhow!("{} env var not found", REGISTRY_ADDRESS))?;
+        let registry_address = Address::from_str(&registry_address_str)
+            .map_err(|e| address_parse_error(REGISTRY_ADDRESS, e, &registry_address_str))?;
 
         let l1_start_block = std::env::var("L1_START_BLOCK")
             .unwrap_or("1".to_string())
