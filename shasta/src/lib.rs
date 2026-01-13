@@ -40,7 +40,8 @@ pub async fn create_shasta_node(
         ));
     }
 
-    let shasta_config = ShastaConfig::read_env_variables();
+    let shasta_config = ShastaConfig::read_env_variables()
+        .map_err(|e| anyhow::anyhow!("Failed to read Shasta configuration: {}", e))?;
     info!("Shasta config: {}", shasta_config);
 
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
@@ -115,7 +116,7 @@ pub async fn create_shasta_node(
                 .expect("L1 RPC URL is required")
                 .clone(),
             config.taiko_geth_rpc_url.clone(),
-            shasta_config.shasta_inbox.clone(),
+            shasta_config.shasta_inbox,
             cancel_token.clone(),
             "Proposed",
             chain_monitor::print_proposed_info,

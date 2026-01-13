@@ -399,7 +399,19 @@ impl Node {
         _current_status: &OperatorStatus,
         _l2_slot_info: &L2SlotInfoV2,
     ) -> Result<(), Error> {
-        info!("Handling transaction error: {error}");
+        match error {
+            TransactionError::EstimationFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                return Err(anyhow::anyhow!("Transaction estimation failed, exiting"));
+            }
+            TransactionError::TransactionReverted => {
+                self.cancel_token.cancel_on_critical_error();
+                return Err(anyhow::anyhow!("Transaction reverted, exiting"));
+            }
+            _ => {
+                info!("Handling transaction error: {error}");
+            }
+        }
         Ok(())
     }
 

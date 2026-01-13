@@ -2,7 +2,6 @@ use alloy::primitives::Address;
 use anyhow::Error;
 use common::config::Config;
 use common::signer::{Signer, create_signer};
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -27,7 +26,7 @@ impl TaikoConfig {
         let signer = create_signer(
             config.web3signer_l2_url.clone(),
             config.catalyst_node_ecdsa_private_key.clone(),
-            config.preconfer_address.clone(),
+            config.preconfer_address,
         )
         .await?;
 
@@ -35,8 +34,8 @@ impl TaikoConfig {
             taiko_geth_url: config.taiko_geth_rpc_url.clone(),
             driver_url: config.taiko_driver_url.clone(),
             jwt_secret_bytes,
-            taiko_anchor_address: Address::from_str(&config.taiko_anchor_address)?,
-            taiko_bridge_address: Address::from_str(&config.taiko_bridge_address)?,
+            taiko_anchor_address: config.taiko_anchor_address,
+            taiko_bridge_address: config.taiko_bridge_address,
             rpc_driver_preconf_timeout: config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: config.rpc_driver_status_timeout,
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,

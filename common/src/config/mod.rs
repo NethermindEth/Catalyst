@@ -1,6 +1,9 @@
 mod config_trait;
 pub use config_trait::ConfigTrait;
 
+use alloy::primitives::Address;
+use anyhow::Error;
+use std::str::FromStr;
 use std::time::Duration;
 use tracing::{info, warn};
 
@@ -9,7 +12,7 @@ use crate::blob::constants::MAX_BLOB_DATA_SIZE;
 #[derive(Debug, Clone)]
 pub struct Config {
     // Signer
-    pub preconfer_address: Option<String>,
+    pub preconfer_address: Option<Address>,
     pub web3signer_l1_url: Option<String>,
     pub web3signer_l2_url: Option<String>,
     pub catalyst_node_ecdsa_private_key: Option<String>,
@@ -30,8 +33,8 @@ pub struct Config {
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
     // Taiko contracts
-    pub taiko_anchor_address: String,
-    pub taiko_bridge_address: String,
+    pub taiko_anchor_address: Address,
+    pub taiko_bridge_address: Address,
     // Batch building parameters
     pub max_bytes_size_of_batch: u64,
     pub max_blocks_per_batch: u16,
@@ -67,8 +70,23 @@ pub struct Config {
     pub whitelist_monitor_interval_sec: u64,
 }
 
+/// Creates a formatted error message for address parsing failures.
+pub fn address_parse_error(
+    env_var: &str,
+    error: impl std::fmt::Display,
+    value: &str,
+) -> anyhow::Error {
+    anyhow::anyhow!(
+        "Failed to parse {}: {}. Address must be exactly 42 characters (0x followed by 40 hex characters). Got: '{}' (length: {})",
+        env_var,
+        error,
+        value,
+        value.len()
+    )
+}
+
 impl Config {
-    pub fn read_env_variables() -> Self {
+    pub fn read_env_variables() -> Result<Self, Error> {
         // Load environment variables from .env file
         dotenvy::dotenv().ok();
 
@@ -77,7 +95,12 @@ impl Config {
         const CATALYST_NODE_ECDSA_PRIVATE_KEY: &str = "CATALYST_NODE_ECDSA_PRIVATE_KEY";
         let catalyst_node_ecdsa_private_key = std::env::var(CATALYST_NODE_ECDSA_PRIVATE_KEY).ok();
         const PRECONFER_ADDRESS: &str = "PRECONFER_ADDRESS";
-        let preconfer_address = std::env::var(PRECONFER_ADDRESS).ok();
+        let preconfer_address = std::env::var(PRECONFER_ADDRESS)
+            .ok()
+            .map(|s| {
+                Address::from_str(&s).map_err(|e| address_parse_error(PRECONFER_ADDRESS, e, &s))
+            })
+            .transpose()?;
         const WEB3SIGNER_L1_URL: &str = "WEB3SIGNER_L1_URL";
         let web3signer_l1_url = std::env::var(WEB3SIGNER_L1_URL).ok();
         const WEB3SIGNER_L2_URL: &str = "WEB3SIGNER_L2_URL";
@@ -88,17 +111,17 @@ impl Config {
                 || web3signer_l2_url.is_none()
                 || preconfer_address.is_none()
             {
-                panic!(
+                return Err(anyhow::anyhow!(
                     "When {CATALYST_NODE_ECDSA_PRIVATE_KEY} is not set, {WEB3SIGNER_L1_URL}, {WEB3SIGNER_L2_URL} and {PRECONFER_ADDRESS} must be set"
-                );
+                ));
             }
         } else if web3signer_l1_url.is_some()
             || web3signer_l2_url.is_some()
             || preconfer_address.is_some()
         {
-            panic!(
+            return Err(anyhow::anyhow!(
                 "When {CATALYST_NODE_ECDSA_PRIVATE_KEY} is set, {WEB3SIGNER_L1_URL}, {WEB3SIGNER_L2_URL} and {PRECONFER_ADDRESS} must not be set"
-            );
+            ));
         }
 
         let l1_beacon_url = {
@@ -115,37 +138,49 @@ impl Config {
         let extra_gas_percentage = std::env::var("EXTRA_GAS_PERCENTAGE")
             .unwrap_or("100".to_string())
             .parse::<u64>()
-            .expect("EXTRA_GAS_PERCENTAGE must be a number");
+            .map_err(|e| anyhow::anyhow!("EXTRA_GAS_PERCENTAGE must be a number: {}", e))?;
 
         let l1_slot_duration_sec = std::env::var("L1_SLOT_DURATION_SEC")
             .unwrap_or("12".to_string())
             .parse::<u64>()
-            .inspect(|&val| {
+            .map_err(|e| anyhow::anyhow!("L1_SLOT_DURATION_SEC must be a number: {}", e))
+            .and_then(|val| {
                 if val == 0 {
-                    panic!("L1_SLOT_DURATION_SEC must be a positive number");
+                    Err(anyhow::anyhow!(
+                        "L1_SLOT_DURATION_SEC must be a positive number"
+                    ))
+                } else {
+                    Ok(val)
                 }
-            })
-            .expect("L1_SLOT_DURATION_SEC must be a number");
+            })?;
 
         let l1_slots_per_epoch = std::env::var("L1_SLOTS_PER_EPOCH")
             .unwrap_or("32".to_string())
             .parse::<u64>()
-            .inspect(|&val| {
+            .map_err(|e| anyhow::anyhow!("L1_SLOTS_PER_EPOCH must be a number: {}", e))
+            .and_then(|val| {
                 if val == 0 {
-                    panic!("L1_SLOTS_PER_EPOCH must be a positive number");
+                    Err(anyhow::anyhow!(
+                        "L1_SLOTS_PER_EPOCH must be a positive number"
+                    ))
+                } else {
+                    Ok(val)
                 }
-            })
-            .expect("L1_SLOTS_PER_EPOCH must be a number");
+            })?;
 
         let preconf_heartbeat_ms = std::env::var("PRECONF_HEARTBEAT_MS")
             .unwrap_or("2000".to_string())
             .parse::<u64>()
-            .inspect(|&val| {
+            .map_err(|e| anyhow::anyhow!("PRECONF_HEARTBEAT_MS must be a number: {}", e))
+            .and_then(|val| {
                 if val == 0 {
-                    panic!("PRECONF_HEARTBEAT_MS must be a positive number");
+                    Err(anyhow::anyhow!(
+                        "PRECONF_HEARTBEAT_MS must be a positive number"
+                    ))
+                } else {
+                    Ok(val)
                 }
-            })
-            .expect("PRECONF_HEARTBEAT_MS must be a number");
+            })?;
 
         let jwt_secret_file_path = std::env::var("JWT_SECRET_FILE_PATH").unwrap_or_else(|_| {
             warn!(
@@ -158,52 +193,63 @@ impl Config {
         let rpc_driver_preconf_timeout = std::env::var("RPC_DRIVER_PRECONF_TIMEOUT_MS")
             .unwrap_or("60000".to_string())
             .parse::<u64>()
-            .expect("RPC_DRIVER_PRECONF_TIMEOUT_MS must be a number");
+            .map_err(|e| {
+                anyhow::anyhow!("RPC_DRIVER_PRECONF_TIMEOUT_MS must be a number: {}", e)
+            })?;
         let rpc_driver_preconf_timeout = Duration::from_millis(rpc_driver_preconf_timeout);
 
         let rpc_driver_status_timeout = std::env::var("RPC_DRIVER_STATUS_TIMEOUT_MS")
             .unwrap_or("1000".to_string())
             .parse::<u64>()
-            .expect("RPC_DRIVER_STATUS_TIMEOUT_MS must be a number");
+            .map_err(|e| anyhow::anyhow!("RPC_DRIVER_STATUS_TIMEOUT_MS must be a number: {}", e))?;
         let rpc_driver_status_timeout = Duration::from_millis(rpc_driver_status_timeout);
 
         let rpc_l2_execution_layer_timeout = std::env::var("RPC_L2_EXECUTION_LAYER_TIMEOUT_MS")
             .unwrap_or("1000".to_string())
             .parse::<u64>()
-            .expect("RPC_L2_EXECUTION_LAYER_TIMEOUT_MS must be a number");
+            .map_err(|e| {
+                anyhow::anyhow!("RPC_L2_EXECUTION_LAYER_TIMEOUT_MS must be a number: {}", e)
+            })?;
         let rpc_l2_execution_layer_timeout = Duration::from_millis(rpc_l2_execution_layer_timeout);
 
-        let taiko_anchor_address = std::env::var("TAIKO_ANCHOR_ADDRESS")
+        const TAIKO_ANCHOR_ADDRESS: &str = "TAIKO_ANCHOR_ADDRESS";
+        let taiko_anchor_address_str = std::env::var(TAIKO_ANCHOR_ADDRESS)
             .unwrap_or("0x1670010000000000000000000000000000010001".to_string());
+        let taiko_anchor_address = Address::from_str(&taiko_anchor_address_str)
+            .map_err(|e| address_parse_error(TAIKO_ANCHOR_ADDRESS, e, &taiko_anchor_address_str))?;
 
         const BRIDGE_ADDRESS: &str = "TAIKO_BRIDGE_L2_ADDRESS";
-        let taiko_bridge_address = std::env::var(BRIDGE_ADDRESS).unwrap_or_else(|_| {
+        let taiko_bridge_address_str = std::env::var(BRIDGE_ADDRESS).unwrap_or_else(|_| {
             warn!(
                 "No Bridge contract address found in {} env var, using default",
                 BRIDGE_ADDRESS
             );
             default_empty_address.clone()
         });
+        let taiko_bridge_address = Address::from_str(&taiko_bridge_address_str)
+            .map_err(|e| address_parse_error(BRIDGE_ADDRESS, e, &taiko_bridge_address_str))?;
 
         let blobs_per_batch = std::env::var("BLOBS_PER_BATCH")
             .unwrap_or("3".to_string())
             .parse::<u64>()
-            .expect("BLOBS_PER_BATCH must be a number");
+            .map_err(|e| anyhow::anyhow!("BLOBS_PER_BATCH must be a number: {}", e))?;
 
         let max_bytes_size_of_batch = u64::try_from(MAX_BLOB_DATA_SIZE)
-            .expect("MAX_BLOB_DATA_SIZE must be a u64 number")
+            .map_err(|_| anyhow::anyhow!("MAX_BLOB_DATA_SIZE must be a u64 number"))?
             .checked_mul(blobs_per_batch)
-            .expect("panic: overflow while computing BLOBS_PER_BATCH * MAX_BLOB_DATA_SIZE. Try to reduce BLOBS_PER_BATCH");
+            .ok_or_else(|| anyhow::anyhow!("Overflow while computing BLOBS_PER_BATCH * MAX_BLOB_DATA_SIZE. Try to reduce BLOBS_PER_BATCH"))?;
 
         let max_blocks_per_batch = std::env::var("MAX_BLOCKS_PER_BATCH")
             .unwrap_or("0".to_string())
             .parse::<u16>()
-            .expect("MAX_BLOCKS_PER_BATCH must be a number");
+            .map_err(|e| anyhow::anyhow!("MAX_BLOCKS_PER_BATCH must be a number: {}", e))?;
 
         let max_time_shift_between_blocks_sec = std::env::var("MAX_TIME_SHIFT_BETWEEN_BLOCKS_SEC")
             .unwrap_or("255".to_string())
             .parse::<u64>()
-            .expect("MAX_TIME_SHIFT_BETWEEN_BLOCKS_SEC must be a number");
+            .map_err(|e| {
+                anyhow::anyhow!("MAX_TIME_SHIFT_BETWEEN_BLOCKS_SEC must be a number: {}", e)
+            })?;
 
         // It is the slot window in which we want to call the proposeBatch transaction
         // and avoid exceeding the MAX_ANCHOR_HEIGHT_OFFSET.
@@ -211,7 +257,12 @@ impl Config {
             std::env::var("MAX_ANCHOR_HEIGHT_OFFSET_REDUCTION_VALUE")
                 .unwrap_or("10".to_string())
                 .parse::<u64>()
-                .expect("MAX_ANCHOR_HEIGHT_OFFSET_REDUCTION_VALUE must be a number");
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "MAX_ANCHOR_HEIGHT_OFFSET_REDUCTION_VALUE must be a number: {}",
+                        e
+                    )
+                })?;
         if max_anchor_height_offset_reduction < 5 {
             warn!(
                 "MAX_ANCHOR_HEIGHT_OFFSET_REDUCTION_VALUE is less than 5: you have a small number of slots to call the proposeBatch transaction"
@@ -221,123 +272,130 @@ impl Config {
         let min_priority_fee_per_gas_wei = std::env::var("MIN_PRIORITY_FEE_PER_GAS_WEI")
             .unwrap_or("1000000000".to_string()) // 1 Gwei
             .parse::<u64>()
-            .expect("MIN_PRIORITY_FEE_PER_GAS_WEI must be a number");
-
-        if min_priority_fee_per_gas_wei < 1000000000 {
-            panic!(
-                "MIN_PRIORITY_FEE_PER_GAS_WEI is less than 1 Gwei! It must be at least 1,000,000,000 wei."
-            );
-        }
+            .map_err(|e| anyhow::anyhow!("MIN_PRIORITY_FEE_PER_GAS_WEI must be a number: {}", e))
+            .and_then(|val| {
+                if val < 1000000000 {
+                    Err(anyhow::anyhow!("MIN_PRIORITY_FEE_PER_GAS_WEI is less than 1 Gwei! It must be at least 1,000,000,000 wei."))
+                } else {
+                    Ok(val)
+                }
+            })?;
 
         let tx_fees_increase_percentage = std::env::var("TX_FEES_INCREASE_PERCENTAGE")
             .unwrap_or("0".to_string())
             .parse::<u64>()
-            .expect("TX_FEES_INCREASE_PERCENTAGE must be a number");
+            .map_err(|e| anyhow::anyhow!("TX_FEES_INCREASE_PERCENTAGE must be a number: {}", e))?;
 
         let max_attempts_to_send_tx = std::env::var("MAX_ATTEMPTS_TO_SEND_TX")
             .unwrap_or("4".to_string())
             .parse::<u64>()
-            .expect("MAX_ATTEMPTS_TO_SEND_TX must be a number");
+            .map_err(|e| anyhow::anyhow!("MAX_ATTEMPTS_TO_SEND_TX must be a number: {}", e))?;
 
         let max_attempts_to_wait_tx = std::env::var("MAX_ATTEMPTS_TO_WAIT_TX")
             .unwrap_or("5".to_string())
             .parse::<u64>()
-            .expect("MAX_ATTEMPTS_TO_WAIT_TX must be a number");
+            .map_err(|e| anyhow::anyhow!("MAX_ATTEMPTS_TO_WAIT_TX must be a number: {}", e))?;
 
         let delay_between_tx_attempts_sec = std::env::var("DELAY_BETWEEN_TX_ATTEMPTS_SEC")
             .unwrap_or("63".to_string())
             .parse::<u64>()
-            .expect("DELAY_BETWEEN_TX_ATTEMPTS_SEC must be a number");
+            .map_err(|e| {
+                anyhow::anyhow!("DELAY_BETWEEN_TX_ATTEMPTS_SEC must be a number: {}", e)
+            })?;
 
         let funds_monitor_interval_sec = std::env::var("FUNDS_MONITOR_INTERVAL_SEC")
             .unwrap_or("60".to_string())
             .parse::<u64>()
-            .expect("FUNDS_MONITOR_INTERVAL_SEC must be a number");
+            .map_err(|e| anyhow::anyhow!("FUNDS_MONITOR_INTERVAL_SEC must be a number: {}", e))?;
 
         // 0.5 ETH
         let threshold_eth =
             std::env::var("THRESHOLD_ETH").unwrap_or("500000000000000000".to_string());
         let threshold_eth = threshold_eth
             .parse::<u128>()
-            .expect("THRESHOLD_ETH must be a number");
+            .map_err(|e| anyhow::anyhow!("THRESHOLD_ETH must be a number: {}", e))?;
 
         // 1000 TAIKO
         let threshold_taiko =
             std::env::var("THRESHOLD_TAIKO").unwrap_or("10000000000000000000000".to_string());
         let threshold_taiko = threshold_taiko
             .parse::<u128>()
-            .expect("THRESHOLD_TAIKO must be a number");
+            .map_err(|e| anyhow::anyhow!("THRESHOLD_TAIKO must be a number: {}", e))?;
 
         // 1 ETH
         let amount_to_bridge_from_l2_to_l1 = std::env::var("AMOUNT_TO_BRIDGE_FROM_L2_TO_L1")
             .unwrap_or("1000000000000000000".to_string())
             .parse::<u128>()
-            .expect("AMOUNT_TO_BRIDGE_FROM_L2_TO_L1 must be a number");
+            .map_err(|e| {
+                anyhow::anyhow!("AMOUNT_TO_BRIDGE_FROM_L2_TO_L1 must be a number: {}", e)
+            })?;
 
         let disable_bridging = std::env::var("DISABLE_BRIDGING")
             .unwrap_or("true".to_string())
             .parse::<bool>()
-            .expect("DISABLE_BRIDGING must be a boolean");
+            .map_err(|e| anyhow::anyhow!("DISABLE_BRIDGING must be a boolean: {}", e))?;
 
         let max_bytes_per_tx_list = std::env::var("MAX_BYTES_PER_TX_LIST")
             .unwrap_or(MAX_BLOB_DATA_SIZE.to_string())
             .parse::<u64>()
-            .expect("MAX_BYTES_PER_TX_LIST must be a number");
+            .map_err(|e| anyhow::anyhow!("MAX_BYTES_PER_TX_LIST must be a number: {}", e))?;
 
         // The throttling factor is used to reduce the max bytes per tx list exponentially.
         let throttling_factor = std::env::var("THROTTLING_FACTOR")
             .unwrap_or("2".to_string())
             .parse::<u64>()
-            .expect("THROTTLING_FACTOR must be a number");
+            .map_err(|e| anyhow::anyhow!("THROTTLING_FACTOR must be a number: {}", e))?;
 
         let min_bytes_per_tx_list = std::env::var("MIN_BYTES_PER_TX_LIST")
             .unwrap_or("8192".to_string()) // 8KB
             .parse::<u64>()
-            .expect("MIN_BYTES_PER_TX_LIST must be a number");
+            .map_err(|e| anyhow::anyhow!("MIN_BYTES_PER_TX_LIST must be a number: {}", e))?;
 
         let preconf_min_txs = std::env::var("PRECONF_MIN_TXS")
             .unwrap_or("3".to_string())
             .parse::<u64>()
-            .expect("PRECONF_MIN_TXS must be a number");
+            .map_err(|e| anyhow::anyhow!("PRECONF_MIN_TXS must be a number: {}", e))?;
 
         let preconf_max_skipped_l2_slots = std::env::var("PRECONF_MAX_SKIPPED_L2_SLOTS")
             .unwrap_or("2".to_string())
             .parse::<u64>()
-            .expect("PRECONF_MAX_SKIPPED_L2_SLOTS must be a number");
+            .map_err(|e| anyhow::anyhow!("PRECONF_MAX_SKIPPED_L2_SLOTS must be a number: {}", e))?;
 
         // 0.003 eth
         let bridge_relayer_fee = std::env::var("BRIDGE_RELAYER_FEE")
             .unwrap_or("3047459064000000".to_string())
             .parse::<u64>()
-            .expect("BRIDGE_RELAYER_FEE must be a number");
+            .map_err(|e| anyhow::anyhow!("BRIDGE_RELAYER_FEE must be a number: {}", e))?;
 
         // 0.001 eth
         let bridge_transaction_fee = std::env::var("BRIDGE_TRANSACTION_FEE")
             .unwrap_or("1000000000000000".to_string())
             .parse::<u64>()
-            .expect("BRIDGE_TRANSACTION_FEE must be a number");
+            .map_err(|e| anyhow::anyhow!("BRIDGE_TRANSACTION_FEE must be a number: {}", e))?;
 
         // Fork info
         let fork_switch_transition_period_sec =
             match std::env::var("FORK_SWITCH_TRANSITION_PERIOD_SEC") {
                 Err(_) => 60,
-                Ok(time) => time
-                    .parse::<u64>()
-                    .expect("FORK_SWITCH_TRANSITION_PERIOD_SEC must be a number"),
+                Ok(time) => time.parse::<u64>().map_err(|e| {
+                    anyhow::anyhow!("FORK_SWITCH_TRANSITION_PERIOD_SEC must be a number: {}", e)
+                })?,
             };
         let pacaya_timestamp_sec = std::env::var("PACAYA_TIMESTAMP_SEC")
             .unwrap_or("0".to_string())
             .parse::<u64>()
-            .expect("PACAYA_TIMESTAMP_SEC must be a number");
+            .map_err(|e| anyhow::anyhow!("PACAYA_TIMESTAMP_SEC must be a number: {}", e))?;
         let shasta_timestamp_sec = std::env::var("SHASTA_TIMESTAMP_SEC")
             .unwrap_or("99999999999".to_string())
             .parse::<u64>()
-            .expect("SHASTA_TIMESTAMP_SEC must be a number");
+            .map_err(|e| anyhow::anyhow!("SHASTA_TIMESTAMP_SEC must be a number: {}", e))?;
 
         let whitelist_monitor_interval_sec = std::env::var("WHITELIST_MONITOR_INTERVAL_SEC")
             .unwrap_or("60".to_string())
             .parse::<u64>()
-            .expect("WHITELIST_MONITOR_INTERVAL_SEC must be a number");
+            .map_err(|e| {
+                anyhow::anyhow!("WHITELIST_MONITOR_INTERVAL_SEC must be a number: {}", e)
+            })?;
 
         let config = Self {
             preconfer_address,
@@ -497,6 +555,6 @@ whitelist monitor interval: {}s
             config.whitelist_monitor_interval_sec,
         );
 
-        config
+        Ok(config)
     }
 }

@@ -529,41 +529,41 @@ impl Node {
                 (elapsed_status - elapsed_l2_slot).as_millis(),
                 (elapsed_pending_tx - elapsed_status).as_millis()
             );
-            #[cfg(feature = "get_status_duration")]
-            {
-                if let Some(durations) =
-                    current_status.as_ref().ok().and_then(|s| s.get_durations())
-                {
-                    error!(
-                        "Get status durations: check_taiko_wrapper: {} ms, check_handover_window_slots: {} ms, check_current_operator: {} ms, check_handover_window: {} ms, check_driver_status: {} ms, check_driver_synced: {} ms, check_preconfer: {} ms, check_preconfirmation_started: {} ms, check_submitter: {} ms, check_end_of_sequencing: {} ms",
-                        durations.check_taiko_wrapper.as_millis(),
-                        (durations.check_handover_window_slots - durations.check_taiko_wrapper)
-                            .as_millis(),
-                        (durations.check_current_operator - durations.check_handover_window_slots)
-                            .as_millis(),
-                        (durations.check_handover_window - durations.check_current_operator)
-                            .as_millis(),
-                        (durations.check_driver_status - durations.check_handover_window)
-                            .as_millis(),
-                        (durations.check_driver_synced - durations.check_driver_status).as_millis(),
-                        (durations.check_preconfer - durations.check_driver_synced).as_millis(),
-                        (durations.check_preconfirmation_started - durations.check_preconfer)
-                            .as_millis(),
-                        (durations.check_submitter - durations.check_preconfirmation_started)
-                            .as_millis(),
-                        (durations.check_end_of_sequencing - durations.check_submitter).as_millis(),
-                    );
-                } else {
-                    error!("Get status durations not available (None)");
-                }
-            }
-            self.metrics.inc_critical_errors();
+            Self::log_status_durations(&current_status);
             return Err(anyhow::anyhow!(
                 "Getting slot info and status is taking too long"
             ));
         }
 
         Ok((l2_slot_info?, current_status?, pending_tx_list?))
+    }
+
+    fn log_status_durations(current_status: &Result<OperatorStatus, Error>) {
+        #[cfg(feature = "get_status_duration")]
+        {
+            if let Some(durations) = current_status.as_ref().ok().and_then(|s| s.get_durations()) {
+                error!(
+                    "Get status durations: check_taiko_wrapper: {} ms, check_handover_window_slots: {} ms, check_current_operator: {} ms, check_handover_window: {} ms, check_driver_status: {} ms, check_driver_synced: {} ms, check_preconfer: {} ms, check_preconfirmation_started: {} ms, check_submitter: {} ms, check_end_of_sequencing: {} ms",
+                    durations.check_taiko_wrapper.as_millis(),
+                    (durations.check_handover_window_slots - durations.check_taiko_wrapper)
+                        .as_millis(),
+                    (durations.check_current_operator - durations.check_handover_window_slots)
+                        .as_millis(),
+                    (durations.check_handover_window - durations.check_current_operator)
+                        .as_millis(),
+                    (durations.check_driver_status - durations.check_handover_window).as_millis(),
+                    (durations.check_driver_synced - durations.check_driver_status).as_millis(),
+                    (durations.check_preconfer - durations.check_driver_synced).as_millis(),
+                    (durations.check_preconfirmation_started - durations.check_preconfer)
+                        .as_millis(),
+                    (durations.check_submitter - durations.check_preconfirmation_started)
+                        .as_millis(),
+                    (durations.check_end_of_sequencing - durations.check_submitter).as_millis(),
+                );
+            } else {
+                error!("Get status durations not available (None)");
+            }
+        }
     }
 
     /// Returns true if the operation succeeds
