@@ -86,26 +86,30 @@ impl BatchManager {
             .await
     }
 
+    pub fn should_new_block_be_created(
+        &self,
+        pending_tx_list: &Option<PreBuiltTxList>,
+        l2_slot_context: &L2SlotContext,
+    ) -> bool {
+        self.batch_builder.should_new_block_be_created(
+            pending_tx_list,
+            l2_slot_context.info.slot_timestamp(),
+            l2_slot_context.end_of_sequencing,
+        )
+    }
+
     pub async fn preconfirm_block(
         &mut self,
         pending_tx_list: Option<PreBuiltTxList>,
         l2_slot_context: &L2SlotContext,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        let result = if self.batch_builder.should_new_block_be_created(
-            pending_tx_list.as_ref(),
-            l2_slot_context.info.slot_timestamp(),
-            l2_slot_context.end_of_sequencing,
-        ) {
-            self.add_new_l2_block(
+    ) -> Result<BuildPreconfBlockResponse, Error> {
+        let result = self
+            .add_new_l2_block(
                 pending_tx_list.unwrap_or_else(PreBuiltTxList::empty),
                 l2_slot_context,
                 OperationType::Preconfirm,
             )
-            .await?
-        } else {
-            None
-        };
-
+            .await?;
         if self
             .batch_builder
             .is_greater_than_max_anchor_height_offset()?
@@ -169,7 +173,7 @@ impl BatchManager {
                         "Preconfirmed forced inclusion L2 block: {:?}",
                         fi_preconfed_block
                     );
-                    return Ok(fi_preconfed_block);
+                    return Ok(Some(fi_preconfed_block));
                 }
                 Err(err) => {
                     error!(
@@ -194,7 +198,7 @@ impl BatchManager {
         prebuilt_tx_list: PreBuiltTxList,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+    ) -> Result<BuildPreconfBlockResponse, Error> {
         let timestamp = l2_slot_context.info.slot_timestamp();
         if let Some(last_block_timestamp) = self
             .batch_builder
@@ -234,7 +238,7 @@ impl BatchManager {
                     )
                     .await?
             {
-                return Ok(Some(fi_block));
+                return Ok(fi_block);
             }
         }
 
@@ -250,7 +254,7 @@ impl BatchManager {
         l2_draft_block: L2BlockV2Draft,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+    ) -> Result<BuildPreconfBlockResponse, Error> {
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
 
         match self
@@ -515,7 +519,7 @@ impl BatchManager {
         l2_slot_info: L2SlotInfoV2,
         _is_forced_inclusion: bool,
         allow_forced_inclusion: bool,
-    ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
+    ) -> Result<BuildPreconfBlockResponse, Error> {
         // TODO create context outside
         let l2_slot_context = L2SlotContext {
             info: l2_slot_info,

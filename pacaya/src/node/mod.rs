@@ -940,17 +940,16 @@ impl Node {
                 )
                 .await;
             // if reanchor_block fails restart the node
-            if let Ok(Some(block)) = block {
-                debug!("Reanchored block {} hash {}", block.number, block.hash);
-            } else {
-                let err_msg = match block {
-                    Ok(None) => "Failed to reanchor block: None returned".to_string(),
-                    Err(err) => format!("Failed to reanchor block: {err}"),
-                    Ok(Some(_)) => "Unreachable".to_string(),
-                };
-                error!("{}", err_msg);
-                self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!("{}", err_msg));
+            match block {
+                Ok(block) => {
+                    debug!("Reanchored block {} hash {}", block.number, block.hash);
+                }
+                Err(err) => {
+                    let err_msg = format!("Failed to reanchor block: {err}");
+                    error!("{}", err_msg);
+                    self.cancel_token.cancel_on_critical_error();
+                    return Err(anyhow::anyhow!("{}", err_msg));
+                }
             }
 
             // TODO reduce 1 geth call
