@@ -17,18 +17,20 @@ use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},
 };
-use tracing::warn;
+use tracing::{debug, warn};
 
 pub struct ProposalTxBuilder {
     provider: DynProvider,
     extra_gas_percentage: u64,
+    fallback_gas_limit: u64,
 }
 
 impl ProposalTxBuilder {
-    pub fn new(provider: DynProvider, extra_gas_percentage: u64) -> Self {
+    pub fn new(provider: DynProvider, extra_gas_percentage: u64, fallback_gas_limit: u64) -> Self {
         Self {
             provider,
             extra_gas_percentage,
+            fallback_gas_limit,
         }
     }
 
@@ -50,14 +52,27 @@ impl ProposalTxBuilder {
                     "Build proposeBatch: Failed to estimate gas for blob transaction: {}",
                     e
                 );
+
                 match e {
                     RpcError::ErrorResp(err) => {
-                        return Err(anyhow::anyhow!(
-                            tools::convert_error_payload(&err.to_string())
-                                .unwrap_or(TransactionError::EstimationFailed)
-                        ));
+                        if err
+                            .to_string()
+                            .to_lowercase()
+                            .contains("gas estimation failed due to out of gas")
+                        {
+                            debug!("Using fallback gas limit: {}", self.fallback_gas_limit);
+                            self.fallback_gas_limit
+                        } else {
+                            return Err(anyhow::anyhow!(
+                                tools::convert_error_payload(&err.to_string())
+                                    .unwrap_or(TransactionError::EstimationFailed)
+                            ));
+                        }
                     }
-                    _ => return Ok(tx_blob),
+                    _ => {
+                        debug!("Using fallback gas limit: {}", self.fallback_gas_limit);
+                        self.fallback_gas_limit
+                    }
                 }
             }
         };

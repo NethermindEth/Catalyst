@@ -37,6 +37,8 @@ pub struct ExecutionLayer {
     pub transaction_monitor: TransactionMonitor,
     contract_addresses: ContractAddresses,
     inbox_instance: InboxInstance<DynProvider>,
+    extra_gas_percentage: u64,
+    fallback_gas_limit: u64,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -91,6 +93,8 @@ impl ELTrait for ExecutionLayer {
             transaction_monitor,
             contract_addresses,
             inbox_instance,
+            extra_gas_percentage: common_config.extra_gas_percentage,
+            fallback_gas_limit: specific_config.fallback_gas_limit,
         })
     }
 
@@ -175,8 +179,11 @@ impl ExecutionLayer {
         );
 
         // Build propose transaction
-        // TODO fill extra gas percentege from config
-        let builder = ProposalTxBuilder::new(self.provider.clone(), 10);
+        let builder = ProposalTxBuilder::new(
+            self.provider.clone(),
+            self.extra_gas_percentage,
+            self.fallback_gas_limit,
+        );
         let tx = builder
             .build_propose_tx(
                 l2_blocks,

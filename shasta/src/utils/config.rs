@@ -6,6 +6,7 @@ use std::str::FromStr;
 #[derive(Debug, Clone)]
 pub struct ShastaConfig {
     pub shasta_inbox: Address,
+    pub fallback_gas_limit: u64,
 }
 
 impl ConfigTrait for ShastaConfig {
@@ -19,7 +20,15 @@ impl ConfigTrait for ShastaConfig {
 
         let shasta_inbox = read_contract_address("SHASTA_INBOX_ADDRESS")?;
 
-        Ok(ShastaConfig { shasta_inbox })
+        let fallback_gas_limit = std::env::var("FALLBACK_GAS_LIMIT")
+            .unwrap_or("200000".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("FALLBACK_GAS_LIMIT must be a number: {}", e))?;
+
+        Ok(ShastaConfig {
+            shasta_inbox,
+            fallback_gas_limit,
+        })
     }
 }
 

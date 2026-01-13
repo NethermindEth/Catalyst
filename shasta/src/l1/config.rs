@@ -12,6 +12,7 @@ pub struct ContractAddresses {
 
 pub struct EthereumL1Config {
     pub shasta_inbox: Address,
+    pub fallback_gas_limit: u64,
 }
 
 impl TryFrom<ShastaConfig> for EthereumL1Config {
@@ -20,6 +21,7 @@ impl TryFrom<ShastaConfig> for EthereumL1Config {
     fn try_from(config: ShastaConfig) -> Result<Self, Self::Error> {
         Ok(EthereumL1Config {
             shasta_inbox: config.shasta_inbox,
+            fallback_gas_limit: config.fallback_gas_limit,
         })
     }
 }
