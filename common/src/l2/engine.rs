@@ -8,7 +8,7 @@ use anyhow::Error;
 use serde_json::Value;
 use std::cmp::{max, min};
 use std::time::Duration;
-use tracing::debug;
+use tracing::{debug, warn};
 
 pub struct L2Engine {
     auth_rpc: JSONRPCClient,
@@ -84,8 +84,13 @@ impl L2Engine {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get L2 tx lists: {}", e))?;
         if result != Value::Null {
-            let tx_lists = l2_tx_lists::decompose_pending_lists_json_from_geth(result)
-                .map_err(|e| anyhow::anyhow!("Failed to decompose L2 tx lists: {}", e))?;
+            let tx_lists = match l2_tx_lists::decompose_pending_lists_json_from_geth(result) {
+                Err(e) => {
+                    warn!("Failed to parse L2 tx lists from geth response: {}", e);
+                    return Ok(None);
+                }
+                Ok(lists) => lists,
+            };
 
             // ignoring rest of tx lists, only one list per L2 block is processed
             let first = tx_lists.into_iter().next();
