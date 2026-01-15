@@ -402,54 +402,54 @@ impl Node {
             TransactionError::ReanchorRequired => {
                 warn!("Unexpected ReanchorRequired error received");
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!(
+                Err(anyhow::anyhow!(
                     "ReanchorRequired error received unexpectedly, exiting"
-                ));
+                ))
             }
             TransactionError::NotConfirmed => {
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!(
+                Err(anyhow::anyhow!(
                     "Transaction not confirmed for a long time, exiting"
-                ));
+                ))
             }
             TransactionError::UnsupportedTransactionType => {
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!(
+                Err(anyhow::anyhow!(
                     "Unsupported transaction type. You can send eip1559 or eip4844 transactions only"
-                ));
+                ))
             }
             TransactionError::GetBlockNumberFailed => {
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!("Failed to get block number from L1"));
+                Err(anyhow::anyhow!("Failed to get block number from L1"))
             }
             TransactionError::EstimationTooEarly => {
                 warn!("Transaction estimation too early");
-                return Ok(());
+                Ok(())
             }
             TransactionError::InsufficientFunds => {
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!(
+                Err(anyhow::anyhow!(
                     "Transaction reverted with InsufficientFunds error"
-                ));
+                ))
             }
             TransactionError::EstimationFailed => {
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!("Transaction estimation failed, exiting"));
+                Err(anyhow::anyhow!("Transaction estimation failed, exiting"))
             }
             TransactionError::TransactionReverted => {
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!("Transaction reverted, exiting"));
+                Err(anyhow::anyhow!("Transaction reverted, exiting"))
             }
             TransactionError::OldestForcedInclusionDue => {
                 // TODO implement proper handling of forced inclusion due
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!(
+                Err(anyhow::anyhow!(
                     "Need to include forced inclusion, reanchoring done, skipping slot"
-                ));
+                ))
             }
             TransactionError::NotTheOperatorInCurrentEpoch => {
                 warn!("Propose batch transaction executed too late.");
-                return Ok(());
+                Ok(())
             }
         }
     }
