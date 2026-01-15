@@ -55,11 +55,18 @@ where
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "PascalCase")]
 pub struct PreBuiltTxList {
-    #[serde(deserialize_with = "deserialize_tx_list")]
+    #[serde(
+        rename = "TxList",
+        alias = "txList",
+        deserialize_with = "deserialize_tx_list"
+    )]
     pub tx_list: Vec<Transaction>,
+
+    #[serde(rename = "EstimatedGasUsed", alias = "estimatedGasUsed")]
     pub estimated_gas_used: u64,
+
+    #[serde(rename = "BytesLength", alias = "bytesLength")]
     pub bytes_length: u64,
 }
 
