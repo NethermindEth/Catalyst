@@ -1,7 +1,11 @@
 use super::transaction_error::TransactionError;
 
+// shasta
+// 0xe92c469f -> InsufficientBond()
 pub fn check_for_insufficient_funds(err_str: &str) -> bool {
-    err_str.contains("insufficient funds") || err_str.contains("insufficient allowance")
+    err_str.contains("insufficient funds")
+        || err_str.contains("insufficient allowance")
+        || err_str.contains("0xe92c469f")
 }
 
 /// 0x46afbf54 -> AnchorBlockIdTooSmall()
@@ -20,7 +24,9 @@ pub fn check_for_reanchor_required(err_str: &str) -> bool {
 /// shasta
 /// 0x92a2f43a -> CannotProposeInCurrentBlock()
 pub fn check_for_too_early_estimation(err_str: &str) -> bool {
-    err_str.contains("0x3d32ffdb") || err_str.contains("0x2b44f010") || err_str.contains("0x92a2f43a")
+    err_str.contains("0x3d32ffdb")
+        || err_str.contains("0x2b44f010")
+        || err_str.contains("0x92a2f43a")
 }
 
 // 0x1e66a770 -> OldestForcedInclusionDue()

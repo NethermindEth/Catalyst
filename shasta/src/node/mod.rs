@@ -441,37 +441,8 @@ impl Node {
                 return Err(anyhow::anyhow!("Transaction reverted, exiting"));
             }
             TransactionError::OldestForcedInclusionDue => {
-                self.metrics.inc_critical_errors();
-                /*let taiko_inbox_height = match self
-                    .ethereum_l1
-                    .execution_layer
-                    .get_l2_height_from_taiko_inbox()
-                    .await
-                {
-                    Ok(height) => height,
-                    Err(err) => {
-                        let err_msg = format!(
-                            "OldestForcedInclusionDue: Failed to get L2 height from Taiko inbox: {err}"
-                        );
-                        error!("{}", err_msg);
-                        self.cancel_token.cancel_on_critical_error();
-                        return Err(anyhow::anyhow!("{}", err_msg));
-                    }
-                };
-                if let Err(err) = self
-                    .handle_oldest_forced_inclusion_due(
-                        taiko_inbox_height,
-                        current_status,
-                        l2_slot_info,
-                    )
-                    .await
-                {
-                    let err_msg = format!("OldestForcedInclusionDue: Failed to reorg: {err}");
-                    error!("{}", err_msg);
-                    self.cancel_token.cancel_on_critical_error();
-                    return Err(anyhow::anyhow!("{}", err_msg));
-                }*/
                 // TODO implement proper handling of forced inclusion due
+                self.cancel_token.cancel_on_critical_error();
                 return Err(anyhow::anyhow!(
                     "Need to include forced inclusion, reanchoring done, skipping slot"
                 ));
@@ -481,7 +452,6 @@ impl Node {
                 return Ok(());
             }
         }
-        Ok(())
     }
 
     async fn get_slot_info_and_status(
