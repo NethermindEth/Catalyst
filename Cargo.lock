@@ -1821,7 +1821,7 @@ dependencies = [
 [[package]]
 name = "bindings"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=f1e2147b65fcc338f28435c3d531bca3a2f890c1#f1e2147b65fcc338f28435c3d531bca3a2f890c1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb#18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb"
 dependencies = [
  "alloy",
  "serde",
@@ -2442,7 +2442,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.26.5"
+version = "1.26.6"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -5707,7 +5707,7 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.26.5"
+version = "1.26.6"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6149,7 +6149,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.26.5"
+version = "1.26.6"
 dependencies = [
  "anyhow",
  "discv5 0.9.1",
@@ -6161,7 +6161,7 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.26.5"
+version = "1.26.6"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6305,7 +6305,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.26.5"
+version = "1.26.6"
 dependencies = [
  "alloy",
  "anyhow",
@@ -6679,7 +6679,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=f1e2147b65fcc338f28435c3d531bca3a2f890c1#f1e2147b65fcc338f28435c3d531bca3a2f890c1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb#18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb"
 dependencies = [
  "alloy",
  "alloy-consensus",
@@ -6690,6 +6690,7 @@ dependencies = [
  "alloy-provider",
  "alloy-rlp",
  "alloy-rpc-types",
+ "alloy-sol-types",
  "anyhow",
  "arc-swap",
  "async-trait",
@@ -6698,6 +6699,7 @@ dependencies = [
  "event-scanner",
  "flate2",
  "serde",
+ "sha2",
  "thiserror 2.0.17",
  "tokio",
  "tokio-retry",
@@ -9997,7 +9999,7 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 [[package]]
 name = "rpc"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=f1e2147b65fcc338f28435c3d531bca3a2f890c1#f1e2147b65fcc338f28435c3d531bca3a2f890c1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb#18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb"
 dependencies = [
  "alethia-reth-evm",
  "alethia-reth-primitives",
@@ -10642,7 +10644,7 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.26.5"
+version = "1.26.6"
 dependencies = [
  "alethia-reth-consensus",
  "alloy",
@@ -11658,6 +11660,7 @@ dependencies = [
  "futures-util",
  "pin-project",
  "pin-project-lite",
+ "tokio",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -12064,7 +12067,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.26.5"
+version = "1.26.6"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
