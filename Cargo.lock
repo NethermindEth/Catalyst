@@ -733,7 +733,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tower 0.5.2",
+ "tower",
  "tracing",
  "wasmtimer",
 ]
@@ -780,7 +780,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tower 0.5.2",
+ "tower",
  "tracing",
  "url",
  "wasmtimer",
@@ -1091,7 +1091,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
- "tower 0.5.2",
+ "tower",
  "tracing",
  "url",
  "wasmtimer",
@@ -1115,7 +1115,7 @@ dependencies = [
  "opentelemetry-http",
  "reqwest",
  "serde_json",
- "tower 0.5.2",
+ "tower",
  "tracing",
  "tracing-opentelemetry",
  "url",
@@ -1821,7 +1821,7 @@ dependencies = [
 [[package]]
 name = "bindings"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb#18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=e57deec41ae0dfcb273823b546ed4ff84be463d1#e57deec41ae0dfcb273823b546ed4ff84be463d1"
 dependencies = [
  "alloy",
  "serde",
@@ -2442,7 +2442,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.26.9"
+version = "1.26.10"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -3532,15 +3532,15 @@ dependencies = [
 
 [[package]]
 name = "event-scanner"
-version = "1.0.0-rc.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46510962fd989569a54cfa6fc529410937f528cf56b2dad2fe329891e4f59c07"
+checksum = "1a379baea9e6bccfcf5eaae8b52d2b66b87dcd807ad30a3bcd00cfb895d8321b"
 dependencies = [
  "alloy",
  "alloy-node-bindings",
  "anyhow",
- "backon",
  "futures",
+ "robust-provider",
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
@@ -4977,7 +4977,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
- "tower 0.5.2",
+ "tower",
  "tracing",
  "wasm-bindgen-futures",
 ]
@@ -5001,7 +5001,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
- "tower 0.5.2",
+ "tower",
  "url",
 ]
 
@@ -5041,7 +5041,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
- "tower 0.5.2",
+ "tower",
  "tracing",
 ]
 
@@ -5066,7 +5066,7 @@ dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-types",
- "tower 0.5.2",
+ "tower",
 ]
 
 [[package]]
@@ -5079,7 +5079,7 @@ dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core",
  "jsonrpsee-types",
- "tower 0.5.2",
+ "tower",
  "url",
 ]
 
@@ -5707,7 +5707,7 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.26.9"
+version = "1.26.10"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6149,7 +6149,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.26.9"
+version = "1.26.10"
 dependencies = [
  "anyhow",
  "discv5 0.9.1",
@@ -6161,7 +6161,7 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.26.9"
+version = "1.26.10"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6305,7 +6305,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.26.9"
+version = "1.26.10"
 dependencies = [
  "alloy",
  "anyhow",
@@ -6679,7 +6679,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb#18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=e57deec41ae0dfcb273823b546ed4ff84be463d1#e57deec41ae0dfcb273823b546ed4ff84be463d1"
 dependencies = [
  "alloy",
  "alloy-consensus",
@@ -7088,7 +7088,7 @@ dependencies = [
  "tokio-native-tls",
  "tokio-rustls",
  "tokio-util",
- "tower 0.5.2",
+ "tower",
  "tower-http",
  "tower-service",
  "url",
@@ -8252,7 +8252,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
- "tower 0.5.2",
+ "tower",
  "tracing",
 ]
 
@@ -8712,7 +8712,7 @@ dependencies = [
  "reth-tasks",
  "tikv-jemalloc-ctl",
  "tokio",
- "tower 0.5.2",
+ "tower",
  "tracing",
 ]
 
@@ -9049,7 +9049,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-stream",
- "tower 0.5.2",
+ "tower",
  "tracing",
  "tracing-futures",
 ]
@@ -9116,7 +9116,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
- "tower 0.5.2",
+ "tower",
  "tower-http",
  "tracing",
 ]
@@ -9272,7 +9272,7 @@ dependencies = [
  "http 1.4.0",
  "jsonrpsee-http-client",
  "pin-project",
- "tower 0.5.2",
+ "tower",
  "tower-http",
  "tracing",
 ]
@@ -9982,6 +9982,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "robust-provider"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9154764a69ea2fd9b5511346a75d63820371a0207fbef148e934aa5ec7d05d72"
+dependencies = [
+ "alloy",
+ "alloy-node-bindings",
+ "anyhow",
+ "backon",
+ "futures",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "rolling-file"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9999,7 +10017,7 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 [[package]]
 name = "rpc"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb#18d09fe60de0a960a0a0ca65a5acfe02f35ec7cb"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=e57deec41ae0dfcb273823b546ed4ff84be463d1#e57deec41ae0dfcb273823b546ed4ff84be463d1"
 dependencies = [
  "alethia-reth-evm",
  "alethia-reth-primitives",
@@ -10028,7 +10046,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.17",
  "tokio",
- "tower 0.4.13",
+ "tower",
  "tracing",
  "url",
 ]
@@ -10644,7 +10662,7 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.26.9"
+version = "1.26.10"
 dependencies = [
  "alethia-reth-consensus",
  "alloy",
@@ -11633,7 +11651,7 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tokio-stream",
- "tower 0.5.2",
+ "tower",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -11648,22 +11666,6 @@ dependencies = [
  "bytes",
  "prost",
  "tonic",
-]
-
-[[package]]
-name = "tower"
-version = "0.4.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8fa9be0de6cf49e536ce1851f987bd21a43b771b09473c3549a6c853db37c1c"
-dependencies = [
- "futures-core",
- "futures-util",
- "pin-project",
- "pin-project-lite",
- "tokio",
- "tower-layer",
- "tower-service",
- "tracing",
 ]
 
 [[package]]
@@ -11710,7 +11712,7 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util",
- "tower 0.5.2",
+ "tower",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -12067,7 +12069,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.26.9"
+version = "1.26.10"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
