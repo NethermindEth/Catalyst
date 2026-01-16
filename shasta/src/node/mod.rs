@@ -572,6 +572,24 @@ impl Node {
         Ok((taiko_inbox_height, taiko_geth_height))
     }
 
+    async fn get_next_proposal_id(&self) -> Result<(u64, u64), Error> {
+        let l1_proposal_id = self
+            .ethereum_l1
+            .execution_layer
+            .get_inbox_next_proposal_id()
+            .await?;
+
+        let l2_proposal_id = self
+            .taiko
+            .l2_execution_layer()
+            .get_last_synced_proposal_id_from_geth()
+            .await
+            .unwrap_or(0)
+            + 1;
+
+        Ok((l1_proposal_id, l2_proposal_id))
+    }
+
     async fn check_transaction_error_channel(
         &mut self,
         current_status: &OperatorStatus,
@@ -666,20 +684,20 @@ impl Node {
         }
 
         // Wait for Taiko Geth to synchronize with L1
-        let (mut taiko_inbox_height, mut taiko_geth_height) =
-            self.get_current_protocol_height().await?;
-
-        info!("Taiko Inbox Height: {taiko_inbox_height}, Taiko Geth Height: {taiko_geth_height}");
-
-        while taiko_geth_height < taiko_inbox_height {
-            warn!("Taiko Geth is behind L1. Waiting 5 seconds...");
-            sleep(Duration::from_secs(5)).await;
-
-            (taiko_inbox_height, taiko_geth_height) = self.get_current_protocol_height().await?;
-
+        loop {
+            let (l1_proposal_id, l2_proposal_id) = self.get_next_proposal_id().await?;
             info!(
-                "Taiko Inbox Height: {taiko_inbox_height}, Taiko Geth Height: {taiko_geth_height}"
+                "Inbox next proposal id: {l1_proposal_id}, Taiko Geth next proposal id: {l2_proposal_id}"
             );
+
+            if l1_proposal_id <= l2_proposal_id {
+                break;
+            }
+
+            warn!(
+                "Taiko Geth is behind L1 (L1: {l1_proposal_id}, L2: {l2_proposal_id}). Retrying in 5 seconds..."
+            );
+            sleep(Duration::from_secs(5)).await;
         }
 
         // Wait for the last sent transaction to be executed

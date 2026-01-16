@@ -278,6 +278,12 @@ impl ExecutionLayer {
 
         Ok(state)
     }
+
+    pub async fn get_inbox_next_proposal_id(&self) -> Result<u64, Error> {
+        let state = self.inbox_instance.getCoreState().call().await?;
+
+        Ok(state.nextProposalId.to::<u64>())
+    }
 }
 
 impl WhitelistProvider for ExecutionLayer {

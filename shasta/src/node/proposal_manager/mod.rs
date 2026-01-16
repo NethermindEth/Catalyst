@@ -446,7 +446,8 @@ impl BatchManager {
 
         let coinbase = block.header.beneficiary();
 
-        let (_, proposal_id) = crate::l2::tools::decode_extra_data(block.header.extra_data())?;
+        let proposal_id =
+            crate::l2::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
 
         let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
         let anchor_info = AnchorBlockInfo::from_precomputed_data(
