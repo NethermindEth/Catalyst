@@ -156,7 +156,8 @@ impl L2ExecutionLayer {
 
     pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
         let block = self.common.get_latest_block_with_txs().await?;
-        let (_, proposal_id) = super::tools::decode_extra_data(block.header.extra_data())?;
+        let proposal_id =
+            super::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
         Ok(proposal_id)
     }
 
