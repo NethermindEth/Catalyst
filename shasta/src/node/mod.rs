@@ -690,7 +690,7 @@ impl Node {
                 "Inbox next proposal id: {l1_proposal_id}, Taiko Geth next proposal id: {l2_proposal_id}"
             );
 
-            if l1_proposal_id == l2_proposal_id {
+            if l1_proposal_id <= l2_proposal_id {
                 break;
             }
 
