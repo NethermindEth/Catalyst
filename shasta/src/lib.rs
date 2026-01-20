@@ -1,9 +1,8 @@
+mod derivation_consts;
 mod chain_monitor;
 mod node;
 mod utils;
-
 mod forced_inclusion;
-
 mod l1;
 mod l2;
 
@@ -88,13 +87,12 @@ pub async fn create_shasta_node(
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
-        //https://github.com/taikoxyz/taiko-mono/blob/taiko-alethia-protocol-v3.0.0/packages/protocol/docs/Derivation.md#constants
-        384 // value from Taiko Derivation docs
+        derivation_consts::DERIVATION_SOURCE_MAX_BLOCKS
     } else {
         config.max_blocks_per_batch
     };
 
-    let max_anchor_height_offset = 128; // value from Taiko Derivation docs
+    let max_anchor_height_offset = derivation_consts::MAX_ANCHOR_OFFSET;
 
     let batch_builder_config = BatchBuilderConfig {
         max_bytes_size_of_batch: config.max_bytes_size_of_batch,
