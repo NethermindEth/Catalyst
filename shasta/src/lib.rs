@@ -81,7 +81,7 @@ pub async fn create_shasta_node(
         preconf_heartbeat_ms: config.preconf_heartbeat_ms,
         handover_window_slots: 8,
         handover_start_buffer_ms: 500,
-        l1_height_lag: 5,
+        l1_height_lag: 8,
         propose_forced_inclusion: true,
         simulate_not_submitting_at_the_end_of_epoch: false,
     };
