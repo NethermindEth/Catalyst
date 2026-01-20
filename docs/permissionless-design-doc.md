@@ -541,7 +541,7 @@ To address this, we introduce an [*overseer*](https://ethresear.ch/t/preconfirma
     ![image.png](images/image%2011.png)
     
 
-To detect withholding, the overseer monitors both the preconf P2P network and the public L2 mempool. If preconfs are not published in a timely manner, or if they consistently ignore a significant portion of mempool transactions for an extended period (exact thresholds are TBD and should be parameterized), the overseer can blacklist the overseer.
+To detect withholding, the overseer monitors both the preconf P2P network and the public L2 mempool. If preconfs are not published in a timely manner, or if they consistently ignore a significant portion of mempool transactions for an extended period (exact thresholds are TBD and should be parameterized), the overseer can blacklist the preconfer.
 
 ```mermaid
 sequenceDiagram
