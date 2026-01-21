@@ -1,5 +1,4 @@
 mod chain_monitor;
-mod derivation_consts;
 mod forced_inclusion;
 mod l1;
 mod l2;
@@ -87,12 +86,12 @@ pub async fn create_shasta_node(
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
-        derivation_consts::DERIVATION_SOURCE_MAX_BLOCKS
+        taiko_protocol::shasta::constants::PROPOSAL_MAX_BLOCKS.try_into()?
     } else {
         config.max_blocks_per_batch
     };
 
-    let max_anchor_height_offset = derivation_consts::MAX_ANCHOR_OFFSET;
+    let max_anchor_height_offset = taiko_protocol::shasta::constants::MAX_ANCHOR_OFFSET;
 
     let batch_builder_config = BatchBuilderConfig {
         max_bytes_size_of_batch: config.max_bytes_size_of_batch,
