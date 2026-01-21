@@ -1,10 +1,10 @@
-mod derivation_consts;
 mod chain_monitor;
-mod node;
-mod utils;
+mod derivation_consts;
 mod forced_inclusion;
 mod l1;
 mod l2;
+mod node;
+mod utils;
 
 use crate::utils::config::ShastaConfig;
 use anyhow::Error;
