@@ -13,13 +13,13 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.26.10"
+version = "1.26.11"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
 
 [workspace.dependencies]
-alloy = { version = "1.2.1", default-features = false, features = [
+alloy = { version = "1.4.3", default-features = false, features = [
     "full",
     "node-bindings",
     "rlp",
@@ -27,7 +27,7 @@ alloy = { version = "1.2.1", default-features = false, features = [
     "rpc-types",
     "kzg",
 ] }
-alloy-json-rpc = { version = "1.2.1", default-features = false }
+alloy-json-rpc = { version = "1.4.3", default-features = false }
 alloy-rlp = { version = "0.3", default-features = false }
 anyhow = { version = "1", default-features = false }
 async-trait = { version = "0.1", default-features = false }
@@ -80,10 +80,10 @@ serde_json = { version = "1.0", default-features = false }
 shasta = { path = "shasta" }
 strum = { version = "0.27", features = ["derive"] }
 
-taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "e07c13fc011798adfa5436f24646b7305337cdf3", package = "alethia-reth-consensus" }
-taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "e57deec41ae0dfcb273823b546ed4ff84be463d1", package = "bindings" }
-taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "e57deec41ae0dfcb273823b546ed4ff84be463d1", package = "protocol" }
-taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "e57deec41ae0dfcb273823b546ed4ff84be463d1", package = "rpc" }
+taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "3e0fdad9b9fbf7f6550c7209185fd6623468452c", package = "alethia-reth-consensus" }
+taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "34c446de200a0856863615936c8ce1e94097981f", package = "bindings" }
+taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "34c446de200a0856863615936c8ce1e94097981f", package = "protocol" }
+taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "34c446de200a0856863615936c8ce1e94097981f", package = "rpc" }
 tokio = { version = "1.45", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
 tracing = { version = "0.1.41", default-features = false }
@@ -109,3 +109,4 @@ unwrap_used = "deny"
 
 [profile.release]
 overflow-checks = true
+
