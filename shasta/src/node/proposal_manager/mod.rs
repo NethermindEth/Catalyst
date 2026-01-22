@@ -267,15 +267,12 @@ impl BatchManager {
             .await
         {
             Ok(preconfed_block) => {
-                // Surge: set the end state as the checkpoint for the proposal at the end
-                // of sequencing
-                if l2_slot_context.end_of_sequencing {
-                    self.batch_builder.set_proposal_checkpoint(Checkpoint {
-                        blockNumber: U48::from(preconfed_block.number),
-                        stateRoot: preconfed_block.state_root,
-                        blockHash: preconfed_block.hash,
-                    })?;
-                }
+                // Surge: record the state of the preconfed block as a potential checkpoint
+                self.batch_builder.set_proposal_checkpoint(Checkpoint {
+                    blockNumber: U48::from(preconfed_block.number),
+                    stateRoot: preconfed_block.state_root,
+                    blockHash: preconfed_block.hash,
+                })?;
 
                 Ok(preconfed_block)
             }
