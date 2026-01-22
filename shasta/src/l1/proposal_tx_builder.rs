@@ -155,6 +155,8 @@ impl ProposalTxBuilder {
                 _proof: proof_data,
             });
 
+        tracing::debug!("{:?}", tx.input);
+
         Ok(tx)
     }
 
