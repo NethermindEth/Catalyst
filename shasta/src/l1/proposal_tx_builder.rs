@@ -140,6 +140,8 @@ impl ProposalTxBuilder {
             numForcedInclusions: u16::from(num_forced_inclusion), // TODO SHASTA: receive this as u16 parameter
         };
 
+        tracing::debug!("Propose input: {:?}", input);
+
         let inbox = Inbox::new(to, self.provider.clone());
         let encoded_proposal_input = inbox.encodeProposeInput(input).call().await?;
 
@@ -155,7 +157,7 @@ impl ProposalTxBuilder {
                 _proof: proof_data,
             });
 
-        tracing::debug!("{:?}", tx.input);
+        tracing::debug!("Transaction input: {:?}", tx.input);
 
         Ok(tx)
     }
