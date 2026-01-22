@@ -20,6 +20,9 @@ pub struct Proposal {
     pub anchor_block_hash: B256,
     pub anchor_state_root: B256,
     pub num_forced_inclusion: u8,
+    // Surge: the state sync checkpoint that is signed and sent as a proof
+    // along with the proposal to Surge inbox
+    pub checkpoint: Checkpoint,
 }
 
 impl Proposal {
@@ -177,6 +180,7 @@ mod test {
             anchor_block_hash: B256::ZERO,
             anchor_state_root: B256::ZERO,
             num_forced_inclusion: 0,
+            checkpoint: Checkpoint::default(),
         };
 
         proposal.compress();

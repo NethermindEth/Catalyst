@@ -22,10 +22,13 @@ use common::{
 };
 use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
 use std::sync::Arc;
-use taiko_bindings::inbox::{
-    IForcedInclusionStore::ForcedInclusion,
-    IInbox::CoreState,
-    Inbox::{self, InboxInstance},
+use taiko_bindings::{
+    anchor::ICheckpointStore::Checkpoint,
+    inbox::{
+        IForcedInclusionStore::ForcedInclusion,
+        IInbox::CoreState,
+        Inbox::{self, InboxInstance},
+    },
 };
 use tokio::sync::mpsc::Sender;
 use tracing::info;
@@ -37,6 +40,8 @@ pub struct ExecutionLayer {
     pub transaction_monitor: TransactionMonitor,
     contract_addresses: ContractAddresses,
     inbox_instance: InboxInstance<DynProvider>,
+    // Surge: For signing the state checkpoints sent as proof with proposal
+    checkpoint_signer: alloy::signers::local::PrivateKeySigner,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -91,6 +96,12 @@ impl ELTrait for ExecutionLayer {
             transaction_monitor,
             contract_addresses,
             inbox_instance,
+            // Surge: Hard coding the private key for the POC
+            // (This is the first private key from foundry anvil)
+            checkpoint_signer: alloy::signers::local::PrivateKeySigner::from_bytes(
+                &"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+                    .parse::<alloy::primitives::FixedBytes<32>>()?,
+            )?,
         })
     }
 
@@ -167,6 +178,7 @@ impl ExecutionLayer {
         &self,
         l2_blocks: Vec<L2BlockV2>,
         num_forced_inclusion: u8,
+        checkpoint: Checkpoint,
     ) -> Result<(), Error> {
         info!(
             "📦 Proposing with {} blocks | num_forced_inclusion: {}",
@@ -176,13 +188,15 @@ impl ExecutionLayer {
 
         // Build propose transaction
         // TODO fill extra gas percentege from config
-        let builder = ProposalTxBuilder::new(self.provider.clone(), 10);
+        let builder =
+            ProposalTxBuilder::new(self.provider.clone(), 10, self.checkpoint_signer.clone());
         let tx = builder
             .build_propose_tx(
                 l2_blocks,
                 self.preconfer_address,
                 self.contract_addresses.shasta_inbox,
                 num_forced_inclusion,
+                checkpoint,
             )
             .await?;
 

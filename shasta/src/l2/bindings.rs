@@ -15,3 +15,10 @@ sol!(
     Bridge,
     "src/l2/abi/Bridge.json"
 );
+
+sol!(
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    SurgeInbox,
+    "src/l2/abi/SurgeInbox.json"
+);
