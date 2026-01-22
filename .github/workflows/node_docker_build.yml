@@ -128,12 +128,13 @@ jobs:
       - name: Determine tags to promote
         id: promote-tags
         run: |
+          SHORT_SHA=${GITHUB_SHA:0:7}
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}
             BASE_VERSION=${VERSION%}
-            echo "TAGS=latest $BASE_VERSION" >> $GITHUB_ENV
+            echo "TAGS=latest $BASE_VERSION $SHORT_SHA" >> $GITHUB_ENV
           else
-            echo "TAGS=latest" >> $GITHUB_ENV
+            echo "TAGS=latest $SHORT_SHA" >> $GITHUB_ENV
           fi
 
       - name: Login to Dockerhub registry with ORAS
