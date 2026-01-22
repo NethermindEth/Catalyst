@@ -94,15 +94,12 @@ jobs:
         id: event
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "is_tag=true" >> $GITHUB_OUTPUT
-            echo "is_branch=false" >> $GITHUB_OUTPUT
             VERSION=${GITHUB_REF#refs/tags/}
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "tag_list=type=raw,value=$VERSION" >> $GITHUB_OUTPUT
+            echo "tag_list=type=raw,value=${VERSION}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/heads/master ]]; then
+            echo "tag_list=type=raw,value=latest,type=sha" >> $GITHUB_OUTPUT
           else
-            echo "is_tag=false" >> $GITHUB_OUTPUT
-            echo "is_branch=true" >> $GITHUB_OUTPUT
-            echo "tag_list=type=raw,value=latest" >> $GITHUB_OUTPUT
+            echo "tag_list=type=sha" >> $GITHUB_OUTPUT
           fi
 
       - name: Docker meta
@@ -130,10 +127,11 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}
-            BASE_VERSION=${VERSION%}
-            echo "TAGS=latest $BASE_VERSION" >> $GITHUB_ENV
-          else
+            echo "TAGS=latest ${VERSION}" >> $GITHUB_ENV
+          elif [[ "${{ github.ref }}" == refs/heads/master ]]; then
             echo "TAGS=latest" >> $GITHUB_ENV
+          else
+            echo "TAGS=" >> $GITHUB_ENV
           fi
 
       - name: Login to Dockerhub registry with ORAS
