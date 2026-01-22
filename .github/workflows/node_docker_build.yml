@@ -119,6 +119,16 @@ jobs:
             ${{ needs.build.outputs.digest-amd64 }} \
             ${{ needs.build.outputs.digest-arm64 }}
 
+      - name: Tag with commit SHA
+        run: |
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA=${SHORT_SHA:0:7}
+          SHA_TAG="sha-${SHORT_SHA}"
+          docker buildx imagetools create \
+            -t ${DOCKER_REGISTRY}/${DOCKER_REPOSITORY_STAGING}:${SHA_TAG} \
+            ${{ needs.build.outputs.digest-amd64 }} \
+            ${{ needs.build.outputs.digest-arm64 }}
+
       - name: Setup ORAS
         uses: oras-project/setup-oras@v1
 
@@ -128,13 +138,14 @@ jobs:
       - name: Determine tags to promote
         id: promote-tags
         run: |
-          SHORT_SHA=${GITHUB_SHA:0:7}
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA=${SHORT_SHA:0:7}
+          SHA_TAG="sha-${SHORT_SHA}"
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION=${GITHUB_REF#refs/tags/}
-            BASE_VERSION=${VERSION%}
-            echo "TAGS=latest $BASE_VERSION $SHORT_SHA" >> $GITHUB_ENV
+            echo "TAGS=$VERSION $SHA_TAG" >> $GITHUB_ENV
           else
-            echo "TAGS=latest $SHORT_SHA" >> $GITHUB_ENV
+            echo "TAGS=latest $SHA_TAG" >> $GITHUB_ENV
           fi
 
       - name: Login to Dockerhub registry with ORAS
@@ -145,12 +156,16 @@ jobs:
 
       - name: Promote to Dockerhub Production
         run: |
+          set -e
           for tag in $TAGS; do
             echo "Current tag: $tag"
             source_image="${DOCKER_REGISTRY}/${DOCKER_REPOSITORY_STAGING}:${tag}"
             prod_image="${DOCKER_PUBLIC_REGISTRY}/${DOCKER_PUBLIC_REPOSITORY}:${tag}"
             echo "Promoting ${source_image} to ${prod_image}"
-            oras cp -r "${source_image}" "${prod_image}"
+            if ! oras cp -r "${source_image}" "${prod_image}"; then
+              echo "Error: Failed to promote tag ${tag}" >&2
+              exit 1
+            fi
           done
 
       - name: Summary
