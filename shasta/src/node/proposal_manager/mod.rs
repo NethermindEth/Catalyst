@@ -488,6 +488,10 @@ impl BatchManager {
 
         let txs = txs.to_vec();
 
+        // Store block data for checkpoint before block is moved
+        let block_hash = block.header.hash_slow();
+        let block_state_root = block.header.state_root();
+
         // TODO validate block params
         self.batch_builder
             .recover_from(
@@ -500,6 +504,15 @@ impl BatchManager {
                 is_forced_inclusion,
             )
             .await?;
+
+        // Surge: Set the checkpoint for the recovered block
+        // This is the L2 block state that should be used as checkpoint for the proposal
+        self.batch_builder.set_proposal_checkpoint(Checkpoint {
+            blockNumber: U48::from(block_height),
+            stateRoot: block_state_root,
+            blockHash: block_hash,
+        })?;
+
         Ok(())
     }
 
