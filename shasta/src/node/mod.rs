@@ -1,7 +1,11 @@
 pub mod proposal_manager;
 use anyhow::Error;
 use common::{
-    chain_monitor, fork_info::ForkInfo, l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError}, l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse}, shared::{l2_slot_info_v2::L2SlotContext, l2_tx_lists::PreBuiltTxList}, utils::{self as common_utils, cancellation_token::CancellationToken}
+    fork_info::ForkInfo,
+    l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
+    l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
+    shared::{l2_slot_info_v2::L2SlotContext, l2_tx_lists::PreBuiltTxList},
+    utils::{self as common_utils, cancellation_token::CancellationToken},
 };
 use pacaya::node::operator::Status as OperatorStatus;
 use pacaya::node::{config::NodeConfig, operator::Operator};
@@ -25,8 +29,8 @@ mod verifier;
 use verifier::{VerificationResult, Verifier};
 
 mod l2_height_from_l1;
-pub use l2_height_from_l1::get_l2_height_from_l1;
 use crate::chain_monitor::ShastaChainMonitor;
+pub use l2_height_from_l1::get_l2_height_from_l1;
 
 pub struct Node {
     config: NodeConfig,
