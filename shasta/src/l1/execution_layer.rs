@@ -166,7 +166,7 @@ impl ExecutionLayer {
     pub async fn send_batch_to_l1(
         &self,
         l2_blocks: Vec<L2BlockV2>,
-        num_forced_inclusion: u8,
+        num_forced_inclusion: u16,
     ) -> Result<(), Error> {
         info!(
             "📦 Proposing with {} blocks | num_forced_inclusion: {}",

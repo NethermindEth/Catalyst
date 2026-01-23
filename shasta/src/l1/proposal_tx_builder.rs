@@ -39,7 +39,7 @@ impl ProposalTxBuilder {
         l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
-        num_forced_inclusion: u8,
+        num_forced_inclusion: u16,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
             .build_propose_blob(l2_blocks, from, to, num_forced_inclusion)
@@ -86,7 +86,7 @@ impl ProposalTxBuilder {
         l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
-        num_forced_inclusion: u8,
+        num_forced_inclusion: u16,
     ) -> Result<TransactionRequest, Error> {
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(l2_blocks.len());
         for l2_block in &l2_blocks {
@@ -125,7 +125,7 @@ impl ProposalTxBuilder {
                 numBlobs: sidecar.blobs.len().try_into()?,
                 offset: U24::ZERO,
             },
-            numForcedInclusions: u16::from(num_forced_inclusion), // TODO SHASTA: receive this as u16 parameter
+            numForcedInclusions: num_forced_inclusion,
         };
 
         let inbox = Inbox::new(to, self.provider.clone());

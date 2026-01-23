@@ -211,7 +211,6 @@ impl VerifierThread {
         taiko_inbox_height: u64,
         taiko_geth_height: u64,
     ) -> Result<(), Error> {
-        //TODO implement
         let anchor_offset = self
             .batch_manager
             .get_l1_anchor_block_offset_for_l2_block(taiko_inbox_height + 1)
