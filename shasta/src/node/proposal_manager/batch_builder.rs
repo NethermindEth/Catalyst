@@ -342,6 +342,8 @@ impl BatchBuilder {
                 "Submitting batch"
             );
 
+            debug!("Checkpoint data before proposing: {:?}", &batch.checkpoint);
+
             if let Err(err) = ethereum_l1
                 .execution_layer
                 // TODO send a Proosal to function
