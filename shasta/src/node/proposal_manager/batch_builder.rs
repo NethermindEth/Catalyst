@@ -103,6 +103,7 @@ impl BatchBuilder {
             anchor_block_hash: anchor_block.hash(),
             anchor_state_root: anchor_block.state_root(),
             num_forced_inclusion: 0,
+            checkpoint: Checkpoint::default(),
         });
     }
 
@@ -155,6 +156,19 @@ impl BatchBuilder {
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
+            Ok(current_proposal)
+        } else {
+            Err(anyhow::anyhow!("No current batch"))
+        }
+    }
+
+    // Surge: Sets the proposal checkpoint
+    // This is called at the end of sequencing
+    pub fn set_proposal_checkpoint(&mut self, checkpoint: Checkpoint) -> Result<&Proposal, Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            current_proposal.checkpoint = checkpoint.clone();
+
+            debug!("Update proposal checkpoint: {:?}", checkpoint);
             Ok(current_proposal)
         } else {
             Err(anyhow::anyhow!("No current batch"))
@@ -215,6 +229,7 @@ impl BatchBuilder {
                 anchor_block_hash: anchor_info.hash(),
                 anchor_state_root: anchor_info.state_root(),
                 num_forced_inclusion: 0,
+                checkpoint: Checkpoint::default(),
             });
         }
 
@@ -327,10 +342,16 @@ impl BatchBuilder {
                 "Submitting batch"
             );
 
+            debug!("Checkpoint data before proposing: {:?}", &batch.checkpoint);
+
             if let Err(err) = ethereum_l1
                 .execution_layer
                 // TODO send a Proosal to function
-                .send_batch_to_l1(batch.l2_blocks.clone(), batch.num_forced_inclusion)
+                .send_batch_to_l1(
+                    batch.l2_blocks.clone(),
+                    batch.num_forced_inclusion,
+                    batch.checkpoint.clone(),
+                )
                 .await
             {
                 if let Some(transaction_error) = err.downcast_ref::<TransactionError>()

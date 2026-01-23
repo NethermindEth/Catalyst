@@ -8,7 +8,10 @@ use crate::{
     metrics::Metrics,
     shared::{l2_block_v2::L2BlockV2Draft, l2_tx_lists::PreBuiltTxList},
 };
-use alloy::{consensus::BlockHeader, consensus::Transaction};
+use alloy::{
+    consensus::{BlockHeader, Transaction},
+    primitives::aliases::U48,
+};
 use anyhow::Error;
 use batch_builder::BatchBuilder;
 use common::{batch_builder::BatchBuilderConfig, shared::l2_slot_info_v2::L2SlotContext};
@@ -19,6 +22,7 @@ use common::{
     utils::cancellation_token::CancellationToken,
 };
 use std::sync::Arc;
+use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 use tracing::{debug, error, info, warn};
 
 use crate::forced_inclusion::ForcedInclusion;
@@ -262,7 +266,16 @@ impl BatchManager {
             .advance_head_to_new_l2_block(payload, l2_slot_context, operation_type)
             .await
         {
-            Ok(preconfed_block) => Ok(preconfed_block),
+            Ok(preconfed_block) => {
+                // Surge: record the state of the preconfed block as a potential checkpoint
+                self.batch_builder.set_proposal_checkpoint(Checkpoint {
+                    blockNumber: U48::from(preconfed_block.number),
+                    stateRoot: preconfed_block.state_root,
+                    blockHash: preconfed_block.hash,
+                })?;
+
+                Ok(preconfed_block)
+            }
             Err(err) => {
                 error!("Failed to advance head to new L2 block: {}", err);
                 self.remove_last_l2_block();
@@ -475,6 +488,10 @@ impl BatchManager {
 
         let txs = txs.to_vec();
 
+        // Store block data for checkpoint before block is moved
+        let block_hash = block.header.hash_slow();
+        let block_state_root = block.header.state_root();
+
         // TODO validate block params
         self.batch_builder
             .recover_from(
@@ -487,6 +504,15 @@ impl BatchManager {
                 is_forced_inclusion,
             )
             .await?;
+
+        // Surge: Set the checkpoint for the recovered block
+        // This is the L2 block state that should be used as checkpoint for the proposal
+        self.batch_builder.set_proposal_checkpoint(Checkpoint {
+            blockNumber: U48::from(block_height),
+            stateRoot: block_state_root,
+            blockHash: block_hash,
+        })?;
+
         Ok(())
     }
 

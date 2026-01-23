@@ -1,3 +1,4 @@
+use crate::l2::bindings::SurgeInbox;
 use alloy::{
     consensus::SidecarBuilder,
     eips::eip4844::BlobTransactionSidecar,
@@ -8,11 +9,14 @@ use alloy::{
     },
     providers::{DynProvider, Provider},
     rpc::types::TransactionRequest,
+    signers::Signer,
+    sol_types::SolValue,
 };
 use alloy_json_rpc::RpcError;
 use anyhow::Error;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use common::shared::l2_block_v2::L2BlockV2;
+use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 use taiko_bindings::inbox::{IInbox::ProposeInput, Inbox, LibBlobs::BlobReference};
 use taiko_protocol::shasta::{
     BlobCoder,
@@ -23,13 +27,19 @@ use tracing::warn;
 pub struct ProposalTxBuilder {
     provider: DynProvider,
     extra_gas_percentage: u64,
+    checkpoint_signer: alloy::signers::local::PrivateKeySigner,
 }
 
 impl ProposalTxBuilder {
-    pub fn new(provider: DynProvider, extra_gas_percentage: u64) -> Self {
+    pub fn new(
+        provider: DynProvider,
+        extra_gas_percentage: u64,
+        checkpoint_signer: alloy::signers::local::PrivateKeySigner,
+    ) -> Self {
         Self {
             provider,
             extra_gas_percentage,
+            checkpoint_signer,
         }
     }
 
@@ -40,9 +50,10 @@ impl ProposalTxBuilder {
         from: Address,
         to: Address,
         num_forced_inclusion: u8,
+        checkpoint: Checkpoint,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
-            .build_propose_blob(l2_blocks, from, to, num_forced_inclusion)
+            .build_propose_blob(l2_blocks, from, to, num_forced_inclusion, checkpoint)
             .await?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
             Ok(gas) => gas,
@@ -87,6 +98,7 @@ impl ProposalTxBuilder {
         from: Address,
         to: Address,
         num_forced_inclusion: u8,
+        checkpoint: Checkpoint,
     ) -> Result<TransactionRequest, Error> {
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(l2_blocks.len());
         for l2_block in &l2_blocks {
@@ -128,18 +140,43 @@ impl ProposalTxBuilder {
             numForcedInclusions: u16::from(num_forced_inclusion), // TODO SHASTA: receive this as u16 parameter
         };
 
+        tracing::debug!("Propose input: {:?}", input);
+
         let inbox = Inbox::new(to, self.provider.clone());
         let encoded_proposal_input = inbox.encodeProposeInput(input).call().await?;
 
+        // Surge: using `proposeWithProof(..)` in Surge Inbox
+        let proof_data = self.build_proof_data(&checkpoint).await?;
         let tx = TransactionRequest::default()
             .with_from(from)
             .with_to(to)
             .with_blob_sidecar(sidecar)
-            .with_call(&Inbox::proposeCall {
+            .with_call(&SurgeInbox::proposeWithProofCall {
                 _lookahead: Bytes::new(),
                 _data: encoded_proposal_input,
+                _proof: proof_data,
             });
 
+        tracing::debug!("Transaction input: {:?}", tx.input);
+
         Ok(tx)
+    }
+
+    // Surge: builds the 161-byte proof data
+    // [0..96: ABI-encoded checkpoint][96..161: signed checkpoint digest]
+    async fn build_proof_data(&self, checkpoint: &Checkpoint) -> Result<Bytes, Error> {
+        let checkpoint_encoded = checkpoint.abi_encode();
+        let checkpoint_digest = alloy::primitives::keccak256(&checkpoint_encoded);
+        let signature = self.checkpoint_signer.sign_hash(&checkpoint_digest).await?;
+
+        let mut signature_bytes = [0_u8; 65];
+        signature_bytes[..32].copy_from_slice(signature.r().to_be_bytes::<32>().as_slice());
+        signature_bytes[32..64].copy_from_slice(signature.s().to_be_bytes::<32>().as_slice());
+        signature_bytes[64] = (signature.v() as u8) + 27;
+
+        let mut proof_data = Vec::with_capacity(161);
+        proof_data.extend_from_slice(&checkpoint_encoded);
+        proof_data.extend_from_slice(&signature_bytes);
+        Ok(Bytes::from(proof_data))
     }
 }

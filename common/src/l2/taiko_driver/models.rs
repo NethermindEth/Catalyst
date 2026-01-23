@@ -14,6 +14,7 @@ pub struct BuildPreconfBlockRequestBody {
 pub struct BuildPreconfBlockResponse {
     pub number: u64,
     pub hash: B256,
+    pub state_root: B256,
     pub parent_hash: B256,
 }
 
@@ -28,6 +29,7 @@ impl BuildPreconfBlockResponse {
             )
             .ok()?,
             hash: Self::to_b256(header.get("hash")?.as_str()?)?,
+            state_root: Self::to_b256(header.get("stateRoot")?.as_str()?)?,
             parent_hash: Self::to_b256(header.get("parentHash")?.as_str()?)?,
         })
     }
