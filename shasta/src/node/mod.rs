@@ -29,6 +29,7 @@ mod verifier;
 use verifier::{VerificationResult, Verifier};
 
 mod l2_height_from_l1;
+use crate::chain_monitor::ShastaChainMonitor;
 pub use l2_height_from_l1::get_l2_height_from_l1;
 
 pub struct Node {
@@ -43,6 +44,7 @@ pub struct Node {
     verifier: Option<Verifier>,
     head_verifier: HeadVerifier,
     transaction_error_channel: Receiver<TransactionError>,
+    chain_monitor: Arc<ShastaChainMonitor>,
 }
 
 impl Node {
@@ -56,6 +58,7 @@ impl Node {
         batch_builder_config: BatchBuilderConfig,
         transaction_error_channel: Receiver<TransactionError>,
         fork_info: ForkInfo,
+        chain_monitor: Arc<ShastaChainMonitor>,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -107,6 +110,7 @@ impl Node {
             verifier: None,
             head_verifier,
             transaction_error_channel,
+            chain_monitor,
         })
     }
 
@@ -747,8 +751,7 @@ impl Node {
         self.verifier = None;
         self.proposal_manager.reset_builder().await?;
 
-        // TODO add chain monitor to node
-        //self.chain_monitor.set_expected_reorg(parent_block_id).await;
+        self.chain_monitor.set_expected_reorg(parent_block_id).await;
 
         let start_block_id = parent_block_id + 1;
         let blocks = self

@@ -19,7 +19,7 @@ pub struct Proposal {
     pub anchor_block_timestamp_sec: u64,
     pub anchor_block_hash: B256,
     pub anchor_state_root: B256,
-    pub num_forced_inclusion: u8,
+    pub num_forced_inclusion: u16,
 }
 
 impl Proposal {

@@ -134,6 +134,7 @@ pub async fn create_shasta_node(
         batch_builder_config,
         transaction_error_receiver,
         fork_info,
+        chain_monitor.clone(),
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
