@@ -140,7 +140,6 @@ mod tests {
         },
     };
     use alloy::consensus::SidecarBuilder;
-    use alloy::eips::eip4844::BlobTransactionSidecar;
     use taiko_protocol::shasta::BlobCoder;
 
     #[test]
