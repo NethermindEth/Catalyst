@@ -35,7 +35,7 @@ jobs:
             cp .env.example .env
             docker compose stop catalyst-node-1
             docker compose stop catalyst-node-2
-            docker compose up -d
+            docker compose --profile stack up -d
             cd ~/e2e_catalyst_tests/catalyst/e2e_tests
             git pull
             python3 -m venv venv
