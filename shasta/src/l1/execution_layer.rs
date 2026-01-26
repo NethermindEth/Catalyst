@@ -166,7 +166,7 @@ impl ExecutionLayer {
     pub async fn send_batch_to_l1(
         &self,
         l2_blocks: Vec<L2BlockV2>,
-        num_forced_inclusion: u8,
+        num_forced_inclusion: u16,
     ) -> Result<(), Error> {
         info!(
             "📦 Proposing with {} blocks | num_forced_inclusion: {}",
@@ -277,6 +277,12 @@ impl ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to call getInboxState for Inbox: {e}"))?;
 
         Ok(state)
+    }
+
+    pub async fn get_inbox_next_proposal_id(&self) -> Result<u64, Error> {
+        let state = self.inbox_instance.getCoreState().call().await?;
+
+        Ok(state.nextProposalId.to::<u64>())
     }
 }
 

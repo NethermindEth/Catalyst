@@ -29,6 +29,7 @@ mod verifier;
 use verifier::{VerificationResult, Verifier};
 
 mod l2_height_from_l1;
+use crate::chain_monitor::ShastaChainMonitor;
 pub use l2_height_from_l1::get_l2_height_from_l1;
 
 pub struct Node {
@@ -43,6 +44,7 @@ pub struct Node {
     verifier: Option<Verifier>,
     head_verifier: HeadVerifier,
     transaction_error_channel: Receiver<TransactionError>,
+    chain_monitor: Arc<ShastaChainMonitor>,
 }
 
 impl Node {
@@ -56,6 +58,7 @@ impl Node {
         batch_builder_config: BatchBuilderConfig,
         transaction_error_channel: Receiver<TransactionError>,
         fork_info: ForkInfo,
+        chain_monitor: Arc<ShastaChainMonitor>,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -107,6 +110,7 @@ impl Node {
             verifier: None,
             head_verifier,
             transaction_error_channel,
+            chain_monitor,
         })
     }
 
@@ -392,7 +396,6 @@ impl Node {
         Ok(true)
     }
 
-    // TODO handle transaction error properly
     async fn handle_transaction_error(
         &mut self,
         error: &TransactionError,
@@ -400,19 +403,59 @@ impl Node {
         _l2_slot_info: &L2SlotInfoV2,
     ) -> Result<(), Error> {
         match error {
+            TransactionError::ReanchorRequired => {
+                warn!("Unexpected ReanchorRequired error received");
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "ReanchorRequired error received unexpectedly, exiting"
+                ))
+            }
+            TransactionError::NotConfirmed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Transaction not confirmed for a long time, exiting"
+                ))
+            }
+            TransactionError::UnsupportedTransactionType => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Unsupported transaction type. You can send eip1559 or eip4844 transactions only"
+                ))
+            }
+            TransactionError::GetBlockNumberFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Failed to get block number from L1"))
+            }
+            TransactionError::EstimationTooEarly => {
+                warn!("Transaction estimation too early");
+                Ok(())
+            }
+            TransactionError::InsufficientFunds => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Transaction reverted with InsufficientFunds error"
+                ))
+            }
             TransactionError::EstimationFailed => {
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!("Transaction estimation failed, exiting"));
+                Err(anyhow::anyhow!("Transaction estimation failed, exiting"))
             }
             TransactionError::TransactionReverted => {
                 self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!("Transaction reverted, exiting"));
+                Err(anyhow::anyhow!("Transaction reverted, exiting"))
             }
-            _ => {
-                info!("Handling transaction error: {error}");
+            TransactionError::OldestForcedInclusionDue => {
+                // TODO implement proper handling of forced inclusion due
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Need to include forced inclusion, reanchoring done, skipping slot"
+                ))
+            }
+            TransactionError::NotTheOperatorInCurrentEpoch => {
+                warn!("Propose batch transaction executed too late.");
+                Ok(())
             }
         }
-        Ok(())
     }
 
     async fn get_slot_info_and_status(
@@ -533,6 +576,24 @@ impl Node {
         Ok((taiko_inbox_height, taiko_geth_height))
     }
 
+    async fn get_next_proposal_id(&self) -> Result<(u64, u64), Error> {
+        let l1_proposal_id = self
+            .ethereum_l1
+            .execution_layer
+            .get_inbox_next_proposal_id()
+            .await?;
+
+        let l2_proposal_id = self
+            .taiko
+            .l2_execution_layer()
+            .get_last_synced_proposal_id_from_geth()
+            .await
+            .unwrap_or(0)
+            + 1;
+
+        Ok((l1_proposal_id, l2_proposal_id))
+    }
+
     async fn check_transaction_error_channel(
         &mut self,
         current_status: &OperatorStatus,
@@ -627,20 +688,20 @@ impl Node {
         }
 
         // Wait for Taiko Geth to synchronize with L1
-        let (mut taiko_inbox_height, mut taiko_geth_height) =
-            self.get_current_protocol_height().await?;
-
-        info!("Taiko Inbox Height: {taiko_inbox_height}, Taiko Geth Height: {taiko_geth_height}");
-
-        while taiko_geth_height < taiko_inbox_height {
-            warn!("Taiko Geth is behind L1. Waiting 5 seconds...");
-            sleep(Duration::from_secs(5)).await;
-
-            (taiko_inbox_height, taiko_geth_height) = self.get_current_protocol_height().await?;
-
+        loop {
+            let (l1_proposal_id, l2_proposal_id) = self.get_next_proposal_id().await?;
             info!(
-                "Taiko Inbox Height: {taiko_inbox_height}, Taiko Geth Height: {taiko_geth_height}"
+                "Inbox next proposal id: {l1_proposal_id}, Taiko Geth next proposal id: {l2_proposal_id}"
             );
+
+            if l1_proposal_id <= l2_proposal_id {
+                break;
+            }
+
+            warn!(
+                "Taiko Geth is behind L1 (L1: {l1_proposal_id}, L2: {l2_proposal_id}). Retrying in 5 seconds..."
+            );
+            sleep(Duration::from_secs(5)).await;
         }
 
         // Wait for the last sent transaction to be executed
@@ -690,8 +751,7 @@ impl Node {
         self.verifier = None;
         self.proposal_manager.reset_builder().await?;
 
-        // TODO add chain monitor to node
-        //self.chain_monitor.set_expected_reorg(parent_block_id).await;
+        self.chain_monitor.set_expected_reorg(parent_block_id).await;
 
         let start_block_id = parent_block_id + 1;
         let blocks = self

@@ -38,7 +38,7 @@ impl ProposalTxBuilder {
         l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
-        num_forced_inclusion: u8,
+        num_forced_inclusion: u16,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
             .build_propose_blob(l2_blocks, from, to, num_forced_inclusion)
@@ -85,7 +85,7 @@ impl ProposalTxBuilder {
         l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
-        num_forced_inclusion: u8,
+        num_forced_inclusion: u16,
     ) -> Result<TransactionRequest, Error> {
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(l2_blocks.len());
         for l2_block in &l2_blocks {

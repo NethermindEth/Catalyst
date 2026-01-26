@@ -1,11 +1,9 @@
 mod chain_monitor;
-mod node;
-mod utils;
-
 mod forced_inclusion;
-
 mod l1;
 mod l2;
+mod node;
+mod utils;
 
 use crate::utils::config::ShastaConfig;
 use anyhow::Error;
@@ -82,19 +80,18 @@ pub async fn create_shasta_node(
         preconf_heartbeat_ms: config.preconf_heartbeat_ms,
         handover_window_slots: 8,
         handover_start_buffer_ms: 500,
-        l1_height_lag: 5,
+        l1_height_lag: 8,
         propose_forced_inclusion: true,
         simulate_not_submitting_at_the_end_of_epoch: false,
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
-        //https://github.com/taikoxyz/taiko-mono/blob/taiko-alethia-protocol-v3.0.0/packages/protocol/docs/Derivation.md#constants
-        384 // value from Taiko Derivation docs
+        taiko_protocol::shasta::constants::PROPOSAL_MAX_BLOCKS.try_into()?
     } else {
         config.max_blocks_per_batch
     };
 
-    let max_anchor_height_offset = 128; // value from Taiko Derivation docs
+    let max_anchor_height_offset = taiko_protocol::shasta::constants::MAX_ANCHOR_OFFSET;
 
     let batch_builder_config = BatchBuilderConfig {
         max_bytes_size_of_batch: config.max_bytes_size_of_batch,
@@ -137,6 +134,7 @@ pub async fn create_shasta_node(
         batch_builder_config,
         transaction_error_receiver,
         fork_info,
+        chain_monitor.clone(),
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
