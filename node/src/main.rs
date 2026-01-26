@@ -9,6 +9,13 @@ use std::sync::Arc;
 use tokio::signal::unix::{SignalKind, signal};
 use tracing::{error, info};
 
+// Initialize rustls crypto provider before any TLS operations
+fn init_rustls() {
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install default rustls crypto provider");
+}
+
 enum ExecutionStopped {
     CloseApp,
     RecreateNode,
@@ -18,6 +25,8 @@ const WAIT_BEFORE_RECREATING_NODE_SECS: u64 = 5;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    init_rustls();
+
     common::utils::logging::init_logging();
 
     info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
