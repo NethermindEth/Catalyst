@@ -2551,7 +2551,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.27.0"
+version = "1.27.1"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -3047,7 +3047,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d162beedaa69905488a8da94f5ac3edb4dd4788b732fadb7bd120b2625c1976"
 dependencies = [
  "data-encoding",
- "syn 2.0.111",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -5775,7 +5775,7 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.27.0"
+version = "1.27.1"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -5784,6 +5784,7 @@ dependencies = [
  "clap",
  "common",
  "pacaya",
+ "rustls",
  "serde_json",
  "shasta",
  "tokio",
@@ -6295,7 +6296,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.27.0"
+version = "1.27.1"
 dependencies = [
  "anyhow",
  "discv5",
@@ -6307,7 +6308,7 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.27.0"
+version = "1.27.1"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6451,13 +6452,14 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.27.0"
+version = "1.27.1"
 dependencies = [
  "alloy",
  "anyhow",
  "blst",
  "common",
  "pacaya",
+ "rustls",
  "tokio",
  "tokio-util",
  "tracing",
@@ -10417,9 +10419,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.35"
+version = "0.23.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "533f54bc6a7d4f647e46ad909549eda97bf5afc1585190ef692b4286b198bd8f"
+checksum = "c665f33d38cea657d9614f766881e4d510e0eda4239891eea56b4cadcf01801b"
 dependencies = [
  "aws-lc-rs",
  "log",
@@ -10914,7 +10916,7 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.27.0"
+version = "1.27.1"
 dependencies = [
  "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=3e0fdad9b9fbf7f6550c7209185fd6623468452c)",
  "alloy",
@@ -12343,7 +12345,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.27.0"
+version = "1.27.1"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
