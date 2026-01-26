@@ -140,7 +140,6 @@ mod tests {
         },
     };
     use alloy::consensus::SidecarBuilder;
-    use alloy::eips::eip4844::BlobTransactionSidecar;
     use taiko_protocol::shasta::BlobCoder;
 
     #[test]
@@ -151,7 +150,7 @@ mod tests {
         let txs = pending_lists[0].tx_list.clone();
         let compress = encode_and_compress(&txs).unwrap();
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&compress);
-        let blob: BlobTransactionSidecar = sidecar_builder.build().unwrap();
+        let blob = sidecar_builder.build_7594().unwrap();
         assert_eq!(blob.blobs.len(), 1);
         let blob_data = BlobDecoder::decode_blob(&blob.blobs[0]).unwrap();
         assert_eq!(blob_data, compress);

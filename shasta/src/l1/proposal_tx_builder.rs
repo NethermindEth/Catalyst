@@ -1,7 +1,6 @@
 use alloy::{
     consensus::SidecarBuilder,
-    eips::eip4844::BlobTransactionSidecar,
-    network::{TransactionBuilder, TransactionBuilder4844},
+    network::{TransactionBuilder, TransactionBuilder7594},
     primitives::{
         Address, Bytes,
         aliases::{U24, U48},
@@ -115,7 +114,7 @@ impl ProposalTxBuilder {
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
-        let sidecar: BlobTransactionSidecar = sidecar_builder.build()?;
+        let sidecar = sidecar_builder.build_7594()?;
 
         // Build the propose input.
         let input = ProposeInput {
