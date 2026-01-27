@@ -125,17 +125,21 @@ impl L2ExecutionLayer {
             self.chain_id, dest_chain_id
         );
 
-        let pacaya_l2_execution_layer =
-            pacaya::l2::execution_layer::L2ExecutionLayer::new(self.config.clone()).await?;
-        pacaya_l2_execution_layer
-            .transfer_eth_from_l2_to_l1(
-                amount,
-                dest_chain_id,
-                preconfer_address,
-                bridge_relayer_fee,
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to transfer ETH from L2 to L1: {}", e))
+        let provider =
+            alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.taiko_geth_url)
+                .await?;
+
+        pacaya::l2::execution_layer::L2ExecutionLayer::transfer_eth_from_l2_to_l1_with_provider(
+            self.config.taiko_bridge_address,
+            provider,
+            amount,
+            self.chain_id,
+            dest_chain_id,
+            preconfer_address,
+            bridge_relayer_fee,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to transfer ETH from L2 to L1: {}", e))
     }
 
     pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
