@@ -16,7 +16,7 @@ use common::shared::{
 };
 use pacaya::l2::config::TaikoConfig;
 use taiko_bindings::anchor::{Anchor, ICheckpointStore::Checkpoint};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use serde_json::Value;
 pub struct L2ExecutionLayer {
@@ -129,29 +129,17 @@ impl L2ExecutionLayer {
             alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.taiko_geth_url)
                 .await?;
 
-        self.transfer_eth_from_l2_to_l1_with_provider(
+        pacaya::l2::execution_layer::L2ExecutionLayer::transfer_eth_from_l2_to_l1_with_provider(
+            self.config.taiko_bridge_address,
             provider,
             amount,
+            self.chain_id,
             dest_chain_id,
             preconfer_address,
             bridge_relayer_fee,
         )
-        .await?;
-
-        Ok(())
-    }
-
-    async fn transfer_eth_from_l2_to_l1_with_provider(
-        &self,
-        _provider: DynProvider,
-        _amount: u128,
-        _dest_chain_id: u64,
-        _preconfer_address: Address,
-        _bridge_relayer_fee: u64,
-    ) -> Result<(), Error> {
-        // TODO: implement the actual transfer logic
-        warn!("Implement bridge transfer logic here");
-        Ok(())
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to transfer ETH from L2 to L1: {}", e))
     }
 
     pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {

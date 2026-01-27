@@ -135,9 +135,11 @@ impl L2ExecutionLayer {
             alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.taiko_geth_url)
                 .await?;
 
-        self.transfer_eth_from_l2_to_l1_with_provider(
+        Self::transfer_eth_from_l2_to_l1_with_provider(
+            self.config.taiko_bridge_address,
             provider,
             amount,
+            self.chain_id,
             dest_chain_id,
             preconfer_address,
             bridge_relayer_fee,
@@ -147,19 +149,21 @@ impl L2ExecutionLayer {
         Ok(())
     }
 
-    async fn transfer_eth_from_l2_to_l1_with_provider(
-        &self,
+    pub async fn transfer_eth_from_l2_to_l1_with_provider(
+        taiko_bridge_address: Address,
         provider: DynProvider,
         amount: u128,
+        src_chain_id: u64,
         dest_chain_id: u64,
         preconfer_address: Address,
         bridge_relayer_fee: u64,
     ) -> Result<(), Error> {
-        let contract = Bridge::new(self.config.taiko_bridge_address, provider.clone());
+        let contract = Bridge::new(taiko_bridge_address, provider.clone());
         let gas_limit = contract
             .getMessageMinGasLimit(Uint::<256, 4>::from(0))
             .call()
-            .await?;
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get message min gas limit: {}", e))?;
         debug!("Bridge message gas limit: {}", gas_limit);
 
         let message = Bridge::Message {
@@ -167,7 +171,7 @@ impl L2ExecutionLayer {
             fee: bridge_relayer_fee,
             gasLimit: gas_limit + 1,
             from: preconfer_address,
-            srcChainId: self.chain_id,
+            srcChainId: src_chain_id,
             srcOwner: preconfer_address,
             destChainId: dest_chain_id,
             destOwner: preconfer_address,
@@ -176,14 +180,20 @@ impl L2ExecutionLayer {
             data: Bytes::new(),
         };
 
-        let mut fees = provider.estimate_eip1559_fees().await?;
+        let mut fees = provider
+            .estimate_eip1559_fees()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to estimate EIP-1559 fees: {}", e))?;
         const ONE_GWEI: u128 = 1000000000;
         if fees.max_priority_fee_per_gas < ONE_GWEI {
             fees.max_priority_fee_per_gas = ONE_GWEI;
             fees.max_fee_per_gas += ONE_GWEI;
         }
         debug!("Fees: {:?}", fees);
-        let nonce = provider.get_transaction_count(preconfer_address).await?;
+        let nonce = provider
+            .get_transaction_count(preconfer_address)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get transaction count: {}", e))?;
 
         let tx_send_message = contract
             .sendMessage(message)
@@ -192,14 +202,17 @@ impl L2ExecutionLayer {
             ))
             .from(preconfer_address)
             .nonce(nonce)
-            .chain_id(self.chain_id)
+            .chain_id(src_chain_id)
             .max_fee_per_gas(fees.max_fee_per_gas)
             .max_priority_fee_per_gas(fees.max_priority_fee_per_gas);
 
         let tx_request = tx_send_message.into_transaction_request();
         const GAS_LIMIT: u64 = 500000;
         let tx_request = tx_request.gas_limit(GAS_LIMIT);
-        let pending_tx = provider.send_transaction(tx_request).await?;
+        let pending_tx = provider
+            .send_transaction(tx_request)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to send transaction: {}", e))?;
 
         let tx_hash = *pending_tx.tx_hash();
         info!("Bridge sendMessage tx hash: {}", tx_hash);
@@ -208,7 +221,8 @@ impl L2ExecutionLayer {
         let receipt = pending_tx
             .with_timeout(Some(RECEIPT_TIMEOUT))
             .get_receipt()
-            .await?;
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get receipt: {}", e))?;
 
         if receipt.status() {
             let block_number = if let Some(block_number) = receipt.block_number() {
