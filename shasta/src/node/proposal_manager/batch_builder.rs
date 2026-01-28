@@ -134,7 +134,7 @@ impl BatchBuilder {
             let payload = current_proposal.add_forced_inclusion(fi_block, anchor_params);
 
             debug!(
-                "Added forced inclusion L2 draft block to batch: forced inclusions: {}, l2 blocks: {}, total bytes: {}",
+                "Added forced inclusion L2 block to batch: forced inclusions: {}, l2 blocks: {}, total bytes: {}",
                 current_proposal.num_forced_inclusion,
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
