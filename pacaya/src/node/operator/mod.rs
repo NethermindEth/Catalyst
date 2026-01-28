@@ -340,7 +340,10 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             .as_millis()
             .try_into()
             .map_err(|err| {
-                anyhow::anyhow!("is_handover_window: Field to covert u128 to u64: {:?}", err)
+                anyhow::anyhow!(
+                    "is_handover_window: Failed to convert u128 to u64: {:?}",
+                    err
+                )
             })?;
         Ok(result)
     }
