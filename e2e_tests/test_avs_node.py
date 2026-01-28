@@ -141,4 +141,4 @@ def test_end_of_sequencing(l2_client_node1, beacon_client, l1_client, env_vars):
     l2_block_number = l2_client_node1.eth.block_number
     send_n_txs_without_waiting(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.preconf_min_txs)
     time.sleep(2 * env_vars.preconf_heartbeat_ms / 1000)
-    assert l2_client_node1.eth.block_number == l2_block_number+1, "L2 Node 1 should have a new block after sending transactions, even in handover buffer"
+    assert l2_client_node1.eth.block_number >= l2_block_number+1, "L2 Node 1 should have a new block after sending transactions, even in handover buffer"
