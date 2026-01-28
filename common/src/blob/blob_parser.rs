@@ -98,12 +98,21 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
         .collect();
 
     for hash in blob_hashes {
+        let mut found = false;
         for (i, sidecar) in sidecars.data.iter().enumerate() {
             if sidecar_hashes[i] == hash {
                 let data = BlobDecoder::decode_blob(sidecar.blob.as_ref())?;
                 result.extend(data);
+                found = true;
                 break;
             }
+        }
+        if !found {
+            return Err(anyhow::anyhow!(
+                "Blob hash {} not found in sidecars for slot {}",
+                hash,
+                slot
+            ));
         }
     }
 
