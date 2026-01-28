@@ -122,6 +122,7 @@ pub fn rlp_encode(tx_list: &[Transaction]) -> Vec<u8> {
 
 // RLP encode and zlib compress
 pub fn encode_and_compress(tx_list: &[Transaction]) -> Result<Vec<u8>, Error> {
+    let start = std::time::Instant::now();
     // First RLP encode the transactions
     let buffer = rlp_encode(tx_list);
 
@@ -130,9 +131,13 @@ pub fn encode_and_compress(tx_list: &[Transaction]) -> Result<Vec<u8>, Error> {
     encoder
         .write_all(&buffer)
         .map_err(|e| anyhow::anyhow!("PreBuiltTxList::encode: Failed to compress: {}", e))?;
-    encoder
+    let encoded = encoder
         .finish()
-        .map_err(|e| anyhow::anyhow!("PreBuiltTxList::encode: Failed to finish: {}", e))
+        .map_err(|e| anyhow::anyhow!("PreBuiltTxList::encode: Failed to finish: {}", e))?;
+
+    let duration = start.elapsed();
+    println!("Encoding and compression took: {} ms", duration.as_millis());
+    Ok(encoded)
 }
 
 fn deserialize_tx_list<'de, D>(deserializer: D) -> Result<Vec<Transaction>, D::Error>
