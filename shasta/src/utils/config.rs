@@ -6,6 +6,8 @@ use std::str::FromStr;
 #[derive(Debug, Clone)]
 pub struct ShastaConfig {
     pub shasta_inbox: Address,
+    pub proposer_multicall: Address,
+    pub bridge: Address,
 }
 
 impl ConfigTrait for ShastaConfig {
@@ -18,8 +20,14 @@ impl ConfigTrait for ShastaConfig {
         };
 
         let shasta_inbox = read_contract_address("SHASTA_INBOX_ADDRESS")?;
+        let proposer_multicall = read_contract_address("PROPOSER_MULTICALL_ADDRESS")?;
+        let bridge = read_contract_address("L1_BRIDGE_ADDRESS")?;
 
-        Ok(ShastaConfig { shasta_inbox })
+        Ok(ShastaConfig {
+            shasta_inbox,
+            proposer_multicall,
+            bridge,
+        })
     }
 }
 
@@ -27,6 +35,7 @@ use std::fmt;
 impl fmt::Display for ShastaConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Shasta inbox: {:#?}", self.shasta_inbox)?;
+        writeln!(f, "Proposer multicall: {:#?}", self.proposer_multicall)?;
         Ok(())
     }
 }

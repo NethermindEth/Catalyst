@@ -3,7 +3,9 @@
 
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
+use crate::l2::bindings::{Anchor, ICheckpointStore::Checkpoint};
 use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
+use alloy::primitives::FixedBytes;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
@@ -31,7 +33,6 @@ use common::{
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
-use taiko_bindings::anchor::{Anchor, ICheckpointStore::Checkpoint};
 use tracing::{debug, trace};
 
 pub struct Taiko {
@@ -237,6 +238,7 @@ impl Taiko {
         &self,
         l2_block_payload: L2BlockV2Payload,
         l2_slot_context: &L2SlotContext,
+        anchor_signal_slots: Vec<FixedBytes<32>>,
         operation_type: OperationType,
     ) -> Result<BuildPreconfBlockResponse, Error> {
         tracing::debug!(
@@ -244,11 +246,14 @@ impl Taiko {
             l2_block_payload.tx_list.len()
         );
 
-        let anchor_block_params = Checkpoint {
-            blockNumber: l2_block_payload.anchor_block_id.try_into()?,
-            blockHash: l2_block_payload.anchor_block_hash,
-            stateRoot: l2_block_payload.anchor_state_root,
-        };
+        let anchor_block_params = (
+            Checkpoint {
+                blockNumber: l2_block_payload.anchor_block_id.try_into()?,
+                blockHash: l2_block_payload.anchor_block_hash,
+                stateRoot: l2_block_payload.anchor_state_root,
+            },
+            anchor_signal_slots,
+        );
 
         let anchor_tx = self
             .l2_execution_layer

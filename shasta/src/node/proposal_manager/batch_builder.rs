@@ -1,12 +1,14 @@
-use std::{collections::VecDeque, sync::Arc};
-
 use super::proposal::Proposals;
-use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
-use crate::{
-    l1::execution_layer::ExecutionLayer, metrics::Metrics,
-    node::proposal_manager::proposal::Proposal, shared::l2_tx_lists::PreBuiltTxList,
+use crate::l1::execution_layer::ExecutionLayer;
+use crate::l2::bindings::ICheckpointStore::Checkpoint;
+use crate::metrics::Metrics;
+use crate::node::proposal_manager::{
+    bridge_handler::{L1Call, UserOpData},
+    l2_block_payload::L2BlockV2Payload,
+    proposal::Proposal,
 };
-use alloy::primitives::Address;
+use crate::shared::l2_tx_lists::PreBuiltTxList;
+use alloy::primitives::{Address, FixedBytes};
 use anyhow::Error;
 use common::{
     batch_builder::BatchBuilderConfig,
@@ -16,7 +18,7 @@ use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
     shared::anchor_block_info::AnchorBlockInfo,
 };
-use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
+use std::{collections::VecDeque, sync::Arc};
 use tracing::{debug, trace, warn};
 
 pub struct BatchBuilder {
@@ -104,6 +106,9 @@ impl BatchBuilder {
             anchor_state_root: anchor_block.state_root(),
             num_forced_inclusion: 0,
             checkpoint: Checkpoint::default(),
+            user_ops: vec![],
+            signal_slots: vec![],
+            l1_calls: vec![],
         });
     }
 
@@ -156,6 +161,42 @@ impl BatchBuilder {
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
+            Ok(current_proposal)
+        } else {
+            Err(anyhow::anyhow!("No current batch"))
+        }
+    }
+
+    // Surge: adds user ops that initiate L2 calls
+    pub fn add_user_op(&mut self, user_op_data: UserOpData) -> Result<&Proposal, Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            current_proposal.user_ops.push(user_op_data.clone());
+
+            debug!("Added user op: {:?}", user_op_data);
+            Ok(current_proposal)
+        } else {
+            Err(anyhow::anyhow!("No current batch"))
+        }
+    }
+
+    // Surge: adds signal slots to make same slot L2 call valid
+    pub fn add_signal_slot(&mut self, signal_slot: FixedBytes<32>) -> Result<&Proposal, Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            current_proposal.signal_slots.push(signal_slot);
+
+            debug!("Added signal slot: {:?}", signal_slot);
+            Ok(current_proposal)
+        } else {
+            Err(anyhow::anyhow!("No current batch"))
+        }
+    }
+
+    // Surge: adds L1 calls initiated by L2 contracts
+    pub fn add_l1_call(&mut self, l1_call: L1Call) -> Result<&Proposal, Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            current_proposal.l1_calls.push(l1_call.clone());
+
+            debug!("Added L1 call: {:?}", l1_call);
             Ok(current_proposal)
         } else {
             Err(anyhow::anyhow!("No current batch"))
@@ -230,6 +271,12 @@ impl BatchBuilder {
                 anchor_state_root: anchor_info.state_root(),
                 num_forced_inclusion: 0,
                 checkpoint: Checkpoint::default(),
+                // Surge: This is NOT OK for recovery, but fine for the POC.
+                // Any previously inititated user ops will not be valid during recovery
+                // leading to proposal failure
+                user_ops: vec![],
+                signal_slots: vec![],
+                l1_calls: vec![],
             });
         }
 
@@ -347,11 +394,7 @@ impl BatchBuilder {
             if let Err(err) = ethereum_l1
                 .execution_layer
                 // TODO send a Proosal to function
-                .send_batch_to_l1(
-                    batch.l2_blocks.clone(),
-                    batch.num_forced_inclusion,
-                    batch.checkpoint.clone(),
-                )
+                .send_batch_to_l1(batch.clone())
                 .await
             {
                 if let Some(transaction_error) = err.downcast_ref::<TransactionError>()

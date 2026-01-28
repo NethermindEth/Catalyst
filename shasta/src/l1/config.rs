@@ -8,10 +8,14 @@ use alloy::primitives::Address;
 pub struct ContractAddresses {
     pub shasta_inbox: Address,
     pub proposer_checker: Address,
+    pub proposer_multicall: Address,
+    pub bridge: Address,
 }
 
 pub struct EthereumL1Config {
     pub shasta_inbox: Address,
+    pub proposer_multicall: Address,
+    pub bridge: Address,
 }
 
 impl TryFrom<ShastaConfig> for EthereumL1Config {
@@ -20,6 +24,8 @@ impl TryFrom<ShastaConfig> for EthereumL1Config {
     fn try_from(config: ShastaConfig) -> Result<Self, Self::Error> {
         Ok(EthereumL1Config {
             shasta_inbox: config.shasta_inbox,
+            proposer_multicall: config.proposer_multicall,
+            bridge: config.bridge,
         })
     }
 }

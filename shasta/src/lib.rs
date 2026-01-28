@@ -3,6 +3,7 @@ mod forced_inclusion;
 mod l1;
 mod l2;
 mod node;
+mod shared_abi;
 mod utils;
 
 use crate::utils::config::ShastaConfig;

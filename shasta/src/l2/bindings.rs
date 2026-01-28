@@ -11,14 +11,7 @@ sol!(
 
 sol!(
     #[allow(missing_docs)]
-    #[sol(rpc)]
-    Bridge,
-    "src/l2/abi/Bridge.json"
-);
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    SurgeInbox,
-    "src/l2/abi/SurgeInbox.json"
+    #[sol(rpc, all_derives)]
+    Anchor,
+    "src/l2/abi/Anchor.json"
 );

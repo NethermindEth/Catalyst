@@ -1,10 +1,20 @@
-use crate::l2::bindings::SurgeInbox;
+use crate::l1::{
+    bindings::{
+        IInbox::ProposeInput, LibBlobs::BlobReference, Multicall, SurgeInbox, UserOpsSubmitter,
+    },
+    config::ContractAddresses,
+};
+use crate::l2::bindings::ICheckpointStore::Checkpoint;
+use crate::node::proposal_manager::{
+    bridge_handler::{L1Call, UserOpData},
+    proposal::Proposal,
+};
+use crate::shared_abi::bindings::Bridge;
 use alloy::{
     consensus::SidecarBuilder,
     eips::eip4844::BlobTransactionSidecar,
-    network::{TransactionBuilder, TransactionBuilder4844},
     primitives::{
-        Address, Bytes,
+        Address, Bytes, U256,
         aliases::{U24, U48},
     },
     providers::{DynProvider, Provider},
@@ -15,9 +25,6 @@ use alloy::{
 use alloy_json_rpc::RpcError;
 use anyhow::Error;
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
-use common::shared::l2_block_v2::L2BlockV2;
-use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
-use taiko_bindings::inbox::{IInbox::ProposeInput, Inbox, LibBlobs::BlobReference};
 use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},
@@ -46,14 +53,12 @@ impl ProposalTxBuilder {
     #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_tx(
         &self,
-        l2_blocks: Vec<L2BlockV2>,
+        batch: Proposal,
         from: Address,
-        to: Address,
-        num_forced_inclusion: u8,
-        checkpoint: Checkpoint,
+        contract_addresses: ContractAddresses,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
-            .build_propose_blob(l2_blocks, from, to, num_forced_inclusion, checkpoint)
+            .build_propose_blob(batch, from, contract_addresses)
             .await?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
             Ok(gas) => gas,
@@ -94,14 +99,84 @@ impl ProposalTxBuilder {
     #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_blob(
         &self,
-        l2_blocks: Vec<L2BlockV2>,
+        batch: Proposal,
         from: Address,
-        to: Address,
-        num_forced_inclusion: u8,
-        checkpoint: Checkpoint,
+        contract_addresses: ContractAddresses,
     ) -> Result<TransactionRequest, Error> {
-        let mut block_manifests = <Vec<BlockManifest>>::with_capacity(l2_blocks.len());
-        for l2_block in &l2_blocks {
+        let mut multicalls: Vec<Multicall::Call> = vec![];
+
+        // Add user op to multicall
+        // Note: Only adding the first call, since more calls are not expected for the POC
+        if !batch.user_ops.is_empty() {
+            multicalls.push(self.build_user_op_call(batch.user_ops.first().unwrap().clone()));
+        }
+
+        // Add the proposal to the multicall
+        // This must always follow the user ops
+        multicalls.push(
+            self.build_propose_call(&batch, contract_addresses.shasta_inbox)
+                .await?,
+        );
+
+        // Add L1 calls initiated by L2 blocks in the proposal
+        if !batch.l1_calls.is_empty() {
+            multicalls.push(self.build_l1_call_call(
+                batch.l1_calls.first().unwrap().clone(),
+                contract_addresses.bridge,
+            ));
+        }
+
+        // Build the multicall transaction request
+        let multicall = Multicall::new(contract_addresses.proposer_multicall, &self.provider);
+        let call = multicall.multicall(multicalls);
+
+        let tx = TransactionRequest::default()
+            .to(contract_addresses.proposer_multicall)
+            .from(from)
+            .input(call.calldata().clone().into());
+
+        Ok(tx)
+    }
+
+    // Surge: builds the 161-byte proof data
+    // [0..96: ABI-encoded checkpoint][96..161: signed checkpoint digest]
+    async fn build_proof_data(&self, checkpoint: &Checkpoint) -> Result<Bytes, Error> {
+        let checkpoint_encoded = checkpoint.abi_encode();
+        let checkpoint_digest = alloy::primitives::keccak256(&checkpoint_encoded);
+        let signature = self.checkpoint_signer.sign_hash(&checkpoint_digest).await?;
+
+        let mut signature_bytes = [0_u8; 65];
+        signature_bytes[..32].copy_from_slice(signature.r().to_be_bytes::<32>().as_slice());
+        signature_bytes[32..64].copy_from_slice(signature.s().to_be_bytes::<32>().as_slice());
+        signature_bytes[64] = (signature.v() as u8) + 27;
+
+        let mut proof_data = Vec::with_capacity(161);
+        proof_data.extend_from_slice(&checkpoint_encoded);
+        proof_data.extend_from_slice(&signature_bytes);
+        Ok(Bytes::from(proof_data))
+    }
+
+    // Surge: Multicall builders
+
+    fn build_user_op_call(&self, user_op_data: UserOpData) -> Multicall::Call {
+        let submitter = UserOpsSubmitter::new(user_op_data.user_op_submitter, &self.provider);
+        let call =
+            submitter.executeBatch(vec![user_op_data.user_op], user_op_data.user_op_signature);
+
+        Multicall::Call {
+            target: user_op_data.user_op_submitter,
+            value: U256::ZERO,
+            data: call.calldata().clone(),
+        }
+    }
+
+    async fn build_propose_call(
+        &self,
+        batch: &Proposal,
+        inbox_address: Address,
+    ) -> Result<Multicall::Call, anyhow::Error> {
+        let mut block_manifests = <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
+        for l2_block in &batch.l2_blocks {
             // Build the block manifests.
             block_manifests.push(BlockManifest {
                 timestamp: l2_block.timestamp_sec,
@@ -137,46 +212,31 @@ impl ProposalTxBuilder {
                 numBlobs: sidecar.blobs.len().try_into()?,
                 offset: U24::ZERO,
             },
-            numForcedInclusions: u16::from(num_forced_inclusion), // TODO SHASTA: receive this as u16 parameter
+            numForcedInclusions: u8::from(batch.num_forced_inclusion),
         };
 
-        tracing::debug!("Propose input: {:?}", input);
-
-        let inbox = Inbox::new(to, self.provider.clone());
+        let inbox = SurgeInbox::new(inbox_address, self.provider.clone());
         let encoded_proposal_input = inbox.encodeProposeInput(input).call().await?;
 
         // Surge: using `proposeWithProof(..)` in Surge Inbox
-        let proof_data = self.build_proof_data(&checkpoint).await?;
-        let tx = TransactionRequest::default()
-            .with_from(from)
-            .with_to(to)
-            .with_blob_sidecar(sidecar)
-            .with_call(&SurgeInbox::proposeWithProofCall {
-                _lookahead: Bytes::new(),
-                _data: encoded_proposal_input,
-                _proof: proof_data,
-            });
+        let proof_data = self.build_proof_data(&batch.checkpoint).await?;
+        let call = inbox.proposeWithProof(Bytes::new(), encoded_proposal_input, proof_data);
 
-        tracing::debug!("Transaction input: {:?}", tx.input);
-
-        Ok(tx)
+        Ok(Multicall::Call {
+            target: inbox_address,
+            value: U256::ZERO,
+            data: call.calldata().clone(),
+        })
     }
 
-    // Surge: builds the 161-byte proof data
-    // [0..96: ABI-encoded checkpoint][96..161: signed checkpoint digest]
-    async fn build_proof_data(&self, checkpoint: &Checkpoint) -> Result<Bytes, Error> {
-        let checkpoint_encoded = checkpoint.abi_encode();
-        let checkpoint_digest = alloy::primitives::keccak256(&checkpoint_encoded);
-        let signature = self.checkpoint_signer.sign_hash(&checkpoint_digest).await?;
+    fn build_l1_call_call(&self, l1_call: L1Call, bridge_address: Address) -> Multicall::Call {
+        let bridge = Bridge::new(bridge_address, &self.provider);
+        let call = bridge.processMessage(l1_call.message_from_l2, l1_call.signal_slot_proof);
 
-        let mut signature_bytes = [0_u8; 65];
-        signature_bytes[..32].copy_from_slice(signature.r().to_be_bytes::<32>().as_slice());
-        signature_bytes[32..64].copy_from_slice(signature.s().to_be_bytes::<32>().as_slice());
-        signature_bytes[64] = (signature.v() as u8) + 27;
-
-        let mut proof_data = Vec::with_capacity(161);
-        proof_data.extend_from_slice(&checkpoint_encoded);
-        proof_data.extend_from_slice(&signature_bytes);
-        Ok(Bytes::from(proof_data))
+        Multicall::Call {
+            target: bridge_address,
+            value: U256::ZERO,
+            data: call.calldata().clone(),
+        }
     }
 }

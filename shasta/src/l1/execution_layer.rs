@@ -1,14 +1,26 @@
 use super::config::EthereumL1Config;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
-use crate::l1::config::ContractAddresses;
+use crate::node::proposal_manager::proposal::Proposal;
+use crate::shared_abi::bindings::{Bridge::MessageSent, IBridge::Message, SignalSent};
+use crate::{
+    l1::{bindings::UserOpsSubmitter, config::ContractAddresses},
+    node::proposal_manager::bridge_handler::UserOpData,
+};
 use alloy::{
-    eips::BlockNumberOrTag,
-    primitives::{Address, U256, aliases::U48},
-    providers::DynProvider,
+    eips::{BlockId, BlockNumberOrTag},
+    primitives::{Address, FixedBytes, U256, aliases::U48},
+    providers::{DynProvider, ext::DebugApi},
+    rpc::types::{
+        TransactionRequest,
+        trace::geth::{
+            GethDebugBuiltInTracerType, GethDebugTracerType, GethDebugTracingCallOptions,
+            GethDebugTracingOptions,
+        },
+    },
+    sol_types::SolEvent,
 };
 use anyhow::{Error, anyhow};
-use common::shared::l2_block_v2::L2BlockV2;
 use common::{
     l1::{
         traits::{ELTrait, PreconferProvider},
@@ -22,13 +34,10 @@ use common::{
 };
 use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
 use std::sync::Arc;
-use taiko_bindings::{
-    anchor::ICheckpointStore::Checkpoint,
-    inbox::{
-        IForcedInclusionStore::ForcedInclusion,
-        IInbox::CoreState,
-        Inbox::{self, InboxInstance},
-    },
+use taiko_bindings::inbox::{
+    IForcedInclusionStore::ForcedInclusion,
+    IInbox::CoreState,
+    Inbox::{self, InboxInstance},
 };
 use tokio::sync::mpsc::Sender;
 use tracing::info;
@@ -80,13 +89,15 @@ impl ELTrait for ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to call getConfig for Inbox: {e}"))?;
 
         tracing::info!(
-            "Shasta inbox: {}, Proposer checker {}",
+            "Shasta inbox: {}, Proposer checker: {}",
             specific_config.shasta_inbox,
-            shasta_config.proposerChecker
+            shasta_config.proposerChecker,
         );
         let contract_addresses = ContractAddresses {
             shasta_inbox: specific_config.shasta_inbox,
             proposer_checker: shasta_config.proposerChecker,
+            proposer_multicall: specific_config.proposer_multicall,
+            bridge: specific_config.bridge,
         };
 
         Ok(Self {
@@ -174,29 +185,24 @@ impl PreconfOperator for ExecutionLayer {
 }
 
 impl ExecutionLayer {
-    pub async fn send_batch_to_l1(
-        &self,
-        l2_blocks: Vec<L2BlockV2>,
-        num_forced_inclusion: u8,
-        checkpoint: Checkpoint,
-    ) -> Result<(), Error> {
+    pub async fn send_batch_to_l1(&self, batch: Proposal) -> Result<(), Error> {
         info!(
             "📦 Proposing with {} blocks | num_forced_inclusion: {}",
-            l2_blocks.len(),
-            num_forced_inclusion,
+            batch.l2_blocks.len(),
+            batch.num_forced_inclusion,
         );
 
         // Build propose transaction
         // TODO fill extra gas percentege from config
         let builder =
             ProposalTxBuilder::new(self.provider.clone(), 10, self.checkpoint_signer.clone());
+
+        // Surge: This is now a multicall containing user ops and L1 calls
         let tx = builder
             .build_propose_tx(
-                l2_blocks,
+                batch,
                 self.preconfer_address,
-                self.contract_addresses.shasta_inbox,
-                num_forced_inclusion,
-                checkpoint,
+                self.contract_addresses.clone(),
             )
             .await?;
 
@@ -335,5 +341,106 @@ impl common::l1::traits::PreconferBondProvider for ExecutionLayer {
             })?;
 
         Ok(U256::from(bond.balance))
+    }
+}
+
+// Surge: L1 EL ops for Bridge Handler
+
+pub trait L1BridgeHandlerOps {
+    // Surge: This can be made to retrieve multiple signal slots
+    async fn find_message_and_signal_slot(
+        &self,
+        user_op_data: UserOpData,
+    ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error>;
+}
+
+// Surge: Please beward of these limitations
+// - Target contracts are not verified in log checks
+impl L1BridgeHandlerOps for ExecutionLayer {
+    async fn find_message_and_signal_slot(
+        &self,
+        user_op_data: UserOpData,
+    ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error> {
+        // Build the call to executeBatch with a single user op
+        let submitter = UserOpsSubmitter::new(user_op_data.user_op_submitter, &self.provider);
+        let call =
+            submitter.executeBatch(vec![user_op_data.user_op], user_op_data.user_op_signature);
+
+        // Create transaction request for simulation
+        let tx_request = TransactionRequest::default()
+            .from(self.preconfer_address)
+            .to(user_op_data.user_op_submitter)
+            .input(call.calldata().clone().into());
+
+        // Configure call tracer with logs enabled
+        let mut tracer_config = serde_json::Map::new();
+        tracer_config.insert("withLog".to_string(), serde_json::Value::Bool(true));
+
+        let tracing_options = GethDebugTracingOptions {
+            tracer: Some(GethDebugTracerType::BuiltInTracer(
+                GethDebugBuiltInTracerType::CallTracer,
+            )),
+            tracer_config: serde_json::Value::Object(tracer_config).into(),
+            ..Default::default()
+        };
+
+        let call_options = GethDebugTracingCallOptions {
+            tracing_options,
+            ..Default::default()
+        };
+
+        // Execute the trace call simulation
+        let trace_result = self
+            .provider
+            .debug_trace_call(
+                tx_request,
+                BlockId::Number(BlockNumberOrTag::Latest),
+                call_options,
+            )
+            .await
+            .map_err(|e| anyhow!("Failed to simulate executeBatch on L1: {e}"))?;
+
+        let mut message: Option<Message> = None;
+        let mut slot: Option<FixedBytes<32>> = None;
+
+        // Look for logs in the trace result and decode MessageSent and SignalSent events
+        if let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result {
+            for log in call_frame.logs {
+                // Check if this is a MessageSent or SignalSent event by matching the topic
+                if let Some(topics) = &log.topics {
+                    if !topics.is_empty() {
+                        if topics[0] == MessageSent::SIGNATURE_HASH {
+                            // Decode the MessageSent event
+                            let log_data = alloy::primitives::LogData::new_unchecked(
+                                topics.clone(),
+                                log.data.clone().unwrap_or_default(),
+                            );
+                            let decoded = MessageSent::decode_log_data(&log_data).map_err(|e| {
+                                anyhow!("Failed to decode MessageSent event L1: {e}")
+                            })?;
+
+                            message = Some(decoded.message);
+                        } else if topics[0] == SignalSent::SIGNATURE_HASH {
+                            // Decode the SignalSent event
+                            let log_data = alloy::primitives::LogData::new_unchecked(
+                                topics.clone(),
+                                log.data.clone().unwrap_or_default(),
+                            );
+                            let decoded = SignalSent::decode_log_data(&log_data).map_err(|e| {
+                                anyhow!("Failed to decode SignalSent event L1: {e}")
+                            })?;
+
+                            slot = Some(decoded.slot);
+                        }
+                    }
+                }
+            }
+        }
+
+        if let (Some(message), Some(slot)) = (message, slot) {
+            return Ok(Some((message, slot)));
+        }
+
+        Ok(None)
     }
 }

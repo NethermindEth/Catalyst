@@ -1,9 +1,12 @@
-use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
-use alloy::primitives::{Address, B256};
+use crate::l2::bindings::ICheckpointStore::Checkpoint;
+use crate::node::proposal_manager::{
+    bridge_handler::{L1Call, UserOpData},
+    l2_block_payload::L2BlockV2Payload,
+};
+use alloy::primitives::{Address, B256, FixedBytes};
 use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
 use std::collections::VecDeque;
 use std::time::Instant;
-use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
 
@@ -23,6 +26,12 @@ pub struct Proposal {
     // Surge: the state sync checkpoint that is signed and sent as a proof
     // along with the proposal to Surge inbox
     pub checkpoint: Checkpoint,
+    // Surge: User ops that initiate L2 calls
+    pub user_ops: Vec<UserOpData>,
+    // Surge: Signal slots to set via anchor with the proposal
+    pub signal_slots: Vec<FixedBytes<32>>,
+    // Surge: L1 calls intitiated by any L2 contracts
+    pub l1_calls: Vec<L1Call>,
 }
 
 impl Proposal {
@@ -181,6 +190,9 @@ mod test {
             anchor_state_root: B256::ZERO,
             num_forced_inclusion: 0,
             checkpoint: Checkpoint::default(),
+            user_ops: vec![],
+            signal_slots: vec![],
+            l1_calls: vec![],
         };
 
         proposal.compress();

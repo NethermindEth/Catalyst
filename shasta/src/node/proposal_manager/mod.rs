@@ -1,19 +1,25 @@
 mod batch_builder;
+pub mod bridge_handler;
 pub mod l2_block_payload;
 pub mod proposal;
 
+use crate::l2::bindings::ICheckpointStore::Checkpoint;
+use crate::l2::execution_layer::L2BridgeHandlerOps;
+use crate::node::proposal_manager::bridge_handler::UserOpData;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
     metrics::Metrics,
     shared::{l2_block_v2::L2BlockV2Draft, l2_tx_lists::PreBuiltTxList},
 };
+use alloy::primitives::FixedBytes;
 use alloy::{
-    consensus::{BlockHeader, Transaction},
+    consensus::{BlockHeader, Transaction as TransactionTrait},
     primitives::aliases::U48,
 };
 use anyhow::Error;
 use batch_builder::BatchBuilder;
+use bridge_handler::BridgeHandler;
 use common::{batch_builder::BatchBuilderConfig, shared::l2_slot_info_v2::L2SlotContext};
 use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
@@ -21,8 +27,8 @@ use common::{
     shared::anchor_block_info::AnchorBlockInfo,
     utils::cancellation_token::CancellationToken,
 };
-use std::sync::Arc;
-use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
+use std::{net::SocketAddr, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::forced_inclusion::ForcedInclusion;
@@ -33,6 +39,7 @@ const MIN_ANCHOR_OFFSET: u64 = 2;
 
 pub struct BatchManager {
     batch_builder: BatchBuilder,
+    bridge_handler: Arc<Mutex<BridgeHandler>>,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
     l1_height_lag: u64,
@@ -66,12 +73,25 @@ impl BatchManager {
 
         let forced_inclusion = Arc::new(ForcedInclusion::new(ethereum_l1.clone()).await?);
 
+        // Initialize bridge handler listening on port 4545
+        let bridge_addr: SocketAddr = "127.0.0.1:4545".parse()?;
+        let bridge_handler = Arc::new(Mutex::new(
+            BridgeHandler::new(
+                bridge_addr,
+                ethereum_l1.clone(),
+                taiko.clone(),
+                cancel_token.clone(),
+            )
+            .await?,
+        ));
+
         Ok(Self {
             batch_builder: BatchBuilder::new(
                 config,
                 ethereum_l1.slot_clock.clone(),
                 metrics.clone(),
             ),
+            bridge_handler,
             ethereum_l1,
             taiko,
             l1_height_lag,
@@ -166,10 +186,11 @@ impl BatchManager {
                 .get_last_synced_block_params_from_geth()
                 .await?;
 
-            let pyaload = self.batch_builder.add_fi_block(fi_block, anchor_params)?;
+            let payload = self.batch_builder.add_fi_block(fi_block, anchor_params)?;
+            // Surge: Signal slots are not expected in forced inclusions
             match self
                 .taiko
-                .advance_head_to_new_l2_block(pyaload, l2_slot_context, operation_type)
+                .advance_head_to_new_l2_block(payload, l2_slot_context, vec![], operation_type)
                 .await
             {
                 Ok(fi_preconfed_block) => {
@@ -253,17 +274,75 @@ impl BatchManager {
         Ok(preconfed_block)
     }
 
+    // Surge: Adds any pending L2 calls initiated via User Ops on the bridge handler
+    // to the transaction list in the draft block.
+    //
+    // For the POC, only a single L2 call is added per block
+    //
+    // Returns the signal slot to be set on L2
+    async fn add_pending_l2_call_to_draft_block(
+        &mut self,
+        l2_draft_block: &mut L2BlockV2Draft,
+    ) -> Result<Option<(UserOpData, FixedBytes<32>)>, anyhow::Error> {
+        // Check for pending L2 calls from the bridge handler
+        if let Ok(Some((user_op_data, l2_call))) = self
+            .bridge_handler
+            .lock()
+            .await
+            .next_user_op_and_l2_call()
+            .await
+        {
+            info!("Processing pending L2 call: {:?}", l2_call);
+
+            // Construct the bridge call transaction via the L2 execution layer
+            let l2_call_bridge_tx = self
+                .taiko
+                .l2_execution_layer()
+                .construct_l2_call_tx(l2_call.message_from_l1)
+                .await?;
+
+            // Insert the bridge transaction into the list
+            l2_draft_block
+                .prebuilt_tx_list
+                .tx_list
+                .push(l2_call_bridge_tx);
+
+            debug!("Inserted bridge call transaction into tx list");
+
+            return Ok(Some((user_op_data, l2_call.signal_slot_on_l2)));
+        }
+
+        Ok(None)
+    }
+
     async fn add_draft_block_to_proposal(
         &mut self,
-        l2_draft_block: L2BlockV2Draft,
+        mut l2_draft_block: L2BlockV2Draft,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<BuildPreconfBlockResponse, Error> {
+        let mut anchor_signal_slots: Vec<FixedBytes<32>> = vec![];
+
+        // Surge: Add any pending L2 call from the bridge handler RPC and
+        // record associated signal slot for the proposal
+        if let Some((user_op_data, signal_slot)) = self
+            .add_pending_l2_call_to_draft_block(&mut l2_draft_block)
+            .await?
+        {
+            self.batch_builder.add_user_op(user_op_data)?;
+            self.batch_builder.add_signal_slot(signal_slot)?;
+            anchor_signal_slots.push(signal_slot);
+        }
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
 
         match self
             .taiko
-            .advance_head_to_new_l2_block(payload, l2_slot_context, operation_type)
+            .advance_head_to_new_l2_block(
+                payload,
+                l2_slot_context,
+                anchor_signal_slots,
+                operation_type,
+            )
             .await
         {
             Ok(preconfed_block) => {
@@ -273,6 +352,17 @@ impl BatchManager {
                     stateRoot: preconfed_block.state_root,
                     blockHash: preconfed_block.hash,
                 })?;
+
+                // Surge: Record any L1 call initiated in the L2 block
+                if let Some(l1_call) = self
+                    .bridge_handler
+                    .lock()
+                    .await
+                    .find_l1_call(preconfed_block.number)
+                    .await?
+                {
+                    self.batch_builder.add_l1_call(l1_call)?;
+                }
 
                 Ok(preconfed_block)
             }
@@ -519,6 +609,7 @@ impl BatchManager {
     pub fn clone_without_batches(&self) -> Self {
         Self {
             batch_builder: self.batch_builder.clone_without_batches(),
+            bridge_handler: self.bridge_handler.clone(),
             ethereum_l1: self.ethereum_l1.clone(),
             taiko: self.taiko.clone(),
             l1_height_lag: self.l1_height_lag,
