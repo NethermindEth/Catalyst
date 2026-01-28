@@ -5784,6 +5784,7 @@ dependencies = [
  "clap",
  "common",
  "pacaya",
+ "permissionless",
  "rustls",
  "serde_json",
  "shasta",

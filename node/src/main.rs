@@ -107,6 +107,16 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
             )
             .await?;
         }
+        Fork::Permissionless => {
+            info!("Current fork: PERMISSIONLESS 🌋");
+            permissionless::create_permissionless_node(
+                config.clone(),
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info,
+            )
+            .await?;
+        }
     }
 
     metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());

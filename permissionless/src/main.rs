@@ -1,16 +1,8 @@
 use anyhow::Error;
-use common::{
-    config::ConfigTrait,
-    l1::{self as common_l1, ethereum_l1::EthereumL1},
-    metrics::Metrics,
-    utils as common_utils,
-    utils::cancellation_token::CancellationToken,
-};
+use common::{config::Config, metrics::Metrics, utils::cancellation_token::CancellationToken};
+use permissionless::create_permissionless_node;
 use std::sync::Arc;
-use tokio::{
-    signal::unix::{SignalKind, signal},
-    sync::mpsc,
-};
+use tokio::signal::unix::{SignalKind, signal};
 use tracing::{error, info};
 
 // Initialize rustls crypto provider before any TLS operations
@@ -20,31 +12,27 @@ fn init_rustls() {
         .expect("Failed to install default rustls crypto provider");
 }
 
-mod l1;
-mod node;
-mod registration;
-mod utils;
-
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     init_rustls();
 
-    common_utils::logging::init_logging();
+    common::utils::logging::init_logging();
 
     info!(
         "🚀 Starting Permissionless Node v{}",
         env!("CARGO_PKG_VERSION")
     );
 
-    let config = common::config::Config::read_env_variables()
+    let config = Config::read_env_variables()
         .map_err(|e| anyhow::anyhow!("Failed to read configuration: {}", e))?;
-    let permissionless_config = crate::utils::config::Config::read_env_variables()
-        .map_err(|e| anyhow::anyhow!("Failed to read permissionless configuration: {}", e))?;
 
-    let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
+    let fork_info = common::fork_info::ForkInfo::from_config((&config).into())
+        .map_err(|e| anyhow::anyhow!("Failed to get fork info: {}", e))?;
+
     let metrics = Arc::new(Metrics::new());
-
     let cancel_token = CancellationToken::new(metrics.clone());
+
+    // Set up panic hook to cancel token on panic
     let panic_cancel_token = cancel_token.clone();
     std::panic::set_hook(Box::new(move |panic_info| {
         error!("Panic occurred: {:?}", panic_info);
@@ -52,31 +40,7 @@ async fn main() -> Result<(), Error> {
         info!("Cancellation token triggered, initiating shutdown...");
     }));
 
-    let ethereum_l1 = Arc::new(
-        EthereumL1::<l1::execution_layer::ExecutionLayer>::new(
-            common_l1::config::EthereumL1Config::new(&config).await?,
-            l1::config::EthereumL1Config::try_from(permissionless_config.clone())?,
-            transaction_error_sender,
-            metrics.clone(),
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?,
-    );
-
-    let node = node::Node::new(
-        cancel_token.clone(),
-        ethereum_l1,
-        transaction_error_receiver,
-        metrics,
-        node::config::NodeConfig {
-            preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-        },
-    )
-    .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
-
-    node.entrypoint()
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to start Node: {}", e))?;
+    create_permissionless_node(config, metrics, cancel_token.clone(), fork_info).await?;
 
     wait_for_the_termination(cancel_token).await;
 
