@@ -114,7 +114,8 @@ impl BatchBuilder {
             let payload = current_proposal.add_l2_draft_block(l2_draft_block);
 
             debug!(
-                "Added L2 draft block to batch: l2 blocks: {}, total bytes: {}",
+                "Added L2 draft block to batch: forced inclusions {}, l2 blocks: {}, total bytes: {}",
+                current_proposal.num_forced_inclusion,
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
@@ -152,7 +153,8 @@ impl BatchBuilder {
             current_proposal.add_l2_block(l2_block);
 
             debug!(
-                "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
+                "Added L2 block to batch: forced inclusions {}, l2 blocks: {}, total bytes: {}",
+                current_proposal.num_forced_inclusion,
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
