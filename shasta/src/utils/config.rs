@@ -3,19 +3,9 @@ use anyhow::Error;
 use common::config::{ConfigTrait, address_parse_error};
 use std::str::FromStr;
 
-/// Temporarily allow the fields in `L1ContractAddresses` which are not read yet
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-pub struct L1ContractAddresses {
-    pub preconf_whitelist: Address,
-    pub preconf_router: Address,
-    pub taiko_wrapper: Address,
-    pub forced_inclusion_store: Address,
-}
 #[derive(Debug, Clone)]
 pub struct ShastaConfig {
     pub shasta_inbox: Address,
-    pub contract_addresses: L1ContractAddresses,
     pub handover_window_slots: u64,
     pub handover_start_buffer_ms: u64,
     pub l1_height_lag: u64,
@@ -33,17 +23,6 @@ impl ConfigTrait for ShastaConfig {
         };
 
         let shasta_inbox = read_contract_address("SHASTA_INBOX_ADDRESS")?;
-
-        let preconf_whitelist = read_contract_address("PRECONF_WHITELIST_ADDRESS")?;
-        let preconf_router = read_contract_address("PRECONF_ROUTER_ADDRESS")?;
-        let taiko_wrapper = read_contract_address("TAIKO_WRAPPER_ADDRESS")?;
-        let forced_inclusion_store = read_contract_address("FORCED_INCLUSION_STORE_ADDRESS")?;
-        let contract_addresses = L1ContractAddresses {
-            preconf_whitelist,
-            preconf_router,
-            taiko_wrapper,
-            forced_inclusion_store,
-        };
 
         let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")
             .unwrap_or("4".to_string())
@@ -78,7 +57,6 @@ impl ConfigTrait for ShastaConfig {
 
         Ok(ShastaConfig {
             shasta_inbox,
-            contract_addresses,
             handover_window_slots,
             handover_start_buffer_ms,
             l1_height_lag,
@@ -92,7 +70,6 @@ use std::fmt;
 impl fmt::Display for ShastaConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Shasta inbox: {:#?}", self.shasta_inbox)?;
-        writeln!(f, "Contract addresses: {:#?}", self.contract_addresses)?;
         writeln!(f, "handover window slots: {}", self.handover_window_slots)?;
         writeln!(
             f,
