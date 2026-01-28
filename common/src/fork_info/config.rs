@@ -15,6 +15,7 @@ impl Default for ForkInfoConfig {
             fork_switch_timestamps: vec![
                 Duration::from_secs(0),           // Pacaya
                 Duration::from_secs(99999999999), // Shasta
+                Duration::from_secs(99999999999), // Permissionless
             ],
             fork_switch_transition_period: Duration::from_secs(15),
         }
@@ -27,6 +28,7 @@ impl From<&Config> for ForkInfoConfig {
             .map(|f| match f {
                 Fork::Pacaya => Duration::from_secs(config.pacaya_timestamp_sec),
                 Fork::Shasta => Duration::from_secs(config.shasta_timestamp_sec),
+                Fork::Permissionless => Duration::from_secs(config.permissionless_timestamp_sec),
             })
             .collect();
         Self {
