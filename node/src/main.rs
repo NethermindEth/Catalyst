@@ -29,7 +29,7 @@ async fn main() -> Result<(), Error> {
 
     common::utils::logging::init_logging();
 
-    info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
+    info!("🚀 Starting Catalyst Node v{}", env!("CARGO_PKG_VERSION"));
 
     let mut iteration = 0;
     let metrics = Arc::new(Metrics::new());
