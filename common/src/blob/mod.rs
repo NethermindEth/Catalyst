@@ -18,7 +18,6 @@ pub fn decode_blob(blob: &Blob) -> Result<Vec<u8>, Error> {
 mod tests {
     use super::*;
     use alloy::consensus::SidecarBuilder;
-    use alloy::eips::eip4844::BlobTransactionSidecar;
     use alloy::primitives::FixedBytes;
     use taiko_protocol::shasta::BlobCoder;
 
