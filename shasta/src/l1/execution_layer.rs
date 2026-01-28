@@ -74,11 +74,8 @@ impl ELTrait for ExecutionLayer {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to call getConfig for Inbox: {e}"))?;
 
-        tracing::info!(
-            "Shasta inbox: {}, Proposer checker {}",
-            specific_config.shasta_inbox,
-            shasta_config.proposerChecker
-        );
+        info!("Shasta config: {:?}", shasta_config);
+
         let contract_addresses = ContractAddresses {
             shasta_inbox: specific_config.shasta_inbox,
             proposer_checker: shasta_config.proposerChecker,

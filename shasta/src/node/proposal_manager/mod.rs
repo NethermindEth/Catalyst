@@ -141,7 +141,7 @@ impl BatchManager {
         let start = std::time::Instant::now();
         let forced_inclusion = self.forced_inclusion.consume_forced_inclusion().await?;
         debug!(
-            "Got forced inclusion in {} milliseconds",
+            "Checked forced inclusion in {} milliseconds",
             start.elapsed().as_millis()
         );
 
