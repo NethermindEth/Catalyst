@@ -1,3 +1,4 @@
+pub mod config;
 pub mod proposal_manager;
 use anyhow::Error;
 use common::{
@@ -7,8 +8,8 @@ use common::{
     shared::{l2_slot_info_v2::L2SlotContext, l2_tx_lists::PreBuiltTxList},
     utils::{self as common_utils, cancellation_token::CancellationToken},
 };
-use pacaya::node::operator::Status as OperatorStatus;
-use pacaya::node::{config::NodeConfig, operator::Operator};
+use config::NodeConfig;
+use pacaya::node::operator::{Operator, Status as OperatorStatus};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
