@@ -158,6 +158,12 @@ jobs:
       - name: Setup ORAS
         uses: oras-project/setup-oras@v1
 
+      - name: Login to JFrog Artifactory with ORAS
+        run: |
+          oras login ${{ env.DOCKER_REGISTRY }} \
+            -u ${{ secrets.ARTIFACTORY_CORE_USERNAME }} \
+            -p ${{ secrets.ARTIFACTORY_CORE_TOKEN_DEVELOPER }}
+
       - name: Login to Docker Hub
         run: |
           oras login ${{ env.DOCKER_PUBLIC_REGISTRY }} \
@@ -167,12 +173,25 @@ jobs:
       - name: Promote to Docker Hub Production
         run: |
           set -e
+          echo "Tags to promote: $PROMOTE_TAGS"
           for tag in $PROMOTE_TAGS; do
             source_image="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}:${tag}"
             prod_image="${{ env.DOCKER_PUBLIC_REGISTRY }}/${{ env.DOCKER_PUBLIC_REPOSITORY }}:${tag}"
-            echo "Promoting ${source_image} to ${prod_image}"
-            oras cp -r "${source_image}" "${prod_image}"
+            echo ""
+            echo "=== Promoting tag: ${tag} ==="
+            echo "Source: ${source_image}"
+            echo "Target: ${prod_image}"
+            
+            if ! oras cp -r "${source_image}" "${prod_image}"; then
+              echo "ERROR: Failed to promote tag ${tag}" >&2
+              echo "Source: ${source_image}" >&2
+              echo "Target: ${prod_image}" >&2
+              exit 1
+            fi
+            echo "✓ Successfully promoted ${tag}"
           done
+          echo ""
+          echo "All tags promoted successfully"
 
       - name: Summary
         run: |
