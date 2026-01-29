@@ -127,17 +127,12 @@ impl BatchManager {
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        if !self.batch_builder.current_proposal_is_empty() {
-            debug!("Cannot add forced inclusion block when current batch is not empty");
+        if !self.batch_builder.has_common_block() {
+            debug!("Cannot add forced inclusion block when current batch has common block");
             return Ok(None);
         }
         // get next forced inclusion
-        let start = std::time::Instant::now();
         let forced_inclusion = self.forced_inclusion.consume_forced_inclusion().await?;
-        debug!(
-            "Got forced inclusion in {} milliseconds",
-            start.elapsed().as_millis()
-        );
 
         if let Some(forced_inclusion) = forced_inclusion {
             debug!(

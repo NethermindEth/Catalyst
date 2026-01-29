@@ -84,10 +84,10 @@ impl BatchBuilder {
         })
     }
 
-    pub fn current_proposal_is_empty(&self) -> bool {
+    pub fn has_common_block(&self) -> bool {
         self.current_proposal
             .as_ref()
-            .is_none_or(|b| b.l2_blocks.is_empty())
+            .is_some_and(|b| !b.l2_blocks.is_empty())
     }
 
     pub fn create_new_batch(&mut self, id: u64, anchor_block: AnchorBlockInfo) {
