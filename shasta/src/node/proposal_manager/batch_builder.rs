@@ -84,10 +84,11 @@ impl BatchBuilder {
         })
     }
 
-    pub fn has_common_block(&self) -> bool {
+    /// Returns true if the current proposal exists and has no common block
+    pub fn can_add_forced_inclusion(&self) -> bool {
         self.current_proposal
             .as_ref()
-            .is_some_and(|b| !b.l2_blocks.is_empty())
+            .is_some_and(|b| b.l2_blocks.is_empty())
     }
 
     pub fn create_new_batch(&mut self, id: u64, anchor_block: AnchorBlockInfo) {

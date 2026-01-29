@@ -127,7 +127,7 @@ impl BatchManager {
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        if !self.batch_builder.has_common_block() {
+        if !self.batch_builder.can_add_forced_inclusion() {
             debug!("Cannot add forced inclusion block when current batch has common block");
             return Ok(None);
         }
