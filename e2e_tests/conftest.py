@@ -144,10 +144,6 @@ def forced_inclusion_teardown(l1_client, l2_client_node1, env_vars):
 def global_setup(l1_client, l2_client_node1, l2_client_node2, env_vars):
     """Run once before all tests"""
 
-    if env_vars.protocol == "shasta":
-        yield
-        return
-
     print("Wait for Geth sync with TaikoInbox")
     block_number_contract = get_last_block_id(l1_client, env_vars)
 
@@ -172,7 +168,7 @@ def global_setup(l1_client, l2_client_node1, l2_client_node2, env_vars):
         if current_operator != empty_address:
             print(f"Operator is set: {current_operator}")
             break
-        
+
         print(f"Current operator is empty address, waiting...")
         time.sleep(10)
 
