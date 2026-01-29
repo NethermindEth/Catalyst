@@ -90,7 +90,7 @@ impl ForcedInclusion {
             self.increment_index();
         }
         tracing::debug!(
-            "Decoded forced inclusion in {} milliseconds",
+            "Decoded forced inclusion in {} ms",
             start.elapsed().as_millis()
         );
         Ok(fi)
