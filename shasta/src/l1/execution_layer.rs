@@ -187,9 +187,12 @@ impl PreconfOperator for ExecutionLayer {
 impl ExecutionLayer {
     pub async fn send_batch_to_l1(&self, batch: Proposal) -> Result<(), Error> {
         info!(
-            "📦 Proposing with {} blocks | num_forced_inclusion: {}",
+            "📦 Proposing with {} blocks | num_forced_inclusion: {} | user_ops: {:?} | signal_slots: {:?} | l1_calls: {:?}",
             batch.l2_blocks.len(),
             batch.num_forced_inclusion,
+            batch.user_ops,
+            batch.signal_slots,
+            batch.l1_calls
         );
 
         // Build propose transaction

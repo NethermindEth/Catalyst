@@ -134,7 +134,7 @@ impl BridgeHandler {
     pub async fn next_user_op_and_l2_call(
         &mut self,
     ) -> Result<Option<(UserOpData, L2Call)>, anyhow::Error> {
-        if let Some(signed_user_op) = self.rx.recv().await {
+        if let Ok(signed_user_op) = self.rx.try_recv() {
             let user_op = UserOp {
                 target: signed_user_op.target.parse()?,
                 value: U256::from(signed_user_op.value),

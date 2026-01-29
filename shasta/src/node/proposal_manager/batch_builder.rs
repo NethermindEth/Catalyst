@@ -19,7 +19,7 @@ use common::{
     shared::anchor_block_info::AnchorBlockInfo,
 };
 use std::{collections::VecDeque, sync::Arc};
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 pub struct BatchBuilder {
     config: BatchBuilderConfig,
@@ -172,7 +172,7 @@ impl BatchBuilder {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
             current_proposal.user_ops.push(user_op_data.clone());
 
-            debug!("Added user op: {:?}", user_op_data);
+            info!("Added user op: {:?}", user_op_data);
             Ok(current_proposal)
         } else {
             Err(anyhow::anyhow!("No current batch"))
@@ -184,7 +184,7 @@ impl BatchBuilder {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
             current_proposal.signal_slots.push(signal_slot);
 
-            debug!("Added signal slot: {:?}", signal_slot);
+            info!("Added signal slot: {:?}", signal_slot);
             Ok(current_proposal)
         } else {
             Err(anyhow::anyhow!("No current batch"))
@@ -196,7 +196,7 @@ impl BatchBuilder {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
             current_proposal.l1_calls.push(l1_call.clone());
 
-            debug!("Added L1 call: {:?}", l1_call);
+            info!("Added L1 call: {:?}", l1_call);
             Ok(current_proposal)
         } else {
             Err(anyhow::anyhow!("No current batch"))

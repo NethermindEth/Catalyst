@@ -301,13 +301,16 @@ impl BatchManager {
                 .construct_l2_call_tx(l2_call.message_from_l1)
                 .await?;
 
+            info!(
+                "Inserting L2 call bridge transaction into tx list: {:?}",
+                l2_call_bridge_tx
+            );
+
             // Insert the bridge transaction into the list
             l2_draft_block
                 .prebuilt_tx_list
                 .tx_list
                 .push(l2_call_bridge_tx);
-
-            debug!("Inserted bridge call transaction into tx list");
 
             return Ok(Some((user_op_data, l2_call.signal_slot_on_l2)));
         }
@@ -325,6 +328,7 @@ impl BatchManager {
 
         // Surge: Add any pending L2 call from the bridge handler RPC and
         // record associated signal slot for the proposal
+        debug!("Checking for pending L2 calls");
         if let Some((user_op_data, signal_slot)) = self
             .add_pending_l2_call_to_draft_block(&mut l2_draft_block)
             .await?
@@ -332,6 +336,8 @@ impl BatchManager {
             self.batch_builder.add_user_op(user_op_data)?;
             self.batch_builder.add_signal_slot(signal_slot)?;
             anchor_signal_slots.push(signal_slot);
+        } else {
+            debug!("No pending L2 calls");
         }
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
 
@@ -354,6 +360,7 @@ impl BatchManager {
                 })?;
 
                 // Surge: Record any L1 call initiated in the L2 block
+                debug!("Checking for initiated L1 calls");
                 if let Some(l1_call) = self
                     .bridge_handler
                     .lock()
@@ -362,6 +369,8 @@ impl BatchManager {
                     .await?
                 {
                     self.batch_builder.add_l1_call(l1_call)?;
+                } else {
+                    debug!("No L1 calls initiated");
                 }
 
                 Ok(preconfed_block)
