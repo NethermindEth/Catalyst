@@ -84,10 +84,15 @@ impl ForcedInclusion {
     }
 
     pub async fn consume_forced_inclusion(&self) -> Result<Option<Vec<Transaction>>, Error> {
+        let start = std::time::Instant::now();
         let fi = self.decode_current_forced_inclusion().await?;
         if fi.is_some() {
             self.increment_index();
         }
+        tracing::debug!(
+            "Decoded forced inclusion in {} ms",
+            start.elapsed().as_millis()
+        );
         Ok(fi)
     }
 
