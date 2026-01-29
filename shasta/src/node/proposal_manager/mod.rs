@@ -127,25 +127,18 @@ impl BatchManager {
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        if self.has_current_forced_inclusion() {
-            warn!("There is already a forced inclusion in the current batch");
-            return Ok(None);
-        }
-        if !self.batch_builder.current_proposal_is_empty() {
-            error!(
-                "Cannot add new L2 block with forced inclusion because there are existing blocks in the current batch"
-            );
+        if !self.batch_builder.can_add_forced_inclusion() {
+            debug!("Cannot add forced inclusion block when current batch has common block");
             return Ok(None);
         }
         // get next forced inclusion
-        let start = std::time::Instant::now();
         let forced_inclusion = self.forced_inclusion.consume_forced_inclusion().await?;
-        debug!(
-            "Checked forced inclusion in {} milliseconds",
-            start.elapsed().as_millis()
-        );
 
         if let Some(forced_inclusion) = forced_inclusion {
+            debug!(
+                "Adding new forced inclusion block with {} transactions",
+                forced_inclusion.len()
+            );
             let fi_block = L2BlockV2Draft {
                 prebuilt_tx_list: PreBuiltTxList {
                     tx_list: forced_inclusion,
@@ -181,7 +174,7 @@ impl BatchManager {
                         err
                     );
                     self.forced_inclusion.release_forced_inclusion().await;
-                    self.batch_builder.remove_current_batch();
+                    self.batch_builder.decrease_forced_inclusion_count();
                     return Err(anyhow::anyhow!(
                         "Failed to advance head to new forced inclusion L2 block: {}",
                         err
@@ -226,20 +219,17 @@ impl BatchManager {
         if !self.batch_builder.can_consume_l2_block(&l2_draft_block) {
             // Create new batch
             let _ = self.create_new_batch().await?;
+        }
 
-            // Add forced inclusion when needed
-            // not add forced inclusion when end_of_sequencing is true
-            if l2_slot_context.allow_forced_inclusion
-                && !l2_slot_context.end_of_sequencing
-                && let Some(fi_block) = self
-                    .add_new_l2_block_with_forced_inclusion_when_needed(
-                        l2_slot_context,
-                        operation_type,
-                    )
-                    .await?
-            {
-                return Ok(fi_block);
-            }
+        // Add forced inclusion when needed
+        // not add forced inclusion when end_of_sequencing is true
+        if l2_slot_context.allow_forced_inclusion
+            && !l2_slot_context.end_of_sequencing
+            && let Some(fi_block) = self
+                .add_new_l2_block_with_forced_inclusion_when_needed(l2_slot_context, operation_type)
+                .await?
+        {
+            return Ok(fi_block);
         }
 
         let preconfed_block = self

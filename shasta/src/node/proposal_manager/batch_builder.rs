@@ -84,10 +84,11 @@ impl BatchBuilder {
         })
     }
 
-    pub fn current_proposal_is_empty(&self) -> bool {
+    /// Returns true if the current proposal exists and has no common block
+    pub fn can_add_forced_inclusion(&self) -> bool {
         self.current_proposal
             .as_ref()
-            .is_none_or(|b| b.l2_blocks.is_empty())
+            .is_some_and(|b| b.l2_blocks.is_empty())
     }
 
     pub fn create_new_batch(&mut self, id: u64, anchor_block: AnchorBlockInfo) {
@@ -114,7 +115,8 @@ impl BatchBuilder {
             let payload = current_proposal.add_l2_draft_block(l2_draft_block);
 
             debug!(
-                "Added L2 draft block to batch: l2 blocks: {}, total bytes: {}",
+                "Added L2 draft block to batch: forced inclusions {}, l2 blocks: {}, total bytes: {}",
+                current_proposal.num_forced_inclusion,
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
@@ -133,7 +135,8 @@ impl BatchBuilder {
             let payload = current_proposal.add_forced_inclusion(fi_block, anchor_params);
 
             debug!(
-                "Added forced inclusion L2 draft block to batch: l2 blocks: {}, total bytes: {}",
+                "Added forced inclusion L2 block to batch: forced inclusions: {}, l2 blocks: {}, total bytes: {}",
+                current_proposal.num_forced_inclusion,
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
@@ -151,7 +154,8 @@ impl BatchBuilder {
             current_proposal.add_l2_block(l2_block);
 
             debug!(
-                "Added L2 block to batch: l2 blocks: {}, total bytes: {}",
+                "Added L2 block to batch: forced inclusions {}, l2 blocks: {}, total bytes: {}",
+                current_proposal.num_forced_inclusion,
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
@@ -439,7 +443,18 @@ impl BatchBuilder {
         Ok(())
     }
 
-    pub fn remove_current_batch(&mut self) {
+    /// Decreases the forced inclusion count and removes the current proposal if empty.
+    pub fn decrease_forced_inclusion_count(&mut self) {
+        if let Some(proposal) = self.current_proposal.as_mut() {
+            proposal.num_forced_inclusion = proposal.num_forced_inclusion.saturating_sub(1);
+
+            if proposal.l2_blocks.is_empty() && proposal.num_forced_inclusion == 0 {
+                self.remove_current_proposal();
+            }
+        }
+    }
+
+    fn remove_current_proposal(&mut self) {
         self.current_proposal = None;
     }
 
