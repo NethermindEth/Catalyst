@@ -25,7 +25,7 @@ impl ConfigTrait for ShastaConfig {
         let shasta_inbox = read_contract_address("SHASTA_INBOX_ADDRESS")?;
 
         let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")
-            .unwrap_or("4".to_string())
+            .unwrap_or("8".to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("HANDOVER_WINDOW_SLOTS must be a number: {}", e))?;
 
