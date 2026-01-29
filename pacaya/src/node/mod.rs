@@ -192,7 +192,7 @@ impl Node {
     }
 
     async fn preconfirmation_loop(&mut self) {
-        debug!("Main perconfirmation loop started");
+        debug!("Main preconfirmation loop started");
         common_utils::synchronization::synchronize_with_l1_slot_start(&self.ethereum_l1).await;
 
         let mut interval =

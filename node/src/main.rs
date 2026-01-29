@@ -29,7 +29,7 @@ async fn main() -> Result<(), Error> {
 
     common::utils::logging::init_logging();
 
-    info!("🚀 Starting Whitelist Node v{}", env!("CARGO_PKG_VERSION"));
+    info!("🚀 Starting Catalyst Node v{}", env!("CARGO_PKG_VERSION"));
 
     let mut iteration = 0;
     let metrics = Arc::new(Metrics::new());
@@ -100,6 +100,16 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
         Fork::Shasta => {
             info!("Current fork: SHASTA 🌋");
             shasta::create_shasta_node(
+                config.clone(),
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info,
+            )
+            .await?;
+        }
+        Fork::Permissionless => {
+            info!("Current fork: PERMISSIONLESS 🌋");
+            permissionless::create_permissionless_node(
                 config.clone(),
                 metrics.clone(),
                 cancel_token.clone(),
