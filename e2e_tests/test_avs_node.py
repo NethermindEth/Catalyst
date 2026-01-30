@@ -74,7 +74,7 @@ def test_handover_transaction(l2_client_node1, l2_client_node2, beacon_client, e
 def test_propose_batch_to_l1_after_reaching_max_blocks_per_batch(l2_client_node1, l1_client, env_vars):
     current_block = l1_client.eth.block_number
     current_block_timestamp = l1_client.eth.get_block(current_block).timestamp
-    spam_n_txs(l2_client_node1, env_vars.l2_prefunded_priv_key, 11)
+    spam_n_blocks(l2_client_node1, env_vars.l2_prefunded_priv_key, env_vars.max_blocks_per_batch, env_vars.preconf_min_txs)
 
     event = wait_for_batch_proposed_event(l1_client, current_block+1, env_vars)
 
