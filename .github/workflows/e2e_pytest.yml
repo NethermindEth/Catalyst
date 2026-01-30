@@ -1,4 +1,4 @@
-name: "Catalyst e2e Stack - Pytest"
+name: "Catalyst e2e Stack - Pytest with Kurtosis"
 
 on:
   pull_request:
@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout catalyst-e2e repository
         uses: actions/checkout@v6
+        with:
+          ref: e2e_tests_fix
 
       - name: Install dependencies
         run: |
