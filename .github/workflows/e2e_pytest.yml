@@ -1,0 +1,237 @@
+name: "Catalyst e2e Stack - Pytest"
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "e2e_tests/**"
+      - ".github/workflows/e2e_pytest.yml"
+
+concurrency:
+  group: catalyst-e2e-pytest
+  cancel-in-progress: false
+
+jobs:
+  e2e-tests:
+    name: Run e2e tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event.pull_request.head.repo.full_name == 'NethermindEth/Catalyst'
+    steps:
+      - name: Checkout catalyst-e2e repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Install Kurtosis CLI
+        run: |
+          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
+          sudo apt-get update
+          sudo apt-get install -y kurtosis-cli
+          kurtosis version
+
+      - name: Clone simple-taiko-node-nethermind repository
+        uses: actions/checkout@v6
+        with:
+          repository: NethermindEth/simple-taiko-node-nethermind
+          path: simple-taiko-node-nethermind
+          ref: e2e-fix-catalyst_pacaya_shasta
+          submodules: true
+
+      - name: Setup environment file
+        working-directory: simple-taiko-node-nethermind
+        run: |
+          cp .env.example .env
+
+      - name: Deploy Ethereum package (L1 setup)
+        working-directory: simple-taiko-node-nethermind
+        run: |
+          chmod +x deploy-etheruem-package.sh
+          ./deploy-etheruem-package.sh --environment local --mode silence
+        env:
+          SECONDS_PER_SLOT: 12
+
+      - name: Wait for L1 services to be ready
+        run: |
+          echo "Waiting for L1 services to be ready..."
+          timeout=300
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -s http://localhost:32003 -X POST -H "Content-Type: application/json" \
+              --data '{"jsonrpc":"2.0","id":0,"method":"eth_blockNumber","params":[]}' > /dev/null 2>&1; then
+              echo "L1 Execution Layer is ready"
+              break
+            fi
+            echo "Waiting for L1 services... ($elapsed/$timeout seconds)"
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          if [ $elapsed -ge $timeout ]; then
+            echo "Timeout waiting for L1 services"
+            exit 1
+          fi
+
+      - name: Wait for Beacon Node to be ready
+        run: |
+          echo "Waiting for Beacon Node to be ready..."
+          timeout=300
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -s http://localhost:33001/lighthouse/syncing > /dev/null 2>&1; then
+              echo "Beacon Node is ready"
+              break
+            fi
+            echo "Waiting for Beacon Node... ($elapsed/$timeout seconds)"
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          if [ $elapsed -ge $timeout ]; then
+            echo "Timeout waiting for Beacon Node"
+            exit 1
+          fi
+
+      - name: Deploy L2 Packaya Contract (Catalyst stack setup)
+        working-directory: simple-taiko-node-nethermind
+        run: |
+          if [ -f "run-catalyst-stack.sh" ]; then
+            echo "Found run-catalyst-stack.sh, L2 stack will be started"
+            ./run-catalyst-stack.sh pacaya 3000
+          else
+            echo "No L2 startup script found, assuming deploy script handles everything"
+          fi
+
+      - name: Deploy L2 Shasta Contract (Catalyst stack setup)
+        working-directory: simple-taiko-node-nethermind
+        run: |
+          if [ -f "run-catalyst-stack.sh" ]; then
+            echo "Found run-catalyst-stack.sh, L2 stack will be started"
+            ./run-catalyst-stack.sh shasta 6000
+          else
+            echo "No L2 startup script found, assuming deploy script handles everything"
+          fi
+          
+      - name: Wait for L2 nodes to be ready
+        run: |
+          echo "Waiting for L2 nodes to be ready..."
+          timeout=300
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            node1_ready=false
+            node2_ready=false
+            
+            if curl -s http://localhost:8547 -X POST -H "Content-Type: application/json" \
+              --data '{"jsonrpc":"2.0","id":0,"method":"eth_blockNumber","params":[]}' > /dev/null 2>&1; then
+              node1_ready=true
+            fi
+            
+            if curl -s http://localhost:8647 -X POST -H "Content-Type: application/json" \
+              --data '{"jsonrpc":"2.0","id":0,"method":"eth_blockNumber","params":[]}' > /dev/null 2>&1; then
+              node2_ready=true
+            fi
+            
+            if [ "$node1_ready" = true ] && [ "$node2_ready" = true ]; then
+              echo "Both L2 nodes are ready"
+              break
+            fi
+            
+            echo "Waiting for L2 nodes... Node1: $node1_ready, Node2: $node2_ready ($elapsed/$timeout seconds)"
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          
+          if [ $elapsed -ge $timeout ]; then
+            echo "Warning: Timeout waiting for L2 nodes, but continuing with tests"
+          fi
+
+      - name: Setup e2e test environment
+        working-directory: ./e2e_tests
+        run: |
+          cp .env.example .env
+          
+          # Read values from simple-taiko-node-nethermind/.env
+          SOURCE_ENV_FILE="../simple-taiko-node-nethermind/.env"
+          
+          # Function to get value from source .env file
+          get_env_value() {
+            local key="$1"
+            grep "^${key}=" "$SOURCE_ENV_FILE" | cut -d '=' -f2- | tr -d '"' | tr -d "'"
+          }
+          
+          # Update TAIKO_INBOX_ADDRESS from PACAYA_TAIKO
+          if PACAYA_TAIKO=$(get_env_value "PACAYA_TAIKO"); then
+            if [ -n "$PACAYA_TAIKO" ]; then
+              if grep -q "^TAIKO_INBOX_ADDRESS=" .env; then
+                sed -i "s|^TAIKO_INBOX_ADDRESS=.*|TAIKO_INBOX_ADDRESS=${PACAYA_TAIKO}|" .env
+              else
+                echo "TAIKO_INBOX_ADDRESS=${PACAYA_TAIKO}" >> .env
+              fi
+              echo "Updated TAIKO_INBOX_ADDRESS=${PACAYA_TAIKO}"
+            fi
+          fi
+          
+          # Update PRECONF_WHITELIST_ADDRESS from PACAYA_PRECONF_WHITELIST
+          if PACAYA_PRECONF_WHITELIST=$(get_env_value "PACAYA_PRECONF_WHITELIST"); then
+            if [ -n "$PACAYA_PRECONF_WHITELIST" ]; then
+              if grep -q "^PRECONF_WHITELIST_ADDRESS=" .env; then
+                sed -i "s|^PRECONF_WHITELIST_ADDRESS=.*|PRECONF_WHITELIST_ADDRESS=${PACAYA_PRECONF_WHITELIST}|" .env
+              else
+                echo "PRECONF_WHITELIST_ADDRESS=${PACAYA_PRECONF_WHITELIST}" >> .env
+              fi
+              echo "Updated PRECONF_WHITELIST_ADDRESS=${PACAYA_PRECONF_WHITELIST}"
+            fi
+          fi
+          
+          # Update FORCED_INCLUSION_STORE_ADDRESS from PACAYA_FORCED_INCLUSION_STORE
+          if PACAYA_FORCED_INCLUSION_STORE=$(get_env_value "PACAYA_FORCED_INCLUSION_STORE"); then
+            if [ -n "$PACAYA_FORCED_INCLUSION_STORE" ]; then
+              if grep -q "^FORCED_INCLUSION_STORE_ADDRESS=" .env; then
+                sed -i "s|^FORCED_INCLUSION_STORE_ADDRESS=.*|FORCED_INCLUSION_STORE_ADDRESS=${PACAYA_FORCED_INCLUSION_STORE}|" .env
+              else
+                echo "FORCED_INCLUSION_STORE_ADDRESS=${PACAYA_FORCED_INCLUSION_STORE}" >> .env
+              fi
+              echo "Updated FORCED_INCLUSION_STORE_ADDRESS=${PACAYA_FORCED_INCLUSION_STORE}"
+            fi
+          fi
+
+      - name: docker ps
+        working-directory: ./e2e_tests
+        run: |
+          docker ps
+          
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+  
+      - name: Install Python dependencies
+        working-directory: ./e2e_tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pacaya E2E tests
+        working-directory: ./e2e_tests
+        run: |
+          source .env
+          pytest -v -s
+          rm .env
+        
+      - name: Run Shasta E2E tests
+        working-directory: ./e2e_tests
+        run: |
+          cp .env.example.shasta .env
+          source .env
+          pytest -v -s
+          rm .env
+
+      - name: Cleanup Kurtosis enclave
+        if: always()
+        run: |
+          kurtosis enclave rm surge-devnet --force || true
+      - name: Summary
+        run: |
+          echo "## Pytest completed :green_circle:" >> $GITHUB_STEP_SUMMARY
