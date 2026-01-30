@@ -75,14 +75,14 @@ pub async fn create_shasta_node(
     .await?;
     let taiko = Arc::new(taiko);
 
-    // TODO fix
-    let node_config = pacaya::node::config::NodeConfig {
+    let node_config = node::config::NodeConfig {
         preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-        handover_window_slots: 8,
-        handover_start_buffer_ms: 500,
-        l1_height_lag: 8,
-        propose_forced_inclusion: true,
-        simulate_not_submitting_at_the_end_of_epoch: false,
+        handover_window_slots: shasta_config.handover_window_slots,
+        handover_start_buffer_ms: shasta_config.handover_start_buffer_ms,
+        l1_height_lag: shasta_config.l1_height_lag,
+        propose_forced_inclusion: shasta_config.propose_forced_inclusion,
+        simulate_not_submitting_at_the_end_of_epoch: shasta_config
+            .simulate_not_submitting_at_the_end_of_epoch,
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
