@@ -40,7 +40,7 @@ jobs:
         with:
           repository: NethermindEth/simple-taiko-node-nethermind
           path: simple-taiko-node-nethermind
-          ref: e2e-fix-catalyst_pacaya_shasta
+          ref: catalyst_pacaya_shasta
           submodules: true
 
       - name: Deploy Ethereum package (L1 setup)
