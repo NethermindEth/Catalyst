@@ -46,9 +46,7 @@ impl BatchBuilder {
         &self.config
     }
 
-    // TODO use L2BlockV2 here
     pub fn can_consume_l2_block(&mut self, l2_draft_block: &L2BlockV2Draft) -> bool {
-        let is_time_shift_expired = self.is_time_shift_expired(l2_draft_block.timestamp_sec);
         self.current_proposal.as_mut().is_some_and(|batch| {
             let new_block_count = match u16::try_from(batch.l2_blocks.len() + 1) {
                 Ok(n) => n,
@@ -80,7 +78,6 @@ impl BatchBuilder {
 
             self.config.is_within_bytes_limit(new_total_bytes)
                 && self.config.is_within_block_limit(new_block_count)
-                && !is_time_shift_expired
         })
     }
 
@@ -350,16 +347,6 @@ impl BatchBuilder {
         Ok(())
     }
 
-    // TODO do we have that check in SC?
-    pub fn is_time_shift_expired(&self, current_l2_slot_timestamp: u64) -> bool {
-        if let Some(current_proposal) = self.current_proposal.as_ref()
-            && let Some(last_block) = current_proposal.l2_blocks.last()
-        {
-            return current_l2_slot_timestamp - last_block.timestamp_sec
-                > self.config.max_time_shift_between_blocks_sec;
-        }
-        false
-    }
     // TODO do we have that check in SC?
     pub fn is_time_shift_between_blocks_expiring(&self, current_l2_slot_timestamp: u64) -> bool {
         if let Some(current_proposal) = self.current_proposal.as_ref() {

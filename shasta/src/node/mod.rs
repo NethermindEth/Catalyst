@@ -768,10 +768,9 @@ impl Node {
 
         self.chain_monitor.set_expected_reorg(parent_block_id).await;
 
-        let start_block_id = parent_block_id + 1;
         let blocks = self
             .taiko
-            .fetch_l2_blocks_until_latest(start_block_id, true)
+            .fetch_l2_blocks_until_latest(parent_block_id + 1, true)
             .await?;
 
         let mut forced_inclusion_flags: Vec<bool> = Vec::with_capacity(blocks.len());
@@ -787,7 +786,6 @@ impl Node {
             .reanchor_blocks_internal(
                 &blocks,
                 &forced_inclusion_flags,
-                start_block_id,
                 parent_block_id,
             )
             .await?;
@@ -814,14 +812,13 @@ impl Node {
         &mut self,
         blocks: &[alloy::rpc::types::Block],
         forced_inclusion_flags: &[bool],
-        start_block_id: u64,
         parent_block_id: u64,
     ) -> Result<u64, Error> {
         const MAX_BLOCKS_TO_REANCHOR: u64 = 1000; // TODO move to config
         let mut current_block_pos = 0;
         let mut processed_blocks = 0;
         let mut max_blocks_to_reanchor = MAX_BLOCKS_TO_REANCHOR;
-        while current_block_pos < blocks.len() && processed_blocks < MAX_BLOCKS_TO_REANCHOR {
+        while current_block_pos < blocks.len() && processed_blocks < max_blocks_to_reanchor {
             if forced_inclusion_flags[current_block_pos] {
                 debug!(
                     "Skipping reanchoring block {} with forced inclusion",
@@ -848,8 +845,8 @@ impl Node {
                 }
             };
             let txs = txs.to_vec();
-            // skip empty blocks
-            if txs.is_empty() {
+            // skip empty blocks, don't skip the first block to have at least one reanchored block
+            if txs.is_empty() && processed_blocks > 0 {
                 debug!(
                     "Skipping reanchoring block {} with 0 transactions",
                     block.header.number,
@@ -859,7 +856,7 @@ impl Node {
             }
 
             // get l2 slot info
-            let l2_slot_info = if block.header.number == start_block_id {
+            let l2_slot_info = if processed_blocks == 0 {
                 let info = self
                     .taiko
                     .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
@@ -871,19 +868,27 @@ impl Node {
                     self.ethereum_l1.slot_clock.get_l2_slot_begin_timestamp()?; // - MAX_BLOCKS_TO_REANCHOR;
                 max_blocks_to_reanchor =
                     max_blocks_to_reanchor.min(l2_slot_timestamp - block.header.timestamp);
-                let l2_slot_timestamp = block.header.timestamp + max_blocks_to_reanchor;
+                debug!(
+                    "Reanchoring first block {}, current_l2_slot_timestamp {}, max_blocks_to_reanchor {}",
+                    block.header.number,
+                    l2_slot_timestamp,
+                    max_blocks_to_reanchor
+                );
+                let l2_slot_timestamp = l2_slot_timestamp - max_blocks_to_reanchor;
                 L2SlotInfoV2::new_from_other(info, l2_slot_timestamp)
             } else {
                 let info = self.taiko.get_l2_slot_info().await?;
-                L2SlotInfoV2::new_from_other(info, block.header.timestamp + 1)
+                let timestamp = info.parent_timestamp() + 1;
+                L2SlotInfoV2::new_from_other(info, timestamp)
             };
 
             debug!(
-                "Reanchoring block {} with {} transactions, parent_id {}, parent_hash {}, timestamp: {}, txs len: {}",
+                "Reanchoring block {} with {} transactions, parent_id {}, parent_hash {}, parent_timestamp {}, timestamp: {}, txs len: {}",
                 block.header.number,
                 block.transactions.len(),
                 l2_slot_info.parent_id(),
                 l2_slot_info.parent_hash(),
+                l2_slot_info.parent_timestamp(),
                 l2_slot_info.slot_timestamp(),
                 txs.len(),
             );
