@@ -909,9 +909,7 @@ impl Node {
                 Ok((reanchored_block, is_forced_inclusion)) => {
                     debug!(
                         "Reanchored block {} hash {}, is_forced_inclusion: {}",
-                        reanchored_block.number,
-                        reanchored_block.hash,
-                        is_forced_inclusion,
+                        reanchored_block.number, reanchored_block.hash, is_forced_inclusion,
                     );
                     processed_blocks += 1;
                     if !is_forced_inclusion {
