@@ -91,7 +91,7 @@ pub async fn create_shasta_node(
         config.max_blocks_per_batch
     };
 
-    let max_anchor_height_offset = taiko_protocol::shasta::constants::MAX_ANCHOR_OFFSET;
+    let max_anchor_height_offset = taiko.get_protocol_config().get_max_anchor_height_offset();
 
     let batch_builder_config = BatchBuilderConfig {
         max_bytes_size_of_batch: config.max_bytes_size_of_batch,

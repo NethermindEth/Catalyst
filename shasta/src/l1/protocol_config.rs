@@ -10,7 +10,7 @@ impl ProtocolConfig {
     pub fn from(shasta_config: &Config) -> Self {
         Self {
             basefee_sharing_pctg: shasta_config.basefeeSharingPctg,
-            max_anchor_offset: 100, // 128 by document
+            max_anchor_offset: taiko_protocol::shasta::constants::MAX_ANCHOR_OFFSET,
         }
     }
 

@@ -783,11 +783,7 @@ impl Node {
         }
 
         let blocks_reanchored = self
-            .reanchor_blocks_internal(
-                &blocks,
-                &forced_inclusion_flags,
-                parent_block_id,
-            )
+            .reanchor_blocks_internal(&blocks, &forced_inclusion_flags, parent_block_id)
             .await?;
 
         let last_l2_slot_info = self.taiko.get_l2_slot_info().await?;
@@ -870,9 +866,7 @@ impl Node {
                     max_blocks_to_reanchor.min(l2_slot_timestamp - block.header.timestamp);
                 debug!(
                     "Reanchoring first block {}, current_l2_slot_timestamp {}, max_blocks_to_reanchor {}",
-                    block.header.number,
-                    l2_slot_timestamp,
-                    max_blocks_to_reanchor
+                    block.header.number, l2_slot_timestamp, max_blocks_to_reanchor
                 );
                 let l2_slot_timestamp = l2_slot_timestamp - max_blocks_to_reanchor;
                 L2SlotInfoV2::new_from_other(info, l2_slot_timestamp)
@@ -899,20 +893,25 @@ impl Node {
                 bytes_length: 0,
             };
 
+            // We want to avoid forced inclusion on the last reanchored block in that case we can finalize the proposal
+            let is_last_reanchored_block = current_block_pos + 1 == blocks.len()
+                || processed_blocks + 1 == max_blocks_to_reanchor;
             // if reanchor_block fails restart the node
             match self
                 .proposal_manager
                 .reanchor_block(
                     pending_tx_list,
                     l2_slot_info,
-                    self.config.propose_forced_inclusion, // always insert forced inclusion when reanchoring if it is enabled
+                    self.config.propose_forced_inclusion && !is_last_reanchored_block,
                 )
                 .await
             {
                 Ok((reanchored_block, is_forced_inclusion)) => {
                     debug!(
                         "Reanchored block {} hash {}, is_forced_inclusion: {}",
-                        reanchored_block.number, reanchored_block.hash, is_forced_inclusion
+                        reanchored_block.number,
+                        reanchored_block.hash,
+                        is_forced_inclusion,
                     );
                     processed_blocks += 1;
                     if !is_forced_inclusion {
@@ -928,6 +927,8 @@ impl Node {
                 }
             }
         }
+        // finalize the current batch to avoid anchor and timestamp checks during preconfirmation
+        self.proposal_manager.try_finalize_current_batch()?;
         Ok(processed_blocks)
     }
 }
