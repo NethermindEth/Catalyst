@@ -373,7 +373,7 @@ impl Node {
                         return Ok(false);
                     }
                     VerificationResult::ReanchorNeeded(block, reason) => {
-                        if let Err(err) = self.reanchor_blocks(block, &reason, false).await {
+                        if let Err(err) = self.reanchor_blocks(block, &reason).await {
                             error!("Failed to reanchor blocks: {}", err);
                             self.cancel_token.cancel_on_critical_error();
                             return Err(err);
@@ -446,11 +446,31 @@ impl Node {
                 Err(anyhow::anyhow!("Transaction reverted, exiting"))
             }
             TransactionError::OldestForcedInclusionDue => {
-                // TODO implement proper handling of forced inclusion due
-                self.cancel_token.cancel_on_critical_error();
-                Err(anyhow::anyhow!(
-                    "Need to include forced inclusion, reanchoring done, skipping slot"
-                ))
+                self.metrics.inc_critical_errors();
+                warn!("OldestForcedInclusionDue critical error received, reanchoring blocks");
+                let taiko_inbox_height =
+                    match get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await
+                    {
+                        Ok(height) => height,
+                        Err(err) => {
+                            let err_msg = format!("OldestForcedInclusionDue: {err}");
+                            error!("{}", err_msg);
+                            self.cancel_token.cancel_on_critical_error();
+                            return Err(anyhow::anyhow!("{}", err_msg));
+                        }
+                    };
+                if let Err(err) = self
+                    .reanchor_blocks(taiko_inbox_height, "OldestForcedInclusionDue")
+                    .await
+                {
+                    error!(
+                        "OldestForcedInclusionDue failed to reanchor blocks: {}",
+                        err
+                    );
+                    self.cancel_token.cancel_on_critical_error();
+                    return Err(err);
+                }
+                Ok(())
             }
             TransactionError::NotTheOperatorInCurrentEpoch => {
                 warn!("Propose batch transaction executed too late.");
@@ -553,7 +573,6 @@ impl Node {
                     .reanchor_blocks(
                         taiko_inbox_height,
                         "Anchor offset is too high for unsafe L2 blocks",
-                        false,
                     )
                     .await
                 {
@@ -735,15 +754,10 @@ impl Node {
         Ok(())
     }
 
-    async fn reanchor_blocks(
-        &mut self,
-        parent_block_id: u64,
-        reason: &str,
-        allow_forced_inclusion: bool,
-    ) -> Result<(), Error> {
+    async fn reanchor_blocks(&mut self, parent_block_id: u64, reason: &str) -> Result<(), Error> {
         warn!(
-            "⛓️‍💥 Reanchoring blocks for parent block: {} reason: {} allow_forced_inclusion: {}",
-            parent_block_id, reason, allow_forced_inclusion
+            "⛓️‍💥 Reanchoring blocks for parent block: {} reason: {}",
+            parent_block_id, reason
         );
 
         let start_time = std::time::Instant::now();
@@ -754,13 +768,10 @@ impl Node {
 
         self.chain_monitor.set_expected_reorg(parent_block_id).await;
 
-        let start_block_id = parent_block_id + 1;
         let blocks = self
             .taiko
-            .fetch_l2_blocks_until_latest(start_block_id, true)
+            .fetch_l2_blocks_until_latest(parent_block_id + 1, true)
             .await?;
-
-        let blocks_reanchored = blocks.len() as u64;
 
         let mut forced_inclusion_flags: Vec<bool> = Vec::with_capacity(blocks.len());
         for block in &blocks {
@@ -771,14 +782,9 @@ impl Node {
             );
         }
 
-        self.reanchor_blocks_internal(
-            &blocks,
-            &forced_inclusion_flags,
-            start_block_id,
-            parent_block_id,
-            allow_forced_inclusion,
-        )
-        .await?;
+        let blocks_reanchored = self
+            .reanchor_blocks_internal(&blocks, &forced_inclusion_flags, parent_block_id)
+            .await?;
 
         let last_l2_slot_info = self.taiko.get_l2_slot_info().await?;
         self.head_verifier
@@ -802,35 +808,24 @@ impl Node {
         &mut self,
         blocks: &[alloy::rpc::types::Block],
         forced_inclusion_flags: &[bool],
-        start_block_id: u64,
         parent_block_id: u64,
-        allow_forced_inclusion: bool,
-    ) -> Result<(), Error> {
-        for (block, is_forced_inclusion) in blocks.iter().zip(forced_inclusion_flags) {
-            let l2_slot_info = if block.header.number == start_block_id {
-                self.taiko
-                    .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
-                        parent_block_id,
-                    ))
-                    .await?
-            } else {
-                self.taiko.get_l2_slot_info().await?
-            };
-            // use block timestamp as l2 slot timestamp,
-            // otherwise it can be the same as the previous block
-            // which is forbidden by the protocol
-            let l2_slot_info = L2SlotInfoV2::new_from_other(l2_slot_info, block.header.timestamp);
+    ) -> Result<u64, Error> {
+        const MAX_BLOCKS_TO_REANCHOR: u64 = 1000; // TODO move to config
+        let mut current_block_pos = 0;
+        let mut processed_blocks = 0;
+        let mut max_blocks_to_reanchor = MAX_BLOCKS_TO_REANCHOR;
+        while current_block_pos < blocks.len() && processed_blocks < max_blocks_to_reanchor {
+            if forced_inclusion_flags[current_block_pos] {
+                debug!(
+                    "Skipping reanchoring block {} with forced inclusion",
+                    blocks[current_block_pos].header.number,
+                );
+                current_block_pos += 1;
+                continue;
+            }
+            let block = &blocks[current_block_pos];
 
-            debug!(
-                "Reanchoring block {} with {} transactions, parent_id {}, parent_hash {}, is_forced_inclusion: {}, timestamp: {}",
-                block.header.number,
-                block.transactions.len(),
-                l2_slot_info.parent_id(),
-                l2_slot_info.parent_hash(),
-                is_forced_inclusion,
-                l2_slot_info.slot_timestamp(),
-            );
-
+            // get block transactions
             let (_, txs) = match block.transactions.as_transactions() {
                 Some(txs) => txs.split_first().ok_or_else(|| {
                     anyhow::anyhow!(
@@ -845,6 +840,52 @@ impl Node {
                     ));
                 }
             };
+            let txs = txs.to_vec();
+            // skip empty blocks, don't skip the first block to have at least one reanchored block
+            if txs.is_empty() && processed_blocks > 0 {
+                debug!(
+                    "Skipping reanchoring block {} with 0 transactions",
+                    block.header.number,
+                );
+                current_block_pos += 1;
+                continue;
+            }
+
+            // get l2 slot info
+            let l2_slot_info = if processed_blocks == 0 {
+                let info = self
+                    .taiko
+                    .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
+                        parent_block_id,
+                    ))
+                    .await?;
+                // Calculate minimum available timestamp for the block to be reanchored
+                let l2_slot_timestamp =
+                    self.ethereum_l1.slot_clock.get_l2_slot_begin_timestamp()?; // - MAX_BLOCKS_TO_REANCHOR;
+                max_blocks_to_reanchor =
+                    max_blocks_to_reanchor.min(l2_slot_timestamp - block.header.timestamp);
+                debug!(
+                    "Reanchoring first block {}, current_l2_slot_timestamp {}, max_blocks_to_reanchor {}",
+                    block.header.number, l2_slot_timestamp, max_blocks_to_reanchor
+                );
+                let l2_slot_timestamp = l2_slot_timestamp - max_blocks_to_reanchor;
+                L2SlotInfoV2::new_from_other(info, l2_slot_timestamp)
+            } else {
+                let info = self.taiko.get_l2_slot_info().await?;
+                let timestamp = info.parent_timestamp() + 1;
+                L2SlotInfoV2::new_from_other(info, timestamp)
+            };
+
+            debug!(
+                "Reanchoring block {} with {} transactions, parent_id {}, parent_hash {}, parent_timestamp {}, timestamp: {}, txs len: {}",
+                block.header.number,
+                block.transactions.len(),
+                l2_slot_info.parent_id(),
+                l2_slot_info.parent_hash(),
+                l2_slot_info.parent_timestamp(),
+                l2_slot_info.slot_timestamp(),
+                txs.len(),
+            );
 
             let pending_tx_list = crate::shared::l2_tx_lists::PreBuiltTxList {
                 tx_list: txs.to_vec(),
@@ -852,22 +893,28 @@ impl Node {
                 bytes_length: 0,
             };
 
+            // We want to avoid forced inclusion on the last reanchored block in that case we can finalize the proposal
+            let is_last_reanchored_block = current_block_pos + 1 == blocks.len()
+                || processed_blocks + 1 == max_blocks_to_reanchor;
             // if reanchor_block fails restart the node
             match self
                 .proposal_manager
                 .reanchor_block(
                     pending_tx_list,
                     l2_slot_info,
-                    *is_forced_inclusion,
-                    allow_forced_inclusion,
+                    self.config.propose_forced_inclusion && !is_last_reanchored_block,
                 )
                 .await
             {
-                Ok(reanchored_block) => {
+                Ok((reanchored_block, is_forced_inclusion)) => {
                     debug!(
-                        "Reanchored block {} hash {}",
-                        reanchored_block.number, reanchored_block.hash
+                        "Reanchored block {} hash {}, is_forced_inclusion: {}",
+                        reanchored_block.number, reanchored_block.hash, is_forced_inclusion,
                     );
+                    processed_blocks += 1;
+                    if !is_forced_inclusion {
+                        current_block_pos += 1;
+                    }
                 }
                 Err(err) => {
                     let err_msg =
@@ -878,7 +925,8 @@ impl Node {
                 }
             }
         }
-
-        Ok(())
+        // finalize the current batch to avoid anchor and timestamp checks during preconfirmation
+        self.proposal_manager.try_finalize_current_batch()?;
+        Ok(processed_blocks)
     }
 }

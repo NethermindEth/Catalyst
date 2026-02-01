@@ -103,7 +103,7 @@ impl BatchManager {
         pending_tx_list: Option<PreBuiltTxList>,
         l2_slot_context: &L2SlotContext,
     ) -> Result<BuildPreconfBlockResponse, Error> {
-        let result = self
+        let (result, _) = self
             .add_new_l2_block(
                 pending_tx_list.unwrap_or_else(PreBuiltTxList::empty),
                 l2_slot_context,
@@ -191,7 +191,8 @@ impl BatchManager {
         prebuilt_tx_list: PreBuiltTxList,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
-    ) -> Result<BuildPreconfBlockResponse, Error> {
+        // TODO REPLACE with enum or struct
+    ) -> Result<(BuildPreconfBlockResponse, bool), Error> {
         let timestamp = l2_slot_context.info.slot_timestamp();
         if let Some(last_block_timestamp) = self
             .batch_builder
@@ -229,14 +230,14 @@ impl BatchManager {
                 .add_new_l2_block_with_forced_inclusion_when_needed(l2_slot_context, operation_type)
                 .await?
         {
-            return Ok(fi_block);
+            return Ok((fi_block, true));
         }
 
         let preconfed_block = self
             .add_draft_block_to_proposal(l2_draft_block, l2_slot_context, operation_type)
             .await?;
 
-        Ok(preconfed_block)
+        Ok((preconfed_block, false))
     }
 
     async fn add_draft_block_to_proposal(
@@ -508,9 +509,9 @@ impl BatchManager {
         &mut self,
         pending_tx_list: PreBuiltTxList,
         l2_slot_info: L2SlotInfoV2,
-        _is_forced_inclusion: bool,
         allow_forced_inclusion: bool,
-    ) -> Result<BuildPreconfBlockResponse, Error> {
+        // TODO REPLACE with enum or struct
+    ) -> Result<(BuildPreconfBlockResponse, bool), Error> {
         // TODO create context outside
         let l2_slot_context = L2SlotContext {
             info: l2_slot_info,
@@ -518,13 +519,11 @@ impl BatchManager {
             allow_forced_inclusion,
         };
 
-        // TODO handle forced inclusion properly
-
-        let block = self
+        let (block, is_forced_inclusion) = self
             .add_new_l2_block(pending_tx_list, &l2_slot_context, OperationType::Reanchor)
             .await?;
 
-        Ok(block)
+        Ok((block, is_forced_inclusion))
     }
 
     pub async fn is_forced_inclusion(&mut self, block_id: u64) -> Result<bool, Error> {
