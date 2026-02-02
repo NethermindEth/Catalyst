@@ -94,7 +94,7 @@ jobs:
         run: |
           if [ -f "run-catalyst-stack.sh" ]; then
             echo "Deploying L2 contract"
-            ./run-catalyst-stack.sh 120
+            ./run-catalyst-stack.sh 3000
           else
             echo "No L2 startup script found, assuming deploy script handles everything"
           fi
@@ -257,7 +257,7 @@ jobs:
         run: |
           if [ -f "run-catalyst-stack.sh" ]; then
             echo "Deploying L2 contract"
-            ./run-catalyst-stack.sh 120
+            ./run-catalyst-stack.sh 60
           else
             echo "No L2 startup script found, assuming deploy script handles everything"
           fi
