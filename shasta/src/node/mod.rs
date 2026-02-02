@@ -814,96 +814,67 @@ impl Node {
         let mut current_block_pos = 0;
         let mut processed_blocks = 0;
         let mut max_blocks_to_reanchor = MAX_BLOCKS_TO_REANCHOR;
+        let mut is_common_block_processed = false;
+
         while current_block_pos < blocks.len() && processed_blocks < max_blocks_to_reanchor {
+            debug!(
+                "Reanchoring block position {}/{}, processed: {}/{}",
+                current_block_pos,
+                blocks.len(),
+                processed_blocks,
+                max_blocks_to_reanchor
+            );
+
             if forced_inclusion_flags[current_block_pos] {
                 debug!(
-                    "Skipping reanchoring block {} with forced inclusion",
+                    "Skipping forced inclusion block {}",
                     blocks[current_block_pos].header.number,
                 );
                 current_block_pos += 1;
                 continue;
             }
-            let block = &blocks[current_block_pos];
 
-            // get block transactions
-            let (_, txs) = match block.transactions.as_transactions() {
-                Some(txs) => txs.split_first().ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Cannot get anchor transaction from block {}",
-                        block.header.number
-                    )
-                })?,
-                None => {
-                    return Err(anyhow::anyhow!(
-                        "No transactions in block {}",
-                        block.header.number
-                    ));
-                }
-            };
-            let txs = txs.to_vec();
-            // skip empty blocks, don't skip the first block to have at least one reanchored block
-            if txs.is_empty() && processed_blocks > 0 {
-                debug!(
-                    "Skipping reanchoring block {} with 0 transactions",
-                    block.header.number,
-                );
+            let block = &blocks[current_block_pos];
+            let txs = self.extract_block_transactions(block)?;
+
+            // Skip empty blocks, except the first one
+            if txs.is_empty() && is_common_block_processed {
+                debug!("Skipping empty block {}", block.header.number);
                 current_block_pos += 1;
                 continue;
             }
 
-            // get l2 slot info
-            let l2_slot_info = if processed_blocks == 0 {
-                let info = self
-                    .taiko
-                    .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
-                        parent_block_id,
-                    ))
-                    .await?;
-                // Calculate minimum available timestamp for the block to be reanchored
-                let l2_slot_timestamp =
-                    self.ethereum_l1.slot_clock.get_l2_slot_begin_timestamp()?; // - MAX_BLOCKS_TO_REANCHOR;
-                max_blocks_to_reanchor =
-                    max_blocks_to_reanchor.min(l2_slot_timestamp - block.header.timestamp);
-                debug!(
-                    "Reanchoring first block {}, current_l2_slot_timestamp {}, max_blocks_to_reanchor {}",
-                    block.header.number, l2_slot_timestamp, max_blocks_to_reanchor
-                );
-                let l2_slot_timestamp = l2_slot_timestamp - max_blocks_to_reanchor;
-                L2SlotInfoV2::new_from_other(info, l2_slot_timestamp)
-            } else {
-                let info = self.taiko.get_l2_slot_info().await?;
-                let timestamp = info.parent_timestamp() + 1;
-                L2SlotInfoV2::new_from_other(info, timestamp)
-            };
+            let l2_slot_info = self
+                .get_l2_slot_info_for_reanchor(
+                    processed_blocks,
+                    parent_block_id,
+                    block,
+                    &mut max_blocks_to_reanchor,
+                )
+                .await?;
 
             debug!(
-                "Reanchoring block {} with {} transactions, parent_id {}, parent_hash {}, parent_timestamp {}, timestamp: {}, txs len: {}",
+                "Reanchoring block {} with {} txs, parent: {}, timestamp: {}",
                 block.header.number,
-                block.transactions.len(),
-                l2_slot_info.parent_id(),
-                l2_slot_info.parent_hash(),
-                l2_slot_info.parent_timestamp(),
-                l2_slot_info.slot_timestamp(),
                 txs.len(),
+                l2_slot_info.parent_id(),
+                l2_slot_info.slot_timestamp(),
             );
 
-            let pending_tx_list = crate::shared::l2_tx_lists::PreBuiltTxList {
-                tx_list: txs.to_vec(),
+            let pending_tx_list = PreBuiltTxList {
+                tx_list: txs,
                 estimated_gas_used: 0,
                 bytes_length: 0,
             };
 
-            // We want to avoid forced inclusion on the last reanchored block in that case we can finalize the proposal
             let is_last_reanchored_block = current_block_pos + 1 == blocks.len()
                 || processed_blocks + 1 == max_blocks_to_reanchor;
-            // if reanchor_block fails restart the node
+            let allow_forced_inclusion =
+                self.config.propose_forced_inclusion && !is_last_reanchored_block;
+
             match self
                 .proposal_manager
-                .reanchor_block(
-                    pending_tx_list,
-                    l2_slot_info,
-                    self.config.propose_forced_inclusion && !is_last_reanchored_block,
-                )
+                .reanchor_block(pending_tx_list, l2_slot_info, allow_forced_inclusion)
                 .await
             {
                 Ok((reanchored_block, is_forced_inclusion)) => {
@@ -913,20 +884,73 @@ impl Node {
                     );
                     processed_blocks += 1;
                     if !is_forced_inclusion {
+                        is_common_block_processed = true;
                         current_block_pos += 1;
                     }
                 }
                 Err(err) => {
-                    let err_msg =
-                        format!("Failed to reanchor block {}: {}", block.header.number, err);
-                    error!("{}", err_msg);
+                    error!("Failed to reanchor block {}: {}", block.header.number, err);
                     self.cancel_token.cancel_on_critical_error();
-                    return Err(anyhow::anyhow!("{}", err_msg));
+                    return Err(anyhow::anyhow!(
+                        "Failed to reanchor block {}: {}",
+                        block.header.number,
+                        err
+                    ));
                 }
             }
         }
         // finalize the current batch to avoid anchor and timestamp checks during preconfirmation
         self.proposal_manager.try_finalize_current_batch()?;
         Ok(processed_blocks)
+    }
+
+    async fn get_l2_slot_info_for_reanchor(
+        &mut self,
+        processed_blocks: u64,
+        parent_block_id: u64,
+        block: &alloy::rpc::types::Block,
+        max_blocks_to_reanchor: &mut u64,
+    ) -> Result<L2SlotInfoV2, Error> {
+        if processed_blocks == 0 {
+            let info = self
+                .taiko
+                .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
+                    parent_block_id,
+                ))
+                .await?;
+            let l2_slot_timestamp = self.ethereum_l1.slot_clock.get_l2_slot_begin_timestamp()?;
+            *max_blocks_to_reanchor =
+                (*max_blocks_to_reanchor).min(l2_slot_timestamp - block.header.timestamp);
+            debug!(
+                "First reanchor block {}, max_blocks: {}",
+                block.header.number, max_blocks_to_reanchor
+            );
+            let adjusted_timestamp = l2_slot_timestamp - *max_blocks_to_reanchor;
+            Ok(L2SlotInfoV2::new_from_other(info, adjusted_timestamp))
+        } else {
+            let info = self.taiko.get_l2_slot_info().await?;
+            let timestamp = info.slot_timestamp() + 1;
+            Ok(L2SlotInfoV2::new_from_other(
+                info,
+                timestamp,
+            ))
+        }
+    }
+
+    fn extract_block_transactions(
+        &self,
+        block: &alloy::rpc::types::Block,
+    ) -> Result<Vec<alloy::rpc::types::Transaction>, Error> {
+        let (_, txs) = block
+            .transactions
+            .as_transactions()
+            .and_then(|txs| txs.split_first())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Cannot extract transactions from block {}",
+                    block.header.number
+                )
+            })?;
+        Ok(txs.to_vec())
     }
 }
