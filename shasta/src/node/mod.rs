@@ -930,10 +930,7 @@ impl Node {
         } else {
             let info = self.taiko.get_l2_slot_info().await?;
             let timestamp = info.slot_timestamp() + 1;
-            Ok(L2SlotInfoV2::new_from_other(
-                info,
-                timestamp,
-            ))
+            Ok(L2SlotInfoV2::new_from_other(info, timestamp))
         }
     }
 
