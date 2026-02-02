@@ -149,12 +149,22 @@ jobs:
 
       - name: Run Pacaya E2E tests
         working-directory: ./e2e_tests
+        env:
+          PYTHONUNBUFFERED: 1
         run: |
           cp .env.example .env
           source .env
-          # Run pytest with unbuffered output to ensure all logs are visible
-          PYTHONUNBUFFERED=1 pytest -v -s --junit-xml=pytest-pacaya-results.xml --tb=long
+          pytest -v -s --junit-xml=pytest-pacaya-results.xml --tb=long
           rm .env
+
+      - name: Upload Pacaya pytest log file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pacaya-pytest-logs
+          path: e2e_tests/pytest.log
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Cleanup Kurtosis enclave (Pacaya)
         if: always()
@@ -289,12 +299,22 @@ jobs:
 
       - name: Run Shasta E2E tests
         working-directory: ./e2e_tests
+        env:
+          PYTHONUNBUFFERED: 1
         run: |
           cp .env.example.shasta .env
           source .env
-          # Run pytest with unbuffered output to ensure all logs are visible
-          PYTHONUNBUFFERED=1 pytest -v -s --junit-xml=pytest-shasta-results.xml --tb=long
+          pytest -v -s --junit-xml=pytest-shasta-results.xml --tb=long
           rm .env
+
+      - name: Upload Shasta pytest log file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shasta-pytest-logs
+          path: e2e_tests/pytest.log
+          retention-days: 30
+          if-no-files-found: warn
 
       - name: Cleanup Kurtosis enclave (Shasta)
         if: always()
