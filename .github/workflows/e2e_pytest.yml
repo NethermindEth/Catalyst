@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   e2e-tests-pacaya:
-    name: Run e2e tests
+    name: E2E Tests (Pacaya)
     runs-on: ubuntu-latest
     timeout-minutes: 60
     if: github.event.pull_request.head.repo.full_name == 'NethermindEth/Catalyst'
@@ -151,6 +151,7 @@ jobs:
         working-directory: ./e2e_tests
         env:
           PYTHONUNBUFFERED: 1
+          TEST_ENV: pacaya
         run: |
           cp .env.example .env
           source .env
@@ -162,7 +163,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pacaya-pytest-logs
-          path: e2e_tests/pytest.log
+          path: e2e_tests/pytest-pacaya.log
           retention-days: 30
           if-no-files-found: warn
 
@@ -301,6 +302,7 @@ jobs:
         working-directory: ./e2e_tests
         env:
           PYTHONUNBUFFERED: 1
+          TEST_ENV: shasta
         run: |
           cp .env.example.shasta .env
           source .env
@@ -312,7 +314,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: shasta-pytest-logs
-          path: e2e_tests/pytest.log
+          path: e2e_tests/pytest-shasta.log
           retention-days: 30
           if-no-files-found: warn
 
