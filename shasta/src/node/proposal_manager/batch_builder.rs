@@ -223,15 +223,13 @@ impl BatchBuilder {
         }
 
         if is_forced_inclusion {
-            if let Some(batch) = self.current_proposal.as_ref()
-                && !batch.l2_blocks.is_empty()
-            {
+            if self.can_add_forced_inclusion() {
+                self.inc_forced_inclusion()?;
+            } else {
                 return Err(anyhow::anyhow!(
-                    "recover_from: Cannot add forced inclusion L2 block to non-empty proposal"
+                    "recover_from: Cannot add forced inclusion block to proposal"
                 ));
             }
-
-            self.inc_forced_inclusion()?;
         } else {
             if let Some(batch) = self.current_proposal.as_mut()
                 && batch.anchor_block_id < anchor_info.id()

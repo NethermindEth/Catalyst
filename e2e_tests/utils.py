@@ -36,7 +36,8 @@ def send_transaction(nonce : int, account, amount, eth_client, private_key):
 
 def wait_for_secs(seconds):
     for i in range(seconds, 0, -1):
-        print(f'Waiting for {i:02d} seconds', end='\r')
+        if (seconds - i) % 100 == 0:
+            print(f'Waiting for {i} seconds', end='\r')
         time.sleep(1)
     print('')
 
