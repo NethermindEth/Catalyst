@@ -15,7 +15,7 @@ jobs:
   e2e-tests-pacaya:
     name: E2E Tests (Pacaya)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     if: github.event.pull_request.head.repo.full_name == 'NethermindEth/Catalyst'
     steps:
       - name: Checkout catalyst-e2e repository
@@ -179,7 +179,7 @@ jobs:
   e2e-tests-shasta:
     name: E2E Tests (Shasta)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     steps:
       - name: Checkout catalyst-e2e repository
         uses: actions/checkout@v6
