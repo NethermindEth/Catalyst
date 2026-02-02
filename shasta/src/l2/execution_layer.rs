@@ -1,9 +1,9 @@
 use alloy::{
-    eips::BlockNumberOrTag,
     consensus::{
         BlockHeader, SignableTransaction, Transaction as AnchorTransaction, TxEnvelope,
         transaction::Recovered,
     },
+    eips::BlockNumberOrTag,
     primitives::{Address, B256},
     providers::{DynProvider, Provider},
     rpc::types::Transaction,
@@ -144,7 +144,8 @@ impl L2ExecutionLayer {
     }
 
     pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
-        self.get_proposal_id_from_geth(BlockNumberOrTag::Latest).await
+        self.get_proposal_id_from_geth(BlockNumberOrTag::Latest)
+            .await
     }
 
     pub async fn get_proposal_id_from_geth_by_block_id(&self, block_id: u64) -> Result<u64, Error> {
@@ -159,12 +160,10 @@ impl L2ExecutionLayer {
         Ok(proposal_id)
     }
 
-    async fn get_latest_anchor_transaction_input(&self) -> Result<Vec<u8>, Error> {
-        self.get_anchor_transaction_input(BlockNumberOrTag::Latest)
-            .await
-    }
-
-    async fn get_anchor_transaction_input(&self, block: BlockNumberOrTag) -> Result<Vec<u8>, Error> {
+    async fn get_anchor_transaction_input(
+        &self,
+        block: BlockNumberOrTag,
+    ) -> Result<Vec<u8>, Error> {
         let block = self.common.get_block_with_txs(block).await?;
         let anchor_tx = match block.transactions.as_transactions() {
             Some(txs) => txs.first().ok_or_else(|| {
@@ -237,10 +236,10 @@ impl L2ExecutionLayer {
             .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
     }
 
-    pub async fn get_last_synced_block_params_from_geth(&self) -> Result<Checkpoint, Error> {
-        self.get_latest_anchor_transaction_input()
+    pub async fn get_block_params_from_geth(&self, block_id: u64) -> Result<Checkpoint, Error> {
+        self.get_anchor_transaction_input(BlockNumberOrTag::Number(block_id))
             .await
-            .map_err(|e| anyhow::anyhow!("get_last_synced_proposal_id_from_geth: {e}"))
+            .map_err(|e| anyhow::anyhow!("get_block_params_from_geth: {e}"))
             .and_then(|input| Self::decode_block_params_from_tx_data(&input))
     }
 

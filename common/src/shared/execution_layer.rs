@@ -162,7 +162,7 @@ impl ExecutionLayer {
             .ok_or_else(|| self.chain_error("Failed to get block header", None))
     }
 
-     pub async fn get_block_with_txs(&self, block: BlockNumberOrTag) -> Result<RpcBlock, Error> {
+    pub async fn get_block_with_txs(&self, block: BlockNumberOrTag) -> Result<RpcBlock, Error> {
         self.provider
             .get_block_by_number(block)
             .full()

@@ -152,7 +152,7 @@ impl BatchManager {
             let anchor_params = self
                 .taiko
                 .l2_execution_layer()
-                .get_last_synced_block_params_from_geth()
+                .get_block_params_from_geth(l2_slot_context.info.parent_id())
                 .await?;
 
             let pyaload = self.batch_builder.add_fi_block(fi_block, anchor_params)?;
@@ -219,7 +219,9 @@ impl BatchManager {
 
         if !self.batch_builder.can_consume_l2_block(&l2_draft_block) {
             // Create new batch
-            let _ = self.create_new_batch(l2_slot_context.info.parent_id()).await?;
+            let _ = self
+                .create_new_batch(l2_slot_context.info.parent_id())
+                .await?;
         }
 
         // Add forced inclusion when needed
