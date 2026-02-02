@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  e2e-tests:
+  e2e-tests-pacaya:
     name: Run e2e tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -20,8 +20,6 @@ jobs:
     steps:
       - name: Checkout catalyst-e2e repository
         uses: actions/checkout@v6
-        with:
-          ref: e2e_tests_fix
 
       - name: Install dependencies
         run: |
@@ -91,25 +89,19 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy L2 Contract (Catalyst stack setup)
+      - name: Deploy L2 Contract (Pacaya catalyst stack)
         working-directory: simple-taiko-node-nethermind
         run: |
           if [ -f "run-catalyst-stack.sh" ]; then
-            echo "Found run-catalyst-stack.sh, L2 stack will be started"
-            echo "Deploying Pacaya contract"
-            ./run-catalyst-stack.sh pacaya 3000
-            echo "Deploying Pacaya contract completed"
-            echo "--------------------------------"
-            echo "Deploying Shasta contract"
-            ./run-catalyst-stack.sh shasta 6000
-            echo "Deploying Shasta contract completed"
+            echo "Deploying L2 contract"
+            ./run-catalyst-stack.sh 120
           else
             echo "No L2 startup script found, assuming deploy script handles everything"
           fi
-          
-      - name: Wait for L2 nodes to be ready
+
+      - name: Wait for L2 node to be ready (Pacaya)
         run: |
-          echo "Waiting for L2 nodes to be ready..."
+          echo "Waiting for Pacaya L2 node to be ready..."
           timeout=300
           elapsed=0
           while [ $elapsed -lt $timeout ]; do
@@ -130,28 +122,26 @@ jobs:
               echo "Both L2 nodes are ready"
               break
             fi
-            
-            echo "Waiting for L2 nodes... Node1: $node1_ready, Node2: $node2_ready ($elapsed/$timeout seconds)"
+            echo "Waiting for Pacaya L2 node... ($elapsed/$timeout seconds)"
             sleep 5
             elapsed=$((elapsed + 5))
           done
-          
           if [ $elapsed -ge $timeout ]; then
             echo "Warning: Timeout waiting for L2 nodes, but continuing with tests"
           fi
 
-      - name: docker ps
+      - name: docker ps (Pacaya)
         working-directory: ./e2e_tests
         run: |
           docker ps
-          
-      - name: Set up Python
+
+      - name: Set up Python (Pacaya)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-  
-      - name: Install Python dependencies
+
+      - name: Install Python dependencies (Pacaya)
         working-directory: ./e2e_tests
         run: |
           python -m pip install --upgrade pip
@@ -162,22 +152,155 @@ jobs:
         run: |
           cp .env.example .env
           source .env
-          pytest -v -s
+          # Run pytest with unbuffered output to ensure all logs are visible
+          PYTHONUNBUFFERED=1 pytest -v -s --junit-xml=pytest-pacaya-results.xml --tb=long
           rm .env
-        
+
+      - name: Cleanup Kurtosis enclave (Pacaya)
+        if: always()
+        run: |
+          kurtosis enclave rm surge-devnet --force || true
+
+      - name: Summary (Pacaya)
+        run: |
+          echo "## Pacaya E2E tests completed :green_circle:" >> $GITHUB_STEP_SUMMARY
+
+  e2e-tests-shasta:
+    name: E2E Tests (Shasta)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout catalyst-e2e repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Install Kurtosis CLI
+        run: |
+          echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
+          sudo apt-get update
+          sudo apt-get install -y kurtosis-cli
+          kurtosis version
+
+      - name: Clone simple-taiko-node-nethermind repository
+        uses: actions/checkout@v6
+        with:
+          repository: NethermindEth/simple-taiko-node-nethermind
+          path: simple-taiko-node-nethermind
+          ref: catalyst_pacaya_shasta
+          submodules: true
+
+      - name: Deploy Ethereum package (L1 setup)
+        working-directory: simple-taiko-node-nethermind
+        run: |
+          cp .env.example .env
+          chmod +x deploy-etheruem-package.sh
+          ./deploy-etheruem-package.sh --environment local --mode silence
+        env:
+          SECONDS_PER_SLOT: 12
+
+      - name: Wait for L1 services to be ready
+        run: |
+          echo "Waiting for L1 services to be ready..."
+          timeout=300
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -s http://localhost:32003 -X POST -H "Content-Type: application/json" \
+              --data '{"jsonrpc":"2.0","id":0,"method":"eth_blockNumber","params":[]}' > /dev/null 2>&1; then
+              echo "L1 Execution Layer is ready"
+              break
+            fi
+            echo "Waiting for L1 services... ($elapsed/$timeout seconds)"
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          if [ $elapsed -ge $timeout ]; then
+            echo "Timeout waiting for L1 services"
+            exit 1
+          fi
+
+      - name: Wait for Beacon Node to be ready
+        run: |
+          echo "Waiting for Beacon Node to be ready..."
+          timeout=300
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -s http://localhost:33001/lighthouse/syncing > /dev/null 2>&1; then
+              echo "Beacon Node is ready"
+              break
+            fi
+            echo "Waiting for Beacon Node... ($elapsed/$timeout seconds)"
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          if [ $elapsed -ge $timeout ]; then
+            echo "Timeout waiting for Beacon Node"
+            exit 1
+          fi
+
+      - name: Deploy L2 Contract (Shasta catalyst stack)
+        working-directory: simple-taiko-node-nethermind
+        run: |
+          if [ -f "run-catalyst-stack.sh" ]; then
+            echo "Deploying L2 contract"
+            ./run-catalyst-stack.sh 120
+          else
+            echo "No L2 startup script found, assuming deploy script handles everything"
+          fi
+
+      - name: Wait for L2 node to be ready (Shasta)
+        run: |
+          echo "Waiting for Shasta L2 node to be ready..."
+          timeout=300
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -s http://localhost:8547 -X POST -H "Content-Type: application/json" \
+              --data '{"jsonrpc":"2.0","id":0,"method":"eth_blockNumber","params":[]}' > /dev/null 2>&1; then
+              echo "Shasta L2 node is ready"
+              break
+            fi
+            echo "Waiting for Shasta L2 node... ($elapsed/$timeout seconds)"
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          if [ $elapsed -ge $timeout ]; then
+            echo "Warning: Timeout waiting for Shasta L2 node, but continuing with tests"
+          fi
+
+      - name: docker ps (Shasta)
+        working-directory: ./e2e_tests
+        run: |
+          docker ps
+
+      - name: Set up Python (Shasta)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies (Shasta)
+        working-directory: ./e2e_tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Run Shasta E2E tests
         working-directory: ./e2e_tests
         run: |
           cp .env.example.shasta .env
           source .env
-          pytest -v -s
+          # Run pytest with unbuffered output to ensure all logs are visible
+          PYTHONUNBUFFERED=1 pytest -v -s --junit-xml=pytest-shasta-results.xml --tb=long
           rm .env
 
-      - name: Cleanup Kurtosis enclave
+      - name: Cleanup Kurtosis enclave (Shasta)
         if: always()
         run: |
           kurtosis enclave rm surge-devnet --force || true
 
-      - name: Summary
+      - name: Summary (Shasta)
         run: |
-          echo "## Pytest completed :green_circle:" >> $GITHUB_STEP_SUMMARY
+          echo "## Shasta E2E tests completed :green_circle:" >> $GITHUB_STEP_SUMMARY
