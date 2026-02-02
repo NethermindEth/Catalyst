@@ -219,7 +219,7 @@ impl BatchManager {
 
         if !self.batch_builder.can_consume_l2_block(&l2_draft_block) {
             // Create new batch
-            let _ = self.create_new_batch().await?;
+            let _ = self.create_new_batch(l2_slot_context.info.parent_id()).await?;
         }
 
         // Add forced inclusion when needed
@@ -265,7 +265,7 @@ impl BatchManager {
         }
     }
 
-    async fn get_next_proposal_id(&self) -> Result<u64, Error> {
+    async fn get_next_proposal_id(&self, parent_block_id: u64) -> Result<u64, Error> {
         if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
             return Ok(current_proposal_id + 1);
         }
@@ -274,7 +274,7 @@ impl BatchManager {
         match self
             .taiko
             .l2_execution_layer()
-            .get_last_synced_proposal_id_from_geth()
+            .get_proposal_id_from_geth_by_block_id(parent_block_id)
             .await
         {
             Ok(id) => Ok(id + 1),
@@ -296,12 +296,12 @@ impl BatchManager {
         }
     }
 
-    async fn create_new_batch(&mut self) -> Result<u64, Error> {
+    async fn create_new_batch(&mut self, parent_block_id: u64) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
         let last_anchor_id = self
             .taiko
             .l2_execution_layer()
-            .get_last_synced_anchor_block_id_from_geth()
+            .get_anchor_block_id_from_geth(parent_block_id)
             .await
             .unwrap_or_else(|e| {
                 warn!("Failed to get last synced anchor block ID from Taiko Geth: {e}");
@@ -315,7 +315,7 @@ impl BatchManager {
         )
         .await?;
 
-        let proposal_id = self.get_next_proposal_id().await?;
+        let proposal_id = self.get_next_proposal_id(parent_block_id).await?;
 
         let anchor_block_id = anchor_block_info.id();
         // Create new batch

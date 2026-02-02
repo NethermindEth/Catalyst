@@ -162,6 +162,15 @@ impl ExecutionLayer {
             .ok_or_else(|| self.chain_error("Failed to get block header", None))
     }
 
+     pub async fn get_block_with_txs(&self, block: BlockNumberOrTag) -> Result<RpcBlock, Error> {
+        self.provider
+            .get_block_by_number(block)
+            .full()
+            .await
+            .map_err(|e| self.chain_error("Failed to get latest block", Some(&e.to_string())))?
+            .ok_or_else(|| self.chain_error("Failed to get latest block", None))
+    }
+
     pub async fn get_latest_block_with_txs(&self) -> Result<RpcBlock, Error> {
         self.provider
             .get_block_by_number(BlockNumberOrTag::Latest)
