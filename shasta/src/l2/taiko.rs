@@ -80,6 +80,10 @@ impl Taiko {
         self.l2_execution_layer.clone()
     }
 
+    pub async fn get_last_block_id_by_batch_id(&self, batch_id: u64) -> Result<Option<u64>, Error> {
+        self.l2_engine.get_last_block_id_by_batch_id(batch_id).await
+    }
+
     pub async fn get_pending_l2_tx_list_from_l2_engine(
         &self,
         base_fee: u64,

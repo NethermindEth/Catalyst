@@ -727,6 +727,8 @@ impl Node {
             sleep(Duration::from_secs(5)).await;
         }
 
+        let block_d = self.taiko.get_last_block_id_by_batch_id(222).await?;
+        warn!("Last block id for batch id 222: {:?}", block_d);
         // Wait for the last sent transaction to be executed
         self.wait_for_sent_transactions().await?;
 
