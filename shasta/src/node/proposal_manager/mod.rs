@@ -274,6 +274,11 @@ impl BatchManager {
         Ok(preconfed_block)
     }
 
+    // Surge: checks if the bridge handler has pending user ops
+    pub async fn has_pending_user_ops(&self) -> bool {
+        return self.bridge_handler.lock().await.has_pending_user_ops();
+    }
+
     // Surge: Adds any pending L2 calls initiated via User Ops on the bridge handler
     // to the transaction list in the draft block.
     //
@@ -285,12 +290,12 @@ impl BatchManager {
         l2_draft_block: &mut L2BlockV2Draft,
     ) -> Result<Option<(UserOpData, FixedBytes<32>)>, anyhow::Error> {
         // Check for pending L2 calls from the bridge handler
-        if let Ok(Some((user_op_data, l2_call))) = self
+        if let Some((user_op_data, l2_call)) = self
             .bridge_handler
             .lock()
             .await
             .next_user_op_and_l2_call()
-            .await
+            .await?
         {
             info!("Processing pending L2 call: {:?}", l2_call);
 
@@ -360,6 +365,10 @@ impl BatchManager {
                 })?;
 
                 // Surge: Record any L1 call initiated in the L2 block
+                // Note: This currently includes ALL L1 calls and not just the ones initiated
+                // by the user op txn.
+                // In production, tx hashes of user op calls need to recorded and only L1 calls
+                // initiated in same transaction need to be considered
                 debug!("Checking for initiated L1 calls");
                 if let Some(l1_call) = self
                     .bridge_handler

@@ -20,6 +20,7 @@ sol!(
 sol!(
     #[allow(missing_docs)]
     #[sol(rpc)]
+    #[derive(Debug)]
     Multicall,
     "src/l1/abi/Multicall.json"
 );

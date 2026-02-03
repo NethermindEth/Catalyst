@@ -54,15 +54,15 @@ impl L2ExecutionLayer {
         let shasta_anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
 
         // Surge: Store the bridge for processing L2 calls
-        let chain_id_hex = format!("{:x}", chain_id);
-        let zeros_needed = 38usize.saturating_sub(chain_id_hex.len());
+        let chain_id_string = format!("{}", chain_id);
+        let zeros_needed = 38usize.saturating_sub(chain_id_string.len());
         let bridge_address: Address =
-            format!("0x{}{}01", chain_id_hex, "0".repeat(zeros_needed)).parse()?;
+            format!("0x{}{}01", chain_id_string, "0".repeat(zeros_needed)).parse()?;
         let bridge = Bridge::new(bridge_address, provider.clone());
 
         // Signal service address (same format as bridge, but ending in 05)
         let signal_service: Address =
-            format!("0x{}{}05", chain_id_hex, "0".repeat(zeros_needed)).parse()?;
+            format!("0x{}{}05", chain_id_string, "0".repeat(zeros_needed)).parse()?;
 
         let common = ExecutionLayerCommon::new(provider.clone()).await?;
         let l2_call_signer = taiko_config.signer.clone();
@@ -218,14 +218,14 @@ impl L2ExecutionLayer {
 
     pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
         let tx_data =
-            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+            <Anchor::anchorV4WithSignalSlotsCall as alloy::sol_types::SolCall>::abi_decode_validate(data)
                 .map_err(|e| anyhow::anyhow!("Failed to decode anchor id from tx data: {}", e))?;
         Ok(tx_data._checkpoint.blockNumber.to::<u64>())
     }
 
-    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
+    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4WithSignalSlotsCall, Error> {
         let tx_data =
-            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+            <Anchor::anchorV4WithSignalSlotsCall as alloy::sol_types::SolCall>::abi_decode_validate(data)
                 .map_err(|e| anyhow::anyhow!("Failed to decode anchor tx data: {}", e))?;
         Ok(tx_data)
     }
@@ -271,7 +271,7 @@ impl L2ExecutionLayer {
 
     pub fn decode_block_params_from_tx_data(data: &[u8]) -> Result<Checkpoint, Error> {
         let tx_data =
-            <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+            <Anchor::anchorV4WithSignalSlotsCall as alloy::sol_types::SolCall>::abi_decode_validate(data)
                 .map_err(|e| anyhow::anyhow!("Failed to decode proposal id from tx data: {}", e))?;
         Ok(tx_data._checkpoint)
     }

@@ -13,6 +13,7 @@ use crate::shared_abi::bindings::Bridge;
 use alloy::{
     consensus::SidecarBuilder,
     eips::eip4844::BlobTransactionSidecar,
+    network::TransactionBuilder4844,
     primitives::{
         Address, Bytes, U256,
         aliases::{U24, U48},
@@ -29,7 +30,7 @@ use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},
 };
-use tracing::warn;
+use tracing::{info, warn};
 
 pub struct ProposalTxBuilder {
     provider: DynProvider,
@@ -108,22 +109,27 @@ impl ProposalTxBuilder {
         // Add user op to multicall
         // Note: Only adding the first call, since more calls are not expected for the POC
         if !batch.user_ops.is_empty() {
-            multicalls.push(self.build_user_op_call(batch.user_ops.first().unwrap().clone()));
+            let user_op_call = self.build_user_op_call(batch.user_ops.first().unwrap().clone());
+            info!("Added user op to Multicall: {:?}", &user_op_call);
+            multicalls.push(user_op_call);
         }
 
         // Add the proposal to the multicall
         // This must always follow the user ops
-        multicalls.push(
-            self.build_propose_call(&batch, contract_addresses.shasta_inbox)
-                .await?,
-        );
+        let (propose_call, blob_sidecar) = self
+            .build_propose_call(&batch, contract_addresses.shasta_inbox)
+            .await?;
+        info!("Added proposal to Multicall: {:?}", &propose_call);
+        multicalls.push(propose_call.clone());
 
         // Add L1 calls initiated by L2 blocks in the proposal
         if !batch.l1_calls.is_empty() {
-            multicalls.push(self.build_l1_call_call(
+            let l1_call = self.build_l1_call_call(
                 batch.l1_calls.first().unwrap().clone(),
                 contract_addresses.bridge,
-            ));
+            );
+            info!("Added L1 call to Multicall: {:?}", &l1_call);
+            multicalls.push(l1_call.clone());
         }
 
         // Build the multicall transaction request
@@ -133,7 +139,8 @@ impl ProposalTxBuilder {
         let tx = TransactionRequest::default()
             .to(contract_addresses.proposer_multicall)
             .from(from)
-            .input(call.calldata().clone().into());
+            .input(call.calldata().clone().into())
+            .with_blob_sidecar(blob_sidecar);
 
         Ok(tx)
     }
@@ -174,7 +181,7 @@ impl ProposalTxBuilder {
         &self,
         batch: &Proposal,
         inbox_address: Address,
-    ) -> Result<Multicall::Call, anyhow::Error> {
+    ) -> Result<(Multicall::Call, BlobTransactionSidecar), anyhow::Error> {
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
         for l2_block in &batch.l2_blocks {
             // Build the block manifests.
@@ -212,7 +219,7 @@ impl ProposalTxBuilder {
                 numBlobs: sidecar.blobs.len().try_into()?,
                 offset: U24::ZERO,
             },
-            numForcedInclusions: u8::from(batch.num_forced_inclusion),
+            numForcedInclusions: u16::from(batch.num_forced_inclusion),
         };
 
         let inbox = SurgeInbox::new(inbox_address, self.provider.clone());
@@ -220,13 +227,21 @@ impl ProposalTxBuilder {
 
         // Surge: using `proposeWithProof(..)` in Surge Inbox
         let proof_data = self.build_proof_data(&batch.checkpoint).await?;
-        let call = inbox.proposeWithProof(Bytes::new(), encoded_proposal_input, proof_data);
+        let call = inbox.proposeWithProof(
+            Bytes::new(),
+            encoded_proposal_input,
+            proof_data,
+            batch.signal_slots.clone(),
+        );
 
-        Ok(Multicall::Call {
-            target: inbox_address,
-            value: U256::ZERO,
-            data: call.calldata().clone(),
-        })
+        Ok((
+            Multicall::Call {
+                target: inbox_address,
+                value: U256::ZERO,
+                data: call.calldata().clone(),
+            },
+            sidecar,
+        ))
     }
 
     fn build_l1_call_call(&self, l1_call: L1Call, bridge_address: Address) -> Multicall::Call {

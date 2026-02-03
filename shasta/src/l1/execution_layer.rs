@@ -349,6 +349,21 @@ impl common::l1::traits::PreconferBondProvider for ExecutionLayer {
 
 // Surge: L1 EL ops for Bridge Handler
 
+use alloy::rpc::types::trace::geth::{CallFrame, CallLogFrame};
+
+/// Recursively collects all logs from a call frame and its nested subcalls.
+/// Logs emitted by nested contract calls are stored within their respective CallFrame objects,
+/// not at the top level, so we need to traverse the entire call tree.
+fn collect_logs_recursive(frame: &CallFrame) -> Vec<CallLogFrame> {
+    let mut logs = frame.logs.clone();
+
+    for subcall in &frame.calls {
+        logs.extend(collect_logs_recursive(subcall));
+    }
+
+    logs
+}
+
 pub trait L1BridgeHandlerOps {
     // Surge: This can be made to retrieve multiple signal slots
     async fn find_message_and_signal_slot(
@@ -375,9 +390,10 @@ impl L1BridgeHandlerOps for ExecutionLayer {
             .to(user_op_data.user_op_submitter)
             .input(call.calldata().clone().into());
 
-        // Configure call tracer with logs enabled
+        // Configure call tracer with logs and nested calls enabled
         let mut tracer_config = serde_json::Map::new();
         tracer_config.insert("withLog".to_string(), serde_json::Value::Bool(true));
+        tracer_config.insert("onlyTopCall".to_string(), serde_json::Value::Bool(false));
 
         let tracing_options = GethDebugTracingOptions {
             tracer: Some(GethDebugTracerType::BuiltInTracer(
@@ -403,12 +419,19 @@ impl L1BridgeHandlerOps for ExecutionLayer {
             .await
             .map_err(|e| anyhow!("Failed to simulate executeBatch on L1: {e}"))?;
 
+        tracing::debug!("Received trace result: {:?}", trace_result);
+
         let mut message: Option<Message> = None;
         let mut slot: Option<FixedBytes<32>> = None;
 
         // Look for logs in the trace result and decode MessageSent and SignalSent events
+        // Note: Logs from nested calls (subcalls) are stored within those nested CallFrame objects,
+        // so we need to recursively collect all logs from the entire call tree
         if let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result {
-            for log in call_frame.logs {
+            let all_logs = collect_logs_recursive(&call_frame);
+            tracing::debug!("Collected {} logs from call trace", all_logs.len());
+
+            for log in all_logs {
                 // Check if this is a MessageSent or SignalSent event by matching the topic
                 if let Some(topics) = &log.topics {
                     if !topics.is_empty() {
@@ -439,6 +462,8 @@ impl L1BridgeHandlerOps for ExecutionLayer {
                 }
             }
         }
+
+        tracing::debug!("{:?} {:?}", message, slot);
 
         if let (Some(message), Some(slot)) = (message, slot) {
             return Ok(Some((message, slot)));

@@ -191,4 +191,8 @@ impl BridgeHandler {
 
         Ok(None)
     }
+
+    pub fn has_pending_user_ops(&self) -> bool {
+        !self.rx.is_empty()
+    }
 }

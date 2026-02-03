@@ -310,7 +310,7 @@ impl Taiko {
         L2ExecutionLayer::decode_anchor_id_from_tx_data(data)
     }
 
-    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
+    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4WithSignalSlotsCall, Error> {
         L2ExecutionLayer::get_anchor_tx_data(data)
     }
 
