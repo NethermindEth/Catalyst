@@ -363,10 +363,10 @@ impl Config {
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("PRECONF_MAX_SKIPPED_L2_SLOTS must be a number: {}", e))?;
 
-        let proposal_max_time_sec = std::env::var("proposal_max_time_sec")
+        let proposal_max_time_sec = std::env::var("PROPOSAL_MAX_TIME_SEC")
             .unwrap_or("384".to_string())
             .parse::<u64>()
-            .map_err(|e| anyhow::anyhow!("proposal_max_time_sec must be a number: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("PROPOSAL_MAX_TIME_SEC must be a number: {}", e))?;
 
         // 0.003 eth
         let bridge_relayer_fee = std::env::var("BRIDGE_RELAYER_FEE")
