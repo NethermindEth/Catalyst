@@ -810,10 +810,9 @@ impl Node {
         forced_inclusion_flags: &[bool],
         parent_block_id: u64,
     ) -> Result<u64, Error> {
-        const MAX_BLOCKS_TO_REANCHOR: u64 = 1000; // TODO move to config
         let mut current_block_pos = 0;
         let mut processed_blocks = 0;
-        let mut max_blocks_to_reanchor = MAX_BLOCKS_TO_REANCHOR;
+        let mut max_blocks_to_reanchor = self.config.max_blocks_to_reanchor;
         let mut is_common_block_processed = false;
 
         while current_block_pos < blocks.len() && processed_blocks < max_blocks_to_reanchor {
@@ -918,18 +917,17 @@ impl Node {
                     parent_block_id,
                 ))
                 .await?;
-            let l2_slot_timestamp = self.ethereum_l1.slot_clock.get_l2_slot_begin_timestamp()?;
             *max_blocks_to_reanchor =
-                (*max_blocks_to_reanchor).min(l2_slot_timestamp - block.header.timestamp);
+                (*max_blocks_to_reanchor).min(info.slot_timestamp() - info.parent_timestamp());
             debug!(
-                "First reanchor block {}, max_blocks: {}",
+                "First reanchor block {}, max_blocks_to_reanchor: {}",
                 block.header.number, max_blocks_to_reanchor
             );
-            let adjusted_timestamp = l2_slot_timestamp - *max_blocks_to_reanchor;
+            let adjusted_timestamp = info.slot_timestamp() - *max_blocks_to_reanchor;
             Ok(L2SlotInfoV2::new_from_other(info, adjusted_timestamp))
         } else {
             let info = self.taiko.get_l2_slot_info().await?;
-            let timestamp = info.slot_timestamp() + 1;
+            let timestamp = info.parent_timestamp() + 1;
             Ok(L2SlotInfoV2::new_from_other(info, timestamp))
         }
     }

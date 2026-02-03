@@ -75,6 +75,15 @@ pub async fn create_shasta_node(
     .await?;
     let taiko = Arc::new(taiko);
 
+    if shasta_config.max_blocks_to_reanchor
+        >= taiko.get_protocol_config().get_timestamp_max_offset()
+    {
+        return Err(anyhow::anyhow!(
+            "MAX_BLOCKS_TO_REANCHOR ({}) must be less than TIMESTAMP_MAX_OFFSET ({})",
+            shasta_config.max_blocks_to_reanchor,
+            taiko.get_protocol_config().get_timestamp_max_offset()
+        ));
+    }
     let node_config = node::config::NodeConfig {
         preconf_heartbeat_ms: config.preconf_heartbeat_ms,
         handover_window_slots: shasta_config.handover_window_slots,
@@ -83,6 +92,7 @@ pub async fn create_shasta_node(
         propose_forced_inclusion: shasta_config.propose_forced_inclusion,
         simulate_not_submitting_at_the_end_of_epoch: shasta_config
             .simulate_not_submitting_at_the_end_of_epoch,
+        max_blocks_to_reanchor: shasta_config.max_blocks_to_reanchor,
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {

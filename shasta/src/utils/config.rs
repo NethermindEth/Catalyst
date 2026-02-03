@@ -11,6 +11,7 @@ pub struct ShastaConfig {
     pub l1_height_lag: u64,
     pub propose_forced_inclusion: bool,
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
+    pub max_blocks_to_reanchor: u64,
 }
 
 impl ConfigTrait for ShastaConfig {
@@ -55,6 +56,11 @@ impl ConfigTrait for ShastaConfig {
                     )
                 })?;
 
+        let max_blocks_to_reanchor = std::env::var("MAX_BLOCKS_TO_REANCHOR")
+            .unwrap_or("1000".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("MAX_BLOCKS_TO_REANCHOR must be a number: {}", e))?;
+
         Ok(ShastaConfig {
             shasta_inbox,
             handover_window_slots,
@@ -62,6 +68,7 @@ impl ConfigTrait for ShastaConfig {
             l1_height_lag,
             propose_forced_inclusion,
             simulate_not_submitting_at_the_end_of_epoch,
+            max_blocks_to_reanchor,
         })
     }
 }
