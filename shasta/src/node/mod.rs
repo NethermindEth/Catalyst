@@ -557,17 +557,15 @@ impl Node {
             get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await?;
         if taiko_inbox_height < l2_slot_info.parent_id() {
             let l2_block_id = taiko_inbox_height + 1;
-            let anchor_offset = self
+            let (anchor_offset, timestamp_offset) = self
                 .proposal_manager
-                .get_l1_anchor_block_offset_for_l2_block(l2_block_id)
+                .get_l1_anchor_block_and_timestamp_offset_for_l2_block(l2_block_id)
                 .await?;
-            let max_anchor_height_offset = self
-                .taiko
-                .get_protocol_config()
-                .get_max_anchor_height_offset();
 
-            // +1 because we are checking the next block
-            if anchor_offset > max_anchor_height_offset + 1 {
+            if !self
+                .proposal_manager
+                .is_offsets_valid(anchor_offset, timestamp_offset)
+            {
                 warn!(
                     "Anchor offset {} is too high for l2 block id {}, triggering reanchor",
                     anchor_offset, l2_block_id

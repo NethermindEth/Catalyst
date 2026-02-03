@@ -378,18 +378,27 @@ impl BatchManager {
         self.batch_builder.take_batches_to_send()
     }
 
-    pub fn is_anchor_block_offset_valid(&self, anchor_block_offset: u64) -> bool {
+    pub fn is_offsets_valid(&self, anchor_block_offset: u64, timestamp_offset: u64) -> bool {
+        self.is_anchor_block_offset_valid(anchor_block_offset)
+            && self.is_timestamp_offset_valid(timestamp_offset)
+    }
+
+    fn is_anchor_block_offset_valid(&self, anchor_block_offset: u64) -> bool {
         anchor_block_offset
-            < self
+            <= self
                 .taiko
                 .get_protocol_config()
                 .get_max_anchor_height_offset()
     }
 
-    pub async fn get_l1_anchor_block_offset_for_l2_block(
+    fn is_timestamp_offset_valid(&self, timestamp_offset: u64) -> bool {
+        timestamp_offset <= self.taiko.get_protocol_config().get_timestamp_max_offset()
+    }
+
+    pub async fn get_l1_anchor_block_and_timestamp_offset_for_l2_block(
         &self,
         l2_block_height: u64,
-    ) -> Result<u64, Error> {
+    ) -> Result<(u64, u64), Error> {
         debug!(
             "get_anchor_block_offset: Checking L2 block {}",
             l2_block_height
@@ -398,6 +407,7 @@ impl BatchManager {
             .taiko
             .get_l2_block_by_number(l2_block_height, false)
             .await?;
+        let block_timestamp = block.header.timestamp();
 
         let anchor_tx_hash = block
             .transactions
@@ -409,16 +419,18 @@ impl BatchManager {
         let l1_anchor_block_id = Taiko::decode_anchor_id_from_tx_data(l2_anchor_tx.input())?;
 
         debug!(
-            "get_l1_anchor_block_offset_for_l2_block: L2 block {l2_block_height} has L1 anchor block id {l1_anchor_block_id}"
+            "get_l1_anchor_block_and_timestamp_offset_for_l2_block: L2 block {l2_block_height} has L1 anchor block id {l1_anchor_block_id} and  timestamp {block_timestamp}",
         );
 
-        self.ethereum_l1.slot_clock.slots_since_l1_block(
+        let anchor_offset = self.ethereum_l1.slot_clock.slots_since_l1_block(
             self.ethereum_l1
                 .execution_layer
                 .common()
                 .get_block_timestamp_by_number(l1_anchor_block_id)
                 .await?,
-        )
+        )?;
+        let timestamp_offset = self.ethereum_l1.slot_clock.seconds_since(block_timestamp);
+        Ok((anchor_offset, timestamp_offset))
     }
 
     pub async fn recover_from_l2_block(&mut self, block_height: u64) -> Result<(), Error> {

@@ -267,6 +267,20 @@ impl<T: Clock> SlotClock<T> {
 
         Ok(current_slot - block_slot)
     }
+
+    pub fn seconds_since(&self, block_timestamp: u64) -> u64 {
+        let now = self
+            .clock
+            .now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or_else(|_| {
+                tracing::error!("System time is before UNIX epoch");
+                0
+            });
+
+        now.saturating_sub(block_timestamp)
+    }
 }
 
 #[cfg(test)]
