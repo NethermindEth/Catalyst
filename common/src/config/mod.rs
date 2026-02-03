@@ -62,6 +62,7 @@ pub struct Config {
     pub throttling_factor: u64,
     pub preconf_min_txs: u64,
     pub preconf_max_skipped_l2_slots: u64,
+    pub max_time_before_submit_sec: u64,
     // fork info
     pub fork_switch_transition_period_sec: u64,
     pub pacaya_timestamp_sec: u64,
@@ -362,6 +363,11 @@ impl Config {
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("PRECONF_MAX_SKIPPED_L2_SLOTS must be a number: {}", e))?;
 
+        let max_time_before_submit_sec = std::env::var("MAX_TIME_BEFORE_SUBMIT_SEC")
+            .unwrap_or("384".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("MAX_TIME_BEFORE_SUBMIT_SEC must be a number: {}", e))?;
+
         // 0.003 eth
         let bridge_relayer_fee = std::env::var("BRIDGE_RELAYER_FEE")
             .unwrap_or("3047459064000000".to_string())
@@ -450,6 +456,7 @@ impl Config {
             extra_gas_percentage,
             preconf_min_txs,
             preconf_max_skipped_l2_slots,
+            max_time_before_submit_sec,
             bridge_relayer_fee,
             bridge_transaction_fee,
             fork_switch_transition_period_sec,
@@ -498,6 +505,7 @@ amount to bridge from l2 to l1: {}
 disable bridging: {}
 min number of transaction to create a L2 block: {}
 max number of skipped L2 slots while creating a L2 block: {}
+max time before submit: {}s
 bridge relayer fee: {}wei
 bridge transaction fee: {}wei
 fork switch transition time: {}s
@@ -554,6 +562,7 @@ whitelist monitor interval: {}s
             config.disable_bridging,
             config.preconf_min_txs,
             config.preconf_max_skipped_l2_slots,
+            config.max_time_before_submit_sec,
             config.bridge_relayer_fee,
             config.bridge_transaction_fee,
             config.fork_switch_transition_period_sec,
