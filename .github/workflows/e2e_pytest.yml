@@ -151,11 +151,10 @@ jobs:
         working-directory: ./e2e_tests
         env:
           PYTHONUNBUFFERED: 1
-          TEST_ENV: pacaya
         run: |
           cp .env.example .env
           source .env
-          pytest -v -s --junit-xml=pytest-pacaya-results.xml --tb=long
+          pytest -v --capture tee-sys -r a --tb=long 2>&1 | tee pytest-pacaya.log; exit ${PIPESTATUS[0]}
           rm .env
 
       - name: Upload Pacaya pytest log file
@@ -163,8 +162,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pacaya-pytest-logs
-          path: e2e_tests/pytest-pacaya.log
-          retention-days: 30
+          path: |
+            e2e_tests/pytest-pacaya.log
+          retention-days: 15
           if-no-files-found: warn
 
       - name: Cleanup Kurtosis enclave (Pacaya)
@@ -302,11 +302,10 @@ jobs:
         working-directory: ./e2e_tests
         env:
           PYTHONUNBUFFERED: 1
-          TEST_ENV: shasta
         run: |
           cp .env.example.shasta .env
           source .env
-          pytest -v -s --junit-xml=pytest-shasta-results.xml --tb=long
+          pytest -v --capture tee-sys -r a --tb=long 2>&1 | tee pytest-shasta.log; exit ${PIPESTATUS[0]}
           rm .env
 
       - name: Upload Shasta pytest log file
@@ -314,8 +313,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: shasta-pytest-logs
-          path: e2e_tests/pytest-shasta.log
-          retention-days: 30
+          path: |
+            e2e_tests/pytest-shasta.log
+          retention-days: 15
           if-no-files-found: warn
 
       - name: Cleanup Kurtosis enclave (Shasta)
