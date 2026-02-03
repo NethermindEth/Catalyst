@@ -45,7 +45,9 @@ def test_p2p_preconfirmation(l2_client_node1, l2_client_node2, env_vars):
     nonce = l2_client_node1.eth.get_transaction_count(account.address)
     l2_node_2_block_number = l2_client_node2.eth.block_number
 
-    send_transaction(nonce, account, '0.00006', l2_client_node1, env_vars.l2_prefunded_priv_key)
+    tx_hash = send_transaction(nonce, account, '0.00006', l2_client_node1, env_vars.l2_prefunded_priv_key)
+    wait_for_tx_to_be_included(l2_client_node1, tx_hash)
+    assert wait_for_tx_to_be_included(l2_client_node2, tx_hash), "Transaction should be included in L2 Node 2"
 
     assert wait_for_new_block(l2_client_node2, l2_node_2_block_number), "L2 Node 2 should have a new block after sending a transaction"
 
