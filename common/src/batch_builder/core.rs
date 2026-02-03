@@ -359,7 +359,7 @@ mod tests {
                 default_coinbase: Address::ZERO,
                 preconf_min_txs: 5,
                 preconf_max_skipped_l2_slots: 3,
-                max_time_before_submit_sec: 100,
+                proposal_max_time_sec: 100,
             },
             Arc::new(SlotClock::new(0, 5, 12, 32, 3000)),
             Arc::new(Metrics::new()),
@@ -382,7 +382,7 @@ mod tests {
             default_coinbase: Address::ZERO,
             preconf_min_txs: 5,
             preconf_max_skipped_l2_slots: 3,
-            max_time_before_submit_sec: 100,
+            proposal_max_time_sec: 100,
         };
 
         let slot_clock = Arc::new(SlotClock::new(0, 5, 12, 32, 2000));

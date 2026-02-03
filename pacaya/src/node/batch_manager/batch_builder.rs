@@ -397,7 +397,7 @@ mod tests {
             default_coinbase: Address::ZERO,
             preconf_min_txs: 5,
             preconf_max_skipped_l2_slots: 3,
-            max_time_before_submit_sec: 100,
+            proposal_max_time_sec: 100,
         };
 
         let mut batch = Batch {
