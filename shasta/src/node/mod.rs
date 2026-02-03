@@ -815,8 +815,12 @@ impl Node {
     ) -> Result<u64, Error> {
         let mut current_block_pos = 0;
         let mut processed_blocks = 0;
-        let mut max_blocks_to_reanchor = self.config.max_blocks_to_reanchor;
+        //let mut max_blocks_to_reanchor = self.config.max_blocks_to_reanchor;
         let mut is_common_block_processed = false;
+
+        // calculate slot info for the first block
+        let (first_l2_slot_info, max_blocks_to_reanchor) =
+            self.prepare_reanchor_slot_info(parent_block_id).await?;
 
         while current_block_pos < blocks.len() && processed_blocks < max_blocks_to_reanchor {
             debug!(
@@ -847,14 +851,8 @@ impl Node {
             }
 
             let l2_slot_info = self
-                .get_l2_slot_info_for_reanchor(
-                    processed_blocks,
-                    parent_block_id,
-                    block,
-                    &mut max_blocks_to_reanchor,
-                )
+                .get_l2_slot_info_for_reanchor(&first_l2_slot_info, processed_blocks)
                 .await?;
-
             debug!(
                 "Reanchoring block {} with {} txs, parent: {}, timestamp: {}",
                 block.header.number,
@@ -906,28 +904,30 @@ impl Node {
         Ok(processed_blocks)
     }
 
-    async fn get_l2_slot_info_for_reanchor(
-        &mut self,
-        processed_blocks: u64,
+    async fn prepare_reanchor_slot_info(
+        &self,
         parent_block_id: u64,
-        block: &alloy::rpc::types::Block,
-        max_blocks_to_reanchor: &mut u64,
+    ) -> Result<(L2SlotInfoV2, u64), Error> {
+        let info = self
+            .taiko
+            .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
+                parent_block_id,
+            ))
+            .await?;
+        let max_blocks_to_reanchor = (self.config.max_blocks_to_reanchor)
+            .min(info.slot_timestamp() - info.parent_timestamp());
+        let first_block_timestamp = info.slot_timestamp() - max_blocks_to_reanchor;
+        let l2_slot_info = L2SlotInfoV2::new_from_other(info, first_block_timestamp);
+        Ok((l2_slot_info, max_blocks_to_reanchor))
+    }
+
+    async fn get_l2_slot_info_for_reanchor(
+        &self,
+        first_slot_info: &L2SlotInfoV2,
+        processed_blocks: u64,
     ) -> Result<L2SlotInfoV2, Error> {
         if processed_blocks == 0 {
-            let info = self
-                .taiko
-                .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
-                    parent_block_id,
-                ))
-                .await?;
-            *max_blocks_to_reanchor =
-                (*max_blocks_to_reanchor).min(info.slot_timestamp() - info.parent_timestamp());
-            debug!(
-                "First reanchor block {}, max_blocks_to_reanchor: {}",
-                block.header.number, max_blocks_to_reanchor
-            );
-            let adjusted_timestamp = info.slot_timestamp() - *max_blocks_to_reanchor;
-            Ok(L2SlotInfoV2::new_from_other(info, adjusted_timestamp))
+            Ok(first_slot_info.clone())
         } else {
             let info = self.taiko.get_l2_slot_info().await?;
             let timestamp = info.parent_timestamp() + 1;
