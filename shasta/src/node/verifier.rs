@@ -211,14 +211,14 @@ impl VerifierThread {
         taiko_inbox_height: u64,
         taiko_geth_height: u64,
     ) -> Result<(), Error> {
-        let anchor_offset = self
+        let (anchor_offset, timestamp_offset) = self
             .batch_manager
-            .get_l1_anchor_block_offset_for_l2_block(taiko_inbox_height + 1)
+            .get_l1_anchor_block_and_timestamp_offset_for_l2_block(taiko_inbox_height + 1)
             .await?;
         // The first block anchor id is valid, so we can continue.
         if self
             .batch_manager
-            .is_anchor_block_offset_valid(anchor_offset)
+            .is_offsets_valid(anchor_offset, timestamp_offset)
         {
             let start = std::time::Instant::now();
             // recover all missed l2 blocks
