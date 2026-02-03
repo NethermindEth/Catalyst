@@ -52,12 +52,14 @@ impl BatchManager {
              max_blocks_per_batch: {}\n\
              l1_slot_duration_sec: {}\n\
              max_time_shift_between_blocks_sec: {}\n\
-             max_anchor_height_offset: {}",
+             max_anchor_height_offset: {}\n\
+             proposal_max_time_sec: {}",
             config.max_bytes_size_of_batch,
             config.max_blocks_per_batch,
             config.l1_slot_duration_sec,
             config.max_time_shift_between_blocks_sec,
             config.max_anchor_height_offset,
+            config.proposal_max_time_sec,
         );
 
         let forced_inclusion = Arc::new(ForcedInclusion::new(ethereum_l1.clone()).await?);
@@ -80,9 +82,14 @@ impl BatchManager {
     pub async fn try_submit_oldest_batch(
         &mut self,
         submit_only_full_batches: bool,
+        l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
         self.batch_builder
-            .try_submit_oldest_batch(self.ethereum_l1.clone(), submit_only_full_batches)
+            .try_submit_oldest_batch(
+                self.ethereum_l1.clone(),
+                submit_only_full_batches,
+                l2_slot_timestamp,
+            )
             .await
     }
 
@@ -220,7 +227,10 @@ impl BatchManager {
         if !self.batch_builder.can_consume_l2_block(&l2_draft_block) {
             // Create new batch
             let _ = self
-                .create_new_batch(l2_slot_context.info.parent_id())
+                .create_new_batch(
+                    l2_slot_context.info.parent_id(),
+                    l2_slot_context.info.slot_timestamp(),
+                )
                 .await?;
         }
 
@@ -298,7 +308,11 @@ impl BatchManager {
         }
     }
 
-    async fn create_new_batch(&mut self, parent_block_id: u64) -> Result<u64, Error> {
+    async fn create_new_batch(
+        &mut self,
+        parent_block_id: u64,
+        l2_slot_timestamp: u64,
+    ) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
         let last_anchor_id = self
             .taiko
@@ -322,7 +336,7 @@ impl BatchManager {
         let anchor_block_id = anchor_block_info.id();
         // Create new batch
         self.batch_builder
-            .create_new_batch(proposal_id, anchor_block_info);
+            .create_new_batch(proposal_id, anchor_block_info, l2_slot_timestamp);
 
         Ok(anchor_block_id)
     }

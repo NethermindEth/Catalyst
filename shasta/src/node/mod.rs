@@ -273,7 +273,10 @@ impl Node {
             if self.has_verified_unproposed_batches().await?
                 && let Err(err) = self
                     .proposal_manager
-                    .try_submit_oldest_batch(current_status.is_preconfer())
+                    .try_submit_oldest_batch(
+                        current_status.is_preconfer(),
+                        l2_slot_info.slot_timestamp(),
+                    )
                     .await
             {
                 if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {

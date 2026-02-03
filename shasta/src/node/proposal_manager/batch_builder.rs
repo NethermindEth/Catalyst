@@ -88,7 +88,7 @@ impl BatchBuilder {
             .is_some_and(|b| b.l2_blocks.is_empty())
     }
 
-    pub fn create_new_batch(&mut self, id: u64, anchor_block: AnchorBlockInfo) {
+    pub fn create_new_batch(&mut self, id: u64, anchor_block: AnchorBlockInfo, timestamp: u64) {
         self.finalize_current_batch();
 
         self.current_proposal = Some(Proposal {
@@ -101,6 +101,7 @@ impl BatchBuilder {
             anchor_block_hash: anchor_block.hash(),
             anchor_state_root: anchor_block.state_root(),
             num_forced_inclusion: 0,
+            created_at_sec: timestamp,
         });
     }
 
@@ -216,6 +217,7 @@ impl BatchBuilder {
                 anchor_block_hash: anchor_info.hash(),
                 anchor_state_root: anchor_info.state_root(),
                 num_forced_inclusion: 0,
+                created_at_sec: l2_block_timestamp_sec,
             });
         }
 
@@ -284,19 +286,18 @@ impl BatchBuilder {
         &mut self,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         submit_only_full_batches: bool,
+        l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
-        if self.current_proposal.is_some()
-            && (!submit_only_full_batches
-                || !self.config.is_within_block_limit(
-                    u16::try_from(
-                        self.current_proposal
-                            .as_ref()
-                            .map(|b| b.l2_blocks.len())
-                            .unwrap_or(0),
-                    )? + 1,
-                ))
-        {
-            self.finalize_current_batch();
+        if let Some(current_proposal) = self.current_proposal.as_ref() {
+            let block_count = u16::try_from(current_proposal.l2_blocks.len()).unwrap_or(0);
+            let is_full = !self.config.is_within_block_limit(block_count + 1);
+            let is_expired = !self
+                .config
+                .is_within_time_limit(current_proposal.created_at_sec, l2_slot_timestamp);
+
+            if !submit_only_full_batches || is_full || is_expired {
+                self.finalize_current_batch();
+            }
         }
 
         if let Some(batch) = self.proposals_to_send.front() {
