@@ -525,10 +525,6 @@ impl BatchManager {
         self.batch_builder.prepend_batches(batches);
     }
 
-    pub async fn sync_fi_with_l1(&mut self) -> Result<u64, Error> {
-        self.forced_inclusion.sync_queue_index_with_head().await
-    }
-
     pub fn set_fi_head(&mut self, fi_head: u64) {
         self.forced_inclusion.set_index(fi_head);
     }
