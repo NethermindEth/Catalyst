@@ -221,6 +221,8 @@ impl VerifierThread {
             .is_offsets_valid(anchor_offset, timestamp_offset)
         {
             let start = std::time::Instant::now();
+            // start recovering align FI with L1
+            self.batch_manager.sync_fi_with_l1().await?;
             // recover all missed l2 blocks
             for current_height in taiko_inbox_height + 1..=taiko_geth_height {
                 if self.cancel_token.is_cancelled() {

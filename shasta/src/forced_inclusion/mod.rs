@@ -25,6 +25,17 @@ impl ForcedInclusion {
         })
     }
 
+    pub fn new_with_index(ethereum_l1: Arc<EthereumL1<ExecutionLayer>>, index: u64) -> Self {
+        Self {
+            ethereum_l1,
+            index: AtomicU64::new(index),
+        }
+    }
+
+    pub fn set_index(&self, index: u64) {
+        self.index.store(index, Ordering::SeqCst);
+    }
+
     pub async fn sync_queue_index_with_head(&self) -> Result<u64, Error> {
         let head = self
             .ethereum_l1

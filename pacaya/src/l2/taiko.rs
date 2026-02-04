@@ -86,10 +86,6 @@ impl Taiko {
         &self.protocol_config
     }
 
-    pub async fn get_last_block_id_by_batch_id(&self, batch_id: u64) -> Result<Option<u64>, Error> {
-        self.l2_engine.get_last_block_id_by_batch_id(batch_id).await
-    }
-
     pub async fn get_latest_l2_block_id(&self) -> Result<u64, Error> {
         self.l2_execution_layer.common().get_latest_block_id().await
     }

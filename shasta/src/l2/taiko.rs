@@ -153,6 +153,20 @@ impl Taiko {
             .await
     }
 
+    pub async fn get_last_block_id_by_batch_id(&self, batch_id: u64) -> Result<u64, Error> {
+        match self
+            .l2_engine
+            .get_last_block_id_by_batch_id(batch_id)
+            .await?
+        {
+            Some(block_id) => Ok(block_id),
+            None => Err(anyhow::anyhow!(
+                "last block id by batch id {} is None",
+                batch_id
+            )),
+        }
+    }
+
     pub async fn get_l2_slot_info_by_parent_block(
         &self,
         parent: BlockNumberOrTag,
