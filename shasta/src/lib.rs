@@ -96,7 +96,7 @@ pub async fn create_shasta_node(
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
-        taiko_protocol::shasta::constants::PROPOSAL_MAX_BLOCKS.try_into()?
+        taiko_protocol::shasta::constants::DERIVATION_SOURCE_MAX_BLOCKS.try_into()?
     } else {
         config.max_blocks_per_batch
     };
