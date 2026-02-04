@@ -19,6 +19,8 @@ pub struct BatchBuilderConfig {
     pub preconf_min_txs: u64,
     /// Maximum number of skipped slots in a preconfirmed block
     pub preconf_max_skipped_l2_slots: u64,
+    /// Duration in seconds for which we build a proposal before sending it to L1
+    pub proposal_max_time_sec: u64,
 }
 
 impl BatchBuilderConfig {
@@ -28,5 +30,10 @@ impl BatchBuilderConfig {
 
     pub fn is_within_bytes_limit(&self, total_bytes: u64) -> bool {
         total_bytes <= self.max_bytes_size_of_batch
+    }
+
+    pub fn is_within_time_limit(&self, created_at: u64, current_time: u64) -> bool {
+        let elapsed_time_sec = current_time.saturating_sub(created_at);
+        elapsed_time_sec <= self.proposal_max_time_sec
     }
 }

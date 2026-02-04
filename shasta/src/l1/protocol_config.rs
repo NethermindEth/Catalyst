@@ -4,13 +4,15 @@ use taiko_bindings::inbox::IInbox::Config;
 pub struct ProtocolConfig {
     basefee_sharing_pctg: u8,
     max_anchor_offset: u64,
+    timestamp_max_offset: u64,
 }
 
 impl ProtocolConfig {
     pub fn from(shasta_config: &Config) -> Self {
         Self {
             basefee_sharing_pctg: shasta_config.basefeeSharingPctg,
-            max_anchor_offset: 100, // 128 by document
+            max_anchor_offset: taiko_protocol::shasta::constants::MAX_ANCHOR_OFFSET,
+            timestamp_max_offset: taiko_protocol::shasta::constants::TIMESTAMP_MAX_OFFSET,
         }
     }
 
@@ -20,5 +22,9 @@ impl ProtocolConfig {
 
     pub fn get_max_anchor_height_offset(&self) -> u64 {
         self.max_anchor_offset
+    }
+
+    pub fn get_timestamp_max_offset(&self) -> u64 {
+        self.timestamp_max_offset
     }
 }

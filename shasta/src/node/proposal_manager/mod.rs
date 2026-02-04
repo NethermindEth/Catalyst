@@ -52,12 +52,14 @@ impl BatchManager {
              max_blocks_per_batch: {}\n\
              l1_slot_duration_sec: {}\n\
              max_time_shift_between_blocks_sec: {}\n\
-             max_anchor_height_offset: {}",
+             max_anchor_height_offset: {}\n\
+             proposal_max_time_sec: {}",
             config.max_bytes_size_of_batch,
             config.max_blocks_per_batch,
             config.l1_slot_duration_sec,
             config.max_time_shift_between_blocks_sec,
             config.max_anchor_height_offset,
+            config.proposal_max_time_sec,
         );
 
         let forced_inclusion = Arc::new(ForcedInclusion::new(ethereum_l1.clone()).await?);
@@ -80,9 +82,14 @@ impl BatchManager {
     pub async fn try_submit_oldest_batch(
         &mut self,
         submit_only_full_batches: bool,
+        l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
         self.batch_builder
-            .try_submit_oldest_batch(self.ethereum_l1.clone(), submit_only_full_batches)
+            .try_submit_oldest_batch(
+                self.ethereum_l1.clone(),
+                submit_only_full_batches,
+                l2_slot_timestamp,
+            )
             .await
     }
 
@@ -103,7 +110,7 @@ impl BatchManager {
         pending_tx_list: Option<PreBuiltTxList>,
         l2_slot_context: &L2SlotContext,
     ) -> Result<BuildPreconfBlockResponse, Error> {
-        let result = self
+        let (result, _) = self
             .add_new_l2_block(
                 pending_tx_list.unwrap_or_else(PreBuiltTxList::empty),
                 l2_slot_context,
@@ -152,7 +159,7 @@ impl BatchManager {
             let anchor_params = self
                 .taiko
                 .l2_execution_layer()
-                .get_last_synced_block_params_from_geth()
+                .get_block_params_from_geth(l2_slot_context.info.parent_id())
                 .await?;
 
             let pyaload = self.batch_builder.add_fi_block(fi_block, anchor_params)?;
@@ -191,7 +198,8 @@ impl BatchManager {
         prebuilt_tx_list: PreBuiltTxList,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
-    ) -> Result<BuildPreconfBlockResponse, Error> {
+        // TODO REPLACE with enum or struct
+    ) -> Result<(BuildPreconfBlockResponse, bool), Error> {
         let timestamp = l2_slot_context.info.slot_timestamp();
         if let Some(last_block_timestamp) = self
             .batch_builder
@@ -218,7 +226,12 @@ impl BatchManager {
 
         if !self.batch_builder.can_consume_l2_block(&l2_draft_block) {
             // Create new batch
-            let _ = self.create_new_batch().await?;
+            let _ = self
+                .create_new_batch(
+                    l2_slot_context.info.parent_id(),
+                    l2_slot_context.info.slot_timestamp(),
+                )
+                .await?;
         }
 
         // Add forced inclusion when needed
@@ -229,14 +242,14 @@ impl BatchManager {
                 .add_new_l2_block_with_forced_inclusion_when_needed(l2_slot_context, operation_type)
                 .await?
         {
-            return Ok(fi_block);
+            return Ok((fi_block, true));
         }
 
         let preconfed_block = self
             .add_draft_block_to_proposal(l2_draft_block, l2_slot_context, operation_type)
             .await?;
 
-        Ok(preconfed_block)
+        Ok((preconfed_block, false))
     }
 
     async fn add_draft_block_to_proposal(
@@ -264,7 +277,7 @@ impl BatchManager {
         }
     }
 
-    async fn get_next_proposal_id(&self) -> Result<u64, Error> {
+    async fn get_next_proposal_id(&self, parent_block_id: u64) -> Result<u64, Error> {
         if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
             return Ok(current_proposal_id + 1);
         }
@@ -273,7 +286,7 @@ impl BatchManager {
         match self
             .taiko
             .l2_execution_layer()
-            .get_last_synced_proposal_id_from_geth()
+            .get_proposal_id_from_geth_by_block_id(parent_block_id)
             .await
         {
             Ok(id) => Ok(id + 1),
@@ -295,12 +308,16 @@ impl BatchManager {
         }
     }
 
-    async fn create_new_batch(&mut self) -> Result<u64, Error> {
+    async fn create_new_batch(
+        &mut self,
+        parent_block_id: u64,
+        l2_slot_timestamp: u64,
+    ) -> Result<u64, Error> {
         // Calculate the anchor block ID and create a new batch
         let last_anchor_id = self
             .taiko
             .l2_execution_layer()
-            .get_last_synced_anchor_block_id_from_geth()
+            .get_anchor_block_id_from_geth(parent_block_id)
             .await
             .unwrap_or_else(|e| {
                 warn!("Failed to get last synced anchor block ID from Taiko Geth: {e}");
@@ -314,12 +331,12 @@ impl BatchManager {
         )
         .await?;
 
-        let proposal_id = self.get_next_proposal_id().await?;
+        let proposal_id = self.get_next_proposal_id(parent_block_id).await?;
 
         let anchor_block_id = anchor_block_info.id();
         // Create new batch
         self.batch_builder
-            .create_new_batch(proposal_id, anchor_block_info);
+            .create_new_batch(proposal_id, anchor_block_info, l2_slot_timestamp);
 
         Ok(anchor_block_id)
     }
@@ -361,18 +378,27 @@ impl BatchManager {
         self.batch_builder.take_batches_to_send()
     }
 
-    pub fn is_anchor_block_offset_valid(&self, anchor_block_offset: u64) -> bool {
+    pub fn is_offsets_valid(&self, anchor_block_offset: u64, timestamp_offset: u64) -> bool {
+        self.is_anchor_block_offset_valid(anchor_block_offset)
+            && self.is_timestamp_offset_valid(timestamp_offset)
+    }
+
+    fn is_anchor_block_offset_valid(&self, anchor_block_offset: u64) -> bool {
         anchor_block_offset
-            < self
+            <= self
                 .taiko
                 .get_protocol_config()
                 .get_max_anchor_height_offset()
     }
 
-    pub async fn get_l1_anchor_block_offset_for_l2_block(
+    fn is_timestamp_offset_valid(&self, timestamp_offset: u64) -> bool {
+        timestamp_offset <= self.taiko.get_protocol_config().get_timestamp_max_offset()
+    }
+
+    pub async fn get_l1_anchor_block_and_timestamp_offset_for_l2_block(
         &self,
         l2_block_height: u64,
-    ) -> Result<u64, Error> {
+    ) -> Result<(u64, u64), Error> {
         debug!(
             "get_anchor_block_offset: Checking L2 block {}",
             l2_block_height
@@ -381,6 +407,7 @@ impl BatchManager {
             .taiko
             .get_l2_block_by_number(l2_block_height, false)
             .await?;
+        let block_timestamp = block.header.timestamp();
 
         let anchor_tx_hash = block
             .transactions
@@ -392,16 +419,18 @@ impl BatchManager {
         let l1_anchor_block_id = Taiko::decode_anchor_id_from_tx_data(l2_anchor_tx.input())?;
 
         debug!(
-            "get_l1_anchor_block_offset_for_l2_block: L2 block {l2_block_height} has L1 anchor block id {l1_anchor_block_id}"
+            "get_l1_anchor_block_and_timestamp_offset_for_l2_block: L2 block {l2_block_height} has L1 anchor block id {l1_anchor_block_id} and  timestamp {block_timestamp}",
         );
 
-        self.ethereum_l1.slot_clock.slots_since_l1_block(
+        let anchor_offset = self.ethereum_l1.slot_clock.slots_since_l1_block(
             self.ethereum_l1
                 .execution_layer
                 .common()
                 .get_block_timestamp_by_number(l1_anchor_block_id)
                 .await?,
-        )
+        )?;
+        let timestamp_offset = self.ethereum_l1.slot_clock.seconds_since(block_timestamp);
+        Ok((anchor_offset, timestamp_offset))
     }
 
     pub async fn recover_from_l2_block(&mut self, block_height: u64) -> Result<(), Error> {
@@ -508,9 +537,9 @@ impl BatchManager {
         &mut self,
         pending_tx_list: PreBuiltTxList,
         l2_slot_info: L2SlotInfoV2,
-        _is_forced_inclusion: bool,
         allow_forced_inclusion: bool,
-    ) -> Result<BuildPreconfBlockResponse, Error> {
+        // TODO REPLACE with enum or struct
+    ) -> Result<(BuildPreconfBlockResponse, bool), Error> {
         // TODO create context outside
         let l2_slot_context = L2SlotContext {
             info: l2_slot_info,
@@ -518,13 +547,11 @@ impl BatchManager {
             allow_forced_inclusion,
         };
 
-        // TODO handle forced inclusion properly
-
-        let block = self
+        let (block, is_forced_inclusion) = self
             .add_new_l2_block(pending_tx_list, &l2_slot_context, OperationType::Reanchor)
             .await?;
 
-        Ok(block)
+        Ok((block, is_forced_inclusion))
     }
 
     pub async fn is_forced_inclusion(&mut self, block_id: u64) -> Result<bool, Error> {
