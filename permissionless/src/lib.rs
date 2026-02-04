@@ -16,6 +16,7 @@ use common::{
     utils::cancellation_token::CancellationToken,
 };
 use std::sync::Arc;
+use taiko_protocol::preconfirmation::lookahead::LookaheadResolver;
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -42,6 +43,8 @@ pub async fn create_permissionless_node(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?,
     );
+
+    let lookahead_resolver = LookaheadResolver::build();
 
     let node = node::Node::new(
         cancel_token.clone(),
