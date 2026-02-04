@@ -3,7 +3,7 @@ use alloy::rpc::types::Transaction;
 use anyhow::Error;
 use common::shared::l2_tx_lists::convert_tx_envelopes_to_transactions;
 use common::{blob::blob_parser::get_bytes_from_blobs, l1::ethereum_l1::EthereumL1};
-use std::sync::{Arc};
+use std::sync::Arc;
 
 use taiko_protocol::shasta::manifest::DerivationSourceManifest;
 
@@ -18,17 +18,11 @@ impl ForcedInclusion {
             .execution_layer
             .get_forced_inclusion_head()
             .await?;
-        Ok(Self {
-            ethereum_l1,
-            index,
-        })
+        Ok(Self { ethereum_l1, index })
     }
 
     pub fn new_with_index(ethereum_l1: Arc<EthereumL1<ExecutionLayer>>, index: u64) -> Self {
-        Self {
-            ethereum_l1,
-            index,
-        }
+        Self { ethereum_l1, index }
     }
 
     pub fn set_index(&mut self, index: u64) {
@@ -53,7 +47,11 @@ impl ForcedInclusion {
             .execution_layer
             .get_forced_inclusion_tail()
             .await?;
-        tracing::debug!("Decode forced inclusion at index {}, tail: {}", self.index, tail);
+        tracing::debug!(
+            "Decode forced inclusion at index {}, tail: {}",
+            self.index,
+            tail
+        );
         if self.index >= tail {
             return Ok(None);
         }
