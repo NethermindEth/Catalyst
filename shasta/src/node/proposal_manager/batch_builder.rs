@@ -85,8 +85,7 @@ impl BatchBuilder {
     /// can accept more forced inclusion blocks.
     pub fn can_add_forced_inclusion(&self) -> bool {
         self.current_proposal.as_ref().is_some_and(|p| {
-            p.id > 1
-                && p.l2_blocks.is_empty()
+            p.l2_blocks.is_empty()
                 && p.num_forced_inclusion
                     < taiko_protocol::shasta::constants::MAX_FORCED_INCLUSIONS_PER_PROPOSAL
         })
