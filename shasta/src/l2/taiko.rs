@@ -8,7 +8,7 @@ use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
     primitives::{Address, B256},
-    rpc::types::Block,
+    rpc::types::{Block, debug},
 };
 use anyhow::Error;
 use common::shared::l2_slot_info_v2::L2SlotContext;
@@ -296,6 +296,10 @@ impl Taiko {
             is_forced_inclusion: l2_block_payload.is_forced_inclusion,
         };
 
+        debug!(
+            "advance_head_to_new_l2_block: Sending preconf block request to Taiko driver: {:?}",
+            request_body
+        );
         self.driver
             .preconf_blocks(request_body, operation_type)
             .await
