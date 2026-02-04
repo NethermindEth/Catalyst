@@ -135,7 +135,7 @@ impl BatchManager {
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         if !self.batch_builder.can_add_forced_inclusion() {
-            debug!("Cannot add forced inclusion block when current batch has common block");
+            debug!("Cannot add forced inclusion block to current proposal");
             return Ok(None);
         }
         // get next forced inclusion

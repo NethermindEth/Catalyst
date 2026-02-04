@@ -81,11 +81,14 @@ impl BatchBuilder {
         })
     }
 
-    /// Returns true if the current proposal exists and has no common block
+    /// Returns true if the current proposal exists, has no common block and
+    /// can accept more forced inclusion blocks.
     pub fn can_add_forced_inclusion(&self) -> bool {
-        self.current_proposal
-            .as_ref()
-            .is_some_and(|b| b.l2_blocks.is_empty())
+        self.current_proposal.as_ref().is_some_and(|b| {
+            b.l2_blocks.is_empty()
+                && b.num_forced_inclusion
+                    < taiko_protocol::shasta::constants::MAX_FORCED_INCLUSIONS_PER_PROPOSAL
+        })
     }
 
     pub fn create_new_batch(&mut self, id: u64, anchor_block: AnchorBlockInfo, timestamp: u64) {

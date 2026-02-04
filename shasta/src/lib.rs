@@ -32,12 +32,6 @@ pub async fn create_shasta_node(
 ) -> Result<(), Error> {
     info!("Creating Shasta node");
 
-    if !config.disable_bridging {
-        return Err(anyhow::anyhow!(
-            "Bridging is not implemented. Exiting Shasta node creation."
-        ));
-    }
-
     let shasta_config = ShastaConfig::read_env_variables()
         .map_err(|e| anyhow::anyhow!("Failed to read Shasta configuration: {}", e))?;
     info!("Shasta config: {}", shasta_config);
@@ -96,7 +90,7 @@ pub async fn create_shasta_node(
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
-        taiko_protocol::shasta::constants::PROPOSAL_MAX_BLOCKS.try_into()?
+        taiko_protocol::shasta::constants::DERIVATION_SOURCE_MAX_BLOCKS.try_into()?
     } else {
         config.max_blocks_per_batch
     };
