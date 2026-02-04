@@ -1,14 +1,13 @@
 name: "Catalyst e2e Stack - Pytest with Kurtosis"
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - "e2e_tests/**"
-      - ".github/workflows/e2e_pytest.yml"
+  push:
+    branches:
+      - master
+  workflow_dispatch:
 
 concurrency:
-  group: catalyst-e2e-pytest
+  group: catalyst-e2e-pytest-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -16,7 +15,9 @@ jobs:
     name: E2E Tests (Pacaya)
     runs-on: ubuntu-latest
     timeout-minutes: 180
-    if: github.event.pull_request.head.repo.full_name == 'NethermindEth/Catalyst'
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master')
     steps:
       - name: Checkout catalyst-e2e repository
         uses: actions/checkout@v6
@@ -25,14 +26,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y curl jq
-
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          
       - name: Install Kurtosis CLI
         run: |
           echo "deb [trusted=yes] https://apt.fury.io/kurtosis-tech/ /" | sudo tee /etc/apt/sources.list.d/kurtosis.list
           sudo apt-get update
           sudo apt-get install -y kurtosis-cli
           kurtosis version
-
+  
       - name: Clone simple-taiko-node-nethermind repository
         uses: actions/checkout@v6
         with:
@@ -40,6 +43,36 @@ jobs:
           path: simple-taiko-node-nethermind
           ref: catalyst_pacaya_shasta
           submodules: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+  
+      - name: Docker Build Catalyst Node
+        run: |
+          image_name="nethermind/catalyst-node"
+          image_tag="${GITHUB_SHA:0:8}"
+          full_image="${image_name}:${image_tag}"
+          
+          echo "Building Docker image: ${full_image}"
+          
+          docker buildx build . \
+            --platform linux/amd64 \
+            -f Dockerfile \
+            -t "${full_image}" \
+            --load
+          
+          echo "IMAGE_TAG=${full_image}" >> $GITHUB_ENV
+          
+          echo "Verifying image exists locally:"
+          docker images | grep "${image_name}" | grep "${image_tag}" || (echo "Error: Image not found locally" && exit 1)
+          
+      - name: Replace Catalyst Node Image simple taiko node nethermind
+        working-directory: simple-taiko-node-nethermind
+        run: |
+          CATALYST_IMAGE="nethermind/catalyst-node:latest"
+          sed -i "s|${CATALYST_IMAGE}|${IMAGE_TAG}|g" .env.example
+          yq eval '.services.catalyst-node-1.pull_policy = "never"' -i docker-compose.yml
+          yq eval '.services.catalyst-node-2.pull_policy = "never"' -i docker-compose.yml
 
       - name: Deploy Ethereum package (L1 setup)
         working-directory: simple-taiko-node-nethermind
@@ -180,6 +213,9 @@ jobs:
     name: E2E Tests (Shasta)
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master')
     steps:
       - name: Checkout catalyst-e2e repository
         uses: actions/checkout@v6
@@ -188,6 +224,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y curl jq
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
 
       - name: Install Kurtosis CLI
         run: |
@@ -204,6 +242,36 @@ jobs:
           ref: catalyst_pacaya_shasta
           submodules: true
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+  
+      - name: Docker Build Catalyst Node
+        run: |
+          image_name="nethermind/catalyst-node"
+          image_tag="${GITHUB_SHA:0:8}"
+          full_image="${image_name}:${image_tag}"
+          
+          echo "Building Docker image: ${full_image}"
+          
+          docker buildx build . \
+            --platform linux/amd64 \
+            -f Dockerfile \
+            -t "${full_image}" \
+            --load
+          
+          echo "IMAGE_TAG=${full_image}" >> $GITHUB_ENV
+          
+          echo "Verifying image exists locally:"
+          docker images | grep "${image_name}" | grep "${image_tag}" || (echo "Error: Image not found locally" && exit 1)
+
+      - name: Replace Catalyst Node Image simple taiko node nethermind
+        working-directory: simple-taiko-node-nethermind
+        run: |
+          CATALYST_IMAGE="nethermind/catalyst-node:latest"
+          sed -i "s|${CATALYST_IMAGE}|${IMAGE_TAG}|g" .env.example
+          yq eval '.services.catalyst-node-1.pull_policy = "never"' -i docker-compose.yml
+          yq eval '.services.catalyst-node-2.pull_policy = "never"' -i docker-compose.yml
+          
       - name: Deploy Ethereum package (L1 setup)
         working-directory: simple-taiko-node-nethermind
         run: |
