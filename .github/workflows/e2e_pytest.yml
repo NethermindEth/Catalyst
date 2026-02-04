@@ -6,6 +6,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: catalyst-e2e-pytest-${{ github.run_id }}
   cancel-in-progress: false
