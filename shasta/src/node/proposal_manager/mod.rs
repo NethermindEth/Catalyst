@@ -524,8 +524,7 @@ impl BatchManager {
     pub async fn update_forced_inclusion_and_clone_without_batches(
         &mut self,
     ) -> Result<Self, Error> {
-        // TODO handle forced inclusion properly
-        //self.forced_inclusion.sync_queue_index_with_head().await?;
+        self.forced_inclusion.sync_queue_index_with_head().await?;
         Ok(self.clone_without_batches())
     }
 
