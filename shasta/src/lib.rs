@@ -32,12 +32,6 @@ pub async fn create_shasta_node(
 ) -> Result<(), Error> {
     info!("Creating Shasta node");
 
-    if !config.disable_bridging {
-        return Err(anyhow::anyhow!(
-            "Bridging is not implemented. Exiting Shasta node creation."
-        ));
-    }
-
     let shasta_config = ShastaConfig::read_env_variables()
         .map_err(|e| anyhow::anyhow!("Failed to read Shasta configuration: {}", e))?;
     info!("Shasta config: {}", shasta_config);
