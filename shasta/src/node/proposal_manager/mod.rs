@@ -143,7 +143,7 @@ impl BatchManager {
 
         if let Some(forced_inclusion) = forced_inclusion {
             debug!(
-                "Adding new forced inclusion block with {} transactions",
+                "⏺️ Adding new forced inclusion block with {} transactions",
                 forced_inclusion.len()
             );
             let fi_block = L2BlockV2Draft {
