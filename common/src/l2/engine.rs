@@ -56,6 +56,32 @@ impl L2Engine {
         Ok(Self { auth_rpc, config })
     }
 
+    pub async fn get_last_block_id_by_batch_id(&self, batch_id: u64) -> Result<Option<u64>, Error> {
+        let hex_batch_id = format!("0x{:x}", batch_id);
+        let params = vec![Value::String(hex_batch_id)];
+        let result = self
+            .auth_rpc
+            .call_method("taikoAuth_lastBlockIDByBatchID", params)
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "taikoAuth_lastBlockIDByBatchID failed: batch id {}: {}",
+                    batch_id,
+                    e
+                )
+            })?;
+
+        tracing::warn!("Result from taikoAuth_lastBlockIDByBatchID: {:?}", result);
+
+        if let Value::String(hex_str) = result {
+            let block_id = u64::from_str_radix(hex_str.trim_start_matches("0x"), 16)
+                .map_err(|_| anyhow::anyhow!("Invalid block id hex format"))?;
+            Ok(Some(block_id))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub async fn get_pending_l2_tx_list(
         &self,
         base_fee: u64,
