@@ -71,8 +71,6 @@ impl L2Engine {
                 )
             })?;
 
-        tracing::warn!("Result from taikoAuth_lastBlockIDByBatchID: {:?}", result);
-
         if let Value::String(hex_str) = result {
             let block_id = u64::from_str_radix(hex_str.trim_start_matches("0x"), 16)
                 .map_err(|_| anyhow::anyhow!("Invalid block id hex format"))?;

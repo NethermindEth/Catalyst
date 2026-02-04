@@ -251,9 +251,11 @@ impl Node {
                     }
                 }
                 debug!(
-                    "Calculated forced inclusion head: {} in {} milliseconds",
+                    "Calculated forced inclusion head: {} in {} ms (unsafe head: {}, safe head: {})",
                     fi_head,
-                    start.elapsed().as_millis()
+                    start.elapsed().as_millis(),
+                    unsafe_block_id,
+                    safe_block_id
                 );
             }
             // Update proposal manager forced inclusion head
