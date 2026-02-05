@@ -126,7 +126,11 @@ impl ConsensusLayer {
 
         let body = response.text().await?;
         let v: serde_json::Value = serde_json::from_str(&body)?;
-        tracing::debug!("ConsensusLayer ({}) took {} ms", path, start.elapsed().as_millis());
+        tracing::debug!(
+            "ConsensusLayer ({}) took {} ms",
+            path,
+            start.elapsed().as_millis()
+        );
         Ok(v)
     }
 }
