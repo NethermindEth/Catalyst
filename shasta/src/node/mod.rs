@@ -179,7 +179,7 @@ impl Node {
                 .set(l2_slot_info.parent_id(), *l2_slot_info.parent_hash())
                 .await;
 
-            let (next_proposal_id, mut fi_head, fi_tail) = self
+            let (next_proposal_id, fi_head, fi_tail) = self
                 .ethereum_l1
                 .execution_layer
                 .get_inbox_forced_inclusion_state()
@@ -231,35 +231,13 @@ impl Node {
             }
 
             // Calculate the current forced inclusion unsafe head
-            if next_proposal_id > 2 && fi_head < fi_tail {
-                let start = std::time::Instant::now();
-                let safe_block_id = self
-                    .taiko
-                    .get_last_block_id_by_batch_id(next_proposal_id - 1)
-                    .await?;
-                let unsafe_block_id = self.taiko.get_latest_l2_block_id().await?;
-                for block_id in safe_block_id + 1..=unsafe_block_id {
-                    let is_forced_inclusion = self
-                        .taiko
-                        .get_forced_inclusion_form_l1origin(block_id)
-                        .await?;
-                    if is_forced_inclusion {
-                        fi_head += 1;
-                    }
-                    if fi_head == fi_tail {
-                        break;
-                    }
-                }
-                debug!(
-                    "Calculated forced inclusion head: {} in {} ms (unsafe head: {}, safe head: {})",
-                    fi_head,
-                    start.elapsed().as_millis(),
-                    unsafe_block_id,
-                    safe_block_id
-                );
-            }
+            let current_fi_head = self
+                .taiko
+                .calculate_current_fi_head(next_proposal_id, fi_head, fi_tail)
+                .await?;
+
             // Update proposal manager forced inclusion head
-            self.proposal_manager.set_fi_head(fi_head);
+            self.proposal_manager.set_fi_head(current_fi_head);
         }
 
         if current_status.is_preconfer() && current_status.is_driver_synced() {
