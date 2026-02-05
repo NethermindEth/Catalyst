@@ -10,11 +10,12 @@ pub struct ConsensusLayer {
 }
 
 impl ConsensusLayer {
-    pub fn new(rpc_url: &str, timeout: Duration) -> Result<Self, Error> {
+    pub fn new(rpc_url: &str, _timeout: Duration) -> Result<Self, Error> {
         if !rpc_url.ends_with('/') {
             return Err(anyhow::anyhow!("Consensus layer URL must end with '/'"));
         }
-        let client = reqwest::Client::builder().timeout(timeout).build()?;
+        tracing::info!("ConsensusLayer url: {} without timeout", rpc_url);
+        let client = reqwest::Client::builder().build()?;
         Ok(Self {
             client,
             url: reqwest::Url::parse(rpc_url)?,
@@ -97,6 +98,7 @@ impl ConsensusLayer {
     }
 
     async fn get(&self, path: &str) -> Result<serde_json::Value, Error> {
+        let start = std::time::Instant::now();
         let response = self
             .client
             .get(self.url.join(path)?)
@@ -124,6 +126,7 @@ impl ConsensusLayer {
 
         let body = response.text().await?;
         let v: serde_json::Value = serde_json::from_str(&body)?;
+        tracing::debug!("ConsensusLayer ({}) took {} ms", path, start.elapsed().as_millis());
         Ok(v)
     }
 }
