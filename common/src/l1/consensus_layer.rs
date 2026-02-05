@@ -97,6 +97,7 @@ impl ConsensusLayer {
     }
 
     async fn get(&self, path: &str) -> Result<serde_json::Value, Error> {
+        let start = std::time::Instant::now();
         let response = self
             .client
             .get(self.url.join(path)?)
@@ -124,6 +125,11 @@ impl ConsensusLayer {
 
         let body = response.text().await?;
         let v: serde_json::Value = serde_json::from_str(&body)?;
+        tracing::debug!(
+            "ConsensusLayer ({}) took {} ms",
+            path,
+            start.elapsed().as_millis()
+        );
         Ok(v)
     }
 }
