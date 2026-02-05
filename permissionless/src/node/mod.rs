@@ -11,7 +11,7 @@ use tokio::{sync::mpsc::Receiver, time::Duration};
 use tracing::{debug, error, info};
 
 pub mod config;
-mod operator;
+pub mod operator;
 
 pub struct Node {
     cancel_token: CancellationToken,

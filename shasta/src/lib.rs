@@ -1,11 +1,10 @@
 mod chain_monitor;
+pub mod config;
 mod forced_inclusion;
 mod l1;
 mod l2;
 mod node;
-mod utils;
 
-use crate::utils::config::ShastaConfig;
 use anyhow::Error;
 use common::{
     batch_builder::BatchBuilderConfig,
@@ -18,6 +17,7 @@ use common::{
     metrics, shared,
     utils::cancellation_token::CancellationToken,
 };
+use config::ShastaConfig;
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
 use std::sync::Arc;

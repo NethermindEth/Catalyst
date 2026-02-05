@@ -1,4 +1,4 @@
-use crate::utils::config::ShastaConfig;
+use crate::config::ShastaConfig;
 use alloy::primitives::Address;
 
 #[derive(Clone)]
