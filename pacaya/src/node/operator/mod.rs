@@ -169,10 +169,12 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
     }
 
     async fn is_current_operator(&mut self, epoch: u64) -> Result<bool, Error> {
-        let current_epoch_timestamp = self.slot_clock.get_epoch_begin_timestamp(epoch)?;
         match self
             .execution_layer
-            .get_operators_for_current_and_next_epoch(current_epoch_timestamp)
+            .get_operators_for_current_and_next_epoch(
+                self.slot_clock.get_epoch_begin_timestamp(epoch)?,
+                self.slot_clock.get_current_slot_begin_timestamp()?,
+            )
             .await
         {
             Ok((current_operator_address, next_operator_address)) => {

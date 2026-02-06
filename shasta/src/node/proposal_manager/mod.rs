@@ -19,7 +19,7 @@ use common::{
     utils::cancellation_token::CancellationToken,
 };
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::forced_inclusion::ForcedInclusion;
 use crate::node::L2SlotInfoV2;
@@ -135,7 +135,7 @@ impl BatchManager {
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         if !self.batch_builder.can_add_forced_inclusion() {
-            debug!("Cannot add forced inclusion block to current proposal");
+            trace!("Cannot add forced inclusion block to current proposal");
             return Ok(None);
         }
         // get next forced inclusion
