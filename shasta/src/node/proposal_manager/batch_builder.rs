@@ -84,9 +84,9 @@ impl BatchBuilder {
     /// Returns true if the current proposal exists, has no common block and
     /// can accept more forced inclusion blocks.
     pub fn can_add_forced_inclusion(&self) -> bool {
-        self.current_proposal.as_ref().is_some_and(|b| {
-            b.l2_blocks.is_empty()
-                && b.num_forced_inclusion
+        self.current_proposal.as_ref().is_some_and(|p| {
+            p.l2_blocks.is_empty()
+                && p.num_forced_inclusion
                     < taiko_protocol::shasta::constants::MAX_FORCED_INCLUSIONS_PER_PROPOSAL
         })
     }
@@ -225,13 +225,10 @@ impl BatchBuilder {
         }
 
         if is_forced_inclusion {
-            if self.can_add_forced_inclusion() {
-                self.inc_forced_inclusion()?;
-            } else {
-                return Err(anyhow::anyhow!(
-                    "recover_from: Cannot add forced inclusion block to proposal"
-                ));
-            }
+            // If forced inclusion exists in the proposal, we need to return an error
+            return Err(anyhow::anyhow!(
+                "recover_from: Cannot recover forced inclusion block"
+            ));
         } else {
             if let Some(batch) = self.current_proposal.as_mut()
                 && batch.anchor_block_id < anchor_info.id()
@@ -491,12 +488,5 @@ impl BatchBuilder {
             .as_ref()
             .map(|p| p.num_forced_inclusion > 0)
             .unwrap_or(false)
-    }
-
-    pub fn inc_forced_inclusion(&mut self) -> Result<(), Error> {
-        self.current_proposal
-            .as_mut()
-            .map(|proposal| proposal.num_forced_inclusion += 1)
-            .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
     }
 }

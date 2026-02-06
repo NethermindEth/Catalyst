@@ -81,9 +81,6 @@ impl Verifier {
             self.verifier_thread_handle = Some(tokio::spawn(async move {
                 info!("🔍 Started block verification thread");
 
-                // update forced inclusion index
-                verifier_thread.batch_manager.reset_builder().await?;
-
                 verifier_thread
                     .verify_submitted_blocks(taiko_inbox_height, metrics)
                     .await
@@ -221,6 +218,10 @@ impl VerifierThread {
             .is_offsets_valid(anchor_offset, timestamp_offset)
         {
             let start = std::time::Instant::now();
+
+            // Sync FI with L1 chain
+            self.batch_manager.reset_builder().await?;
+
             // recover all missed l2 blocks
             for current_height in taiko_inbox_height + 1..=taiko_geth_height {
                 if self.cancel_token.is_cancelled() {
