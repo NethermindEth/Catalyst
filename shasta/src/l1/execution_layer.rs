@@ -8,7 +8,6 @@ use alloy::{
     providers::DynProvider,
 };
 use anyhow::{Error, anyhow};
-use common::shared::l2_block_v2::L2BlockV2;
 use common::{
     l1::{
         traits::{ELTrait, PreconferProvider},
@@ -17,10 +16,13 @@ use common::{
     metrics::Metrics,
     shared::{
         alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon,
-        transaction_monitor::TransactionMonitor,
+        l2_block_v2::L2BlockV2, transaction_monitor::TransactionMonitor,
     },
 };
-use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
+use pacaya::l1::{
+    operators_cache::{OperatorError, OperatorsCache},
+    traits::{PreconfOperator, WhitelistProvider},
+};
 use std::sync::Arc;
 use taiko_bindings::inbox::{
     IForcedInclusionStore::ForcedInclusion,
@@ -37,6 +39,7 @@ pub struct ExecutionLayer {
     pub transaction_monitor: TransactionMonitor,
     contract_addresses: ContractAddresses,
     inbox_instance: InboxInstance<DynProvider>,
+    operators_cache: OperatorsCache,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -81,6 +84,9 @@ impl ELTrait for ExecutionLayer {
             proposer_checker: shasta_config.proposerChecker,
         };
 
+        let operators_cache =
+            OperatorsCache::new(provider.clone(), contract_addresses.proposer_checker);
+
         Ok(Self {
             common,
             provider,
@@ -88,6 +94,7 @@ impl ELTrait for ExecutionLayer {
             transaction_monitor,
             contract_addresses,
             inbox_instance,
+            operators_cache,
         })
     }
 
@@ -128,13 +135,14 @@ impl PreconfOperator for ExecutionLayer {
     async fn get_operators_for_current_and_next_epoch(
         &self,
         current_epoch_timestamp: u64,
+        current_slot_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
-        pacaya::l1::execution_layer::ExecutionLayer::get_operators_for_current_and_next_epoch(
-            &self.provider,
-            self.contract_addresses.proposer_checker,
-            current_epoch_timestamp,
-        )
-        .await
+        self.operators_cache
+            .get_operators_for_current_and_next_epoch(
+                current_epoch_timestamp,
+                current_slot_timestamp,
+            )
+            .await
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {

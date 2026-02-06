@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::l1::traits::OperatorError;
+    use crate::l1::operators_cache::OperatorError;
     use crate::node::operator::*;
     use alloy::primitives::B256;
     use alloy::primitives::{Address, address};
@@ -41,6 +41,7 @@ mod tests {
         async fn get_operators_for_current_and_next_epoch(
             &self,
             _: u64,
+            _: u64,
         ) -> Result<(Address, Address), OperatorError> {
             Ok((self.current_operator_address, self.next_operator_address))
         }
@@ -66,6 +67,7 @@ mod tests {
 
         async fn get_operators_for_current_and_next_epoch(
             &self,
+            _: u64,
             _: u64,
         ) -> Result<(Address, Address), OperatorError> {
             Err(OperatorError::Any(Error::from(anyhow::anyhow!(
@@ -654,6 +656,7 @@ mod tests {
 
         async fn get_operators_for_current_and_next_epoch(
             &self,
+            _: u64,
             _: u64,
         ) -> Result<(Address, Address), OperatorError> {
             Err(OperatorError::OperatorCheckTooEarly)
