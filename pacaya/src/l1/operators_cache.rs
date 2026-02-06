@@ -52,7 +52,7 @@ impl OperatorsCache {
         Ok(result)
     }
 
-    pub async fn get_operators_for_current_and_next_epoch_internal(
+    async fn get_operators_for_current_and_next_epoch_internal(
         &self,
         current_epoch_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
