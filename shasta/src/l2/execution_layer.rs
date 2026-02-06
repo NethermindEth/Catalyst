@@ -61,10 +61,6 @@ impl L2ExecutionLayer {
         l2_slot_info: &L2SlotInfoV2,
         anchor_block_params: Checkpoint,
     ) -> Result<Transaction, Error> {
-        debug!(
-            "Constructing anchor transaction for block number: {}",
-            l2_slot_info.parent_id() + 1
-        );
         let nonce = self
             .provider
             .get_transaction_count(GOLDEN_TOUCH_ADDRESS)
@@ -98,7 +94,11 @@ impl L2ExecutionLayer {
 
         let tx_envelope = TxEnvelope::from(sig_tx);
 
-        debug!("AnchorTX transaction hash: {}", tx_envelope.tx_hash());
+        debug!(
+            "AnchorTX transaction hash: {}, block number: {}",
+            tx_envelope.tx_hash(),
+            l2_slot_info.parent_id() + 1
+        );
 
         let tx = Transaction {
             inner: Recovered::new_unchecked(tx_envelope, GOLDEN_TOUCH_ADDRESS),
