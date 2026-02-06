@@ -68,27 +68,41 @@ impl ForcedInclusion {
         )
         .await?;
 
-        let fi = DerivationSourceManifest::decompress_and_decode(
+        // Extract transactions from the blob bytes. If any step fails, return an empty transaction vector
+        self.extract_transactions_from_blob_bytes(
             &blob_bytes,
             forced_inclusion.blobSlice.offset.to::<usize>(),
-        )?;
+        )
+        .await
+        .or_else(|err| {
+            tracing::warn!(
+                error = ?err,
+                "Failed to extract transactions from blob bytes; returning empty transaction vector"
+            );
+            Ok(Some(vec![]))
+        })
+    }
 
-        // TODO handle multiple blocks in forced inclusion manifest
-        if fi.blocks.len() != 1 {
+    async fn extract_transactions_from_blob_bytes(
+        &self,
+        blob_bytes: &[u8],
+        offset: usize,
+    ) -> Result<Option<Vec<Transaction>>, Error> {
+        let blocks = DerivationSourceManifest::decompress_and_decode(blob_bytes, offset)?.blocks;
+
+        if blocks.len() != 1 {
             return Err(anyhow::anyhow!(
                 "Expected exactly one block in forced inclusion manifest, found {}",
-                fi.blocks.len()
+                blocks.len()
             ));
         }
-        if let Some(first_block) = fi.blocks.first() {
-            Ok(Some(convert_tx_envelopes_to_transactions(
-                first_block.transactions.clone(),
-            )?))
-        } else {
-            Err(anyhow::anyhow!(
-                "No blocks found in forced inclusion manifest"
-            ))
-        }
+
+        let single_block = blocks
+            .into_iter()
+            .next()
+            .expect("Length checked above");
+        let transactions = convert_tx_envelopes_to_transactions(single_block.transactions)?;
+        Ok(Some(transactions))
     }
 
     pub async fn consume_forced_inclusion(&mut self) -> Result<Option<Vec<Transaction>>, Error> {
