@@ -97,10 +97,7 @@ impl ForcedInclusion {
             ));
         }
 
-        let single_block = blocks
-            .into_iter()
-            .next()
-            .expect("Length checked above");
+        let single_block = blocks.into_iter().next().expect("Length checked above");
         let transactions = convert_tx_envelopes_to_transactions(single_block.transactions)?;
         Ok(Some(transactions))
     }
