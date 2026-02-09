@@ -86,9 +86,9 @@ strum = { version = "0.27", features = ["derive"] }
 
 taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "3e0fdad9b9fbf7f6550c7209185fd6623468452c", package = "alethia-reth-consensus" }
 taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "a09950572696cf0ba50b6728a96ea285e5c0ddfa", package = "bindings" }
+taiko_preconfirmation_driver = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "a09950572696cf0ba50b6728a96ea285e5c0ddfa", package = "preconfirmation-driver" }
 taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "a09950572696cf0ba50b6728a96ea285e5c0ddfa", package = "protocol" }
 taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "a09950572696cf0ba50b6728a96ea285e5c0ddfa", package = "rpc" }
-taiko_preconfirmation_driver = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "a09950572696cf0ba50b6728a96ea285e5c0ddfa", package = "preconfirmation-driver" }
 tokio = { version = "1.49", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
 tracing = { version = "0.1", default-features = false }
