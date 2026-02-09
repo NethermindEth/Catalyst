@@ -90,14 +90,12 @@ impl ForcedInclusion {
     ) -> Result<Option<Vec<Transaction>>, Error> {
         let blocks = DerivationSourceManifest::decompress_and_decode(blob_bytes, offset)?.blocks;
 
-        if blocks.len() != 1 {
-            return Err(anyhow::anyhow!(
+        let [single_block]: [_; 1] = blocks.try_into().map_err(|b: Vec<_>| {
+            anyhow::anyhow!(
                 "Expected exactly one block in forced inclusion manifest, found {}",
-                blocks.len()
-            ));
-        }
-
-        let single_block = blocks.into_iter().next().expect("Length checked above");
+                b.len()
+            )
+        })?;
         let transactions = convert_tx_envelopes_to_transactions(single_block.transactions)?;
         Ok(Some(transactions))
     }
