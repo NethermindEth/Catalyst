@@ -179,6 +179,16 @@ impl Node {
                 .set(l2_slot_info.parent_id(), *l2_slot_info.parent_hash())
                 .await;
 
+            let (next_proposal_id, fi_head, fi_tail) = self
+                .ethereum_l1
+                .execution_layer
+                .get_inbox_forced_inclusion_state()
+                .await?;
+            debug!(
+                "Next proposal id: {}, FI head: {}, FI tail: {}",
+                next_proposal_id, fi_head, fi_tail
+            );
+
             if current_status.is_submitter() {
                 // We start preconfirmation in the middle of the epoch.
                 // Need to check for unproposed L2 blocks.
@@ -200,9 +210,7 @@ impl Node {
                 let verifier_result = Verifier::new_with_taiko_height(
                     taiko_geth_height,
                     self.taiko.clone(),
-                    self.proposal_manager
-                        .update_forced_inclusion_and_clone_without_batches()
-                        .await?,
+                    self.proposal_manager.clone_without_batches(fi_head),
                     verification_slot,
                     self.cancel_token.clone(),
                 )
@@ -221,6 +229,15 @@ impl Node {
                     }
                 }
             }
+
+            // Calculate the current forced inclusion unsafe head
+            let current_fi_head = self
+                .taiko
+                .calculate_current_fi_head(next_proposal_id, fi_head, fi_tail)
+                .await?;
+
+            // Update proposal manager forced inclusion head
+            self.proposal_manager.set_fi_head(current_fi_head);
         }
 
         if current_status.is_preconfer() && current_status.is_driver_synced() {
@@ -250,9 +267,7 @@ impl Node {
                 // TODO remove clone
                 info: l2_slot_info.clone(),
                 end_of_sequencing: current_status.is_end_of_sequencing(),
-                allow_forced_inclusion: self.config.propose_forced_inclusion
-                    && current_status.is_submitter()
-                    && self.verifier.is_none(),
+                allow_forced_inclusion: self.config.propose_forced_inclusion,
             };
 
             if self
@@ -339,9 +354,7 @@ impl Node {
                     Verifier::new_with_taiko_height(
                         taiko_geth_height,
                         self.taiko.clone(),
-                        self.proposal_manager
-                            .update_forced_inclusion_and_clone_without_batches()
-                            .await?,
+                        self.proposal_manager.clone_without_batches(0), // it does not matter here, we will update it in Verifier.handle_unprocessed_blocks
                         0,
                         self.cancel_token.clone(),
                     )

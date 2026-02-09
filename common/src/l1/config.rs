@@ -3,11 +3,13 @@ use crate::signer::{Signer, create_signer};
 use alloy::primitives::Address;
 use anyhow::Error;
 use std::sync::Arc;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct EthereumL1Config {
     pub execution_rpc_urls: Vec<String>,
     pub consensus_rpc_url: String,
+    pub consensus_rpc_timeout: Duration,
     pub blob_indexer_url: Option<String>,
     pub min_priority_fee_per_gas_wei: u64,
     pub tx_fees_increase_percentage: u64,
@@ -34,6 +36,7 @@ impl EthereumL1Config {
         Ok(Self {
             execution_rpc_urls: config.l1_rpc_urls.clone(),
             consensus_rpc_url: config.l1_beacon_url.clone(),
+            consensus_rpc_timeout: config.l1_beacon_timeout,
             blob_indexer_url: config.blob_indexer_url.clone(),
             slot_duration_sec: config.l1_slot_duration_sec,
             slots_per_epoch: config.l1_slots_per_epoch,

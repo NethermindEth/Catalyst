@@ -19,6 +19,7 @@ pub struct Config {
     // L1
     pub l1_rpc_urls: Vec<String>,
     pub l1_beacon_url: String,
+    pub l1_beacon_timeout: Duration,
     pub blob_indexer_url: Option<String>,
     pub l1_slot_duration_sec: u64,
     pub l1_slots_per_epoch: u64,
@@ -136,6 +137,12 @@ impl Config {
             }
             url
         };
+
+        let l1_beacon_timeout = std::env::var("L1_BEACON_TIMEOUT_MS")
+            .unwrap_or("1000".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("L1_BEACON_TIMEOUT_MS must be a number: {}", e))
+            .map(Duration::from_millis)?;
 
         let extra_gas_percentage = std::env::var("EXTRA_GAS_PERCENTAGE")
             .unwrap_or("100".to_string())
@@ -423,6 +430,7 @@ impl Config {
                 .map(|s| s.to_string())
                 .collect(),
             l1_beacon_url,
+            l1_beacon_timeout,
             blob_indexer_url: std::env::var("BLOB_INDEXER_URL").ok(),
             web3signer_l1_url,
             web3signer_l2_url,
@@ -474,6 +482,7 @@ Taiko geth auth RPC URL: {},
 Taiko driver URL: {},
 L1 RPC URL: {},
 Consensus layer URL: {},
+Consensus layer timeout: {}ms,
 Blob Indexer URL: {},
 Web3signer L1 URL: {},
 Web3signer L2 URL: {},
@@ -531,6 +540,7 @@ whitelist monitor interval: {}s
                 None => String::new(),
             },
             config.l1_beacon_url,
+            config.l1_beacon_timeout.as_millis(),
             config.blob_indexer_url.as_deref().unwrap_or("not set"),
             config.web3signer_l1_url.as_deref().unwrap_or("not set"),
             config.web3signer_l2_url.as_deref().unwrap_or("not set"),

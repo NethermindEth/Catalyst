@@ -153,6 +153,53 @@ impl Taiko {
             .await
     }
 
+    pub async fn calculate_current_fi_head(
+        &self,
+        next_proposal_id: u64,
+        fi_head: u64,
+        fi_tail: u64,
+    ) -> Result<u64, Error> {
+        let mut fi_head = fi_head;
+        if next_proposal_id > 2 && fi_head < fi_tail {
+            let start = std::time::Instant::now();
+            let safe_block_id = self
+                .get_last_block_id_by_batch_id(next_proposal_id - 1)
+                .await?;
+            let unsafe_block_id = self.get_latest_l2_block_id().await?;
+            for block_id in safe_block_id + 1..=unsafe_block_id {
+                let is_forced_inclusion = self.get_forced_inclusion_form_l1origin(block_id).await?;
+                if is_forced_inclusion {
+                    fi_head += 1;
+                }
+                if fi_head == fi_tail {
+                    break;
+                }
+            }
+            debug!(
+                "Calculated forced inclusion head: {} in {} ms (unsafe head: {}, safe head: {})",
+                fi_head,
+                start.elapsed().as_millis(),
+                unsafe_block_id,
+                safe_block_id
+            );
+        }
+        Ok(fi_head)
+    }
+
+    pub async fn get_last_block_id_by_batch_id(&self, batch_id: u64) -> Result<u64, Error> {
+        match self
+            .l2_engine
+            .get_last_block_id_by_batch_id(batch_id)
+            .await?
+        {
+            Some(block_id) => Ok(block_id),
+            None => Err(anyhow::anyhow!(
+                "last block id by batch id {} is None",
+                batch_id
+            )),
+        }
+    }
+
     pub async fn get_l2_slot_info_by_parent_block(
         &self,
         parent: BlockNumberOrTag,

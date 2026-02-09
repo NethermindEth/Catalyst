@@ -5,10 +5,11 @@ use crate::l1::config::ContractAddresses;
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, U256, aliases::U48},
-    providers::DynProvider,
+    providers::{DynProvider, Provider},
+    rpc::client::BatchRequest,
+    sol_types::SolCall,
 };
 use anyhow::{Error, anyhow};
-use common::shared::l2_block_v2::L2BlockV2;
 use common::{
     l1::{
         traits::{ELTrait, PreconferProvider},
@@ -17,10 +18,14 @@ use common::{
     metrics::Metrics,
     shared::{
         alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon,
-        transaction_monitor::TransactionMonitor,
+        l2_block_v2::L2BlockV2, transaction_monitor::TransactionMonitor,
     },
 };
-use pacaya::l1::traits::{OperatorError, PreconfOperator, WhitelistProvider};
+use pacaya::l1::{
+    operators_cache::{OperatorError, OperatorsCache},
+    traits::{PreconfOperator, WhitelistProvider},
+};
+use serde_json::json;
 use std::sync::Arc;
 use taiko_bindings::inbox::{
     IForcedInclusionStore::ForcedInclusion,
@@ -37,6 +42,7 @@ pub struct ExecutionLayer {
     pub transaction_monitor: TransactionMonitor,
     contract_addresses: ContractAddresses,
     inbox_instance: InboxInstance<DynProvider>,
+    operators_cache: OperatorsCache,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -81,6 +87,9 @@ impl ELTrait for ExecutionLayer {
             proposer_checker: shasta_config.proposerChecker,
         };
 
+        let operators_cache =
+            OperatorsCache::new(provider.clone(), contract_addresses.proposer_checker);
+
         Ok(Self {
             common,
             provider,
@@ -88,6 +97,7 @@ impl ELTrait for ExecutionLayer {
             transaction_monitor,
             contract_addresses,
             inbox_instance,
+            operators_cache,
         })
     }
 
@@ -128,13 +138,14 @@ impl PreconfOperator for ExecutionLayer {
     async fn get_operators_for_current_and_next_epoch(
         &self,
         current_epoch_timestamp: u64,
+        current_slot_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
-        pacaya::l1::execution_layer::ExecutionLayer::get_operators_for_current_and_next_epoch(
-            &self.provider,
-            self.contract_addresses.proposer_checker,
-            current_epoch_timestamp,
-        )
-        .await
+        self.operators_cache
+            .get_operators_for_current_and_next_epoch(
+                current_epoch_timestamp,
+                current_slot_timestamp,
+            )
+            .await
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
@@ -280,6 +291,84 @@ impl ExecutionLayer {
         let state = self.inbox_instance.getCoreState().call().await?;
 
         Ok(state.nextProposalId.to::<u64>())
+    }
+
+    pub async fn get_inbox_forced_inclusion_state(
+        &self,
+        // TODO use struct: next_proposal_id, head, tail
+    ) -> Result<(u64, u64, u64), Error> {
+        // Use BatchRequest to send all calls in a single RPC request
+        // This ensures the load balancer forwards all calls to the same RPC node
+        let client = self.provider.client();
+        let mut batch = BatchRequest::new(client);
+
+        let core_state_call_params = json!([{
+            "to": self.contract_addresses.shasta_inbox,
+            // TODO use OnceLock as get_operators_for_current_and_next_epoch
+            "data": "0x6aa6a01a", // Inbox::getCoreStateCall::SELECTOR;
+        }, "latest"]);
+        let core_state_waiter = batch
+            .add_call("eth_call", &core_state_call_params)
+            .map_err(|e| anyhow::anyhow!("Failed to add core state call to batch: {e}"))?;
+
+        let forced_inclusion_state_call_params = json!([{
+            "to": self.contract_addresses.shasta_inbox,
+            // TODO use OnceLock as get_operators_for_current_and_next_epoch
+            "data": "0x5ccc1718", // Inbox::getForcedInclusionStateCall::SELECTOR;
+        }, "latest"]);
+        let forced_inclusion_state_waiter = batch
+            .add_call("eth_call", &forced_inclusion_state_call_params)
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to add forced inclusion state call to batch: {e}")
+            })?;
+
+        batch
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to send batch request: {e}"))?;
+
+        let core_state_result: serde_json::Value = core_state_waiter
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get core state from batch: {e}"))?;
+        let forced_inclusion_state_result: serde_json::Value = forced_inclusion_state_waiter
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get forced inclusion state from batch: {e}"))?;
+
+        let core_state_bytes = hex::decode(
+            core_state_result
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Invalid core state result format"))?
+                .strip_prefix("0x")
+                .unwrap_or_default(),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to decode core state: {e}"))?;
+
+        let core_state =
+            <Inbox::getCoreStateCall as SolCall>::abi_decode_returns(&core_state_bytes)
+                .map_err(|e| anyhow::anyhow!("Failed to decode core state response: {e}"))?;
+
+        let forced_inclusion_state_bytes = hex::decode(
+            forced_inclusion_state_result
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Invalid forced inclusion state result format"))?
+                .strip_prefix("0x")
+                .unwrap_or_default(),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to decode forced inclusion state: {e}"))?;
+
+        let forced_inclusion_state =
+            <Inbox::getForcedInclusionStateCall as SolCall>::abi_decode_returns(
+                &forced_inclusion_state_bytes,
+            )
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to decode forced inclusion state response: {e}")
+            })?;
+
+        Ok((
+            core_state.nextProposalId.to::<u64>(),
+            forced_inclusion_state.head_.to::<u64>(),
+            forced_inclusion_state.tail_.to::<u64>(),
+        ))
     }
 }
 

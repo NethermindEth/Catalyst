@@ -32,7 +32,7 @@ pub struct BatchManager {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
     l1_height_lag: u64,
-    forced_inclusion: Arc<ForcedInclusion>,
+    forced_inclusion: ForcedInclusion,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
 }
@@ -62,7 +62,7 @@ impl BatchManager {
             config.proposal_max_time_sec,
         );
 
-        let forced_inclusion = Arc::new(ForcedInclusion::new(ethereum_l1.clone()).await?);
+        let forced_inclusion = ForcedInclusion::new(ethereum_l1.clone()).await?;
 
         Ok(Self {
             batch_builder: BatchBuilder::new(
@@ -135,7 +135,6 @@ impl BatchManager {
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
         if !self.batch_builder.can_add_forced_inclusion() {
-            debug!("Cannot add forced inclusion block to current proposal");
             return Ok(None);
         }
         // get next forced inclusion
@@ -143,7 +142,7 @@ impl BatchManager {
 
         if let Some(forced_inclusion) = forced_inclusion {
             debug!(
-                "Adding new forced inclusion block with {} transactions",
+                "⏺️ Adding new forced inclusion block with {} transactions",
                 forced_inclusion.len()
             );
             let fi_block = L2BlockV2Draft {
@@ -509,28 +508,24 @@ impl BatchManager {
         Ok(())
     }
 
-    pub fn clone_without_batches(&self) -> Self {
+    pub fn clone_without_batches(&self, fi_head: u64) -> Self {
         Self {
             batch_builder: self.batch_builder.clone_without_batches(),
             ethereum_l1: self.ethereum_l1.clone(),
             taiko: self.taiko.clone(),
             l1_height_lag: self.l1_height_lag,
-            forced_inclusion: self.forced_inclusion.clone(),
+            forced_inclusion: ForcedInclusion::new_with_index(self.ethereum_l1.clone(), fi_head),
             metrics: self.metrics.clone(),
             cancel_token: self.cancel_token.clone(),
         }
     }
 
-    pub async fn update_forced_inclusion_and_clone_without_batches(
-        &mut self,
-    ) -> Result<Self, Error> {
-        // TODO handle forced inclusion properly
-        //self.forced_inclusion.sync_queue_index_with_head().await?;
-        Ok(self.clone_without_batches())
-    }
-
     pub fn prepend_batches(&mut self, batches: Proposals) {
         self.batch_builder.prepend_batches(batches);
+    }
+
+    pub fn set_fi_head(&mut self, fi_head: u64) {
+        self.forced_inclusion.set_index(fi_head);
     }
 
     pub async fn reanchor_block(
