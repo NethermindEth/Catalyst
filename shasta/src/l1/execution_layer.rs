@@ -377,7 +377,7 @@ impl ExecutionLayer {
         static CALLDATA: OnceLock<String> = OnceLock::new();
         CALLDATA.get_or_init(|| {
             let tx_req = inbox.getCoreState().into_transaction_request();
-            let hex_string =tx_req
+            let hex_string = tx_req
                 .input
                 .input
                 .as_ref()
