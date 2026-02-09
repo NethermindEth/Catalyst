@@ -377,13 +377,14 @@ impl ExecutionLayer {
         static CALLDATA: OnceLock<String> = OnceLock::new();
         CALLDATA.get_or_init(|| {
             let tx_req = inbox.getCoreState().into_transaction_request();
-            tx_req
+            let hex_string =tx_req
                 .input
                 .input
                 .as_ref()
                 .expect("get_core_state_calldata: Failed to get core state calldata")
                 .to_vec()
-                .encode_hex()
+                .encode_hex();
+            format!("0x{}", hex_string)
         })
     }
 
@@ -394,13 +395,14 @@ impl ExecutionLayer {
         static CALLDATA: OnceLock<String> = OnceLock::new();
         CALLDATA.get_or_init(|| {
             let tx_req = inbox.getForcedInclusionState().into_transaction_request();
-            tx_req
+            let hex_string = tx_req
                 .input
                 .input
                 .as_ref()
                 .expect("get_forced_inclusion_state_calldata: Failed to get forced inclusion state calldata")
                 .to_vec()
-                .encode_hex()
+                .encode_hex();
+            format!("0x{}", hex_string)
         })
     }
 }
