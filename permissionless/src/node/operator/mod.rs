@@ -1,24 +1,33 @@
-mod status;
+pub mod status;
 
+use crate::l2::preconfirmation_driver::PreconfirmationDriver;
+use alloy::primitives::{Address, U256};
 use anyhow::Error;
-use common::shared::l2_slot_info::SlotData;
+use common::shared::l2_slot_info_v2::L2SlotInfoV2;
 use status::Status;
+use std::sync::Arc;
 
-use taiko_protocol::preconfirmation::lookahead::LookaheadResolver;
-
-struct Operator {
-    lookahead_resolver: LookaheadResolver,
+pub struct Operator {
+    driver: Arc<PreconfirmationDriver>,
+    preconfer_address: Address,
 }
 
 impl Operator {
-    pub fn new(lookahead_resolver: LookaheadResolver) -> Self {
-        Self { lookahead_resolver }
+    pub fn new(driver: Arc<PreconfirmationDriver>, preconfer_address: Address) -> Self {
+        Self {
+            driver,
+            preconfer_address,
+        }
     }
 
-    pub fn get_status<S: SlotData>(&self, l2_slot_info: S) -> Result<Status, Error> {
-        // pobrać adress obecnego oparatora
-        // pobrać addreses następnego
+    pub async fn get_status(&self, l2_slot_info: L2SlotInfoV2) -> Result<Status, Error> {
+        let preconf_slot_info = self
+            .driver
+            .get_preconf_slot_info(U256::from(l2_slot_info.slot_timestamp()))
+            .await?;
 
-        Ok(Status::new(false, false))
+        let preconfer = preconf_slot_info.signer == self.preconfer_address;
+
+        Ok(Status::new(preconfer, false))
     }
 }

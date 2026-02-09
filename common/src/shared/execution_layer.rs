@@ -10,6 +10,7 @@ use tracing::debug;
 pub struct ExecutionLayer {
     provider: DynProvider,
     chain_id: u64,
+    preconfer_address: Address,
 }
 
 pub struct BlockInfo {
@@ -30,20 +31,22 @@ impl ExecutionLayer {
         }
     }
 
-    pub async fn new(provider: DynProvider) -> Result<Self, Error> {
+    pub async fn new(provider: DynProvider, preconfer_address: Address) -> Result<Self, Error> {
         debug!("Creating ExecutionLayer from provider");
         let chain_id = provider
             .get_chain_id()
             .await
             .map_err(|e| Error::msg(format!("Failed to get chain ID: {e}")))?;
 
-        Ok(Self { provider, chain_id })
+        Ok(Self {
+            provider,
+            chain_id,
+            preconfer_address,
+        })
     }
 
-    pub async fn new_read_only(url: &str) -> Result<Self, Error> {
-        debug!("Creating ExecutionLayer from URL: {}", url);
-        let provider = super::alloy_tools::create_alloy_provider_without_wallet(url).await?;
-        Self::new(provider).await
+    pub fn preconfer_address(&self) -> Address {
+        self.preconfer_address
     }
 
     pub fn provider(&self) -> DynProvider {

@@ -39,7 +39,6 @@ use tracing::{debug, info, warn};
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
-    preconfer_address: Address,
     config: EthereumL1Config,
     taiko_wrapper_contract: taiko_wrapper::TaikoWrapper::TaikoWrapperInstance<DynProvider>,
     pub transaction_monitor: TransactionMonitor,
@@ -64,7 +63,8 @@ impl ELTrait for ExecutionLayer {
                 .ok_or_else(|| anyhow!("L1 RPC URL is required"))?,
         )
         .await?;
-        let common = ExecutionLayerCommon::new(provider.clone()).await?;
+        let common =
+            ExecutionLayerCommon::new(provider.clone(), common_config.signer.get_address()).await?;
 
         let taiko_wrapper_contract = taiko_wrapper::TaikoWrapper::new(
             specific_config.contract_addresses.taiko_wrapper,
@@ -89,7 +89,6 @@ impl ELTrait for ExecutionLayer {
         Ok(Self {
             common,
             provider,
-            preconfer_address: common_config.signer.get_address(),
             config: specific_config,
             taiko_wrapper_contract,
             transaction_monitor,
@@ -124,24 +123,24 @@ impl PreconferBondProvider for ExecutionLayer {
 impl PreconferProvider for ExecutionLayer {
     async fn get_preconfer_wallet_eth(&self) -> Result<alloy::primitives::U256, Error> {
         self.common()
-            .get_account_balance(self.preconfer_address)
+            .get_account_balance(self.common().preconfer_address())
             .await
     }
 
     async fn get_preconfer_nonce_pending(&self) -> Result<u64, Error> {
         self.common()
-            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Pending)
+            .get_account_nonce(self.common().preconfer_address(), BlockNumberOrTag::Pending)
             .await
     }
 
     async fn get_preconfer_nonce_latest(&self) -> Result<u64, Error> {
         self.common()
-            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Latest)
+            .get_account_nonce(self.common().preconfer_address(), BlockNumberOrTag::Latest)
             .await
     }
 
-    fn get_preconfer_alloy_address(&self) -> Address {
-        self.preconfer_address
+    fn get_preconfer_address(&self) -> Address {
+        self.common().preconfer_address()
     }
 }
 
@@ -230,7 +229,7 @@ impl ExecutionLayer {
         let builder = ProposeBatchBuilder::new(self.provider.clone(), self.extra_gas_percentage);
         let tx = builder
             .build_propose_batch_tx(
-                self.preconfer_address,
+                self.common().preconfer_address(),
                 self.config.contract_addresses.preconf_router,
                 tx_lists_bytes,
                 blocks.clone(),
@@ -287,7 +286,7 @@ impl ExecutionLayer {
             &self.provider,
         );
         let bonds_balance = contract
-            .bondBalanceOf(self.preconfer_address)
+            .bondBalanceOf(self.common().preconfer_address())
             .call()
             .await
             .map_err(|e| Error::msg(format!("Failed to get bonds balance: {e}")))?;
@@ -317,7 +316,7 @@ impl ExecutionLayer {
         let contract = IERC20::new(*taiko_token, &self.provider);
         let allowance = contract
             .allowance(
-                self.preconfer_address,
+                self.common().preconfer_address(),
                 self.config.contract_addresses.taiko_inbox,
             )
             .call()
@@ -325,7 +324,7 @@ impl ExecutionLayer {
             .map_err(|e| Error::msg(format!("Failed to get allowance: {e}")))?;
 
         let balance = contract
-            .balanceOf(self.preconfer_address)
+            .balanceOf(self.common().preconfer_address())
             .call()
             .await
             .map_err(|e| Error::msg(format!("Failed to get preconfer balance: {e}")))?;
@@ -381,7 +380,7 @@ impl ExecutionLayer {
         info: &ForcedInclusionInfo,
     ) -> BatchParams {
         ProposeBatchBuilder::build_forced_inclusion_batch(
-            self.preconfer_address,
+            self.common().preconfer_address(),
             coinbase,
             last_anchor_origin_height,
             last_l2_block_timestamp,
@@ -413,7 +412,7 @@ impl WhitelistProvider for ExecutionLayer {
             &self.provider,
         );
         let operators = contract
-            .operators(self.preconfer_address)
+            .operators(self.common().preconfer_address())
             .call()
             .await
             .map_err(|e| {
@@ -428,7 +427,7 @@ impl WhitelistProvider for ExecutionLayer {
 
 impl PreconfOperator for ExecutionLayer {
     fn get_preconfer_address(&self) -> Address {
-        self.preconfer_address
+        self.common().preconfer_address()
     }
 
     async fn get_operators_for_current_and_next_epoch(

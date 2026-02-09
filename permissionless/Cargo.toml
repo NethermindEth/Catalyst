@@ -19,6 +19,8 @@ tracing = { workspace = true }
 urc = { workspace = true }
 reqwest = { workspace = true }
 taiko_protocol = { workspace = true }
+taiko_preconfirmation_driver = { workspace = true }
+serde_json = { workspace = true }
 shasta = { workspace = true }
 
 [lints]

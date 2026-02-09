@@ -134,7 +134,7 @@ where
             }
         };
 
-        let preconfer_address = self.l1_execution_layer.get_preconfer_alloy_address();
+        let preconfer_address = self.l1_execution_layer.get_preconfer_address();
         let l2_eth_balance = self.taiko.get_balance(preconfer_address).await;
         let l2_eth_balance_str = match l2_eth_balance.as_ref() {
             Ok(balance) => {

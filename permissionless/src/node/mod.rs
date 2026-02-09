@@ -1,10 +1,16 @@
-use crate::{l1::execution_layer::ExecutionLayer, node::config::NodeConfig};
+use crate::{
+    l1::execution_layer::ExecutionLayer,
+    node::{
+        config::NodeConfig,
+        operator::{Operator, status::Status},
+    },
+};
 use anyhow::Error;
 use common::{
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     metrics::Metrics,
-    utils as common_utils,
-    utils::cancellation_token::CancellationToken,
+    shared::l2_slot_info_v2::L2SlotInfoV2,
+    utils::{self as common_utils, cancellation_token::CancellationToken},
 };
 use std::sync::Arc;
 use tokio::{sync::mpsc::Receiver, time::Duration};
@@ -20,6 +26,7 @@ pub struct Node {
     _metrics: Arc<Metrics>,
     watchdog: common_utils::watchdog::Watchdog,
     config: NodeConfig,
+    operator: Operator,
 }
 
 impl Node {
@@ -29,6 +36,7 @@ impl Node {
         transaction_error_channel: Receiver<TransactionError>,
         metrics: Arc<Metrics>,
         config: NodeConfig,
+        operator: Operator,
     ) -> Result<Self, Error> {
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
@@ -41,6 +49,7 @@ impl Node {
             _metrics: metrics,
             watchdog,
             config,
+            operator,
         })
     }
 
@@ -80,14 +89,16 @@ impl Node {
     }
 
     async fn main_block_preconfirmation_step(&mut self) -> Result<(), Error> {
-        self.print_current_slots_info()?;
+        let l2_slot_info = L2SlotInfoV2::new(0, 0, 0, alloy::primitives::B256::ZERO, 0, 0); //TODO: get from taiko module
+        let status = self.operator.get_status(l2_slot_info).await?;
+        self.print_current_slots_info(status)?;
         Ok(())
     }
 
-    fn print_current_slots_info(&self) -> Result<(), Error> {
+    fn print_current_slots_info(&self, status: Status) -> Result<(), Error> {
         let l1_slot = self.ethereum_l1.slot_clock.get_current_slot()?;
         info!(target: "heartbeat",
-            "| Epoch: {:<6} | Slot: {:<2} | L2 Slot: {:<2} |",
+            "| Epoch: {:<6} | Slot: {:<2} | L2 Slot: {:<2} | {status} |",
             self.ethereum_l1.slot_clock.get_epoch_from_slot(l1_slot),
             self.ethereum_l1.slot_clock.slot_of_epoch(l1_slot),
             self.ethereum_l1
