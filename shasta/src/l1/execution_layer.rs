@@ -4,6 +4,7 @@ use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
 use alloy::{
     eips::BlockNumberOrTag,
+    hex::ToHexExt,
     primitives::{Address, U256, aliases::U48},
     providers::{DynProvider, Provider},
     rpc::client::BatchRequest,
@@ -26,7 +27,7 @@ use pacaya::l1::{
     traits::{PreconfOperator, WhitelistProvider},
 };
 use serde_json::json;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use taiko_bindings::inbox::{
     IForcedInclusionStore::ForcedInclusion,
     IInbox::CoreState,
@@ -302,19 +303,20 @@ impl ExecutionLayer {
         let client = self.provider.client();
         let mut batch = BatchRequest::new(client);
 
+        let core_state_calldata = self.get_core_state_calldata(&self.inbox_instance);
         let core_state_call_params = json!([{
             "to": self.contract_addresses.shasta_inbox,
-            // TODO use OnceLock as get_operators_for_current_and_next_epoch
-            "data": "0x6aa6a01a", // Inbox::getCoreStateCall::SELECTOR;
+            "data": core_state_calldata, // Inbox::getCoreStateCall
         }, "latest"]);
         let core_state_waiter = batch
             .add_call("eth_call", &core_state_call_params)
             .map_err(|e| anyhow::anyhow!("Failed to add core state call to batch: {e}"))?;
 
+        let forced_inclusion_state_calldata =
+            self.get_forced_inclusion_state_calldata(&self.inbox_instance);
         let forced_inclusion_state_call_params = json!([{
             "to": self.contract_addresses.shasta_inbox,
-            // TODO use OnceLock as get_operators_for_current_and_next_epoch
-            "data": "0x5ccc1718", // Inbox::getForcedInclusionStateCall::SELECTOR;
+            "data": forced_inclusion_state_calldata, // Inbox::getForcedInclusionStateCall
         }, "latest"]);
         let forced_inclusion_state_waiter = batch
             .add_call("eth_call", &forced_inclusion_state_call_params)
@@ -369,6 +371,37 @@ impl ExecutionLayer {
             forced_inclusion_state.head_.to::<u64>(),
             forced_inclusion_state.tail_.to::<u64>(),
         ))
+    }
+
+    fn get_core_state_calldata(&self, inbox: &InboxInstance<DynProvider>) -> &'static str {
+        static CALLDATA: OnceLock<String> = OnceLock::new();
+        CALLDATA.get_or_init(|| {
+            let tx_req = inbox.getCoreState().into_transaction_request();
+            tx_req
+                .input
+                .input
+                .as_ref()
+                .expect("get_core_state_calldata: Failed to get core state calldata")
+                .to_vec()
+                .encode_hex()
+        })
+    }
+
+    fn get_forced_inclusion_state_calldata(
+        &self,
+        inbox: &InboxInstance<DynProvider>,
+    ) -> &'static str {
+        static CALLDATA: OnceLock<String> = OnceLock::new();
+        CALLDATA.get_or_init(|| {
+            let tx_req = inbox.getForcedInclusionState().into_transaction_request();
+            tx_req
+                .input
+                .input
+                .as_ref()
+                .expect("get_forced_inclusion_state_calldata: Failed to get forced inclusion state calldata")
+                .to_vec()
+                .encode_hex()
+        })
     }
 }
 
