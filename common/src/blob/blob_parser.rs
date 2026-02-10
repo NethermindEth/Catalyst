@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
-use alloy::{eips::eip4844::kzg_to_versioned_hash, primitives::B256, rpc::types::Transaction};
+use alloy::primitives::B256;
+use alloy::rpc::types::Transaction;
 use anyhow::Error;
 
 use super::blob_decoder::BlobDecoder;
@@ -13,16 +14,20 @@ pub async fn extract_transactions_from_blob<T: ELTrait>(
     blob_hashes: Vec<B256>,
     tx_list_offset: u32,
     tx_list_size: u32,
-) -> Result<Vec<Transaction>, Error> {
+) -> Result<Option<Vec<Transaction>>, Error> {
     let start = std::time::Instant::now();
-    let v = blob_to_vec(
+    let v = match blob_to_vec(
         ethereum_l1,
         block,
         blob_hashes,
         tx_list_offset,
         tx_list_size,
     )
-    .await?;
+    .await?
+    {
+        None => return Ok(None),
+        Some(v) => v,
+    };
     tracing::debug!(
         "extract_transactions_from_blob: Blob conversion took {} ms",
         start.elapsed().as_millis()
@@ -32,7 +37,7 @@ pub async fn extract_transactions_from_blob<T: ELTrait>(
         "extract_transactions_from_blob: Total with decompression and decoding took {} ms",
         start.elapsed().as_millis()
     );
-    Ok(txs)
+    Ok(Some(txs))
 }
 
 async fn blob_to_vec<T: ELTrait>(
@@ -41,14 +46,17 @@ async fn blob_to_vec<T: ELTrait>(
     blob_hashes: Vec<B256>,
     tx_list_offset: u32,
     tx_list_size: u32,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Option<Vec<u8>>, Error> {
     let block_timestamp = ethereum_l1
         .execution_layer
         .common()
         .get_block_timestamp_by_number(block)
         .await?;
 
-    let result: Vec<u8> = get_bytes_from_blobs(ethereum_l1, block_timestamp, blob_hashes).await?;
+    let result = match get_bytes_from_blobs(ethereum_l1, block_timestamp, blob_hashes).await? {
+        None => return Ok(None),
+        Some(r) => r,
+    };
 
     let tx_list_left: usize = tx_list_offset.try_into()?;
     let tx_list_right: usize = tx_list_left + usize::try_from(tx_list_size)?;
@@ -62,18 +70,16 @@ async fn blob_to_vec<T: ELTrait>(
         ));
     }
 
-    let result = result[tx_list_left..tx_list_right].to_vec();
-
-    Ok(result)
+    Ok(Some(result[tx_list_left..tx_list_right].to_vec()))
 }
 
 pub async fn get_bytes_from_blobs<T: ELTrait>(
     ethereum_l1: Arc<EthereumL1<T>>,
     block_timestamp: u64,
     blob_hashes: Vec<B256>,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Option<Vec<u8>>, Error> {
     if ethereum_l1.blob_indexer.is_some() {
-        get_data_from_block_indexer(ethereum_l1.clone(), blob_hashes).await
+        Ok(Some(get_data_from_block_indexer(ethereum_l1.clone(), blob_hashes).await?))
     } else {
         get_data_from_consensus_layer(ethereum_l1.clone(), block_timestamp, blob_hashes).await
     }
@@ -83,40 +89,36 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
     ethereum_l1: Arc<EthereumL1<T>>,
     block_timestamp: u64,
     blob_hashes: Vec<B256>,
-) -> Result<Vec<u8>, Error> {
-    let mut result: Vec<u8> = Vec::new();
-
+) -> Result<Option<Vec<u8>>, Error> {
     let slot = ethereum_l1
         .slot_clock
         .slot_of(Duration::from_secs(block_timestamp))?;
-    let sidecars = ethereum_l1.consensus_layer.get_blob_sidecars(slot).await?;
 
-    let sidecar_hashes: Vec<B256> = sidecars
-        .data
-        .iter()
-        .map(|sidecar| kzg_to_versioned_hash(sidecar.kzg_commitment.as_slice()))
-        .collect();
+    let blobs = match ethereum_l1
+        .consensus_layer
+        .get_blobs(slot, &blob_hashes)
+        .await?
+    {
+        None => return Ok(None),
+        Some(b) => b,
+    };
 
-    for hash in blob_hashes {
-        let mut found = false;
-        for (i, sidecar) in sidecars.data.iter().enumerate() {
-            if sidecar_hashes[i] == hash {
-                let data = BlobDecoder::decode_blob(sidecar.blob.as_ref())?;
-                result.extend(data);
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            return Err(anyhow::anyhow!(
-                "Blob hash {} not found in sidecars for slot {}",
-                hash,
-                slot
-            ));
-        }
+    if blobs.len() != blob_hashes.len() {
+        return Err(anyhow::anyhow!(
+            "Expected {} blobs but got {} for slot {}",
+            blob_hashes.len(),
+            blobs.len(),
+            slot
+        ));
     }
 
-    Ok(result)
+    let mut result: Vec<u8> = Vec::new();
+    for blob in &blobs {
+        let data = BlobDecoder::decode_blob(blob)?;
+        result.extend(data);
+    }
+
+    Ok(Some(result))
 }
 
 async fn get_data_from_block_indexer<T: ELTrait>(

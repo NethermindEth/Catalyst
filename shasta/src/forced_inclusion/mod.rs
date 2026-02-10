@@ -61,12 +61,22 @@ impl ForcedInclusion {
             .get_forced_inclusion(self.index)
             .await?;
 
-        let blob_bytes = get_bytes_from_blobs(
+        let blob_bytes = match get_bytes_from_blobs(
             self.ethereum_l1.clone(),
             forced_inclusion.blobSlice.timestamp.to::<u64>(),
             forced_inclusion.blobSlice.blobHashes,
         )
-        .await?;
+        .await?
+        {
+            Some(bytes) => bytes,
+            None => {
+                tracing::warn!(
+                    "Blob not available for slot (404/skipped slot) at forced inclusion index {}",
+                    self.index
+                );
+                return Ok(None);
+            }
+        };
 
         // Extract transactions from the blob bytes. If any step fails, return an empty transaction vector
         self.extract_transactions_from_blob_bytes(

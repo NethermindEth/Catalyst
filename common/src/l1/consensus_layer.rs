@@ -1,6 +1,8 @@
 use std::{error::Error as std_error, time::Duration};
 
-use alloy::rpc::types::beacon::sidecar::BeaconBlobBundle;
+use alloy::eips::eip4844::Blob;
+use alloy::primitives::B256;
+use alloy::rpc::types::beacon::sidecar::GetBlobsResponse;
 use anyhow::Error;
 use reqwest;
 
@@ -21,12 +23,28 @@ impl ConsensusLayer {
         })
     }
 
-    pub async fn get_blob_sidecars(&self, slot: u64) -> Result<BeaconBlobBundle, Error> {
-        let res = self
-            .get(format!("eth/v1/beacon/blob_sidecars/{slot}").as_str())
-            .await?;
-        let sidecar: BeaconBlobBundle = serde_json::from_value(res)?;
-        Ok(sidecar)
+    pub async fn get_blobs(
+        &self,
+        slot: u64,
+        versioned_hashes: &[B256],
+    ) -> Result<Option<Vec<Blob>>, Error> {
+        let mut path = format!("eth/v1/beacon/blobs/{slot}");
+        if !versioned_hashes.is_empty() {
+            let params: Vec<String> = versioned_hashes
+                .iter()
+                .map(|h| format!("versioned_hashes={h}"))
+                .collect();
+            path = format!("{}?{}", path, params.join("&"));
+        }
+
+        let res = self.get_optional(path.as_str()).await?;
+        match res {
+            None => Ok(None),
+            Some(json) => {
+                let response: GetBlobsResponse = serde_json::from_value(json)?;
+                Ok(Some(response.data))
+            }
+        }
     }
 
     pub async fn get_genesis_time(&self) -> Result<u64, Error> {
@@ -97,6 +115,12 @@ impl ConsensusLayer {
     }
 
     async fn get(&self, path: &str) -> Result<serde_json::Value, Error> {
+        self.get_optional(path)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Consensus layer request ({}) returned 404", path))
+    }
+
+    async fn get_optional(&self, path: &str) -> Result<Option<serde_json::Value>, Error> {
         let start = std::time::Instant::now();
         let response = self
             .client
@@ -115,6 +139,11 @@ impl ConsensusLayer {
                 }
             })?;
 
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            tracing::debug!("ConsensusLayer ({}) returned 404", path);
+            return Ok(None);
+        }
+
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(
                 "Consensus layer request ({}) failed with status: {}",
@@ -130,7 +159,7 @@ impl ConsensusLayer {
             path,
             start.elapsed().as_millis()
         );
-        Ok(v)
+        Ok(Some(v))
     }
 }
 
@@ -163,6 +192,53 @@ pub mod tests {
         let slot = cl.get_head_slot_number().await.unwrap();
 
         assert_eq!(slot, 4269575);
+    }
+
+    #[tokio::test]
+    async fn test_get_blobs_returns_none_on_404() {
+        let mut server = setup_server().await;
+        server
+            .mock(
+                "GET",
+                mockito::Matcher::Regex(
+                    r"eth/v1/beacon/blobs/12345\?versioned_hashes=0x[0-9a-f]+".to_string(),
+                ),
+            )
+            .with_status(404)
+            .with_body(r#"{"code":404,"message":"Block not found"}"#)
+            .create();
+        let cl = ConsensusLayer::new(
+            format!("{}/", server.url()).as_str(),
+            Duration::from_secs(1),
+        )
+        .unwrap();
+        let hash = B256::from([0xab; 32]);
+        let result = cl.get_blobs(12345, &[hash]).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_blobs_returns_blobs_on_success() {
+        let mut server = setup_server().await;
+        server
+            .mock(
+                "GET",
+                mockito::Matcher::Regex(
+                    r"eth/v1/beacon/blobs/12345\?versioned_hashes=0x[0-9a-f]+".to_string(),
+                ),
+            )
+            .with_status(200)
+            .with_body(r#"{"execution_optimistic":false,"finalized":true,"data":[]}"#)
+            .create();
+        let cl = ConsensusLayer::new(
+            format!("{}/", server.url()).as_str(),
+            Duration::from_secs(1),
+        )
+        .unwrap();
+        let hash = B256::from([0xab; 32]);
+        let result = cl.get_blobs(12345, &[hash]).await.unwrap();
+        assert!(result.is_some());
+        assert!(result.unwrap().is_empty());
     }
 
     async fn setup_server() -> mockito::ServerGuard {
