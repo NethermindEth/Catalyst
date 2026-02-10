@@ -12,7 +12,12 @@ anyhow = { workspace = true }
 blst = { workspace = true }
 common = { workspace = true }
 pacaya = { workspace = true }
+reqwest = { workspace = true }
 rustls = { workspace = true }
+serde_json = { workspace = true }
+shasta = { workspace = true }
+taiko_preconfirmation_driver = { workspace = true }
+taiko_protocol = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }

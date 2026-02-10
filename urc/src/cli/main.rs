@@ -49,6 +49,12 @@ async fn main() -> Result<(), Error> {
             )
             .await?
         }
+        Commands::Unregister {
+            rpc,
+            registry,
+            owner_pk,
+            registration_root,
+        } => unregister(&rpc, &registry, &owner_pk, &registration_root).await?,
         Commands::GenerateBlsKey => generate_bls_key(),
     }
 
@@ -172,6 +178,39 @@ async fn opt_in_to_slasher(
         }
         Err(err) => {
             return Err(anyhow::anyhow!("optInToSlasher error: {err}"));
+        }
+    }
+
+    Ok(())
+}
+
+async fn unregister(
+    rpc: &str,
+    registry: &str,
+    owner_pk: &str,
+    registration_root: &str,
+) -> Result<(), Error> {
+    let signer = PrivateKeySigner::from_str(owner_pk)?;
+    let wallet = EthereumWallet::from(signer);
+
+    let l1_provider = ProviderBuilder::new()
+        .wallet(wallet)
+        .connect_http(rpc.parse()?)
+        .erased();
+    let registry_address = Address::from_str(registry)?;
+    let registry = IRegistry::new(registry_address, l1_provider);
+
+    let registration_root = FixedBytes::from_str(registration_root)?;
+
+    let tx = registry.unregister(registration_root);
+
+    match tx.send().await {
+        Ok(pending_tx) => {
+            let tx_hash = pending_tx.tx_hash();
+            println!("Unregister successfully tx_hash: {tx_hash:?}");
+        }
+        Err(err) => {
+            return Err(anyhow::anyhow!("Unregister error: {err}"));
         }
     }
 

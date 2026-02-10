@@ -1,11 +1,10 @@
 mod chain_monitor;
+pub mod config;
 mod forced_inclusion;
 mod l1;
-mod l2;
+pub mod l2;
 mod node;
-mod utils;
 
-use crate::utils::config::ShastaConfig;
 use anyhow::Error;
 use common::{
     batch_builder::BatchBuilderConfig,
@@ -18,6 +17,7 @@ use common::{
     metrics, shared,
     utils::cancellation_token::CancellationToken,
 };
+use config::ShastaConfig;
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
 use std::sync::Arc;
@@ -104,7 +104,7 @@ pub async fn create_shasta_node(
         max_time_shift_between_blocks_sec: config.max_time_shift_between_blocks_sec,
         max_anchor_height_offset: max_anchor_height_offset
             - config.max_anchor_height_offset_reduction,
-        default_coinbase: ethereum_l1.execution_layer.get_preconfer_alloy_address(),
+        default_coinbase: ethereum_l1.execution_layer.get_preconfer_address(),
         preconf_min_txs: config.preconf_min_txs,
         preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
         proposal_max_time_sec: config.proposal_max_time_sec,

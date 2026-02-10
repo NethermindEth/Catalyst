@@ -3,8 +3,7 @@
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::config::{ConfigTrait, address_parse_error};
-use std::fmt;
-use std::str::FromStr;
+use std::{fmt, str::FromStr, time::Duration};
 use tracing::warn;
 
 #[derive(Debug, Clone)]
@@ -18,6 +17,8 @@ pub struct L1ContractAddresses {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub contract_addresses: L1ContractAddresses,
+    pub preconfirmation_driver_url: String,
+    pub preconfirmation_driver_timeout: Duration,
 }
 
 impl ConfigTrait for Config {
@@ -52,6 +53,23 @@ impl ConfigTrait for Config {
                 address_parse_error(PRECONF_SLASHER_ADDRESS, e, &preconf_slasher_address_str)
             })?;
 
+        const PRECONFIRMATION_DRIVER_URL: &str = "PRECONFIRMATION_DRIVER_URL";
+        let preconfirmation_driver_url = std::env::var(PRECONFIRMATION_DRIVER_URL)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", PRECONFIRMATION_DRIVER_URL, e))?;
+        const PRECONFIRMATION_DRIVER_TIMEOUT_MS: &str = "PRECONFIRMATION_DRIVER_TIMEOUT_MS";
+        let preconfirmation_driver_timeout = Duration::from_millis(
+            std::env::var(PRECONFIRMATION_DRIVER_TIMEOUT_MS)
+                .unwrap_or("1500".to_string())
+                .parse::<u64>()
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to read {}: {}",
+                        PRECONFIRMATION_DRIVER_TIMEOUT_MS,
+                        e
+                    )
+                })?,
+        );
+
         Ok(Config {
             contract_addresses: L1ContractAddresses {
                 registry_address,
@@ -59,6 +77,8 @@ impl ConfigTrait for Config {
                 lookahead_slasher_address,
                 preconf_slasher_address,
             },
+            preconfirmation_driver_url,
+            preconfirmation_driver_timeout,
         })
     }
 }

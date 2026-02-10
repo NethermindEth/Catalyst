@@ -34,5 +34,15 @@ pub enum Commands {
         #[arg(long)]
         committer: String,
     },
+    Unregister {
+        #[arg(long)]
+        rpc: String,
+        #[arg(long)]
+        registry: String,
+        #[arg(long)]
+        owner_pk: String,
+        #[arg(long)]
+        registration_root: String,
+    },
     GenerateBlsKey,
 }

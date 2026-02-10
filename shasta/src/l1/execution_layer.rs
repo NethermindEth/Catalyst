@@ -39,7 +39,6 @@ use tracing::info;
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
-    preconfer_address: Address,
     pub transaction_monitor: TransactionMonitor,
     contract_addresses: ContractAddresses,
     inbox_instance: InboxInstance<DynProvider>,
@@ -62,7 +61,8 @@ impl ELTrait for ExecutionLayer {
                 .ok_or_else(|| anyhow!("L1 RPC URL is required"))?,
         )
         .await?;
-        let common = ExecutionLayerCommon::new(provider.clone()).await?;
+        let common =
+            ExecutionLayerCommon::new(provider.clone(), common_config.signer.get_address()).await?;
 
         let transaction_monitor = TransactionMonitor::new(
             provider.clone(),
@@ -94,7 +94,6 @@ impl ELTrait for ExecutionLayer {
         Ok(Self {
             common,
             provider,
-            preconfer_address: common_config.signer.get_address(),
             transaction_monitor,
             contract_addresses,
             inbox_instance,
@@ -110,30 +109,30 @@ impl ELTrait for ExecutionLayer {
 impl PreconferProvider for ExecutionLayer {
     async fn get_preconfer_wallet_eth(&self) -> Result<alloy::primitives::U256, Error> {
         self.common()
-            .get_account_balance(self.preconfer_address)
+            .get_account_balance(self.common().preconfer_address())
             .await
     }
 
     async fn get_preconfer_nonce_pending(&self) -> Result<u64, Error> {
         self.common()
-            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Pending)
+            .get_account_nonce(self.common().preconfer_address(), BlockNumberOrTag::Pending)
             .await
     }
 
     async fn get_preconfer_nonce_latest(&self) -> Result<u64, Error> {
         self.common()
-            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Latest)
+            .get_account_nonce(self.common().preconfer_address(), BlockNumberOrTag::Latest)
             .await
     }
 
-    fn get_preconfer_alloy_address(&self) -> Address {
-        self.preconfer_address
+    fn get_preconfer_address(&self) -> Address {
+        self.common().preconfer_address()
     }
 }
 
 impl PreconfOperator for ExecutionLayer {
     fn get_preconfer_address(&self) -> Address {
-        self.preconfer_address
+        self.common().preconfer_address()
     }
 
     async fn get_operators_for_current_and_next_epoch(
@@ -189,7 +188,7 @@ impl ExecutionLayer {
         let tx = builder
             .build_propose_tx(
                 l2_blocks,
-                self.preconfer_address,
+                self.common().preconfer_address(),
                 self.contract_addresses.shasta_inbox,
                 num_forced_inclusion,
             )
@@ -414,7 +413,7 @@ impl WhitelistProvider for ExecutionLayer {
             &self.provider,
         );
         let operators = contract
-            .operators(self.preconfer_address)
+            .operators(self.common().preconfer_address())
             .call()
             .await
             .map_err(|e| {
@@ -432,7 +431,7 @@ impl common::l1::traits::PreconferBondProvider for ExecutionLayer {
     async fn get_preconfer_total_bonds(&self) -> Result<U256, Error> {
         let bond = self
             .inbox_instance
-            .getBond(self.preconfer_address)
+            .getBond(self.common().preconfer_address())
             .call()
             .await
             .map_err(|e| {

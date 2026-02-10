@@ -41,7 +41,8 @@ impl L2ExecutionLayer {
 
         let shasta_anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
 
-        let common = ExecutionLayerCommon::new(provider.clone()).await?;
+        let common =
+            ExecutionLayerCommon::new(provider.clone(), taiko_config.signer.get_address()).await?;
 
         Ok(Self {
             common,

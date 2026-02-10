@@ -1,4 +1,5 @@
 mod l1;
+mod l2;
 mod node;
 mod registration;
 mod utils;
@@ -11,6 +12,7 @@ use common::{
     config::Config,
     config::ConfigTrait,
     fork_info::ForkInfo,
+    l1::traits::ELTrait,
     l1::{self as common_l1, ethereum_l1::EthereumL1},
     metrics::Metrics,
     utils::cancellation_token::CancellationToken,
@@ -42,6 +44,16 @@ pub async fn create_permissionless_node(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create EthereumL1: {}", e))?,
     );
+    let preconfer_address = ethereum_l1.execution_layer.common().preconfer_address();
+
+    let preconfirmation_driver = Arc::new(
+        l2::preconfirmation_driver::PreconfirmationDriver::new_with_timeout(
+            &permissionless_config.preconfirmation_driver_url,
+            permissionless_config.preconfirmation_driver_timeout,
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to create PreconfirmationDriver: {}", e))?,
+    );
+    let operator = crate::node::operator::Operator::new(preconfirmation_driver, preconfer_address);
 
     let node = node::Node::new(
         cancel_token.clone(),
@@ -51,6 +63,7 @@ pub async fn create_permissionless_node(
         NodeConfig {
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
         },
+        operator,
     )
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
 
