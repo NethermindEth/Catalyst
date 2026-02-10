@@ -79,7 +79,9 @@ pub async fn get_bytes_from_blobs<T: ELTrait>(
     blob_hashes: Vec<B256>,
 ) -> Result<Option<Vec<u8>>, Error> {
     if ethereum_l1.blob_indexer.is_some() {
-        Ok(Some(get_data_from_block_indexer(ethereum_l1.clone(), blob_hashes).await?))
+        Ok(Some(
+            get_data_from_block_indexer(ethereum_l1.clone(), blob_hashes).await?,
+        ))
     } else {
         get_data_from_consensus_layer(ethereum_l1.clone(), block_timestamp, blob_hashes).await
     }
