@@ -202,6 +202,44 @@ impl DataBase {
         Ok(())
     }
 
+    pub async fn set_operator_unregistered(
+        &self,
+        registration_root: &str,
+        unregistered_at: u64,
+    ) -> Result<(), Error> {
+        let unregistered_at: i64 = unregistered_at.try_into()?;
+        sqlx::query(
+            r#"
+            UPDATE operators SET unregistered_at = ? WHERE registration_root = ?
+            "#,
+        )
+        .bind(unregistered_at)
+        .bind(registration_root)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn set_operator_slashed(
+        &self,
+        registration_root: &str,
+        slashed_at: u64,
+    ) -> Result<(), Error> {
+        let slashed_at: i64 = slashed_at.try_into()?;
+        sqlx::query(
+            r#"
+            UPDATE operators SET slashed_at = ? WHERE registration_root = ?
+            "#,
+        )
+        .bind(slashed_at)
+        .bind(registration_root)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     pub async fn insert_operator(
         &self,
         registration_root: &str,
