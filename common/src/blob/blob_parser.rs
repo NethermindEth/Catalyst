@@ -89,7 +89,7 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
     let slot = ethereum_l1
         .slot_clock
         .slot_of(Duration::from_secs(block_timestamp))?;
-    let sidecars = ethereum_l1.consensus_layer.get_blob_sidecars(slot).await?;
+    let sidecars = ethereum_l1.consensus_layer.get_blobs(slot, blob_hashes).await?;
 
     let sidecar_hashes: Vec<B256> = sidecars
         .data
