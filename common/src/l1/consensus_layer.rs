@@ -43,6 +43,9 @@ impl ConsensusLayer {
         Ok(blobs.data)
     }
 
+    #[deprecated(
+        note = "This method is deprecated in favor of get_blobs, which allows fetching only specific blobs."
+    )]
     pub async fn get_blob_sidecars(&self, slot: u64) -> Result<BeaconBlobBundle, Error> {
         let res = self
             .get(format!("eth/v1/beacon/blob_sidecars/{slot}").as_str())
