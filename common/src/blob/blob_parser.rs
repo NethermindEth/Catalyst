@@ -1,6 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
-use alloy::{eips::eip4844::kzg_to_versioned_hash, primitives::B256, rpc::types::Transaction};
+use alloy::{
+    eips::eip7594::BlobTransactionSidecarEip7594, primitives::B256, rpc::types::Transaction,
+};
 use anyhow::Error;
 
 use super::blob_decoder::BlobDecoder;
@@ -89,31 +91,28 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
     let slot = ethereum_l1
         .slot_clock
         .slot_of(Duration::from_secs(block_timestamp))?;
-    let sidecars = ethereum_l1.consensus_layer.get_blobs(slot, blob_hashes).await?;
-
-    let sidecar_hashes: Vec<B256> = sidecars
-        .data
-        .iter()
-        .map(|sidecar| kzg_to_versioned_hash(sidecar.kzg_commitment.as_slice()))
-        .collect();
+    let blobs = ethereum_l1
+        .consensus_layer
+        .get_blobs(slot, &blob_hashes)
+        .await?;
+    let blob_sidecar = BlobTransactionSidecarEip7594::try_from_blobs(blobs).map_err(|err| {
+        anyhow::anyhow!(
+            "Failed to create BlobTransactionSidecarEip7594 from blobs for slot {}: {}",
+            slot,
+            err
+        )
+    })?;
 
     for hash in blob_hashes {
-        let mut found = false;
-        for (i, sidecar) in sidecars.data.iter().enumerate() {
-            if sidecar_hashes[i] == hash {
-                let data = BlobDecoder::decode_blob(sidecar.blob.as_ref())?;
-                result.extend(data);
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            return Err(anyhow::anyhow!(
-                "Blob hash {} not found in sidecars for slot {}",
+        let blob = blob_sidecar.blob_by_versioned_hash(&hash).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Blob with hash {} not found in consensus layer for slot {}",
                 hash,
                 slot
-            ));
-        }
+            )
+        })?;
+        let data = BlobDecoder::decode_blob(blob)?;
+        result.extend(data);
     }
 
     Ok(result)

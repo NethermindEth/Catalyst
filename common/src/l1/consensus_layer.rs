@@ -1,7 +1,8 @@
 use std::{error::Error as std_error, time::Duration};
 
+use alloy::eips::eip4844::Blob;
 use alloy::primitives::B256;
-use alloy::rpc::types::beacon::sidecar::BeaconBlobBundle;
+use alloy::rpc::types::beacon::sidecar::{BeaconBlobBundle, GetBlobsResponse};
 use anyhow::Error;
 use reqwest;
 
@@ -25,8 +26,8 @@ impl ConsensusLayer {
     pub async fn get_blobs(
         &self,
         slot: u64,
-        versioned_hashes: Vec<B256>,
-    ) -> Result<BeaconBlobBundle, Error> {
+        versioned_hashes: &[B256],
+    ) -> Result<Vec<Blob>, Error> {
         let mut path = format!("eth/v1/beacon/blobs/{slot}");
         if !versioned_hashes.is_empty() {
             let hashes = versioned_hashes
@@ -38,8 +39,8 @@ impl ConsensusLayer {
         }
 
         let res = self.get(path.as_str()).await?;
-        let blobs: BeaconBlobBundle = serde_json::from_value(res)?;
-        Ok(blobs)
+        let blobs: GetBlobsResponse = serde_json::from_value(res)?;
+        Ok(blobs.data)
     }
 
     pub async fn get_blob_sidecars(&self, slot: u64) -> Result<BeaconBlobBundle, Error> {
