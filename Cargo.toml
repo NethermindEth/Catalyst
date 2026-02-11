@@ -13,7 +13,7 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.31.3"
+version = "1.32.0"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -85,10 +85,10 @@ shasta = { path = "shasta" }
 strum = { version = "0.27", features = ["derive"] }
 
 taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "3e0fdad9b9fbf7f6550c7209185fd6623468452c", package = "alethia-reth-consensus" }
-taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "4414a7ca1a1f46b7431ec44cf81660e2d6c690fe", package = "bindings" }
-taiko_preconfirmation_driver = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "4414a7ca1a1f46b7431ec44cf81660e2d6c690fe", package = "preconfirmation-driver" }
-taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "4414a7ca1a1f46b7431ec44cf81660e2d6c690fe", package = "protocol" }
-taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "4414a7ca1a1f46b7431ec44cf81660e2d6c690fe", package = "rpc" }
+taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "33b4e340155e962eab1dfa2b8932a802d26aafc5", package = "bindings" }
+taiko_preconfirmation_driver = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "33b4e340155e962eab1dfa2b8932a802d26aafc5", package = "preconfirmation-driver" }
+taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "33b4e340155e962eab1dfa2b8932a802d26aafc5", package = "protocol" }
+taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "33b4e340155e962eab1dfa2b8932a802d26aafc5", package = "rpc" }
 tokio = { version = "1.49", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
 tracing = { version = "0.1", default-features = false }

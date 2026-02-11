@@ -1,11 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
-use alloy::{eips::eip4844::kzg_to_versioned_hash, primitives::B256, rpc::types::Transaction};
-use anyhow::Error;
+use alloy::{
+    eips::eip7594::BlobTransactionSidecarEip7594, primitives::B256, rpc::types::Transaction,
+};
+use anyhow::{Error, anyhow};
 
-use super::blob_decoder::BlobDecoder;
 use crate::l1::{ethereum_l1::EthereumL1, traits::ELTrait};
 use crate::shared::l2_tx_lists::uncompress_and_decode;
+use taiko_protocol::shasta::BlobCoder;
 
 pub async fn extract_transactions_from_blob<T: ELTrait>(
     ethereum_l1: Arc<EthereumL1<T>>,
@@ -89,31 +91,29 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
     let slot = ethereum_l1
         .slot_clock
         .slot_of(Duration::from_secs(block_timestamp))?;
-    let sidecars = ethereum_l1.consensus_layer.get_blob_sidecars(slot).await?;
-
-    let sidecar_hashes: Vec<B256> = sidecars
-        .data
-        .iter()
-        .map(|sidecar| kzg_to_versioned_hash(sidecar.kzg_commitment.as_slice()))
-        .collect();
+    let blobs = ethereum_l1
+        .consensus_layer
+        .get_blobs(slot, &blob_hashes)
+        .await?;
+    let blob_sidecar = BlobTransactionSidecarEip7594::try_from_blobs(blobs).map_err(|err| {
+        anyhow::anyhow!(
+            "Failed to create BlobTransactionSidecarEip7594 from blobs for slot {}: {}",
+            slot,
+            err
+        )
+    })?;
 
     for hash in blob_hashes {
-        let mut found = false;
-        for (i, sidecar) in sidecars.data.iter().enumerate() {
-            if sidecar_hashes[i] == hash {
-                let data = BlobDecoder::decode_blob(sidecar.blob.as_ref())?;
-                result.extend(data);
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            return Err(anyhow::anyhow!(
-                "Blob hash {} not found in sidecars for slot {}",
+        let blob = blob_sidecar.blob_by_versioned_hash(&hash).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Blob with hash {} not found in consensus layer for slot {}",
                 hash,
                 slot
-            ));
-        }
+            )
+        })?;
+        let data = BlobCoder::decode_blob(blob)
+            .ok_or_else(|| anyhow!("Failed to decode blob with hash {}", hash))?;
+        result.extend(data);
     }
 
     Ok(result)
@@ -133,7 +133,8 @@ async fn get_data_from_block_indexer<T: ELTrait>(
 
     for hash in blob_hash {
         let blob = blob_indexer.get_blob(hash).await?;
-        let data = BlobDecoder::decode_blob(&blob)?;
+        let data = BlobCoder::decode_blob(&blob)
+            .ok_or_else(|| anyhow!("Failed to decode blob with hash {}", hash))?;
         result.extend(data);
     }
 
@@ -142,11 +143,8 @@ async fn get_data_from_block_indexer<T: ELTrait>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        blob::BlobDecoder,
-        shared::l2_tx_lists::{
-            decompose_pending_lists_json_from_geth, encode_and_compress, uncompress_and_decode,
-        },
+    use crate::shared::l2_tx_lists::{
+        decompose_pending_lists_json_from_geth, encode_and_compress, uncompress_and_decode,
     };
     use alloy::consensus::SidecarBuilder;
     use taiko_protocol::shasta::BlobCoder;
@@ -161,7 +159,7 @@ mod tests {
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&compress);
         let blob = sidecar_builder.build_7594().unwrap();
         assert_eq!(blob.blobs.len(), 1);
-        let blob_data = BlobDecoder::decode_blob(&blob.blobs[0]).unwrap();
+        let blob_data = BlobCoder::decode_blob(&blob.blobs[0]).unwrap();
         assert_eq!(blob_data, compress);
         let decoded_txs = uncompress_and_decode(&blob_data).unwrap();
         assert_eq!(decoded_txs, txs);
