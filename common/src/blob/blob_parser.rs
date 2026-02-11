@@ -3,11 +3,11 @@ use std::{sync::Arc, time::Duration};
 use alloy::{
     eips::eip7594::BlobTransactionSidecarEip7594, primitives::B256, rpc::types::Transaction,
 };
-use anyhow::Error;
+use anyhow::{Error, anyhow};
 
-use super::blob_decoder::BlobDecoder;
 use crate::l1::{ethereum_l1::EthereumL1, traits::ELTrait};
 use crate::shared::l2_tx_lists::uncompress_and_decode;
+use taiko_protocol::shasta::BlobCoder;
 
 pub async fn extract_transactions_from_blob<T: ELTrait>(
     ethereum_l1: Arc<EthereumL1<T>>,
@@ -111,7 +111,8 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
                 slot
             )
         })?;
-        let data = BlobDecoder::decode_blob(blob)?;
+        let data = BlobCoder::decode_blob(blob)
+            .ok_or_else(|| anyhow!("Failed to decode blob with hash {}", hash))?;
         result.extend(data);
     }
 
@@ -132,7 +133,8 @@ async fn get_data_from_block_indexer<T: ELTrait>(
 
     for hash in blob_hash {
         let blob = blob_indexer.get_blob(hash).await?;
-        let data = BlobDecoder::decode_blob(&blob)?;
+        let data = BlobCoder::decode_blob(&blob)
+            .ok_or_else(|| anyhow!("Failed to decode blob with hash {}", hash))?;
         result.extend(data);
     }
 
