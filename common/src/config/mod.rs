@@ -7,7 +7,8 @@ use std::str::FromStr;
 use std::time::Duration;
 use tracing::{info, warn};
 
-use crate::blob::constants::MAX_BLOB_DATA_SIZE;
+/// Maximum payload size that fits in a single blob with Kona encoding.
+const BLOB_MAX_DATA_SIZE: usize = (4 * 31 + 3) * 1024 - 4;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -243,10 +244,10 @@ impl Config {
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("BLOBS_PER_BATCH must be a number: {}", e))?;
 
-        let max_bytes_size_of_batch = u64::try_from(MAX_BLOB_DATA_SIZE)
-            .map_err(|_| anyhow::anyhow!("MAX_BLOB_DATA_SIZE must be a u64 number"))?
+        let max_bytes_size_of_batch = u64::try_from(BLOB_MAX_DATA_SIZE)
+            .map_err(|_| anyhow::anyhow!("BLOB_MAX_DATA_SIZE must be a u64 number"))?
             .checked_mul(blobs_per_batch)
-            .ok_or_else(|| anyhow::anyhow!("Overflow while computing BLOBS_PER_BATCH * MAX_BLOB_DATA_SIZE. Try to reduce BLOBS_PER_BATCH"))?;
+            .ok_or_else(|| anyhow::anyhow!("Overflow while computing BLOBS_PER_BATCH * BLOB_MAX_DATA_SIZE. Try to reduce BLOBS_PER_BATCH"))?;
 
         let max_blocks_per_batch = std::env::var("MAX_BLOCKS_PER_BATCH")
             .unwrap_or("0".to_string())
@@ -345,7 +346,7 @@ impl Config {
             .map_err(|e| anyhow::anyhow!("DISABLE_BRIDGING must be a boolean: {}", e))?;
 
         let max_bytes_per_tx_list = std::env::var("MAX_BYTES_PER_TX_LIST")
-            .unwrap_or(MAX_BLOB_DATA_SIZE.to_string())
+            .unwrap_or(BLOB_MAX_DATA_SIZE.to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("MAX_BYTES_PER_TX_LIST must be a number: {}", e))?;
 

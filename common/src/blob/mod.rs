@@ -1,23 +1,14 @@
-mod blob_decoder;
 pub mod blob_parser;
-pub mod constants;
 
-use alloy::consensus::{Blob, EnvKzgSettings};
-use anyhow::Error;
-use blob_decoder::BlobDecoder;
+use alloy::consensus::EnvKzgSettings;
 
 pub fn build_default_kzg_settings() {
     EnvKzgSettings::Default.get();
 }
 
-pub fn decode_blob(blob: &Blob) -> Result<Vec<u8>, Error> {
-    BlobDecoder::decode_blob(blob)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use alloy::consensus::SidecarBuilder;
+    use alloy::consensus::{Blob, SidecarBuilder};
     use alloy::primitives::FixedBytes;
     use taiko_protocol::shasta::BlobCoder;
 
@@ -66,7 +57,7 @@ mod tests {
         );
 
         let decoded_data =
-            BlobDecoder::decode_blob(&encoded_blob).expect("assert: can decode taiko blob");
+            BlobCoder::decode_blob(&encoded_blob).expect("assert: can decode taiko blob");
         assert_eq!(data, decoded_data);
     }
 
@@ -101,7 +92,7 @@ mod tests {
         );
 
         let decoded_data =
-            BlobDecoder::decode_blob(&encoded_blob).expect("assert: can decode taiko blob");
+            BlobCoder::decode_blob(&encoded_blob).expect("assert: can decode taiko blob");
         assert_eq!(data, decoded_data);
     }
 }

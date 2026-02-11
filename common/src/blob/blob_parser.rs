@@ -143,11 +143,8 @@ async fn get_data_from_block_indexer<T: ELTrait>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        blob::BlobDecoder,
-        shared::l2_tx_lists::{
-            decompose_pending_lists_json_from_geth, encode_and_compress, uncompress_and_decode,
-        },
+    use crate::shared::l2_tx_lists::{
+        decompose_pending_lists_json_from_geth, encode_and_compress, uncompress_and_decode,
     };
     use alloy::consensus::SidecarBuilder;
     use taiko_protocol::shasta::BlobCoder;
@@ -162,7 +159,7 @@ mod tests {
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&compress);
         let blob = sidecar_builder.build_7594().unwrap();
         assert_eq!(blob.blobs.len(), 1);
-        let blob_data = BlobDecoder::decode_blob(&blob.blobs[0]).unwrap();
+        let blob_data = BlobCoder::decode_blob(&blob.blobs[0]).unwrap();
         assert_eq!(blob_data, compress);
         let decoded_txs = uncompress_and_decode(&blob_data).unwrap();
         assert_eq!(decoded_txs, txs);
