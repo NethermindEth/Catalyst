@@ -1,4 +1,4 @@
-use crate::utils::cancellation_token::CancellationToken;
+use crate::{metrics::Metrics, utils::cancellation_token::CancellationToken};
 use alloy::primitives::{Address, B256};
 use alloy::sol_types::SolEvent;
 use anyhow::{Error, anyhow};
@@ -31,6 +31,7 @@ where
     cancel_token: CancellationToken,
     event_name: &'static str,
     event_handler: fn(&T),
+    metrics: Arc<Metrics>,
 }
 
 impl<T> ChainMonitor<T>
@@ -44,6 +45,7 @@ where
         cancel_token: CancellationToken,
         event_name: &'static str,
         event_handler: fn(&T),
+        metrics: Arc<Metrics>,
     ) -> Result<Self, Error> {
         debug!(
             "Creating ChainMonitor (L1: {}, L2: {}, Contract: {}, Event : {})",
@@ -66,6 +68,7 @@ where
             cancel_token,
             event_name,
             event_handler,
+            metrics,
         })
     }
 
@@ -109,6 +112,7 @@ where
             taiko_geth_status,
             cancel_token,
             self.event_handler,
+            self.metrics.clone(),
         ));
 
         Ok(())
@@ -120,6 +124,7 @@ where
         taiko_geth_status: Arc<Mutex<TaikoGethStatus>>,
         cancel_token: CancellationToken,
         event_handler: fn(&T),
+        metrics: Arc<Metrics>,
     ) {
         info!("ChainMonitor message loop running");
 
@@ -148,7 +153,9 @@ where
                             if reorg_expected {
                                 tracing::debug!("Geth reorg detected: Received L2 block with expected number. Expected: block_id {} hash {}", status.height, status.hash);
                             } else {
-                                tracing::warn!("⛔ Geth reorg detected: Received L2 block with unexpected number. Expected: block_id {} hash {}", status.height, status.hash);
+                                let reorg_depth = status.height.saturating_sub(block.block_number) + 1;
+                                tracing::warn!("⛔ Geth reorg detected: Received L2 block with unexpected number. Expected: block id {} parent hash {}, Reorg depth: {}", status.height+1, status.hash, reorg_depth);
+                                metrics.observe_reorg(reorg_depth);
                             }
                         }
 

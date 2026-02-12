@@ -24,6 +24,8 @@ pub struct Metrics {
     rpc_driver_call_error: CounterVec,
     skipped_l2_slots_by_low_txs_count: Counter,
     critical_errors: Counter,
+    reorgs: Counter,
+    reorg_depth: Gauge,
     operator_whitelisted: Gauge,
     registry: Registry,
 }
@@ -231,6 +233,23 @@ impl Metrics {
             error!("Error: Failed to register critical_errors: {}", err);
         }
 
+        let reorgs = Counter::new("reorgs", "Number of detected L2 reorgs")
+            .expect("Failed to create reorgs counter");
+
+        if let Err(err) = registry.register(Box::new(reorgs.clone())) {
+            error!("Error: Failed to register reorgs: {}", err);
+        }
+
+        let reorg_depth = Gauge::new(
+            "reorg_depth",
+            "Depth of the most recently detected L2 reorg",
+        )
+        .expect("Failed to create reorg_depth gauge");
+
+        if let Err(err) = registry.register(Box::new(reorg_depth.clone())) {
+            error!("Error: Failed to register reorg_depth: {}", err);
+        }
+
         let operator_whitelisted = Gauge::new(
             "operator_whitelisted",
             "Whether the operator is whitelisted (1.0 = true, 0.0 = false)",
@@ -259,6 +278,8 @@ impl Metrics {
             rpc_driver_call_error,
             skipped_l2_slots_by_low_txs_count,
             critical_errors,
+            reorgs,
+            reorg_depth,
             operator_whitelisted,
             registry,
         }
@@ -364,6 +385,12 @@ impl Metrics {
         self.critical_errors.inc();
     }
 
+    #[allow(clippy::cast_precision_loss)]
+    pub fn observe_reorg(&self, depth: u64) {
+        self.reorgs.inc();
+        self.reorg_depth.set(depth as f64);
+    }
+
     pub fn set_operator_whitelisted(&self, whitelisted: bool) {
         self.operator_whitelisted
             .set(if whitelisted { 1.0 } else { 0.0 });
@@ -432,6 +459,7 @@ mod tests {
         metrics.observe_block_tx_count(3);
         metrics.inc_skipped_l2_slots_by_low_txs_count();
         metrics.inc_critical_errors();
+        metrics.observe_reorg(2);
 
         let output = metrics.gather();
         println!("{output}");
@@ -451,6 +479,8 @@ mod tests {
         assert!(output.contains("block_tx_count_sum 3"));
         assert!(output.contains("skipped_l2_slots_by_low_txs_count 1"));
         assert!(output.contains("critical_errors 1"));
+        assert!(output.contains("reorgs 1"));
+        assert!(output.contains("reorg_depth 2"));
     }
 
     #[test]

@@ -102,6 +102,7 @@ pub async fn create_pacaya_node(
             cancel_token.clone(),
             "BatchProposed",
             chain_monitor::print_batch_proposed_info,
+            metrics.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create PacayaChainMonitor: {}", e))?,
     );
