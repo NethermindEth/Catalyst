@@ -225,10 +225,14 @@ impl BatchBuilder {
         }
 
         if is_forced_inclusion {
-            // If forced inclusion exists in the proposal, we need to return an error
-            return Err(anyhow::anyhow!(
-                "recover_from: Cannot recover forced inclusion block"
-            ));
+            if coinbase == self.config.default_coinbase && self.can_add_forced_inclusion() {
+                self.inc_forced_inclusion()?;
+            } else {
+                return Err(anyhow::anyhow!(
+                    "recover_from: Cannot add FI block with coinbase {} to proposal",
+                    coinbase
+                ));
+            }
         } else {
             if let Some(batch) = self.current_proposal.as_mut()
                 && batch.anchor_block_id < anchor_info.id()
@@ -257,12 +261,18 @@ impl BatchBuilder {
             // TODO we add block to the current proposal.
             // But we should verify that it fit N blob data size
             // Otherwise we should do a reorg
-            // TODO align on blob count with all teams
 
             // at previous step we check that proposal exists
             self.add_l2_block_and_get_current_proposal(l2_block)?;
         }
         Ok(())
+    }
+
+    pub fn inc_forced_inclusion(&mut self) -> Result<(), Error> {
+        self.current_proposal
+            .as_mut()
+            .map(|proposal| proposal.num_forced_inclusion += 1)
+            .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
     }
 
     fn is_same_proposal_id(&self, proposal_id: u64) -> bool {
