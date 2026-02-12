@@ -122,6 +122,7 @@ pub async fn create_shasta_node(
             cancel_token.clone(),
             "Proposed",
             chain_monitor::print_proposed_info,
+            metrics.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create ShastaChainMonitor: {}", e))?,
     );
