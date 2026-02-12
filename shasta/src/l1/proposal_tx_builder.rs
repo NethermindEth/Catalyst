@@ -1,12 +1,10 @@
 use crate::l1::{
-    bindings::{
-        IInbox::ProposeInput, LibBlobs::BlobReference, Multicall, SurgeInbox, UserOpsSubmitter,
-    },
+    bindings::{IInbox::ProposeInput, LibBlobs::BlobReference, Multicall, SurgeInbox},
     config::ContractAddresses,
 };
 use crate::l2::bindings::ICheckpointStore::Checkpoint;
 use crate::node::proposal_manager::{
-    bridge_handler::{L1Call, UserOpData},
+    bridge_handler::{L1Call, UserOp},
     proposal::Proposal,
 };
 use crate::shared_abi::bindings::Bridge;
@@ -165,15 +163,11 @@ impl ProposalTxBuilder {
 
     // Surge: Multicall builders
 
-    fn build_user_op_call(&self, user_op_data: UserOpData) -> Multicall::Call {
-        let submitter = UserOpsSubmitter::new(user_op_data.user_op_submitter, &self.provider);
-        let call =
-            submitter.executeBatch(vec![user_op_data.user_op], user_op_data.user_op_signature);
-
+    fn build_user_op_call(&self, user_op_data: UserOp) -> Multicall::Call {
         Multicall::Call {
-            target: user_op_data.user_op_submitter,
+            target: user_op_data.submitter,
             value: U256::ZERO,
-            data: call.calldata().clone(),
+            data: user_op_data.calldata,
         }
     }
 

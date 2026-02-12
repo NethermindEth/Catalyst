@@ -3,10 +3,7 @@ use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
 use crate::node::proposal_manager::proposal::Proposal;
 use crate::shared_abi::bindings::{Bridge::MessageSent, IBridge::Message, SignalSent};
-use crate::{
-    l1::{bindings::UserOpsSubmitter, config::ContractAddresses},
-    node::proposal_manager::bridge_handler::UserOpData,
-};
+use crate::{l1::config::ContractAddresses, node::proposal_manager::bridge_handler::UserOp};
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
     primitives::{Address, FixedBytes, U256, aliases::U48},
@@ -185,7 +182,12 @@ impl PreconfOperator for ExecutionLayer {
 }
 
 impl ExecutionLayer {
-    pub async fn send_batch_to_l1(&self, batch: Proposal) -> Result<(), Error> {
+    pub async fn send_batch_to_l1(
+        &self,
+        batch: Proposal,
+        tx_hash_notifier: Option<tokio::sync::oneshot::Sender<alloy::primitives::B256>>,
+        tx_result_notifier: Option<tokio::sync::oneshot::Sender<bool>>,
+    ) -> Result<(), Error> {
         info!(
             "📦 Proposing with {} blocks | num_forced_inclusion: {} | user_ops: {:?} | signal_slots: {:?} | l1_calls: {:?}",
             batch.l2_blocks.len(),
@@ -212,7 +214,7 @@ impl ExecutionLayer {
         let pending_nonce = self.get_preconfer_nonce_pending().await?;
         // Spawn a monitor for this transaction
         self.transaction_monitor
-            .monitor_new_transaction(tx, pending_nonce)
+            .monitor_new_transaction(tx, pending_nonce, tx_hash_notifier, tx_result_notifier)
             .await
             .map_err(|e| Error::msg(format!("Sending batch to L1 failed: {e}")))?;
 
@@ -368,7 +370,7 @@ pub trait L1BridgeHandlerOps {
     // Surge: This can be made to retrieve multiple signal slots
     async fn find_message_and_signal_slot(
         &self,
-        user_op_data: UserOpData,
+        user_op: UserOp,
     ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error>;
 }
 
@@ -377,18 +379,13 @@ pub trait L1BridgeHandlerOps {
 impl L1BridgeHandlerOps for ExecutionLayer {
     async fn find_message_and_signal_slot(
         &self,
-        user_op_data: UserOpData,
+        user_op_data: UserOp,
     ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error> {
-        // Build the call to executeBatch with a single user op
-        let submitter = UserOpsSubmitter::new(user_op_data.user_op_submitter, &self.provider);
-        let call =
-            submitter.executeBatch(vec![user_op_data.user_op], user_op_data.user_op_signature);
-
-        // Create transaction request for simulation
+        // Create transaction request for simulation, sending calldata directly to the submitter
         let tx_request = TransactionRequest::default()
             .from(self.preconfer_address)
-            .to(user_op_data.user_op_submitter)
-            .input(call.calldata().clone().into());
+            .to(user_op_data.submitter)
+            .input(user_op_data.calldata.into());
 
         // Configure call tracer with logs and nested calls enabled
         let mut tracer_config = serde_json::Map::new();

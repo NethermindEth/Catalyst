@@ -1,48 +1,77 @@
 use crate::l2::taiko::Taiko;
 use crate::shared_abi::bindings::IBridge::Message;
 use crate::{
-    l1::{
-        bindings::UserOpsSubmitter::UserOp,
-        execution_layer::{ExecutionLayer, L1BridgeHandlerOps},
-    },
+    l1::execution_layer::{ExecutionLayer, L1BridgeHandlerOps},
     l2::execution_layer::L2BridgeHandlerOps,
 };
-use alloy::primitives::{Address, Bytes, FixedBytes, U256};
+use alloy::primitives::{Address, Bytes, FixedBytes};
 use alloy::signers::Signer;
 use anyhow::Result;
 use common::{l1::ethereum_l1::EthereumL1, utils::cancellation_token::CancellationToken};
 use jsonrpsee::server::{RpcModule, ServerBuilder};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc::{self, Receiver};
-use tracing::{error, info};
-
-#[derive(Deserialize)]
-pub struct SignedUserOp {
-    // `UserOpsSubmitter` contract for the user.
-    // Can be replaced with a Safe multisig or equivalent user ops based service contract
-    submitter: String,
-    target: String,
-    value: u64,
-    data: Vec<u8>,
-    // Signature on the hashed UserOp { target, value, data }
-    signature: Vec<u8>,
-}
+use tracing::{error, info, warn};
 
 // Sequence of calls on L1:
-// 1. User op submission via `UserOpSubmitter`
+// 1. User op calldata submission to the submitter
 // 2. Proposal with signal slot
 // 3. L1Call initiated by an L2 contract
 
 // Sequence of calls on l2:
 // 1. L2Call initiated by an L1 contract
 
-// Data to allow construction of the user op transaction
-#[derive(Clone, Debug)]
-pub struct UserOpData {
-    pub user_op: UserOp,
-    pub user_op_signature: Bytes,
-    pub user_op_submitter: Address,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "status")]
+pub enum UserOpStatus {
+    Pending,
+    Processing { tx_hash: FixedBytes<32> },
+    Rejected { reason: String },
+    Executed,
+}
+
+/// Disk-backed user op status store using sled.
+#[derive(Clone)]
+pub struct UserOpStatusStore {
+    db: sled::Db,
+}
+
+impl UserOpStatusStore {
+    pub fn open(path: &str) -> Result<Self, anyhow::Error> {
+        let db = sled::open(path)
+            .map_err(|e| anyhow::anyhow!("Failed to open user op status store: {}", e))?;
+        Ok(Self { db })
+    }
+
+    pub fn set(&self, id: u64, status: &UserOpStatus) {
+        if let Ok(value) = serde_json::to_vec(status) {
+            if let Err(e) = self.db.insert(id.to_be_bytes(), value) {
+                error!("Failed to write user op status: {}", e);
+            }
+        }
+    }
+
+    pub fn get(&self, id: u64) -> Option<UserOpStatus> {
+        self.db
+            .get(id.to_be_bytes())
+            .ok()
+            .flatten()
+            .and_then(|v| serde_json::from_slice(&v).ok())
+    }
+
+    pub fn remove(&self, id: u64) {
+        let _ = self.db.remove(id.to_be_bytes());
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UserOp {
+    #[serde(default)]
+    pub id: u64,
+    pub submitter: Address,
+    pub calldata: Bytes,
 }
 
 // Data required to build the L1 call transaction initiated by an L2 contract via the bridge
@@ -60,12 +89,20 @@ pub struct L2Call {
     pub signal_slot_on_l2: FixedBytes<32>,
 }
 
+#[derive(Clone)]
+struct BridgeRpcContext {
+    tx: mpsc::Sender<UserOp>,
+    status_store: UserOpStatusStore,
+    next_id: Arc<AtomicU64>,
+}
+
 pub struct BridgeHandler {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     taiko: Arc<Taiko>,
-    rx: Receiver<SignedUserOp>,
+    rx: Receiver<UserOp>,
     // Surge: For signing the L1 call signal slot proofs
     l1_call_proof_signer: alloy::signers::local::PrivateKeySigner,
+    status_store: UserOpStatusStore,
 }
 
 impl BridgeHandler {
@@ -75,25 +112,40 @@ impl BridgeHandler {
         taiko: Arc<Taiko>,
         cancellation_token: CancellationToken,
     ) -> Result<Self, anyhow::Error> {
-        let (tx, rx) = mpsc::channel::<SignedUserOp>(1024);
+        let (tx, rx) = mpsc::channel::<UserOp>(1024);
+        let status_store = UserOpStatusStore::open("data/user_op_status")?;
+
+        let rpc_context = BridgeRpcContext {
+            tx,
+            status_store: status_store.clone(),
+            next_id: Arc::new(AtomicU64::new(1)),
+        };
 
         let server = ServerBuilder::default()
             .build(addr)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to build RPC server: {}", e))?;
 
-        let mut module = RpcModule::new(tx);
+        let mut module = RpcModule::new(rpc_context);
 
-        module.register_async_method("surge_sendUserOp", |params, tx_context, _| async move {
-            let signed_user_op: SignedUserOp = params.parse()?;
+        module.register_async_method("surge_sendUserOp", |params, ctx, _| async move {
+            let mut user_op: UserOp = params.parse()?;
+            let id = ctx.next_id.fetch_add(1, Ordering::Relaxed);
+            user_op.id = id;
 
             info!(
-                "Received UserOp: target={:?}, value={:?}",
-                signed_user_op.target, signed_user_op.value
+                "Received UserOp: id={}, submitter={:?}, calldata_len={}",
+                id,
+                user_op.submitter,
+                user_op.calldata.len()
             );
 
-            tx_context.send(signed_user_op).await.map_err(|e| {
+            // Set status to Pending
+            ctx.status_store.set(id, &UserOpStatus::Pending);
+
+            ctx.tx.send(user_op).await.map_err(|e| {
                 error!("Failed to send UserOp to queue: {}", e);
+                ctx.status_store.remove(id);
                 jsonrpsee::types::ErrorObjectOwned::owned(
                     -32000,
                     "Failed to queue user operation",
@@ -101,9 +153,28 @@ impl BridgeHandler {
                 )
             })?;
 
-            Ok::<String, jsonrpsee::types::ErrorObjectOwned>(
-                "UserOp queued successfully".to_string(),
-            )
+            Ok::<u64, jsonrpsee::types::ErrorObjectOwned>(id)
+        })?;
+
+        module.register_async_method("surge_userOpStatus", |params, ctx, _| async move {
+            let id: u64 = params.one()?;
+
+            match ctx.status_store.get(id) {
+                Some(status) => Ok::<serde_json::Value, jsonrpsee::types::ErrorObjectOwned>(
+                    serde_json::to_value(status).map_err(|e| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32603,
+                            "Serialization error",
+                            Some(format!("{}", e)),
+                        )
+                    })?,
+                ),
+                None => Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32001,
+                    "UserOp not found",
+                    Some(format!("No user operation with id {}", id)),
+                )),
+            }
         })?;
 
         info!("Bridge handler RPC server starting on {}", addr);
@@ -125,7 +196,12 @@ impl BridgeHandler {
                 &"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
                     .parse::<alloy::primitives::FixedBytes<32>>()?,
             )?,
+            status_store,
         })
+    }
+
+    pub fn status_store(&self) -> UserOpStatusStore {
+        self.status_store.clone()
     }
 
     // Returns any L2 calls initiated by an L1 contract via the Bridge.
@@ -133,36 +209,36 @@ impl BridgeHandler {
     // the Bridge and any other intermediate contract.
     pub async fn next_user_op_and_l2_call(
         &mut self,
-    ) -> Result<Option<(UserOpData, L2Call)>, anyhow::Error> {
-        if let Ok(signed_user_op) = self.rx.try_recv() {
-            let user_op = UserOp {
-                target: signed_user_op.target.parse()?,
-                value: U256::from(signed_user_op.value),
-                data: Bytes::from(signed_user_op.data),
-            };
-
-            let user_op_data = UserOpData {
-                user_op,
-                user_op_submitter: signed_user_op.submitter.parse()?,
-                user_op_signature: Bytes::from(signed_user_op.signature),
-            };
-
+    ) -> Result<Option<(UserOp, L2Call)>, anyhow::Error> {
+        if let Ok(user_op) = self.rx.try_recv() {
             // This is the message sent from the L1 contract to the L2, and the
             // associated signal that is set when the user op is executed
             if let Some((message_from_l1, signal_slot_on_l2)) = self
                 .ethereum_l1
                 .execution_layer
-                .find_message_and_signal_slot(user_op_data.clone())
+                .find_message_and_signal_slot(user_op.clone())
                 .await?
             {
                 return Ok(Some((
-                    user_op_data,
+                    user_op,
                     L2Call {
                         message_from_l1,
                         signal_slot_on_l2,
                     },
                 )));
             }
+
+            // No L2 call found in the user op - reject it
+            warn!(
+                "UserOp id={} rejected: no L2 call found in user op",
+                user_op.id
+            );
+            self.status_store.set(
+                user_op.id,
+                &UserOpStatus::Rejected {
+                    reason: "No L2 call found in user op".to_string(),
+                },
+            );
         }
 
         Ok(None)

@@ -1,6 +1,6 @@
 use crate::l2::bindings::ICheckpointStore::Checkpoint;
 use crate::node::proposal_manager::{
-    bridge_handler::{L1Call, UserOpData},
+    bridge_handler::{L1Call, UserOp},
     l2_block_payload::L2BlockV2Payload,
 };
 use alloy::primitives::{Address, B256, FixedBytes};
@@ -27,7 +27,7 @@ pub struct Proposal {
     // along with the proposal to Surge inbox
     pub checkpoint: Checkpoint,
     // Surge: User ops that initiate L2 calls
-    pub user_ops: Vec<UserOpData>,
+    pub user_ops: Vec<UserOp>,
     // Surge: Signal slots to set via anchor with the proposal
     pub signal_slots: Vec<FixedBytes<32>>,
     // Surge: L1 calls intitiated by any L2 contracts

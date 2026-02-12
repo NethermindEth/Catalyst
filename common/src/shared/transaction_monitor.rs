@@ -46,6 +46,9 @@ pub struct TransactionMonitorThread {
     metrics: Arc<Metrics>,
     chain_id: u64,
     sent_tx_hashes: Vec<FixedBytes<32>>,
+    tx_hash_notifier: Option<tokio::sync::oneshot::Sender<B256>>,
+    /// Notifies the caller whether the transaction was confirmed (true) or failed (false).
+    tx_result_notifier: Option<tokio::sync::oneshot::Sender<bool>>,
 }
 
 //#[derive(Debug)]
@@ -95,6 +98,8 @@ impl TransactionMonitor {
         &self,
         tx: TransactionRequest,
         nonce: u64,
+        tx_hash_notifier: Option<tokio::sync::oneshot::Sender<B256>>,
+        tx_result_notifier: Option<tokio::sync::oneshot::Sender<bool>>,
     ) -> Result<(), Error> {
         let mut guard = self.join_handle.lock().await;
         if let Some(join_handle) = guard.as_ref()
@@ -105,7 +110,7 @@ impl TransactionMonitor {
             ));
         }
 
-        let monitor_thread = TransactionMonitorThread::new(
+        let mut monitor_thread = TransactionMonitorThread::new(
             self.provider.clone(),
             self.config.clone(),
             nonce,
@@ -113,6 +118,8 @@ impl TransactionMonitor {
             self.metrics.clone(),
             self.chain_id,
         );
+        monitor_thread.tx_hash_notifier = tx_hash_notifier;
+        monitor_thread.tx_result_notifier = tx_result_notifier;
         let join_handle = monitor_thread.spawn_monitoring_task(tx);
         *guard = Some(join_handle);
         Ok(())
@@ -144,6 +151,8 @@ impl TransactionMonitorThread {
             metrics,
             chain_id,
             sent_tx_hashes: Vec::new(),
+            tx_hash_notifier: None,
+            tx_result_notifier: None,
         }
     }
     pub fn spawn_monitoring_task(mut self, tx: TransactionRequest) -> JoinHandle<()> {
@@ -152,11 +161,18 @@ impl TransactionMonitorThread {
         })
     }
 
+    fn notify_result(&mut self, success: bool) {
+        if let Some(notifier) = self.tx_result_notifier.take() {
+            let _ = notifier.send(success);
+        }
+    }
+
     async fn monitor_transaction(&mut self, mut tx: TransactionRequest) {
         tx.set_nonce(self.nonce);
         if !matches!(tx.buildable_type(), Some(TxType::Eip1559 | TxType::Eip4844)) {
             self.send_error_signal(TransactionError::UnsupportedTransactionType)
                 .await;
+            self.notify_result(false);
             return;
         }
         tx.set_chain_id(self.chain_id);
@@ -210,11 +226,13 @@ impl TransactionMonitorThread {
                     error!("Failed to get L1 block number: {}", e);
                     self.send_error_signal(TransactionError::GetBlockNumberFailed)
                         .await;
+                    self.notify_result(false);
                     return;
                 }
             };
 
             if sending_attempt > 0 && self.verify_tx_included(sending_attempt).await {
+                self.notify_result(true);
                 return;
             }
 
@@ -222,11 +240,17 @@ impl TransactionMonitorThread {
                 if let Some(pending_tx) = self.send_transaction(tx_clone, sending_attempt).await {
                     pending_tx
                 } else {
+                    self.notify_result(false);
                     return;
                 };
 
             let tx_hash = *pending_tx.tx_hash();
             self.sent_tx_hashes.push(tx_hash);
+
+            // Notify the first tx hash to the caller if requested
+            if let Some(notifier) = self.tx_hash_notifier.take() {
+                let _ = notifier.send(tx_hash);
+            }
 
             if root_provider.is_none() {
                 root_provider = Some(pending_tx.provider().clone());
@@ -248,7 +272,7 @@ impl TransactionMonitorThread {
                 max_fee_per_blob_gas
             );
 
-            if self
+            if let Some(confirmed) = self
                 .is_transaction_handled_by_builder(
                     pending_tx.provider().clone(),
                     tx_hash,
@@ -257,6 +281,7 @@ impl TransactionMonitorThread {
                 )
                 .await
             {
+                self.notify_result(confirmed);
                 return;
             }
 
@@ -271,14 +296,15 @@ impl TransactionMonitorThread {
 
         //Wait for transaction result
         let mut wait_attempt = 0;
+        let mut resolved = false;
         if let Some(root_provider) = root_provider {
             // We can use unwrap since tx_hashes is updated before root_provider
             let tx_hash = self
                 .sent_tx_hashes
                 .last()
                 .expect("assert: tx_hashes is updated before root_provider");
-            while wait_attempt < self.config.max_attempts_to_wait_tx
-                && !self
+            while wait_attempt < self.config.max_attempts_to_wait_tx {
+                if let Some(confirmed) = self
                     .is_transaction_handled_by_builder(
                         root_provider.clone(),
                         *tx_hash,
@@ -286,51 +312,63 @@ impl TransactionMonitorThread {
                         self.config.max_attempts_to_send_tx,
                     )
                     .await
-                && !self
+                {
+                    self.notify_result(confirmed);
+                    resolved = true;
+                    break;
+                }
+                if self
                     .verify_tx_included(wait_attempt + self.config.max_attempts_to_send_tx)
                     .await
-            {
+                {
+                    self.notify_result(true);
+                    resolved = true;
+                    break;
+                }
                 warn!("🟣 Transaction watcher timed out without a result. Waiting...");
                 wait_attempt += 1;
             }
         }
 
-        if wait_attempt >= self.config.max_attempts_to_wait_tx {
-            error!(
-                "⛔ Transaction {} with nonce {} not confirmed",
-                if let Some(tx_hash) = self.sent_tx_hashes.last() {
-                    tx_hash.to_string()
-                } else {
-                    "unknown".to_string()
-                },
-                self.nonce,
-            );
+        if !resolved {
+            if wait_attempt >= self.config.max_attempts_to_wait_tx {
+                error!(
+                    "⛔ Transaction {} with nonce {} not confirmed",
+                    if let Some(tx_hash) = self.sent_tx_hashes.last() {
+                        tx_hash.to_string()
+                    } else {
+                        "unknown".to_string()
+                    },
+                    self.nonce,
+                );
 
-            self.send_error_signal(TransactionError::NotConfirmed).await;
+                self.send_error_signal(TransactionError::NotConfirmed).await;
+            }
+            self.notify_result(false);
         }
     }
 
-    /// Returns true if transaction removed from mempool for any reason
+    /// Returns Some(true) if confirmed, Some(false) if failed, None if still pending.
     async fn is_transaction_handled_by_builder(
         &self,
         root_provider: RootProvider<alloy::network::Ethereum>,
         tx_hash: B256,
         l1_block_at_send: u64,
         sending_attempt: u64,
-    ) -> bool {
+    ) -> Option<bool> {
         loop {
             let check_tx = PendingTransactionBuilder::new(root_provider.clone(), tx_hash);
             let tx_status = self.wait_for_tx_receipt(check_tx, sending_attempt).await;
             match tx_status {
-                TxStatus::Confirmed => return true,
+                TxStatus::Confirmed => return Some(true),
                 TxStatus::Failed(err_str) => {
                     if let Some(error) = tools::convert_error_payload(&err_str) {
                         self.send_error_signal(error).await;
-                        return true;
+                        return Some(false);
                     }
                     self.send_error_signal(TransactionError::TransactionReverted)
                         .await;
-                    return true;
+                    return Some(false);
                 }
                 TxStatus::Pending => {} // Continue with retry attempts
             }
@@ -342,7 +380,7 @@ impl TransactionMonitorThread {
                     error!("Failed to get L1 block number: {}", e);
                     self.send_error_signal(TransactionError::GetBlockNumberFailed)
                         .await;
-                    return true;
+                    return Some(false);
                 }
             };
             if current_l1_height != l1_block_at_send {
@@ -354,7 +392,7 @@ impl TransactionMonitorThread {
             );
         }
 
-        false
+        None
     }
 
     async fn send_transaction(

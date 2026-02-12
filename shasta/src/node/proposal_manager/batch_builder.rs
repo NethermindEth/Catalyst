@@ -3,7 +3,7 @@ use crate::l1::execution_layer::ExecutionLayer;
 use crate::l2::bindings::ICheckpointStore::Checkpoint;
 use crate::metrics::Metrics;
 use crate::node::proposal_manager::{
-    bridge_handler::{L1Call, UserOpData},
+    bridge_handler::{L1Call, UserOp, UserOpStatus, UserOpStatusStore},
     l2_block_payload::L2BlockV2Payload,
     proposal::Proposal,
 };
@@ -168,7 +168,7 @@ impl BatchBuilder {
     }
 
     // Surge: adds user ops that initiate L2 calls
-    pub fn add_user_op(&mut self, user_op_data: UserOpData) -> Result<&Proposal, Error> {
+    pub fn add_user_op(&mut self, user_op_data: UserOp) -> Result<&Proposal, Error> {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
             current_proposal.user_ops.push(user_op_data.clone());
 
@@ -347,6 +347,7 @@ impl BatchBuilder {
         &mut self,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         submit_only_full_batches: bool,
+        status_store: Option<UserOpStatusStore>,
     ) -> Result<(), Error> {
         if self.current_proposal.is_some()
             && (!submit_only_full_batches
@@ -391,12 +392,45 @@ impl BatchBuilder {
 
             debug!("Checkpoint data before proposing: {:?}", &batch.checkpoint);
 
+            // Collect user op IDs from the batch being submitted
+            let user_op_ids: Vec<u64> = batch.user_ops.iter().map(|op| op.id).collect();
+            let has_user_ops = !user_op_ids.is_empty() && status_store.is_some();
+
+            // Create notification channels if there are user ops to track
+            let (tx_hash_sender, tx_hash_receiver) = if has_user_ops {
+                let (s, r) = tokio::sync::oneshot::channel();
+                (Some(s), Some(r))
+            } else {
+                (None, None)
+            };
+            let (tx_result_sender, tx_result_receiver) = if has_user_ops {
+                let (s, r) = tokio::sync::oneshot::channel();
+                (Some(s), Some(r))
+            } else {
+                (None, None)
+            };
+
             if let Err(err) = ethereum_l1
                 .execution_layer
                 // TODO send a Proosal to function
-                .send_batch_to_l1(batch.clone())
+                .send_batch_to_l1(batch.clone(), tx_hash_sender, tx_result_sender)
                 .await
             {
+                // Reject all user ops in failed batches
+                if let Some(ref store) = status_store {
+                    let reason = format!("L1 multicall failed: {}", err);
+                    for batch in &self.proposals_to_send {
+                        for op in &batch.user_ops {
+                            store.set(
+                                op.id,
+                                &UserOpStatus::Rejected {
+                                    reason: reason.clone(),
+                                },
+                            );
+                        }
+                    }
+                }
+
                 if let Some(transaction_error) = err.downcast_ref::<TransactionError>()
                     && !matches!(transaction_error, TransactionError::EstimationTooEarly)
                 {
@@ -404,6 +438,65 @@ impl BatchBuilder {
                     self.proposals_to_send.clear();
                 }
                 return Err(err);
+            }
+
+            // Spawn background task to track user op status through Processing → Executed/Rejected
+            if let (Some(hash_rx), Some(result_rx), Some(store)) =
+                (tx_hash_receiver, tx_result_receiver, status_store)
+            {
+                tokio::spawn(async move {
+                    // Wait for tx hash → set Processing
+                    let tx_hash = match hash_rx.await {
+                        Ok(tx_hash) => {
+                            for id in &user_op_ids {
+                                store.set(*id, &UserOpStatus::Processing { tx_hash });
+                            }
+                            Some(tx_hash)
+                        }
+                        Err(_) => {
+                            for id in &user_op_ids {
+                                store.set(
+                                    *id,
+                                    &UserOpStatus::Rejected {
+                                        reason: "Transaction failed to send".to_string(),
+                                    },
+                                );
+                            }
+                            None
+                        }
+                    };
+
+                    // Wait for confirmation result → set Executed or Rejected
+                    if tx_hash.is_some() {
+                        match result_rx.await {
+                            Ok(true) => {
+                                for id in &user_op_ids {
+                                    store.set(*id, &UserOpStatus::Executed);
+                                }
+                            }
+                            Ok(false) => {
+                                for id in &user_op_ids {
+                                    store.set(
+                                        *id,
+                                        &UserOpStatus::Rejected {
+                                            reason: "L1 multicall reverted".to_string(),
+                                        },
+                                    );
+                                }
+                            }
+                            Err(_) => {
+                                for id in &user_op_ids {
+                                    store.set(
+                                        *id,
+                                        &UserOpStatus::Rejected {
+                                            reason: "Transaction monitor dropped".to_string(),
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                    }
+                });
             }
 
             self.proposals_to_send.pop_front();

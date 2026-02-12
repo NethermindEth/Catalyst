@@ -5,7 +5,7 @@ pub mod proposal;
 
 use crate::l2::bindings::ICheckpointStore::Checkpoint;
 use crate::l2::execution_layer::L2BridgeHandlerOps;
-use crate::node::proposal_manager::bridge_handler::UserOpData;
+use crate::node::proposal_manager::bridge_handler::UserOp;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
@@ -105,8 +105,13 @@ impl BatchManager {
         &mut self,
         submit_only_full_batches: bool,
     ) -> Result<(), Error> {
+        let status_store = self.bridge_handler.lock().await.status_store();
         self.batch_builder
-            .try_submit_oldest_batch(self.ethereum_l1.clone(), submit_only_full_batches)
+            .try_submit_oldest_batch(
+                self.ethereum_l1.clone(),
+                submit_only_full_batches,
+                Some(status_store),
+            )
             .await
     }
 
@@ -288,7 +293,7 @@ impl BatchManager {
     async fn add_pending_l2_call_to_draft_block(
         &mut self,
         l2_draft_block: &mut L2BlockV2Draft,
-    ) -> Result<Option<(UserOpData, FixedBytes<32>)>, anyhow::Error> {
+    ) -> Result<Option<(UserOp, FixedBytes<32>)>, anyhow::Error> {
         // Check for pending L2 calls from the bridge handler
         if let Some((user_op_data, l2_call)) = self
             .bridge_handler
