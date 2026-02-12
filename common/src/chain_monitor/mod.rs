@@ -143,9 +143,9 @@ where
                                 None => false,
                             };
                             if reorg_expected {
-                                tracing::debug!("Geth reorg detected: Received L2 block with expected number. Expected: block_id {} hash {}", status.height, status.hash);
+                                tracing::debug!("Geth reorg detected: Received L2 block with expected number. Expected: parent_id {} hash {}", status.height, status.hash);
                             } else {
-                                tracing::warn!("⛔ Geth reorg detected: Received L2 block with unexpected number. Expected: block_id {} hash {}", status.height, status.hash);
+                                tracing::warn!("⛔ Geth reorg detected: Received L2 block with unexpected number. Expected: parent_id {} hash {}", status.height, status.hash);
                             }
                         }
 
