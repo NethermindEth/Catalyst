@@ -94,6 +94,11 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
         .consensus_layer
         .get_blobs(slot, &blob_hashes)
         .await?;
+    // Create a BlobTransactionSidecar from the blobs to obtain versioned hashes.
+    // Note: BlobTransactionSidecar is preferred for performance reasons, as it is less time-consuming to create than BlobTransactionSidecarEip7594.
+    // Both sidecars yield the same versioned hashes, allowing us to use BlobTransactionSidecar without sacrificing correctness.
+    // We have a test (test_blob_sidecar_creation_time) in common/src/blob/mod.rs to benchmark the creation time of BlobTransactionSidecar against BlobTransactionSidecarEip7594.
+    // If future changes in the alloy library make BlobTransactionSidecarEip7594 faster, we may consider switching to it.
     let blob_sidecar =
         BlobTransactionSidecar::try_from_blobs_with_settings(blobs, EnvKzgSettings::Default.get())
             .map_err(|err| {

@@ -98,6 +98,11 @@ mod tests {
         assert_eq!(data, decoded_data);
     }
 
+    // This test benchmarks the creation time of BlobTransactionSidecar (EIP-4844) against BlobTransactionSidecarEip7594.
+    // It is expected that BlobTransactionSidecar will perform faster than BlobTransactionSidecarEip7594 in the alloy library.
+    // Should future updates to the alloy library result in BlobTransactionSidecarEip7594 becoming faster, we may reconsider its usage.
+    // We utilize BlobTransactionSidecar in the get_data_from_consensus_layer function in blob_parser.rs to efficiently obtain versioned hashes from blobs,
+    // as it is less time-consuming to create while providing the same versioned hashes as BlobTransactionSidecarEip7594.
     #[test]
     fn test_blob_sidecar_creation_time() {
         let data: Vec<u8> = vec![0xAB; 13000];
