@@ -1,12 +1,11 @@
-use std::{sync::Arc, time::Duration};
-
-use alloy::{
-    eips::eip7594::BlobTransactionSidecarEip7594, primitives::B256, rpc::types::Transaction,
-};
-use anyhow::{Error, anyhow};
-
 use crate::l1::{ethereum_l1::EthereumL1, traits::ELTrait};
 use crate::shared::l2_tx_lists::uncompress_and_decode;
+use alloy::{
+    consensus::EnvKzgSettings, eips::eip4844::BlobTransactionSidecar, primitives::B256,
+    rpc::types::Transaction,
+};
+use anyhow::{Error, anyhow};
+use std::{sync::Arc, time::Duration};
 use taiko_protocol::shasta::BlobCoder;
 
 pub async fn extract_transactions_from_blob<T: ELTrait>(
@@ -95,13 +94,15 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
         .consensus_layer
         .get_blobs(slot, &blob_hashes)
         .await?;
-    let blob_sidecar = BlobTransactionSidecarEip7594::try_from_blobs(blobs).map_err(|err| {
-        anyhow::anyhow!(
-            "Failed to create BlobTransactionSidecarEip7594 from blobs for slot {}: {}",
-            slot,
-            err
-        )
-    })?;
+    let blob_sidecar =
+        BlobTransactionSidecar::try_from_blobs_with_settings(blobs, EnvKzgSettings::Default.get())
+            .map_err(|err| {
+                anyhow::anyhow!(
+                    "Failed to create BlobTransactionSidecar from blobs for slot {}: {}",
+                    slot,
+                    err
+                )
+            })?;
 
     for hash in blob_hashes {
         let blob = blob_sidecar.blob_by_versioned_hash(&hash).ok_or_else(|| {

@@ -8,7 +8,9 @@ pub fn build_default_kzg_settings() {
 
 #[cfg(test)]
 mod tests {
-    use alloy::consensus::{Blob, SidecarBuilder};
+    use alloy::consensus::{Blob, EnvKzgSettings, SidecarBuilder};
+    use alloy::eips::eip4844::BlobTransactionSidecar;
+    use alloy::eips::eip7594::BlobTransactionSidecarEip7594;
     use alloy::primitives::FixedBytes;
     use taiko_protocol::shasta::BlobCoder;
 
@@ -93,6 +95,74 @@ mod tests {
 
         let decoded_data =
             BlobCoder::decode_blob(&encoded_blob).expect("assert: can decode taiko blob");
+        assert_eq!(data, decoded_data);
+    }
+
+    #[test]
+    fn test_blob_sidecar_creation_time() {
+        let data: Vec<u8> = vec![0xAB; 13000];
+
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&data);
+        let sidecar = sidecar_builder.build_7594().unwrap();
+        assert_eq!(sidecar.blobs.len(), 1);
+        let encoded_blob: Blob = sidecar.blobs[0];
+        let blob_versioned_hash = sidecar.versioned_hashes().next().unwrap();
+
+        let vec_blob: Vec<Blob> = vec![encoded_blob.clone()];
+        let start = std::time::Instant::now();
+        let blob_sidecar_7594 = BlobTransactionSidecarEip7594::try_from_blobs(vec_blob)
+            .map_err(|err| {
+                anyhow::anyhow!(
+                    "Failed to create BlobTransactionSidecarEip7594 from blobs: {}",
+                    err
+                )
+            })
+            .unwrap();
+        let duration_7594 = start.elapsed();
+        println!(
+            "Time taken to create BlobTransactionSidecarEip7594: {:?}",
+            duration_7594
+        );
+        assert_eq!(blob_sidecar_7594.blobs.len(), 1);
+        assert_eq!(
+            blob_sidecar_7594.versioned_hashes().next().unwrap(),
+            blob_versioned_hash
+        );
+
+        let vec_blob: Vec<Blob> = vec![encoded_blob];
+        let start = std::time::Instant::now();
+        let blob_sidecar_4844 = BlobTransactionSidecar::try_from_blobs_with_settings(
+            vec_blob,
+            EnvKzgSettings::Default.get(),
+        )
+        .map_err(|err| {
+            anyhow::anyhow!(
+                "Failed to create BlobTransactionSidecar from blobs: {}",
+                err
+            )
+        })
+        .unwrap();
+
+        let duration_4844 = start.elapsed();
+        println!(
+            "Time taken to create BlobTransactionSidecar: {:?}",
+            duration_4844
+        );
+        assert_eq!(
+            blob_sidecar_4844.versioned_hashes().next().unwrap(),
+            blob_versioned_hash
+        );
+        assert_eq!(blob_sidecar_4844.blobs.len(), 1);
+
+        assert!(
+            duration_4844 <= duration_7594,
+            "Expected BlobTransactionSidecar (EIP-4844) to be faster than BlobTransactionSidecarEip7594. \
+     duration_4844: {:?}, duration_7594: {:?}",
+            duration_4844,
+            duration_7594
+        );
+        let decoded_data = BlobCoder::decode_blob(&blob_sidecar_4844.blobs[0])
+            .expect("assert: can decode taiko blob");
         assert_eq!(data, decoded_data);
     }
 }
