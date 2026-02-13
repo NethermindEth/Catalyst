@@ -6,7 +6,7 @@ members = [
     "pacaya",
     "permissionless",
     "shasta",
-    "tools/p2p_node/p2p_boot_node",
+    "tools/p2p_boot_node",
     "urc",
 ]
 resolver = "2"
