@@ -2,5 +2,5 @@
 
 ```sh
 cd ../../
-docker build -f tools/p2p_node/p2p_boot_node/Dockerfile -t bootnodep2p .
+docker build -f tools/p2p_boot_node/Dockerfile -t bootnodep2p .
 ```
