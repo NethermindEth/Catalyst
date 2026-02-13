@@ -1,12 +1,11 @@
-use std::{sync::Arc, time::Duration};
-
-use alloy::{
-    eips::eip7594::BlobTransactionSidecarEip7594, primitives::B256, rpc::types::Transaction,
-};
-use anyhow::{Error, anyhow};
-
 use crate::l1::{ethereum_l1::EthereumL1, traits::ELTrait};
 use crate::shared::l2_tx_lists::uncompress_and_decode;
+use alloy::{
+    consensus::EnvKzgSettings, eips::eip4844::BlobTransactionSidecar, primitives::B256,
+    rpc::types::Transaction,
+};
+use anyhow::{Error, anyhow};
+use std::{sync::Arc, time::Duration};
 use taiko_protocol::shasta::BlobCoder;
 
 pub async fn extract_transactions_from_blob<T: ELTrait>(
@@ -95,13 +94,20 @@ async fn get_data_from_consensus_layer<T: ELTrait>(
         .consensus_layer
         .get_blobs(slot, &blob_hashes)
         .await?;
-    let blob_sidecar = BlobTransactionSidecarEip7594::try_from_blobs(blobs).map_err(|err| {
-        anyhow::anyhow!(
-            "Failed to create BlobTransactionSidecarEip7594 from blobs for slot {}: {}",
-            slot,
-            err
-        )
-    })?;
+    // Create a BlobTransactionSidecar from the blobs to obtain versioned hashes.
+    // Note: BlobTransactionSidecar is preferred for performance reasons, as it is less time-consuming to create than BlobTransactionSidecarEip7594.
+    // Both sidecars yield the same versioned hashes, allowing us to use BlobTransactionSidecar without sacrificing correctness.
+    // We have a test (test_blob_sidecar_creation_time) in common/src/blob/mod.rs to benchmark the creation time of BlobTransactionSidecar against BlobTransactionSidecarEip7594.
+    // If future changes in the alloy library make BlobTransactionSidecarEip7594 faster, we may consider switching to it.
+    let blob_sidecar =
+        BlobTransactionSidecar::try_from_blobs_with_settings(blobs, EnvKzgSettings::Default.get())
+            .map_err(|err| {
+                anyhow::anyhow!(
+                    "Failed to create BlobTransactionSidecar from blobs for slot {}: {}",
+                    slot,
+                    err
+                )
+            })?;
 
     for hash in blob_hashes {
         let blob = blob_sidecar.blob_by_versioned_hash(&hash).ok_or_else(|| {
