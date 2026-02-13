@@ -7,7 +7,7 @@ on:
     tags:
       - "v*"
     paths:
-      - "tools/p2p_node/**"
+      - "tools/p2p_boot_node/**"
 
 env:
   DOCKER_PUBLIC_REGISTRY: docker.io
@@ -54,8 +54,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./tools/p2p_node/p2p_boot_node
-          file: ./tools/p2p_node/p2p_boot_node/Dockerfile
+          context: .
+          file: ./tools/p2p_boot_node/Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
           outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }},push-by-digest=true,name-canonical=true
