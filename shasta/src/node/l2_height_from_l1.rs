@@ -14,6 +14,7 @@ pub async fn get_l2_height_from_l1(
             Ok(0u64) // If no proposals have been made, we can consider the L2 height to be 0
         })
     } else {
+        tracing::debug!("Fetching L2 height from L1 nextProposalId: {}", inbox_state.nextProposalId);
         taiko.get_last_block_id_by_batch_id(inbox_state.nextProposalId.to::<u64>() - 1).await
     }
 }
