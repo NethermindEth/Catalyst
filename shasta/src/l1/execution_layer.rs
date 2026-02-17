@@ -43,6 +43,7 @@ pub struct ExecutionLayer {
     contract_addresses: ContractAddresses,
     inbox_instance: InboxInstance<DynProvider>,
     operators_cache: OperatorsCache,
+    extra_gas_percentage: u64,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -98,6 +99,7 @@ impl ELTrait for ExecutionLayer {
             contract_addresses,
             inbox_instance,
             operators_cache,
+            extra_gas_percentage: common_config.extra_gas_percentage,
         })
     }
 
@@ -183,8 +185,7 @@ impl ExecutionLayer {
         );
 
         // Build propose transaction
-        // TODO fill extra gas percentege from config
-        let builder = ProposalTxBuilder::new(self.provider.clone(), 10);
+        let builder = ProposalTxBuilder::new(self.provider.clone(), self.extra_gas_percentage);
         let tx = builder
             .build_propose_tx(
                 l2_blocks,
