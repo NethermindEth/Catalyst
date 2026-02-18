@@ -1,5 +1,5 @@
 use alloy::primitives::{B256, Bytes, U256, keccak256};
-use anyhow::{Error, Ok};
+use anyhow::Error;
 use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::shared::l2_tx_lists::encode_and_compress;
 use common::utils::rpc_client::JSONRPCClient;
@@ -53,7 +53,7 @@ impl PreconfirmationDriver {
         l2_block_payload: L2BlockV2Payload,
         l2_slot_context: &L2SlotContext,
         signer_key: &SecretKey,
-    ) -> Result<(PublishTxListRequest, PublishCommitmentRequest), Error> {
+    ) -> Result<(PublishTxListResponse, PublishCommitmentResponse), Error> {
         let tx_list = &l2_block_payload.tx_list;
         let tx_list_bytes = encode_and_compress(tx_list)?;
         let tx_list_hash = keccak256(&tx_list_bytes);
@@ -97,9 +97,9 @@ impl PreconfirmationDriver {
         let commitment_request = PublishCommitmentRequest {
             commitment: Bytes::from(signed_commitment_bytes),
         };
-        self.publish_tx_list(tx_request.clone()).await?;
-        self.publish_commitment(commitment_request.clone()).await?;
-        Ok((tx_request, commitment_request))
+        let tx_response = self.publish_tx_list(tx_request).await?;
+        let commitment_response = self.publish_commitment(commitment_request).await?;
+        Ok((tx_response, commitment_response))
     }
 
     async fn publish_tx_list(
