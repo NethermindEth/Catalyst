@@ -79,19 +79,20 @@ impl Node {
         let head_verifier = HeadVerifier::default();
 
         let proposal_manager = BatchManager::new(
-            //TODO
             config.l1_height_lag,
             batch_builder_config,
             ethereum_l1.clone(),
             taiko.clone(),
             metrics.clone(),
             cancel_token.clone(),
+            config.max_blocks_to_reanchor,
+            config.propose_forced_inclusion,
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;
 
         // Workaround for the issue: https://github.com/NethermindEth/Catalyst/issues/611
-        // e2e-test to reproduce issue: test_preocnfirmation_after_restart
+        // e2e-test to reproduce issue: test_preconfirmation_after_restart
         let start = std::time::Instant::now();
         common::blob::build_default_kzg_settings();
         info!(
@@ -163,6 +164,11 @@ impl Node {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
 
+        let l2_slot_ctx = L2SlotContext {
+            info: l2_slot_info,
+            end_of_sequencing: current_status.is_end_of_sequencing(),
+        };
+
         // Get the transaction status before checking the error channel
         // to avoid race condition
         let transaction_in_progress = self
@@ -171,12 +177,14 @@ impl Node {
             .is_transaction_in_progress()
             .await?;
 
-        self.check_transaction_error_channel(&current_status, &l2_slot_info)
-            .await?;
+        self.check_transaction_error_channel().await?;
 
         if current_status.is_preconfirmation_start_slot() {
             self.head_verifier
-                .set(l2_slot_info.parent_id(), *l2_slot_info.parent_hash())
+                .set(
+                    l2_slot_ctx.info.parent_id(),
+                    *l2_slot_ctx.info.parent_hash(),
+                )
                 .await;
 
             let (next_proposal_id, fi_head, fi_tail) = self
@@ -205,7 +213,7 @@ impl Node {
                 }
             } else {
                 // It is for handover window
-                let taiko_geth_height = l2_slot_info.parent_id();
+                let taiko_geth_height = l2_slot_ctx.info.parent_id();
                 let verification_slot = self.ethereum_l1.slot_clock.get_next_epoch_start_slot()?;
                 let verifier_result = Verifier::new_with_taiko_height(
                     taiko_geth_height,
@@ -244,7 +252,7 @@ impl Node {
             // do not trigger fast reanchor on submitter window to prevent from double reanchor
             if !current_status.is_submitter()
                 && self
-                    .check_and_handle_anchor_offset_for_unsafe_l2_blocks(&l2_slot_info)
+                    .check_and_handle_anchor_offset_for_unsafe_l2_blocks(&l2_slot_ctx.info)
                     .await?
             {
                 // reanchored, no need to preconf
@@ -253,7 +261,7 @@ impl Node {
 
             if !self
                 .head_verifier
-                .verify(l2_slot_info.parent_id(), l2_slot_info.parent_hash())
+                .verify(l2_slot_ctx.info.parent_id(), l2_slot_ctx.info.parent_hash())
                 .await
             {
                 self.head_verifier.log_error().await;
@@ -263,20 +271,13 @@ impl Node {
                 ));
             }
 
-            let l2_slot_context = L2SlotContext {
-                // TODO remove clone
-                info: l2_slot_info.clone(),
-                end_of_sequencing: current_status.is_end_of_sequencing(),
-                allow_forced_inclusion: self.config.propose_forced_inclusion,
-            };
-
             if self
                 .proposal_manager
-                .should_new_block_be_created(&pending_tx_list, &l2_slot_context)
+                .should_new_block_be_created(&pending_tx_list, &l2_slot_ctx)
             {
                 let preconfed_block = self
                     .proposal_manager
-                    .preconfirm_block(pending_tx_list, &l2_slot_context)
+                    .preconfirm_block(pending_tx_list, &l2_slot_ctx)
                     .await?;
 
                 self.verify_preconfed_block(preconfed_block).await?;
@@ -290,17 +291,12 @@ impl Node {
                     .proposal_manager
                     .try_submit_oldest_batch(
                         current_status.is_preconfer(),
-                        l2_slot_info.slot_timestamp(),
+                        l2_slot_ctx.info.slot_timestamp(),
                     )
                     .await
             {
                 if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
-                    self.handle_transaction_error(
-                        transaction_error,
-                        &current_status,
-                        &l2_slot_info,
-                    )
-                    .await?;
+                    self.handle_transaction_error(transaction_error).await?;
                 } else {
                     return Err(err);
                 }
@@ -413,12 +409,7 @@ impl Node {
         Ok(true)
     }
 
-    async fn handle_transaction_error(
-        &mut self,
-        error: &TransactionError,
-        _current_status: &OperatorStatus,
-        _l2_slot_info: &L2SlotInfoV2,
-    ) -> Result<(), Error> {
+    async fn handle_transaction_error(&mut self, error: &TransactionError) -> Result<(), Error> {
         match error {
             TransactionError::ReanchorRequired => {
                 warn!("Unexpected ReanchorRequired error received");
@@ -628,16 +619,10 @@ impl Node {
         Ok((l1_proposal_id, l2_proposal_id))
     }
 
-    async fn check_transaction_error_channel(
-        &mut self,
-        current_status: &OperatorStatus,
-        l2_slot_info: &L2SlotInfoV2,
-    ) -> Result<(), Error> {
+    async fn check_transaction_error_channel(&mut self) -> Result<(), Error> {
         match self.transaction_error_channel.try_recv() {
             Ok(error) => {
-                return self
-                    .handle_transaction_error(&error, current_status, l2_slot_info)
-                    .await;
+                return self.handle_transaction_error(&error).await;
             }
             Err(err) => match err {
                 TryRecvError::Empty => {
@@ -797,7 +782,8 @@ impl Node {
         }
 
         let blocks_reanchored = self
-            .reanchor_blocks_internal(&blocks, &forced_inclusion_flags, parent_block_id)
+            .proposal_manager
+            .reanchor_blocks(&blocks, &forced_inclusion_flags, parent_block_id)
             .await?;
 
         let last_l2_slot_info = self.taiko.get_l2_slot_info().await?;
@@ -816,150 +802,5 @@ impl Node {
             start_time.elapsed().as_millis()
         );
         Ok(())
-    }
-
-    async fn reanchor_blocks_internal(
-        &mut self,
-        blocks: &[alloy::rpc::types::Block],
-        forced_inclusion_flags: &[bool],
-        parent_block_id: u64,
-    ) -> Result<u64, Error> {
-        let mut current_block_pos = 0;
-        let mut processed_blocks = 0;
-        //let mut max_blocks_to_reanchor = self.config.max_blocks_to_reanchor;
-        let mut is_common_block_processed = false;
-
-        // calculate slot info for the first block
-        let (first_l2_slot_info, max_blocks_to_reanchor) =
-            self.prepare_reanchor_slot_info(parent_block_id).await?;
-
-        while current_block_pos < blocks.len() && processed_blocks < max_blocks_to_reanchor {
-            debug!(
-                "Reanchoring block position {}/{}, processed: {}/{}",
-                current_block_pos,
-                blocks.len(),
-                processed_blocks,
-                max_blocks_to_reanchor
-            );
-
-            if forced_inclusion_flags[current_block_pos] {
-                debug!(
-                    "Skipping forced inclusion block {}",
-                    blocks[current_block_pos].header.number,
-                );
-                current_block_pos += 1;
-                continue;
-            }
-
-            let block = &blocks[current_block_pos];
-            let txs = self.extract_block_transactions(block)?;
-
-            // Skip empty blocks, except the first one
-            if txs.is_empty() && is_common_block_processed {
-                debug!("Skipping empty block {}", block.header.number);
-                current_block_pos += 1;
-                continue;
-            }
-
-            let l2_slot_info = self
-                .get_l2_slot_info_for_reanchor(&first_l2_slot_info, processed_blocks)
-                .await?;
-            debug!(
-                "Reanchoring block {} with {} txs, parent: {}, timestamp: {}",
-                block.header.number,
-                txs.len(),
-                l2_slot_info.parent_id(),
-                l2_slot_info.slot_timestamp(),
-            );
-
-            let pending_tx_list = PreBuiltTxList {
-                tx_list: txs,
-                estimated_gas_used: 0,
-                bytes_length: 0,
-            };
-
-            let is_last_reanchored_block = current_block_pos + 1 == blocks.len()
-                || processed_blocks + 1 == max_blocks_to_reanchor;
-            let allow_forced_inclusion =
-                self.config.propose_forced_inclusion && !is_last_reanchored_block;
-
-            match self
-                .proposal_manager
-                .reanchor_block(pending_tx_list, l2_slot_info, allow_forced_inclusion)
-                .await
-            {
-                Ok((reanchored_block, is_forced_inclusion)) => {
-                    debug!(
-                        "Reanchored block {} hash {}, is_forced_inclusion: {}",
-                        reanchored_block.number, reanchored_block.hash, is_forced_inclusion,
-                    );
-                    processed_blocks += 1;
-                    if !is_forced_inclusion {
-                        is_common_block_processed = true;
-                        current_block_pos += 1;
-                    }
-                }
-                Err(err) => {
-                    error!("Failed to reanchor block {}: {}", block.header.number, err);
-                    self.cancel_token.cancel_on_critical_error();
-                    return Err(anyhow::anyhow!(
-                        "Failed to reanchor block {}: {}",
-                        block.header.number,
-                        err
-                    ));
-                }
-            }
-        }
-        // finalize the current batch to avoid anchor and timestamp checks during preconfirmation
-        self.proposal_manager.try_finalize_current_batch()?;
-        Ok(processed_blocks)
-    }
-
-    async fn prepare_reanchor_slot_info(
-        &self,
-        parent_block_id: u64,
-    ) -> Result<(L2SlotInfoV2, u64), Error> {
-        let info = self
-            .taiko
-            .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
-                parent_block_id,
-            ))
-            .await?;
-        let max_blocks_to_reanchor = (self.config.max_blocks_to_reanchor)
-            .min(info.slot_timestamp() - info.parent_timestamp());
-        let first_block_timestamp = info.slot_timestamp() - max_blocks_to_reanchor;
-        let l2_slot_info = L2SlotInfoV2::new_from_other(info, first_block_timestamp);
-        Ok((l2_slot_info, max_blocks_to_reanchor))
-    }
-
-    async fn get_l2_slot_info_for_reanchor(
-        &self,
-        first_slot_info: &L2SlotInfoV2,
-        processed_blocks: u64,
-    ) -> Result<L2SlotInfoV2, Error> {
-        if processed_blocks == 0 {
-            Ok(first_slot_info.clone())
-        } else {
-            let info = self.taiko.get_l2_slot_info().await?;
-            let timestamp = info.parent_timestamp() + 1;
-            Ok(L2SlotInfoV2::new_from_other(info, timestamp))
-        }
-    }
-
-    fn extract_block_transactions(
-        &self,
-        block: &alloy::rpc::types::Block,
-    ) -> Result<Vec<alloy::rpc::types::Transaction>, Error> {
-        let (_, txs) = block
-            .transactions
-            .as_transactions()
-            .and_then(|txs| txs.split_first())
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Cannot extract transactions from block {}",
-                    block.header.number
-                )
-            })?;
-        Ok(txs.to_vec())
     }
 }

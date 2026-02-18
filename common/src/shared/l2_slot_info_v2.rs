@@ -4,7 +4,6 @@ use alloy::primitives::B256;
 pub struct L2SlotContext {
     pub info: L2SlotInfoV2,
     pub end_of_sequencing: bool,
-    pub allow_forced_inclusion: bool,
 }
 
 #[derive(Debug, Clone)]

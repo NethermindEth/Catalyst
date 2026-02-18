@@ -35,6 +35,8 @@ pub struct BatchManager {
     forced_inclusion: ForcedInclusion,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
+    max_blocks_to_reanchor: u64,
+    propose_forced_inclusion: bool,
 }
 
 impl BatchManager {
@@ -45,6 +47,8 @@ impl BatchManager {
         taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
+        max_blocks_to_reanchor: u64,
+        propose_forced_inclusion: bool,
     ) -> Result<Self, Error> {
         info!(
             "Batch builder config:\n\
@@ -76,6 +80,8 @@ impl BatchManager {
             forced_inclusion,
             metrics,
             cancel_token,
+            max_blocks_to_reanchor,
+            propose_forced_inclusion,
         })
     }
 
@@ -115,6 +121,7 @@ impl BatchManager {
                 pending_tx_list.unwrap_or_else(PreBuiltTxList::empty),
                 l2_slot_context,
                 OperationType::Preconfirm,
+                true,
             )
             .await?;
         if self
@@ -161,10 +168,10 @@ impl BatchManager {
                 .get_block_params_from_geth(l2_slot_context.info.parent_id())
                 .await?;
 
-            let pyaload = self.batch_builder.add_fi_block(fi_block, anchor_params)?;
+            let payload = self.batch_builder.add_fi_block(fi_block, anchor_params)?;
             match self
                 .taiko
-                .advance_head_to_new_l2_block(pyaload, l2_slot_context, operation_type)
+                .advance_head_to_new_l2_block(payload, l2_slot_context, operation_type)
                 .await
             {
                 Ok(fi_preconfed_block) => {
@@ -197,6 +204,7 @@ impl BatchManager {
         prebuilt_tx_list: PreBuiltTxList,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
+        allow_forced_inclusion: bool,
         // TODO REPLACE with enum or struct
     ) -> Result<(BuildPreconfBlockResponse, bool), Error> {
         let timestamp = l2_slot_context.info.slot_timestamp();
@@ -210,11 +218,14 @@ impl BatchManager {
             ));
         }
 
+        let allow_forced_inclusion = self.propose_forced_inclusion
+            && allow_forced_inclusion
+            && !l2_slot_context.end_of_sequencing;
         info!(
             "Adding new L2 block id: {}, timestamp: {}, allow_forced_inclusion: {}",
             l2_slot_context.info.parent_id() + 1,
             timestamp,
-            l2_slot_context.allow_forced_inclusion,
+            allow_forced_inclusion,
         );
 
         let l2_draft_block = L2BlockV2Draft {
@@ -234,9 +245,7 @@ impl BatchManager {
         }
 
         // Add forced inclusion when needed
-        // not add forced inclusion when end_of_sequencing is true
-        if l2_slot_context.allow_forced_inclusion
-            && !l2_slot_context.end_of_sequencing
+        if allow_forced_inclusion
             && let Some(fi_block) = self
                 .add_new_l2_block_with_forced_inclusion_when_needed(l2_slot_context, operation_type)
                 .await?
@@ -517,6 +526,8 @@ impl BatchManager {
             forced_inclusion: ForcedInclusion::new_with_index(self.ethereum_l1.clone(), fi_head),
             metrics: self.metrics.clone(),
             cancel_token: self.cancel_token.clone(),
+            max_blocks_to_reanchor: self.max_blocks_to_reanchor,
+            propose_forced_inclusion: self.propose_forced_inclusion,
         }
     }
 
@@ -528,22 +539,25 @@ impl BatchManager {
         self.forced_inclusion.set_index(fi_head);
     }
 
-    pub async fn reanchor_block(
+    async fn reanchor_block(
         &mut self,
         pending_tx_list: PreBuiltTxList,
         l2_slot_info: L2SlotInfoV2,
         allow_forced_inclusion: bool,
         // TODO REPLACE with enum or struct
     ) -> Result<(BuildPreconfBlockResponse, bool), Error> {
-        // TODO create context outside
         let l2_slot_context = L2SlotContext {
             info: l2_slot_info,
             end_of_sequencing: false,
-            allow_forced_inclusion,
         };
 
         let (block, is_forced_inclusion) = self
-            .add_new_l2_block(pending_tx_list, &l2_slot_context, OperationType::Reanchor)
+            .add_new_l2_block(
+                pending_tx_list,
+                &l2_slot_context,
+                OperationType::Reanchor,
+                allow_forced_inclusion,
+            )
             .await?;
 
         Ok((block, is_forced_inclusion))
@@ -559,5 +573,147 @@ impl BatchManager {
             })?;
 
         Ok(is_forced_inclusion)
+    }
+
+    pub async fn reanchor_blocks(
+        &mut self,
+        blocks: &[alloy::rpc::types::Block],
+        forced_inclusion_flags: &[bool],
+        parent_block_id: u64,
+    ) -> Result<u64, Error> {
+        let mut current_block_pos = 0;
+        let mut processed_blocks = 0;
+        let mut is_common_block_processed = false;
+
+        // calculate slot info for the first block
+        let (first_l2_slot_info, max_blocks_to_reanchor) =
+            self.prepare_reanchor_slot_info(parent_block_id).await?;
+
+        while current_block_pos < blocks.len() && processed_blocks < max_blocks_to_reanchor {
+            debug!(
+                "Reanchoring block position {}/{}, processed: {}/{}",
+                current_block_pos,
+                blocks.len(),
+                processed_blocks,
+                max_blocks_to_reanchor
+            );
+
+            if forced_inclusion_flags[current_block_pos] {
+                debug!(
+                    "Skipping forced inclusion block {}",
+                    blocks[current_block_pos].header.number,
+                );
+                current_block_pos += 1;
+                continue;
+            }
+
+            let block = &blocks[current_block_pos];
+            let txs = self.extract_block_transactions(block)?;
+
+            // Skip empty blocks, except the first one
+            if txs.is_empty() && is_common_block_processed {
+                debug!("Skipping empty block {}", block.header.number);
+                current_block_pos += 1;
+                continue;
+            }
+
+            let l2_slot_info = self
+                .get_l2_slot_info_for_reanchor(&first_l2_slot_info, processed_blocks)
+                .await?;
+            debug!(
+                "Reanchoring block {} with {} txs, parent: {}, timestamp: {}",
+                block.header.number,
+                txs.len(),
+                l2_slot_info.parent_id(),
+                l2_slot_info.slot_timestamp(),
+            );
+
+            let pending_tx_list = PreBuiltTxList {
+                tx_list: txs,
+                estimated_gas_used: 0,
+                bytes_length: 0,
+            };
+
+            let is_last_reanchored_block = current_block_pos + 1 == blocks.len()
+                || processed_blocks + 1 == max_blocks_to_reanchor;
+            let allow_forced_inclusion = !is_last_reanchored_block;
+
+            match self
+                .reanchor_block(pending_tx_list, l2_slot_info, allow_forced_inclusion)
+                .await
+            {
+                Ok((reanchored_block, is_forced_inclusion)) => {
+                    debug!(
+                        "Reanchored block {} hash {}, is_forced_inclusion: {}",
+                        reanchored_block.number, reanchored_block.hash, is_forced_inclusion,
+                    );
+                    processed_blocks += 1;
+                    if !is_forced_inclusion {
+                        is_common_block_processed = true;
+                        current_block_pos += 1;
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to reanchor block {}: {}", block.header.number, err);
+                    self.cancel_token.cancel_on_critical_error();
+                    return Err(anyhow::anyhow!(
+                        "Failed to reanchor block {}: {}",
+                        block.header.number,
+                        err
+                    ));
+                }
+            }
+        }
+        // finalize the current batch to avoid anchor and timestamp checks during preconfirmation
+        self.try_finalize_current_batch()?;
+        Ok(processed_blocks)
+    }
+
+    async fn prepare_reanchor_slot_info(
+        &self,
+        parent_block_id: u64,
+    ) -> Result<(L2SlotInfoV2, u64), Error> {
+        let info = self
+            .taiko
+            .get_l2_slot_info_by_parent_block(alloy::eips::BlockNumberOrTag::Number(
+                parent_block_id,
+            ))
+            .await?;
+        let max_blocks_to_reanchor =
+            (self.max_blocks_to_reanchor).min(info.slot_timestamp() - info.parent_timestamp());
+        let first_block_timestamp = info.slot_timestamp() - max_blocks_to_reanchor;
+        let l2_slot_info = L2SlotInfoV2::new_from_other(info, first_block_timestamp);
+        Ok((l2_slot_info, max_blocks_to_reanchor))
+    }
+
+    async fn get_l2_slot_info_for_reanchor(
+        &self,
+        first_slot_info: &L2SlotInfoV2,
+        processed_blocks: u64,
+    ) -> Result<L2SlotInfoV2, Error> {
+        if processed_blocks == 0 {
+            Ok(first_slot_info.clone())
+        } else {
+            let info = self.taiko.get_l2_slot_info().await?;
+            let timestamp = info.parent_timestamp() + 1;
+            Ok(L2SlotInfoV2::new_from_other(info, timestamp))
+        }
+    }
+
+    fn extract_block_transactions(
+        &self,
+        block: &alloy::rpc::types::Block,
+    ) -> Result<Vec<alloy::rpc::types::Transaction>, Error> {
+        let (_, txs) = block
+            .transactions
+            .as_transactions()
+            .and_then(|txs| txs.split_first())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Cannot extract transactions from block {}",
+                    block.header.number
+                )
+            })?;
+        Ok(txs.to_vec())
     }
 }
