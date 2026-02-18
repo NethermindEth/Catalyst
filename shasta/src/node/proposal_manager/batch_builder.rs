@@ -419,6 +419,10 @@ impl BatchBuilder {
             }
     }
 
+    pub fn get_number_of_batches_ready_to_send(&self) -> u64 {
+        self.proposals_to_send.len() as u64
+    }
+
     /// Alias for `take_proposals_to_send` for compatibility
     pub fn take_batches_to_send(&mut self) -> VecDeque<Proposal> {
         std::mem::take(&mut self.proposals_to_send)

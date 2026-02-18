@@ -19,6 +19,10 @@ pub struct Config {
     pub contract_addresses: L1ContractAddresses,
     pub preconfirmation_driver_url: String,
     pub preconfirmation_driver_timeout: Duration,
+    pub shasta_inbox: Address,
+    pub l1_height_lag: u64,
+    pub max_blocks_to_reanchor: u64,
+    pub propose_forced_inclusion: bool,
 }
 
 impl ConfigTrait for Config {
@@ -70,6 +74,27 @@ impl ConfigTrait for Config {
                 })?,
         );
 
+        const SHASTA_INBOX_ADDRESS: &str = "SHASTA_INBOX_ADDRESS";
+        let shasta_inbox_str = std::env::var(SHASTA_INBOX_ADDRESS)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", SHASTA_INBOX_ADDRESS, e))?;
+        let shasta_inbox = Address::from_str(&shasta_inbox_str)
+            .map_err(|e| address_parse_error(SHASTA_INBOX_ADDRESS, e, &shasta_inbox_str))?;
+
+        let l1_height_lag = std::env::var("L1_HEIGHT_LAG")
+            .unwrap_or("4".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("L1_HEIGHT_LAG must be a number: {}", e))?;
+
+        let max_blocks_to_reanchor = std::env::var("MAX_BLOCKS_TO_REANCHOR")
+            .unwrap_or("1000".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("MAX_BLOCKS_TO_REANCHOR must be a number: {}", e))?;
+
+        let propose_forced_inclusion = std::env::var("PROPOSE_FORCED_INCLUSION")
+            .unwrap_or("true".to_string())
+            .parse::<bool>()
+            .map_err(|e| anyhow::anyhow!("PROPOSE_FORCED_INCLUSION must be a boolean: {}", e))?;
+
         Ok(Config {
             contract_addresses: L1ContractAddresses {
                 registry_address,
@@ -79,6 +104,10 @@ impl ConfigTrait for Config {
             },
             preconfirmation_driver_url,
             preconfirmation_driver_timeout,
+            shasta_inbox,
+            l1_height_lag,
+            max_blocks_to_reanchor,
+            propose_forced_inclusion,
         })
     }
 }
