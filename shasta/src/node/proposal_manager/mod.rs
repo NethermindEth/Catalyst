@@ -27,7 +27,7 @@ use proposal::Proposals;
 
 const MIN_ANCHOR_OFFSET: u64 = 2;
 
-pub struct BatchManager {
+pub struct ProposalManager {
     batch_builder: BatchBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
@@ -39,7 +39,7 @@ pub struct BatchManager {
     propose_forced_inclusion: bool,
 }
 
-impl BatchManager {
+impl ProposalManager {
     pub async fn new(
         l1_height_lag: u64,
         config: BatchBuilderConfig,
@@ -83,6 +83,10 @@ impl BatchManager {
             max_blocks_to_reanchor,
             propose_forced_inclusion,
         })
+    }
+
+    pub fn get_number_of_proposals_ready_to_send(&self) -> u64 {
+        self.batch_builder.get_number_of_batches_ready_to_send()
     }
 
     pub async fn try_submit_oldest_batch(

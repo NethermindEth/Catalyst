@@ -1,4 +1,4 @@
-use super::proposal_manager::BatchManager;
+use super::proposal_manager::ProposalManager;
 use crate::{
     l1::execution_layer::ExecutionLayer, l2::taiko::Taiko, metrics::Metrics,
     node::get_l2_height_from_l1, node::proposal_manager::proposal::Proposals,
@@ -13,8 +13,8 @@ use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
 
 pub enum VerificationResult {
-    SuccessNoBatches,
-    SuccessWithBatches(Proposals),
+    SuccessNoProposals,
+    SuccessWithProposals(Proposals),
     ReanchorNeeded(u64, String),
     SlotNotValid,
     VerificationInProgress,
@@ -35,7 +35,7 @@ pub struct Verifier {
 struct VerifierThread {
     taiko: Arc<Taiko>,
     preconfirmation_root: PreconfirmationRootBlock,
-    batch_manager: BatchManager,
+    proposal_manager: ProposalManager,
     cancel_token: CancellationToken,
 }
 
@@ -43,7 +43,7 @@ impl Verifier {
     pub async fn new_with_taiko_height(
         taiko_geth_height: u64,
         taiko: Arc<Taiko>,
-        batch_manager: BatchManager,
+        proposal_manager: ProposalManager,
         verification_slot: Slot,
         cancel_token: CancellationToken,
     ) -> Result<Self, Error> {
@@ -60,7 +60,7 @@ impl Verifier {
             verifier_thread: Some(VerifierThread {
                 taiko,
                 preconfirmation_root: preconfirmation_root.clone(),
-                batch_manager,
+                proposal_manager,
                 cancel_token,
             }),
             verification_slot,
@@ -102,12 +102,12 @@ impl Verifier {
                 debug!("Verifier thread handle has finished");
                 let result = handle.await?;
                 match result {
-                    Ok(batches) => {
-                        debug!("Batches to send from verifier: {}", batches.len());
-                        if batches.is_empty() {
-                            return Ok(VerificationResult::SuccessNoBatches);
+                    Ok(proposals) => {
+                        debug!("Proposals to send from verifier: {}", proposals.len());
+                        if proposals.is_empty() {
+                            return Ok(VerificationResult::SuccessNoProposals);
                         }
-                        Ok(VerificationResult::SuccessWithBatches(batches))
+                        Ok(VerificationResult::SuccessWithProposals(proposals))
                     }
                     Err(err) => {
                         let taiko_inbox_height = get_l2_height_from_l1(ethereum_l1, taiko).await?;
@@ -197,10 +197,10 @@ impl VerifierThread {
             self.preconfirmation_root.number, self.preconfirmation_root.hash
         );
 
-        metrics.inc_by_batch_recovered(self.batch_manager.get_number_of_batches());
+        metrics.inc_by_batch_recovered(self.proposal_manager.get_number_of_batches());
 
-        self.batch_manager.try_finalize_current_batch()?;
-        Ok(self.batch_manager.take_batches_to_send())
+        self.proposal_manager.try_finalize_current_batch()?;
+        Ok(self.proposal_manager.take_batches_to_send())
     }
 
     async fn handle_unprocessed_blocks(
@@ -209,18 +209,18 @@ impl VerifierThread {
         taiko_geth_height: u64,
     ) -> Result<(), Error> {
         let (anchor_offset, timestamp_offset) = self
-            .batch_manager
+            .proposal_manager
             .get_l1_anchor_block_and_timestamp_offset_for_l2_block(taiko_inbox_height + 1)
             .await?;
         // The first block anchor id is valid, so we can continue.
         if self
-            .batch_manager
+            .proposal_manager
             .is_offsets_valid(anchor_offset, timestamp_offset)
         {
             let start = std::time::Instant::now();
 
             // Sync FI with L1 chain
-            self.batch_manager.reset_builder().await?;
+            self.proposal_manager.reset_builder().await?;
 
             // recover all missed l2 blocks
             for current_height in taiko_inbox_height + 1..=taiko_geth_height {
@@ -228,7 +228,7 @@ impl VerifierThread {
                     return Err(anyhow::anyhow!("Verification cancelled"));
                 }
 
-                self.batch_manager
+                self.proposal_manager
                     .recover_from_l2_block(current_height)
                     .await?;
             }

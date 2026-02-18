@@ -19,7 +19,7 @@ use common::batch_builder::BatchBuilderConfig;
 use common::l1::traits::PreconferProvider;
 use common::shared::head_verifier::HeadVerifier;
 use common::shared::l2_slot_info_v2::L2SlotInfoV2;
-use proposal_manager::BatchManager;
+use proposal_manager::ProposalManager;
 
 use tokio::{
     sync::mpsc::{Receiver, error::TryRecvError},
@@ -41,7 +41,7 @@ pub struct Node {
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
     metrics: Arc<Metrics>,
-    proposal_manager: BatchManager, //TODO change name or unify with pacaya's batch manager
+    proposal_manager: ProposalManager,
     verifier: Option<Verifier>,
     head_verifier: HeadVerifier,
     transaction_error_channel: Receiver<TransactionError>,
@@ -78,7 +78,7 @@ impl Node {
         );
         let head_verifier = HeadVerifier::default();
 
-        let proposal_manager = BatchManager::new(
+        let proposal_manager = ProposalManager::new(
             config.l1_height_lag,
             batch_builder_config,
             ethereum_l1.clone(),
@@ -391,10 +391,10 @@ impl Node {
                             return Err(err);
                         }
                     }
-                    VerificationResult::SuccessWithBatches(batches) => {
+                    VerificationResult::SuccessWithProposals(batches) => {
                         self.proposal_manager.prepend_batches(batches);
                     }
-                    VerificationResult::SuccessNoBatches => {}
+                    VerificationResult::SuccessNoProposals => {}
                     VerificationResult::VerificationInProgress => {
                         self.verifier = Some(verifier);
                         return Ok(false);
@@ -504,8 +504,9 @@ impl Node {
         };
 
         let pending_tx_list = if gas_limit_without_anchor != 0 {
-            // TODO use proper number of batches ready to send
-            let batches_ready_to_send = 0; //self.batch_manager.get_number_of_batches_ready_to_send();
+            let batches_ready_to_send = self
+                .proposal_manager
+                .get_number_of_proposals_ready_to_send();
             match &l2_slot_info {
                 Ok(info) => {
                     self.taiko
