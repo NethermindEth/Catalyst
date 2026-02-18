@@ -1,9 +1,11 @@
 mod chain_monitor;
 pub mod config;
 mod forced_inclusion;
-mod l1;
+pub mod l1;
 pub mod l2;
 mod node;
+
+pub use node::proposal_manager::ProposalManager;
 
 use anyhow::Error;
 use common::{
