@@ -89,7 +89,7 @@ impl Node {
             config.propose_forced_inclusion,
         )
         .await
-        .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to create ProposalManager: {}", e))?;
 
         // Workaround for the issue: https://github.com/NethermindEth/Catalyst/issues/611
         // e2e-test to reproduce issue: test_preconfirmation_after_restart

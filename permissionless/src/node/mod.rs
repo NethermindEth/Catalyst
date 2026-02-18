@@ -112,7 +112,7 @@ impl Node {
         let gas_limit_without_anchor = match &l2_slot_info {
             Ok(info) => info.parent_gas_limit_without_anchor(),
             Err(_) => {
-                error!("Failed to get L2 slot info set gas_limit_without_anchor to 0");
+                error!("Failed to get L2 slot info; set gas_limit_without_anchor to 0");
                 0u64
             }
         };
