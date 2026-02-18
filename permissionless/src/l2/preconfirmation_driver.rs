@@ -3,10 +3,6 @@ use anyhow::{Error, Ok};
 use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::shared::l2_tx_lists::encode_and_compress;
 use common::utils::rpc_client::JSONRPCClient;
-use preconfirmation_types::{
-    Bytes20, PreconfCommitment, Preconfirmation, SignedCommitment, address_to_bytes20,
-    b256_to_bytes32, sign_commitment, u256_to_uint256,
-};
 use secp256k1::SecretKey;
 use shasta::L2BlockV2Payload;
 use ssz_rs::prelude::*;
@@ -17,6 +13,10 @@ use taiko_preconfirmation_driver::rpc::{
     PublishCommitmentRequest, PublishCommitmentResponse, PublishTxListRequest,
     PublishTxListResponse,
     server::{METHOD_PUBLISH_COMMITMENT, METHOD_PUBLISH_TX_LIST},
+};
+use taiko_preconfirmation_types::{
+    Bytes20, PreconfCommitment, Preconfirmation, SignedCommitment, address_to_bytes20,
+    b256_to_bytes32, sign_commitment, u256_to_uint256,
 };
 use tracing::debug;
 /// Client for communicating with the preconfirmation driver's JSON-RPC server.
