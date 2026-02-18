@@ -7596,17 +7596,21 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 name = "permissionless"
 version = "1.33.3"
 dependencies = [
+ "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=3e0fdad9b9fbf7f6550c7209185fd6623468452c)",
  "alloy",
  "anyhow",
  "blst",
  "common",
  "pacaya",
  "preconfirmation-driver",
+ "preconfirmation-types 0.1.0 (git+https://github.com/taikoxyz/taiko-mono.git)",
  "protocol",
  "reqwest 0.13.1",
  "rustls",
+ "secp256k1 0.30.0",
  "serde_json",
  "shasta",
+ "ssz_rs",
  "tokio",
  "tokio-util",
  "tracing",
@@ -7825,7 +7829,7 @@ dependencies = [
  "jsonrpsee",
  "metrics 0.24.3",
  "preconfirmation-net",
- "preconfirmation-types",
+ "preconfirmation-types 0.1.0 (git+https://github.com/taikoxyz/taiko-mono.git?rev=33b4e340155e962eab1dfa2b8932a802d26aafc5)",
  "protocol",
  "rpc",
  "serde",
@@ -7859,7 +7863,7 @@ dependencies = [
  "libp2p-request-response",
  "metrics 0.24.3",
  "metrics-exporter-prometheus 0.15.3",
- "preconfirmation-types",
+ "preconfirmation-types 0.1.0 (git+https://github.com/taikoxyz/taiko-mono.git?rev=33b4e340155e962eab1dfa2b8932a802d26aafc5)",
  "rand 0.8.5",
  "reth-discv5 1.9.3",
  "reth-network-types 1.9.3",
@@ -7879,6 +7883,21 @@ dependencies = [
 name = "preconfirmation-types"
 version = "0.1.0"
 source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=33b4e340155e962eab1dfa2b8932a802d26aafc5#33b4e340155e962eab1dfa2b8932a802d26aafc5"
+dependencies = [
+ "alloy-primitives",
+ "anyhow",
+ "secp256k1 0.30.0",
+ "serde",
+ "serde_json",
+ "sha3",
+ "ssz_rs",
+ "thiserror 2.0.17",
+]
+
+[[package]]
+name = "preconfirmation-types"
+version = "0.1.0"
+source = "git+https://github.com/taikoxyz/taiko-mono.git#6188b8ed99913de1262b7959b8c7aec1f7436238"
 dependencies = [
  "alloy-primitives",
  "anyhow",

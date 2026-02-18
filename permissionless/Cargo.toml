@@ -16,12 +16,16 @@ reqwest = { workspace = true }
 rustls = { workspace = true }
 serde_json = { workspace = true }
 shasta = { workspace = true }
+taiko_alethia_reth = { workspace = true }
 taiko_preconfirmation_driver = { workspace = true }
 taiko_protocol = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 urc = { workspace = true }
+preconfirmation_types = { git = "https://github.com/taikoxyz/taiko-mono.git",package= "preconfirmation-types" }
+secp256k1 = { version = "0.30", features = ["recovery", "rand"] }
+ssz_rs = "0.9.0"
 
 [lints]
 workspace = true
