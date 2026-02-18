@@ -30,6 +30,7 @@ pub struct Node {
 }
 
 impl Node {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cancel_token: CancellationToken,
         ethereum_l1: Arc<EthereumL1<ShastaExecutionLayer>>,

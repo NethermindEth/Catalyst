@@ -40,6 +40,7 @@ pub struct ProposalManager {
 }
 
 impl ProposalManager {
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         l1_height_lag: u64,
         config: BatchBuilderConfig,
