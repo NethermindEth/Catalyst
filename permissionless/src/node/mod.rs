@@ -118,7 +118,7 @@ impl Node {
         };
 
         let pending_tx_list = if gas_limit_without_anchor != 0 {
-            let batches_ready_to_send = self
+            let proposals_ready_to_send = self
                 .proposal_manager
                 .get_number_of_proposals_ready_to_send();
             match &l2_slot_info {
@@ -126,7 +126,7 @@ impl Node {
                     self.taiko
                         .get_pending_l2_tx_list_from_l2_engine(
                             info.base_fee(),
-                            batches_ready_to_send,
+                            proposals_ready_to_send,
                             gas_limit_without_anchor,
                         )
                         .await
