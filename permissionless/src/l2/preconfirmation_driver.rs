@@ -44,6 +44,7 @@ impl PreconfirmationDriver {
     }
 
     /// Function to publish a Signed Preconfirmation Commitment and a Transaction List
+    #[allow(dead_code)]
     pub async fn post_preconf_requests(
         &self,
         l2_block_payload: L2BlockV2Payload,
@@ -51,7 +52,7 @@ impl PreconfirmationDriver {
         signer_key: &SecretKey,
     ) -> Result<(PublishTxListRequest, PublishCommitmentRequest), Error> {
         let tx_list = &l2_block_payload.tx_list;
-        let tx_list_bytes = encode_and_compress(&tx_list)?;
+        let tx_list_bytes = encode_and_compress(tx_list)?;
         let tx_list_hash = keccak256(&tx_list_bytes);
         let submission_window_end = self
             .get_preconf_slot_info(U256::from(l2_block_payload.timestamp_sec))
