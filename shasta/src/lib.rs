@@ -53,8 +53,11 @@ pub async fn create_shasta_node(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create TaikoConfig: {}", e))?;
 
-    let l2_engine = L2Engine::new(L2EngineConfig::new(&config, taiko_config.signer.get_address())?)
-        .map_err(|e| anyhow::anyhow!("Failed to create L2Engine: {}", e))?;
+    let l2_engine = L2Engine::new(L2EngineConfig::new(
+        &config,
+        taiko_config.signer.get_address(),
+    )?)
+    .map_err(|e| anyhow::anyhow!("Failed to create L2Engine: {}", e))?;
     let protocol_config = ethereum_l1.execution_layer.fetch_protocol_config().await?;
 
     let taiko = crate::l2::taiko::Taiko::new(
@@ -110,7 +113,11 @@ pub async fn create_shasta_node(
 
     let chain_monitor = Arc::new(
         chain_monitor::ShastaChainMonitor::new(
-            config.l1_rpc_urls.first().expect("L1 RPC URL is required").clone(),
+            config
+                .l1_rpc_urls
+                .first()
+                .expect("L1 RPC URL is required")
+                .clone(),
             config.taiko_geth_rpc_url.clone(),
             shasta_config.shasta_inbox,
             cancel_token.clone(),
@@ -139,7 +146,9 @@ pub async fn create_shasta_node(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
 
-    node.entrypoint().await.map_err(|e| anyhow::anyhow!("Failed to start Node: {}", e))?;
+    node.entrypoint()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to start Node: {}", e))?;
 
     let funds_controller = FundsController::new(
         (&config).into(),

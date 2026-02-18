@@ -37,7 +37,10 @@ impl PreconfirmationDriver {
         debug!("Calling {}", METHOD_GET_PRECONF_SLOT_INFO);
         let response = self
             .rpc_client
-            .call_method(METHOD_GET_PRECONF_SLOT_INFO, vec![serde_json::to_value(timestamp)?])
+            .call_method(
+                METHOD_GET_PRECONF_SLOT_INFO,
+                vec![serde_json::to_value(timestamp)?],
+            )
             .await?;
         let slot_info: PreconfSlotInfo = serde_json::from_value(response)?;
         Ok(slot_info)
@@ -74,16 +77,26 @@ impl PreconfirmationDriver {
             proposal_id: u256_to_uint256(U256::from(l2_block_payload.proposal_id)),
         };
 
-        let commitment = PreconfCommitment { preconf, slasher_address: Bytes20::default() };
+        let commitment = PreconfCommitment {
+            preconf,
+            slasher_address: Bytes20::default(),
+        };
 
         let signature = sign_commitment(&commitment, signer_key)?;
-        let signed_commitment = SignedCommitment { commitment, signature };
+        let signed_commitment = SignedCommitment {
+            commitment,
+            signature,
+        };
         let signed_commitment_bytes = ssz_rs::serialize(&signed_commitment)
             .map_err(|e| anyhow::anyhow!("SSZ Serialization Failed: {:?}", e))?;
 
-        let tx_request = PublishTxListRequest { tx_list_hash, tx_list: Bytes::from(tx_list_bytes) };
-        let commitment_request =
-            PublishCommitmentRequest { commitment: Bytes::from(signed_commitment_bytes) };
+        let tx_request = PublishTxListRequest {
+            tx_list_hash,
+            tx_list: Bytes::from(tx_list_bytes),
+        };
+        let commitment_request = PublishCommitmentRequest {
+            commitment: Bytes::from(signed_commitment_bytes),
+        };
         self.publish_tx_list(tx_request.clone()).await?;
         self.publish_commitment(commitment_request.clone()).await?;
         Ok((tx_request, commitment_request))
