@@ -229,7 +229,7 @@ impl BatchManager {
         );
 
         let l2_draft_block = L2BlockV2Draft {
-            prebuilt_tx_list: prebuilt_tx_list.clone(),
+            prebuilt_tx_list,
             timestamp_sec: timestamp,
             gas_limit_without_anchor: l2_slot_context.info.parent_gas_limit_without_anchor(),
         };
