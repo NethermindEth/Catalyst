@@ -89,15 +89,15 @@ impl ProposalManager {
         self.batch_builder.get_number_of_batches_ready_to_send()
     }
 
-    pub async fn try_submit_oldest_batch(
+    pub async fn try_submit_oldest_proposal(
         &mut self,
-        submit_only_full_batches: bool,
+        submit_only_full_proposals: bool,
         l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
         self.batch_builder
             .try_submit_oldest_batch(
                 self.ethereum_l1.clone(),
-                submit_only_full_batches,
+                submit_only_full_proposals,
                 l2_slot_timestamp,
             )
             .await
@@ -241,7 +241,7 @@ impl ProposalManager {
         if !self.batch_builder.can_consume_l2_block(&l2_draft_block) {
             // Create new batch
             let _ = self
-                .create_new_batch(
+                .create_new_proposal(
                     l2_slot_context.info.parent_id(),
                     l2_slot_context.info.slot_timestamp(),
                 )
@@ -320,7 +320,7 @@ impl ProposalManager {
         }
     }
 
-    async fn create_new_batch(
+    async fn create_new_proposal(
         &mut self,
         parent_block_id: u64,
         l2_slot_timestamp: u64,
@@ -370,7 +370,7 @@ impl ProposalManager {
         Ok(())
     }
 
-    pub fn has_batches(&self) -> bool {
+    pub fn has_proposals(&self) -> bool {
         !self.batch_builder.is_empty()
     }
 
@@ -378,15 +378,15 @@ impl ProposalManager {
         self.batch_builder.has_current_forced_inclusion()
     }
 
-    pub fn get_number_of_batches(&self) -> u64 {
+    pub fn get_number_of_proposals(&self) -> u64 {
         self.batch_builder.get_number_of_batches()
     }
 
-    pub fn try_finalize_current_batch(&mut self) -> Result<(), Error> {
+    pub fn try_finalize_current_proposal(&mut self) -> Result<(), Error> {
         self.batch_builder.try_finalize_current_batch()
     }
 
-    pub fn take_batches_to_send(&mut self) -> Proposals {
+    pub fn take_proposals_to_send(&mut self) -> Proposals {
         self.batch_builder.take_batches_to_send()
     }
 
@@ -521,7 +521,7 @@ impl ProposalManager {
         Ok(())
     }
 
-    pub fn clone_without_batches(&self, fi_head: u64) -> Self {
+    pub fn clone_without_proposals(&self, fi_head: u64) -> Self {
         Self {
             batch_builder: self.batch_builder.clone_without_batches(),
             ethereum_l1: self.ethereum_l1.clone(),
@@ -535,7 +535,7 @@ impl ProposalManager {
         }
     }
 
-    pub fn prepend_batches(&mut self, batches: Proposals) {
+    pub fn prepend_proposals(&mut self, batches: Proposals) {
         self.batch_builder.prepend_batches(batches);
     }
 
@@ -669,7 +669,7 @@ impl ProposalManager {
             }
         }
         // finalize the current batch to avoid anchor and timestamp checks during preconfirmation
-        self.try_finalize_current_batch()?;
+        self.try_finalize_current_proposal()?;
         Ok(processed_blocks)
     }
 

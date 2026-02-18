@@ -200,14 +200,14 @@ impl Node {
             if current_status.is_submitter() {
                 // We start preconfirmation in the middle of the epoch.
                 // Need to check for unproposed L2 blocks.
-                if let Err(err) = self.check_for_missing_proposed_batches().await {
+                if let Err(err) = self.check_for_missing_sent_proposals().await {
                     error!(
-                        "Shutdown: Failed to verify proposed batches on startup: {}",
+                        "Shutdown: Failed to verify sent proposals on startup: {}",
                         err
                     );
                     self.cancel_token.cancel_on_critical_error();
                     return Err(anyhow::anyhow!(
-                        "Shutdown: Failed to verify proposed batches on startup: {}",
+                        "Shutdown: Failed to verify sent proposals on startup: {}",
                         err
                     ));
                 }
@@ -218,7 +218,7 @@ impl Node {
                 let verifier_result = Verifier::new_with_taiko_height(
                     taiko_geth_height,
                     self.taiko.clone(),
-                    self.proposal_manager.clone_without_batches(fi_head),
+                    self.proposal_manager.clone_without_proposals(fi_head),
                     verification_slot,
                     self.cancel_token.clone(),
                 )
@@ -286,10 +286,10 @@ impl Node {
 
         if current_status.is_submitter() && !transaction_in_progress {
             // first check verifier
-            if self.has_verified_unproposed_batches().await?
+            if self.has_verified_unsent_proposals().await?
                 && let Err(err) = self
                     .proposal_manager
-                    .try_submit_oldest_batch(
+                    .try_submit_oldest_proposal(
                         current_status.is_preconfer(),
                         l2_slot_ctx.info.slot_timestamp(),
                     )
@@ -304,12 +304,12 @@ impl Node {
         }
 
         if !current_status.is_submitter() && !current_status.is_preconfer() {
-            if self.proposal_manager.has_batches()
+            if self.proposal_manager.has_proposals()
                 || self.proposal_manager.has_current_forced_inclusion()
             {
                 error!(
                     "Resetting batch builder. has batches: {}, has current forced inclusion: {}",
-                    self.proposal_manager.has_batches(),
+                    self.proposal_manager.has_proposals(),
                     self.proposal_manager.has_current_forced_inclusion()
                 );
                 self.proposal_manager.reset_builder().await?;
@@ -323,7 +323,7 @@ impl Node {
         Ok(())
     }
 
-    async fn check_for_missing_proposed_batches(&mut self) -> Result<(), Error> {
+    async fn check_for_missing_sent_proposals(&mut self) -> Result<(), Error> {
         let (taiko_inbox_height, taiko_geth_height) = self.get_current_protocol_height().await?;
 
         info!(
@@ -350,7 +350,7 @@ impl Node {
                     Verifier::new_with_taiko_height(
                         taiko_geth_height,
                         self.taiko.clone(),
-                        self.proposal_manager.clone_without_batches(0), // it does not matter here, we will update it in Verifier.handle_unprocessed_blocks
+                        self.proposal_manager.clone_without_proposals(0), // it does not matter here, we will update it in Verifier.handle_unprocessed_blocks
                         0,
                         self.cancel_token.clone(),
                     )
@@ -368,8 +368,7 @@ impl Node {
     }
 
     /// Returns true if the operation succeeds
-    /// Returns true if the operation succeeds
-    async fn has_verified_unproposed_batches(&mut self) -> Result<bool, Error> {
+    async fn has_verified_unsent_proposals(&mut self) -> Result<bool, Error> {
         if let Some(mut verifier) = self.verifier.take() {
             match verifier
                 .verify(
@@ -391,8 +390,8 @@ impl Node {
                             return Err(err);
                         }
                     }
-                    VerificationResult::SuccessWithProposals(batches) => {
-                        self.proposal_manager.prepend_batches(batches);
+                    VerificationResult::SuccessWithProposals(proposals) => {
+                        self.proposal_manager.prepend_proposals(proposals);
                     }
                     VerificationResult::SuccessNoProposals => {}
                     VerificationResult::VerificationInProgress => {
@@ -480,7 +479,7 @@ impl Node {
                 Ok(())
             }
             TransactionError::NotTheOperatorInCurrentEpoch => {
-                warn!("Propose batch transaction executed too late.");
+                warn!("Proposal transaction executed too late.");
                 Ok(())
             }
         }
@@ -504,7 +503,7 @@ impl Node {
         };
 
         let pending_tx_list = if gas_limit_without_anchor != 0 {
-            let batches_ready_to_send = self
+            let proposals_ready_to_send = self
                 .proposal_manager
                 .get_number_of_proposals_ready_to_send();
             match &l2_slot_info {
@@ -512,7 +511,7 @@ impl Node {
                     self.taiko
                         .get_pending_l2_tx_list_from_l2_engine(
                             info.base_fee(),
-                            batches_ready_to_send,
+                            proposals_ready_to_send,
                             gas_limit_without_anchor,
                         )
                         .await
@@ -527,7 +526,7 @@ impl Node {
             &current_status,
             &pending_tx_list,
             &l2_slot_info,
-            self.proposal_manager.get_number_of_batches(),
+            self.proposal_manager.get_number_of_proposals(),
         )?;
 
         Ok((l2_slot_info?, current_status?, pending_tx_list?))
@@ -644,11 +643,11 @@ impl Node {
         current_status: &Result<OperatorStatus, Error>,
         pending_tx_list: &Result<Option<PreBuiltTxList>, Error>,
         l2_slot_info: &Result<L2SlotInfoV2, Error>,
-        batches_number: u64,
+        proposals_number: u64,
     ) -> Result<(), Error> {
         let l1_slot = self.ethereum_l1.slot_clock.get_current_slot()?;
         info!(target: "heartbeat",
-            "| Epoch: {:<6} | Slot: {:<2} | L2 Slot: {:<2} | {}{} Batches: {batches_number} | {} |",
+            "| Epoch: {:<6} | Slot: {:<2} | L2 Slot: {:<2} | {}{} Proposals: {proposals_number} | {} |",
             self.ethereum_l1.slot_clock.get_epoch_from_slot(l1_slot),
             self.ethereum_l1.slot_clock.slot_of_epoch(l1_slot),
             self.ethereum_l1

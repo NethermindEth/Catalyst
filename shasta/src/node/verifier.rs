@@ -197,10 +197,10 @@ impl VerifierThread {
             self.preconfirmation_root.number, self.preconfirmation_root.hash
         );
 
-        metrics.inc_by_batch_recovered(self.proposal_manager.get_number_of_batches());
+        metrics.inc_by_batch_recovered(self.proposal_manager.get_number_of_proposals());
 
-        self.proposal_manager.try_finalize_current_batch()?;
-        Ok(self.proposal_manager.take_batches_to_send())
+        self.proposal_manager.try_finalize_current_proposal()?;
+        Ok(self.proposal_manager.take_proposals_to_send())
     }
 
     async fn handle_unprocessed_blocks(
