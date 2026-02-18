@@ -53,7 +53,10 @@ pub struct ExecutableData {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaikoStatus {
-    #[serde(rename = "highestUnsafeL2PayloadBlockID")]
+    #[serde(
+        rename = "highestUnsafeL2PayloadBlockID",
+        alias = "highestUnsafeL2PayloadBlockId"
+    )]
     pub highest_unsafe_l2_payload_block_id: u64,
     #[serde(
         rename = "endOfSequencingBlockHash",
