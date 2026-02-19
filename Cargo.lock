@@ -7596,17 +7596,21 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 name = "permissionless"
 version = "1.33.5"
 dependencies = [
+ "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=3e0fdad9b9fbf7f6550c7209185fd6623468452c)",
  "alloy",
  "anyhow",
  "blst",
  "common",
  "pacaya",
  "preconfirmation-driver",
+ "preconfirmation-types",
  "protocol",
  "reqwest 0.13.1",
  "rustls",
+ "secp256k1 0.30.0",
  "serde_json",
  "shasta",
+ "ssz_rs",
  "tokio",
  "tokio-util",
  "tracing",

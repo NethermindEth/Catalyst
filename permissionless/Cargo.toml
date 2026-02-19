@@ -14,9 +14,13 @@ common = { workspace = true }
 pacaya = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true }
+secp256k1 = { workspace = true }
 serde_json = { workspace = true }
 shasta = { workspace = true }
+ssz_rs = { workspace = true }
+taiko_alethia_reth = { workspace = true }
 taiko_preconfirmation_driver = { workspace = true }
+taiko_preconfirmation_types = { workspace = true }
 taiko_protocol = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

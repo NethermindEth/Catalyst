@@ -4,6 +4,7 @@ mod forced_inclusion;
 pub mod l1;
 pub mod l2;
 mod node;
+pub use node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 
 pub use node::proposal_manager::ProposalManager;
 
