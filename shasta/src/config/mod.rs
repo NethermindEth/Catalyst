@@ -12,6 +12,7 @@ pub struct ShastaConfig {
     pub propose_forced_inclusion: bool,
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
     pub max_blocks_to_reanchor: u64,
+    pub proposal_include_after_restart_max_timeout_sec: u64,
 }
 
 impl ConfigTrait for ShastaConfig {
@@ -61,6 +62,17 @@ impl ConfigTrait for ShastaConfig {
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("MAX_BLOCKS_TO_REANCHOR must be a number: {}", e))?;
 
+        let proposal_include_after_restart_max_timeout_sec =
+            std::env::var("PROPOSAL_INCLUDE_AFTER_RESTART_MAX_TIMEOUT_SEC")
+                .unwrap_or("60".to_string())
+                .parse::<u64>()
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "PROPOSAL_INCLUDE_AFTER_RESTART_MAX_TIMEOUT_SEC must be a number: {}",
+                        e
+                    )
+                })?;
+
         Ok(ShastaConfig {
             shasta_inbox,
             handover_window_slots,
@@ -69,6 +81,7 @@ impl ConfigTrait for ShastaConfig {
             propose_forced_inclusion,
             simulate_not_submitting_at_the_end_of_epoch,
             max_blocks_to_reanchor,
+            proposal_include_after_restart_max_timeout_sec,
         })
     }
 }
@@ -93,6 +106,11 @@ impl fmt::Display for ShastaConfig {
             f,
             "simulate not submitting at the end of epoch: {}",
             self.simulate_not_submitting_at_the_end_of_epoch
+        )?;
+        writeln!(
+            f,
+            "proposal include after restart max timeout: {}s",
+            self.proposal_include_after_restart_max_timeout_sec
         )?;
         Ok(())
     }

@@ -730,6 +730,9 @@ impl Node {
     }
 
     async fn wait_for_sent_transactions(&self) -> Result<(), Error> {
+        let start = std::time::Instant::now();
+        let timeout_sec = self.config.proposal_include_after_restart_max_timeout_sec;
+
         loop {
             let nonce_latest: u64 = self
                 .ethereum_l1
@@ -742,6 +745,13 @@ impl Node {
                 .get_preconfer_nonce_pending()
                 .await?;
             if nonce_pending == nonce_latest {
+                break;
+            }
+            if start.elapsed().as_secs() >= timeout_sec {
+                warn!(
+                    "Waiting for sent transactions exceeded timeout of {}s (Nonce Latest: {}, Nonce Pending: {}). Proceeding anyway.",
+                    timeout_sec, nonce_latest, nonce_pending
+                );
                 break;
             }
             debug!(
