@@ -1,4 +1,3 @@
-
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
 use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
