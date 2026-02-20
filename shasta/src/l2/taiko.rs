@@ -1,5 +1,3 @@
-//TODO remove
-#![allow(dead_code)]
 
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
@@ -39,7 +37,6 @@ pub struct Taiko {
     l2_execution_layer: Arc<L2ExecutionLayer>,
     driver: Arc<TaikoDriver>,
     slot_clock: Arc<SlotClock>,
-    coinbase: String,
     l2_engine: L2Engine,
 }
 
@@ -67,7 +64,6 @@ impl Taiko {
             ),
             driver: Arc::new(TaikoDriver::new(&driver_config, metrics).await?),
             slot_clock,
-            coinbase: format!("0x{}", hex::encode(taiko_config.signer.get_address())),
             l2_engine,
         })
     }
@@ -278,8 +274,6 @@ impl Taiko {
         Ok(base_fee)
     }
 
-    // TODO fix that function
-    #[allow(clippy::too_many_arguments)]
     pub async fn advance_head_to_new_l2_block(
         &self,
         l2_block_payload: L2BlockV2Payload,
