@@ -24,7 +24,7 @@ use tracing::debug;
 /// Provides a typed wrapper around the `preconf_getPreconfSlotInfo` RPC method
 /// exposed by the preconfirmation driver node.
 pub struct PreconfirmationDriver {
-    rpc_client: JSONRPCClient,
+    pub rpc_client: JSONRPCClient,
 }
 
 impl PreconfirmationDriver {
@@ -47,7 +47,6 @@ impl PreconfirmationDriver {
     }
 
     /// Function to publish a Signed Preconfirmation Commitment and a Transaction List
-    #[allow(dead_code)]
     pub async fn post_preconf_requests(
         &self,
         l2_block_payload: L2BlockV2Payload,

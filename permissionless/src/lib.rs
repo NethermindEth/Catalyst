@@ -138,6 +138,8 @@ pub async fn create_permissionless_node(
         metrics,
         NodeConfig {
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
+            coinbase: preconfer_address,
+            l1_height_lag: permissionless_config.l1_height_lag,
         },
         operator,
         proposal_manager,

@@ -43,4 +43,18 @@ impl Signer {
             Signer::PrivateKey(_, address) => *address,
         }
     }
+
+    pub fn get_secret_key(&self) -> Result<secp256k1::SecretKey, Error> {
+        match self {
+            Signer::PrivateKey(key, _) => {
+                let bytes = hex::decode(key.trim_start_matches("0x"))
+                    .map_err(|e| anyhow::anyhow!("Failed to decode private key: {}", e))?;
+                secp256k1::SecretKey::from_slice(&bytes)
+                    .map_err(|e| anyhow::anyhow!("Failed to create SecretKey: {}", e))
+            }
+            Signer::Web3signer(_, _) => {
+                Err(anyhow::anyhow!("Cannot extract secret key from Web3Signer"))
+            }
+        }
+    }
 }
