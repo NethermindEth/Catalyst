@@ -10,7 +10,7 @@ use alloy::{
     rpc::client::BatchRequest,
     sol_types::SolCall,
 };
-use anyhow::{Error, anyhow};
+use anyhow::{Context, Error, anyhow};
 use common::{
     l1::{
         traits::{ELTrait, PreconferProvider},
@@ -61,9 +61,12 @@ impl ELTrait for ExecutionLayer {
                 .first()
                 .ok_or_else(|| anyhow!("L1 RPC URL is required"))?,
         )
-        .await?;
+        .await
+        .context("construct_alloy_provider")?;
         let common =
-            ExecutionLayerCommon::new(provider.clone(), common_config.signer.get_address()).await?;
+            ExecutionLayerCommon::new(provider.clone(), common_config.signer.get_address())
+                .await
+                .context("ExecutionLayerCommon::new")?;
 
         let transaction_monitor = TransactionMonitor::new(
             provider.clone(),
@@ -113,18 +116,21 @@ impl PreconferProvider for ExecutionLayer {
         self.common()
             .get_account_balance(self.common().preconfer_address())
             .await
+            .context("get_preconfer_wallet_eth")
     }
 
     async fn get_preconfer_nonce_pending(&self) -> Result<u64, Error> {
         self.common()
             .get_account_nonce(self.common().preconfer_address(), BlockNumberOrTag::Pending)
             .await
+            .context("get_preconfer_nonce_pending")
     }
 
     async fn get_preconfer_nonce_latest(&self) -> Result<u64, Error> {
         self.common()
             .get_account_nonce(self.common().preconfer_address(), BlockNumberOrTag::Latest)
             .await
+            .context("get_preconfer_nonce_latest")
     }
 
     fn get_preconfer_address(&self) -> Address {
@@ -193,9 +199,12 @@ impl ExecutionLayer {
                 self.contract_addresses.shasta_inbox,
                 num_forced_inclusion,
             )
-            .await?;
+            .await.context("build_propose_tx")?;
 
-        let pending_nonce = self.get_preconfer_nonce_pending().await?;
+        let pending_nonce = self
+            .get_preconfer_nonce_pending()
+            .await
+            .context("get_preconfer_nonce_pending (send_batch_to_l1)")?;
         // Spawn a monitor for this transaction
         self.transaction_monitor
             .monitor_new_transaction(tx, pending_nonce)
@@ -206,7 +215,10 @@ impl ExecutionLayer {
     }
 
     pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {
-        self.transaction_monitor.is_transaction_in_progress().await
+        self.transaction_monitor
+            .is_transaction_in_progress()
+            .await
+            .context("is_transaction_in_progress")
     }
 
     pub async fn fetch_protocol_config(&self) -> Result<ProtocolConfig, Error> {
@@ -289,7 +301,12 @@ impl ExecutionLayer {
     }
 
     pub async fn get_inbox_next_proposal_id(&self) -> Result<u64, Error> {
-        let state = self.inbox_instance.getCoreState().call().await?;
+        let state = self
+            .inbox_instance
+            .getCoreState()
+            .call()
+            .await
+            .context("getCoreState (get_inbox_next_proposal_id)")?;
 
         Ok(state.nextProposalId.to::<u64>())
     }
