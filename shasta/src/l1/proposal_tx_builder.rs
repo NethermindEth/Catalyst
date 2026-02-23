@@ -9,7 +9,7 @@ use alloy::{
     rpc::types::TransactionRequest,
 };
 use alloy_json_rpc::RpcError;
-use anyhow::Error;
+use anyhow::{Context, Error};
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use common::shared::l2_block_v2::L2BlockV2;
 use taiko_bindings::inbox::{IInbox::ProposeInput, Inbox, LibBlobs::BlobReference};
@@ -42,7 +42,8 @@ impl ProposalTxBuilder {
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
             .build_propose_blob(l2_blocks, from, to, num_forced_inclusion)
-            .await?;
+            .await
+            .context("build_propose_blob")?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
             Ok(gas) => gas,
             Err(e) => {
@@ -114,21 +115,31 @@ impl ProposalTxBuilder {
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
-        let sidecar = sidecar_builder.build_7594()?;
+        let sidecar = sidecar_builder
+            .build_7594()
+            .context("sidecar builder build_7594")?;
 
         // Build the propose input.
         let input = ProposeInput {
             deadline: U48::ZERO,
             blobReference: BlobReference {
                 blobStartIndex: 0,
-                numBlobs: sidecar.blobs.len().try_into()?,
+                numBlobs: sidecar
+                    .blobs
+                    .len()
+                    .try_into()
+                    .context("blobs len try_into")?,
                 offset: U24::ZERO,
             },
             numForcedInclusions: num_forced_inclusion,
         };
 
         let inbox = Inbox::new(to, self.provider.clone());
-        let encoded_proposal_input = inbox.encodeProposeInput(input).call().await?;
+        let encoded_proposal_input = inbox
+            .encodeProposeInput(input)
+            .call()
+            .await
+            .context("inbox encodeProposeInput")?;
 
         let tx = TransactionRequest::default()
             .with_from(from)
