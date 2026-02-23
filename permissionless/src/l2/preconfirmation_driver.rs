@@ -24,7 +24,7 @@ use tracing::debug;
 /// Provides a typed wrapper around the `preconf_getPreconfSlotInfo` RPC method
 /// exposed by the preconfirmation driver node.
 pub struct PreconfirmationDriver {
-    pub rpc_client: JSONRPCClient,
+    rpc_client: JSONRPCClient,
 }
 
 impl PreconfirmationDriver {

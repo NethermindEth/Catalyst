@@ -16,7 +16,7 @@ use shasta::{
 };
 use std::sync::Arc;
 use tokio::{sync::mpsc::Receiver, time::Duration};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 pub mod config;
 pub mod operator;
 
@@ -108,13 +108,28 @@ impl Node {
             }
         };
 
-        let l1_height = self
-            .ethereum_l1
-            .execution_layer
-            .common()
-            .get_latest_block_id()
-            .await?;
-        let anchor_block_id = l1_height.saturating_sub(self.config.l1_height_lag);
+        let last_anchor_id = self
+            .taiko
+            .l2_execution_layer()
+            .get_anchor_block_id_from_geth(l2_slot_info.parent_id())
+            .await
+            .unwrap_or_else(|e| {
+                warn!("Failed to get last anchor ID from Taiko geth: {e}");
+                0
+            });
+        let anchor_block_id = AnchorBlockInfo::calculate_anchor_block_id(
+            self.ethereum_l1.execution_layer.common(),
+            self.config.l1_height_lag,
+            last_anchor_id,
+            self.taiko
+                .get_protocol_config()
+                .get_max_anchor_height_offset(),
+        )
+        .await
+        .unwrap_or_else(|e| {
+            warn!("Error fetching anchor block: {e}");
+            0
+        });
 
         let anchor_block_info = AnchorBlockInfo::from_block_number(
             self.ethereum_l1.execution_layer.common(),
@@ -137,17 +152,10 @@ impl Node {
             info: l2_slot_info,
             end_of_sequencing: false,
         };
-        let signer_key = self
-            .taiko
-            .l2_execution_layer()
-            .config
-            .signer
-            .get_secret_key()?;
-
         let (tx_response, commitment_response) = self
             .operator
             .preconfirmation_driver()
-            .post_preconf_requests(l2_payload, &l2_slot_context, &signer_key)
+            .post_preconf_requests(l2_payload, &l2_slot_context, &self.config.sequencer_key)
             .await?;
 
         info!(

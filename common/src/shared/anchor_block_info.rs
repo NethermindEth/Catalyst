@@ -54,7 +54,7 @@ impl AnchorBlockInfo {
         })
     }
 
-    async fn calculate_anchor_block_id(
+    pub async fn calculate_anchor_block_id(
         execution_layer: &ExecutionLayer,
         l1_height_lag: u64,
         last_anchor_id: u64,

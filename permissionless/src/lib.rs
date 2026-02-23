@@ -140,6 +140,7 @@ pub async fn create_permissionless_node(
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
             coinbase: preconfer_address,
             l1_height_lag: permissionless_config.l1_height_lag,
+            sequencer_key: permissionless_config.sequencer_key,
         },
         operator,
         proposal_manager,
