@@ -115,21 +115,31 @@ impl ProposalTxBuilder {
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
-        let sidecar = sidecar_builder.build_7594().context("sidecar builder build_7594")?;
+        let sidecar = sidecar_builder
+            .build_7594()
+            .context("sidecar builder build_7594")?;
 
         // Build the propose input.
         let input = ProposeInput {
             deadline: U48::ZERO,
             blobReference: BlobReference {
                 blobStartIndex: 0,
-                numBlobs: sidecar.blobs.len().try_into().context("blobs len try_into")?,
+                numBlobs: sidecar
+                    .blobs
+                    .len()
+                    .try_into()
+                    .context("blobs len try_into")?,
                 offset: U24::ZERO,
             },
             numForcedInclusions: num_forced_inclusion,
         };
 
         let inbox = Inbox::new(to, self.provider.clone());
-        let encoded_proposal_input = inbox.encodeProposeInput(input).call().await.context("inbox encodeProposeInput")?;
+        let encoded_proposal_input = inbox
+            .encodeProposeInput(input)
+            .call()
+            .await
+            .context("inbox encodeProposeInput")?;
 
         let tx = TransactionRequest::default()
             .with_from(from)

@@ -199,7 +199,8 @@ impl ExecutionLayer {
                 self.contract_addresses.shasta_inbox,
                 num_forced_inclusion,
             )
-            .await.context("build_propose_tx")?;
+            .await
+            .context("build_propose_tx")?;
 
         let pending_nonce = self
             .get_preconfer_nonce_pending()
