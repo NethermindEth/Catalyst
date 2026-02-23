@@ -1,6 +1,6 @@
 use crate::node::operator::status::Status as OperatorStatus;
 use crate::node::{config::NodeConfig, operator::Operator};
-use anyhow::Error;
+use anyhow::{Context, Error};
 use common::l1::traits::ELTrait;
 use common::shared::anchor_block_info::AnchorBlockInfo;
 use common::shared::l2_slot_info_v2::L2SlotContext;
@@ -16,7 +16,7 @@ use shasta::{
 };
 use std::sync::Arc;
 use tokio::{sync::mpsc::Receiver, time::Duration};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 pub mod config;
 pub mod operator;
 
@@ -113,10 +113,7 @@ impl Node {
             .l2_execution_layer()
             .get_anchor_block_id_from_geth(l2_slot_info.parent_id())
             .await
-            .unwrap_or_else(|e| {
-                warn!("Failed to get last anchor ID from Taiko geth: {e}");
-                0
-            });
+            .context("Failed to get last anchor id from Taiko geth")?;
         let anchor_block_id = AnchorBlockInfo::calculate_anchor_block_id(
             self.ethereum_l1.execution_layer.common(),
             self.config.l1_height_lag,
@@ -126,10 +123,7 @@ impl Node {
                 .get_max_anchor_height_offset(),
         )
         .await
-        .unwrap_or_else(|e| {
-            warn!("Error fetching anchor block: {e}");
-            0
-        });
+        .context("Failed to calculate anchor block id")?;
 
         let anchor_block_info = AnchorBlockInfo::from_block_number(
             self.ethereum_l1.execution_layer.common(),
