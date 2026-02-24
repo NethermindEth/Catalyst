@@ -1,19 +1,22 @@
 use crate::node::operator::status::Status as OperatorStatus;
 use crate::node::{config::NodeConfig, operator::Operator};
-use anyhow::Error;
+use anyhow::{Context, Error};
+use common::l1::traits::ELTrait;
+use common::shared::anchor_block_info::AnchorBlockInfo;
+use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::{
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     metrics::Metrics,
     shared::{l2_slot_info_v2::L2SlotInfoV2, l2_tx_lists::PreBuiltTxList},
     utils::{self as common_utils, cancellation_token::CancellationToken},
 };
+use shasta::L2BlockV2Payload;
 use shasta::{
     ProposalManager, l1::execution_layer::ExecutionLayer as ShastaExecutionLayer, l2::taiko::Taiko,
 };
 use std::sync::Arc;
 use tokio::{sync::mpsc::Receiver, time::Duration};
 use tracing::{debug, error, info};
-
 pub mod config;
 pub mod operator;
 
@@ -94,8 +97,65 @@ impl Node {
     }
 
     async fn main_block_preconfirmation_step(&mut self) -> Result<(), Error> {
-        let (_l2_slot_info, _current_status, _pending_tx_list) =
+        let (l2_slot_info, _current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
+
+        let pending_tx_list = match pending_tx_list {
+            Some(tx_list) => tx_list,
+            None => {
+                debug!("No pending transactions, skipping preconfirmation step");
+                return Ok(());
+            }
+        };
+
+        let last_anchor_id = self
+            .taiko
+            .l2_execution_layer()
+            .get_anchor_block_id_from_geth(l2_slot_info.parent_id())
+            .await
+            .context("Failed to get last anchor id from Taiko geth")?;
+        let anchor_block_id = AnchorBlockInfo::calculate_anchor_block_id(
+            self.ethereum_l1.execution_layer.common(),
+            self.config.l1_height_lag,
+            last_anchor_id,
+            self.taiko
+                .get_protocol_config()
+                .get_max_anchor_height_offset(),
+        )
+        .await
+        .context("Failed to calculate anchor block id")?;
+
+        let anchor_block_info = AnchorBlockInfo::from_block_number(
+            self.ethereum_l1.execution_layer.common(),
+            anchor_block_id,
+        )
+        .await?;
+
+        let l2_payload = L2BlockV2Payload {
+            proposal_id: l2_slot_info.parent_id() + 1,
+            coinbase: self.config.coinbase,
+            tx_list: pending_tx_list.tx_list,
+            timestamp_sec: l2_slot_info.slot_timestamp(),
+            gas_limit_without_anchor: l2_slot_info.parent_gas_limit_without_anchor(),
+            anchor_block_id: anchor_block_info.id(),
+            anchor_block_hash: anchor_block_info.hash(),
+            anchor_state_root: anchor_block_info.state_root(),
+            is_forced_inclusion: false,
+        };
+        let l2_slot_context = L2SlotContext {
+            info: l2_slot_info,
+            end_of_sequencing: false,
+        };
+        let (tx_response, commitment_response) = self
+            .operator
+            .preconfirmation_driver()
+            .post_preconf_requests(l2_payload, &l2_slot_context, &self.config.sequencer_key)
+            .await?;
+
+        info!(
+            "Published preconfirmation: tx_list= {}, commitment= {}",
+            tx_response.tx_list_hash, commitment_response.commitment_hash
+        );
 
         Ok(())
     }

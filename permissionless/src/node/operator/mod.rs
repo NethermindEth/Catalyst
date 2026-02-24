@@ -30,4 +30,8 @@ impl Operator {
 
         Ok(Status::new(preconfer, false))
     }
+
+    pub fn preconfirmation_driver(&self) -> &PreconfirmationDriver {
+        &self.driver
+    }
 }

@@ -1,8 +1,10 @@
 #![allow(unused)] // TODO: remove this once we have a used contract_addresses field
 
+use alloy::hex;
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::config::{ConfigTrait, address_parse_error};
+use secp256k1::SecretKey;
 use std::{fmt, str::FromStr, time::Duration};
 use tracing::warn;
 
@@ -14,7 +16,7 @@ pub struct L1ContractAddresses {
     pub preconf_slasher_address: Address,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     pub contract_addresses: L1ContractAddresses,
     pub preconfirmation_driver_url: String,
@@ -23,6 +25,7 @@ pub struct Config {
     pub l1_height_lag: u64,
     pub max_blocks_to_reanchor: u64,
     pub propose_forced_inclusion: bool,
+    pub sequencer_key: SecretKey,
 }
 
 impl ConfigTrait for Config {
@@ -95,6 +98,14 @@ impl ConfigTrait for Config {
             .parse::<bool>()
             .map_err(|e| anyhow::anyhow!("PROPOSE_FORCED_INCLUSION must be a boolean: {}", e))?;
 
+        let sequencer_key_str = std::env::var("SEQUENCER_KEY")
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", "SEQUENCER_KEY", e))?;
+        let sequencer_key_bytes = hex::decode(sequencer_key_str.trim_start_matches("0x"))
+            .map_err(|e| anyhow::anyhow!("{} must be valid hex: {}", "SEQUENCER_KEY", e))?;
+        let sequencer_key = SecretKey::from_slice(&sequencer_key_bytes).map_err(|e| {
+            anyhow::anyhow!("{} must be a valid secp256k1 key: {}", "SEQUENCER_KEY", e)
+        })?;
+
         Ok(Config {
             contract_addresses: L1ContractAddresses {
                 registry_address,
@@ -108,6 +119,7 @@ impl ConfigTrait for Config {
             l1_height_lag,
             max_blocks_to_reanchor,
             propose_forced_inclusion,
+            sequencer_key,
         })
     }
 }

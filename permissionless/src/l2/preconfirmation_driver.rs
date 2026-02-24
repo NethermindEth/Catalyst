@@ -47,7 +47,6 @@ impl PreconfirmationDriver {
     }
 
     /// Function to publish a Signed Preconfirmation Commitment and a Transaction List
-    #[allow(dead_code)]
     pub async fn post_preconf_requests(
         &self,
         l2_block_payload: L2BlockV2Payload,

@@ -29,6 +29,7 @@ k256 = { workspace = true }
 lazy_static = { workspace = true }
 prometheus = { workspace = true }
 reqwest = { workspace = true }
+secp256k1 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true, features = ["derive"] }

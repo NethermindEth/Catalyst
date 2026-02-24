@@ -2766,6 +2766,7 @@ dependencies = [
  "prometheus",
  "protocol",
  "reqwest 0.13.1",
+ "secp256k1 0.30.0",
  "serde",
  "serde_json",
  "strum 0.27.2",
