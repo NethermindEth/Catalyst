@@ -1,6 +1,6 @@
 use crate::node::operator::status::Status as OperatorStatus;
 use crate::node::{config::NodeConfig, operator::Operator};
-use anyhow::{Context, Error};
+use anyhow::Error;
 use common::l1::traits::ELTrait;
 use common::shared::anchor_block_info::AnchorBlockInfo;
 use common::shared::l2_slot_info_v2::L2SlotContext;
@@ -113,7 +113,7 @@ impl Node {
             .l2_execution_layer()
             .get_anchor_block_id_from_geth(l2_slot_info.parent_id())
             .await
-            .context("Failed to get last anchor id from Taiko geth")?;
+            .map_err(|e| anyhow::anyhow!("Failed to get last anchor id from Taiko geth: {}", e))?;
         let anchor_block_id = AnchorBlockInfo::calculate_anchor_block_id(
             self.ethereum_l1.execution_layer.common(),
             self.config.l1_height_lag,
@@ -123,7 +123,7 @@ impl Node {
                 .get_max_anchor_height_offset(),
         )
         .await
-        .context("Failed to calculate anchor block id")?;
+        .map_err(|e| anyhow::anyhow!("Failed to calculate anchor block id: {}", e))?;
 
         let anchor_block_info = AnchorBlockInfo::from_block_number(
             self.ethereum_l1.execution_layer.common(),
@@ -150,7 +150,8 @@ impl Node {
             .operator
             .preconfirmation_driver()
             .post_preconf_requests(l2_payload, &l2_slot_context, &self.config.sequencer_key)
-            .await?;
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to post preconfirmation requests: {}", e))?;
 
         info!(
             "Published preconfirmation: tx_list= {}, commitment= {}",

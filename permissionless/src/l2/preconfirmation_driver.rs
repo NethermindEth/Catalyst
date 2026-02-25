@@ -41,7 +41,14 @@ impl PreconfirmationDriver {
                 METHOD_GET_PRECONF_SLOT_INFO,
                 vec![serde_json::to_value(timestamp)?],
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "preconfirmation driver: {} RPC call failed: {}",
+                    METHOD_GET_PRECONF_SLOT_INFO,
+                    e
+                )
+            })?;
         let slot_info: PreconfSlotInfo = serde_json::from_value(response)?;
         Ok(slot_info)
     }
@@ -58,7 +65,15 @@ impl PreconfirmationDriver {
         let tx_list_hash = keccak256(&tx_list_bytes);
         let submission_window_end = self
             .get_preconf_slot_info(U256::from(l2_block_payload.timestamp_sec))
-            .await?
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "preconfirmation driver: {} failed for timestamp_sec={}: {}",
+                    METHOD_GET_PRECONF_SLOT_INFO,
+                    l2_block_payload.timestamp_sec,
+                    e
+                )
+            })?
             .submission_window_end;
         let preconf = Preconfirmation {
             eop: l2_slot_context.end_of_sequencing,
@@ -96,8 +111,23 @@ impl PreconfirmationDriver {
         let commitment_request = PublishCommitmentRequest {
             commitment: Bytes::from(signed_commitment_bytes),
         };
-        let tx_response = self.publish_tx_list(tx_request).await?;
-        let commitment_response = self.publish_commitment(commitment_request).await?;
+        let tx_response = self.publish_tx_list(tx_request).await.map_err(|e| {
+            anyhow::anyhow!(
+                "preconfirmation driver: {} RPC call failed: {}",
+                METHOD_PUBLISH_TX_LIST,
+                e
+            )
+        })?;
+        let commitment_response =
+            self.publish_commitment(commitment_request)
+                .await
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "preconfirmation driver: {} RPC call failed: {}",
+                        METHOD_PUBLISH_COMMITMENT,
+                        e
+                    )
+                })?;
         Ok((tx_response, commitment_response))
     }
 
