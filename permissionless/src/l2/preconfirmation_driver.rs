@@ -4,7 +4,6 @@ use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::shared::l2_tx_lists::encode_and_compress;
 use common::utils::rpc_client::JSONRPCClient;
 use secp256k1::SecretKey;
-use shasta::L2BlockV2Payload;
 use ssz_rs::prelude::*;
 use std::time::Duration;
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
@@ -18,7 +17,7 @@ use taiko_preconfirmation_types::{
     Bytes20, PreconfCommitment, Preconfirmation, SignedCommitment, address_to_bytes20,
     b256_to_bytes32, sign_commitment, u256_to_uint256,
 };
-use tracing::debug;
+use tracing::{debug, trace};
 /// Client for communicating with the preconfirmation driver's JSON-RPC server.
 ///
 /// Provides a typed wrapper around the `preconf_getPreconfSlotInfo` RPC method
@@ -34,7 +33,7 @@ impl PreconfirmationDriver {
     }
 
     pub async fn get_preconf_slot_info(&self, timestamp: U256) -> Result<PreconfSlotInfo, Error> {
-        debug!("Calling {}", METHOD_GET_PRECONF_SLOT_INFO);
+        trace!("Calling {}", METHOD_GET_PRECONF_SLOT_INFO);
         let response = self
             .rpc_client
             .call_method(
@@ -56,21 +55,23 @@ impl PreconfirmationDriver {
     /// Function to publish a Signed Preconfirmation Commitment and a Transaction List
     pub async fn post_preconf_requests(
         &self,
-        l2_block_payload: L2BlockV2Payload,
         l2_slot_context: &L2SlotContext,
+        tx_list: &[alloy::rpc::types::Transaction],
+        coinbase: alloy::primitives::Address,
+        anchor_block_id: u64,
         signer_key: &SecretKey,
     ) -> Result<(PublishTxListResponse, PublishCommitmentResponse), Error> {
-        let tx_list = &l2_block_payload.tx_list;
+        let timestamp_sec = l2_slot_context.info.slot_timestamp();
         let tx_list_bytes = encode_and_compress(tx_list)?;
         let tx_list_hash = keccak256(&tx_list_bytes);
         let submission_window_end = self
-            .get_preconf_slot_info(U256::from(l2_block_payload.timestamp_sec))
+            .get_preconf_slot_info(U256::from(timestamp_sec))
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
                     "preconfirmation driver: {} failed for timestamp_sec={}: {}",
                     METHOD_GET_PRECONF_SLOT_INFO,
-                    l2_block_payload.timestamp_sec,
+                    timestamp_sec,
                     e
                 )
             })?
@@ -78,17 +79,17 @@ impl PreconfirmationDriver {
         let preconf = Preconfirmation {
             eop: l2_slot_context.end_of_sequencing,
             block_number: u256_to_uint256(U256::from(l2_slot_context.info.parent_id() + 1)),
-            timestamp: u256_to_uint256(U256::from(l2_block_payload.timestamp_sec)),
+            timestamp: u256_to_uint256(U256::from(timestamp_sec)),
             gas_limit: u256_to_uint256(U256::from(
-                l2_block_payload.gas_limit_without_anchor + ANCHOR_V3_V4_GAS_LIMIT,
+                l2_slot_context.info.parent_gas_limit_without_anchor() + ANCHOR_V3_V4_GAS_LIMIT,
             )),
-            coinbase: address_to_bytes20(l2_block_payload.coinbase),
-            anchor_block_number: u256_to_uint256(U256::from(l2_block_payload.anchor_block_id)),
+            coinbase: address_to_bytes20(coinbase),
+            anchor_block_number: u256_to_uint256(U256::from(anchor_block_id)),
             raw_tx_list_hash: b256_to_bytes32(tx_list_hash),
             parent_preconfirmation_hash: b256_to_bytes32(B256::ZERO),
             submission_window_end: u256_to_uint256(submission_window_end),
             prover_auth: Bytes20::default(),
-            proposal_id: u256_to_uint256(U256::from(l2_block_payload.proposal_id)),
+            proposal_id: u256_to_uint256(U256::from(l2_slot_context.info.parent_id() + 1)),
         };
 
         let commitment = PreconfCommitment {
