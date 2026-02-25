@@ -130,7 +130,7 @@ impl Node {
                 self.ethereum_l1.execution_layer.common(),
                 self.config.l1_height_lag,
                 last_anchor_id,
-                2,
+                self.config.min_anchor_offset,
             )
             .await
             .map_err(|e| anyhow::anyhow!("Failed to calculate anchor block id: {}", e))?;

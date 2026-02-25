@@ -42,6 +42,8 @@ pub struct Config {
     pub max_blocks_per_batch: u16,
     pub max_time_shift_between_blocks_sec: u64,
     pub max_anchor_height_offset_reduction: u64,
+    /// Minimum offset between calculated anchor block ID and latest L1 height
+    pub min_anchor_offset: u64,
     // Transaction parameters
     pub min_priority_fee_per_gas_wei: u64,
     pub tx_fees_increase_percentage: u64,
@@ -279,6 +281,11 @@ impl Config {
             );
         }
 
+        let min_anchor_offset = std::env::var("MIN_ANCHOR_OFFSET")
+            .unwrap_or("1".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("MIN_ANCHOR_OFFSET must be a number: {}", e))?;
+
         let min_priority_fee_per_gas_wei = std::env::var("MIN_PRIORITY_FEE_PER_GAS_WEI")
             .unwrap_or("1000000000".to_string()) // 1 Gwei
             .parse::<u64>()
@@ -449,6 +456,7 @@ impl Config {
             max_blocks_per_batch,
             max_time_shift_between_blocks_sec,
             max_anchor_height_offset_reduction,
+            min_anchor_offset,
             min_priority_fee_per_gas_wei,
             tx_fees_increase_percentage,
             max_attempts_to_send_tx,
@@ -503,6 +511,7 @@ max bytes size of batch: {}
 max blocks per batch value: {}
 max time shift between blocks: {}s
 max anchor height offset reduction value: {}
+min anchor offset: {}
 min priority fee per gas: {}wei
 tx fees increase percentage: {}
 max attempts to send tx: {}
@@ -561,6 +570,7 @@ whitelist monitor interval: {}s
             config.max_blocks_per_batch,
             config.max_time_shift_between_blocks_sec,
             config.max_anchor_height_offset_reduction,
+            config.min_anchor_offset,
             config.min_priority_fee_per_gas_wei,
             config.tx_fees_increase_percentage,
             config.max_attempts_to_send_tx,

@@ -25,13 +25,12 @@ use crate::forced_inclusion::ForcedInclusion;
 use crate::node::L2SlotInfoV2;
 use proposal::Proposals;
 
-const MIN_ANCHOR_OFFSET: u64 = 2;
-
 pub struct ProposalManager {
     batch_builder: BatchBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
     l1_height_lag: u64,
+    min_anchor_offset: u64,
     forced_inclusion: ForcedInclusion,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
@@ -43,6 +42,7 @@ impl ProposalManager {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         l1_height_lag: u64,
+        min_anchor_offset: u64,
         config: BatchBuilderConfig,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
@@ -78,6 +78,7 @@ impl ProposalManager {
             ethereum_l1,
             taiko,
             l1_height_lag,
+            min_anchor_offset,
             forced_inclusion,
             metrics,
             cancel_token,
@@ -340,7 +341,7 @@ impl ProposalManager {
             self.ethereum_l1.execution_layer.common(),
             self.l1_height_lag,
             last_anchor_id,
-            MIN_ANCHOR_OFFSET,
+            self.min_anchor_offset,
         )
         .await?;
 
@@ -528,6 +529,7 @@ impl ProposalManager {
             ethereum_l1: self.ethereum_l1.clone(),
             taiko: self.taiko.clone(),
             l1_height_lag: self.l1_height_lag,
+            min_anchor_offset: self.min_anchor_offset,
             forced_inclusion: ForcedInclusion::new_with_index(self.ethereum_l1.clone(), fi_head),
             metrics: self.metrics.clone(),
             cancel_token: self.cancel_token.clone(),
