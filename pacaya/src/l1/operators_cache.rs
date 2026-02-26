@@ -56,7 +56,7 @@ impl OperatorsCache {
         &self,
         current_epoch_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
-        tracing::debug!(
+        tracing::trace!(
             "get_operators_for_current_and_next_epoch_internal, for timestamp: {}",
             current_epoch_timestamp
         );

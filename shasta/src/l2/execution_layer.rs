@@ -185,6 +185,10 @@ impl L2ExecutionLayer {
     }
 
     pub async fn get_anchor_block_id_from_geth(&self, block_id: u64) -> Result<u64, Error> {
+        // Genesis block (0) has no anchor transaction; return 0 as last anchor id.
+        if block_id == 0 {
+            return Ok(0);
+        }
         self.get_anchor_transaction_input(BlockNumberOrTag::Number(block_id))
             .await
             .map_err(|e| anyhow::anyhow!("get_anchor_block_id_from_geth: {e}"))

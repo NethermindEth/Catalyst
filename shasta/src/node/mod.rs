@@ -80,6 +80,7 @@ impl Node {
 
         let proposal_manager = ProposalManager::new(
             config.l1_height_lag,
+            config.min_anchor_offset,
             batch_builder_config,
             ethereum_l1.clone(),
             taiko.clone(),

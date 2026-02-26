@@ -111,6 +111,7 @@ pub async fn create_permissionless_node(
 
     let proposal_manager = ProposalManager::new(
         permissionless_config.l1_height_lag,
+        config.min_anchor_offset,
         batch_builder_config,
         ethereum_l1.clone(),
         taiko.clone(),
@@ -140,6 +141,7 @@ pub async fn create_permissionless_node(
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
             coinbase: preconfer_address,
             l1_height_lag: permissionless_config.l1_height_lag,
+            min_anchor_offset: config.min_anchor_offset,
             sequencer_key: permissionless_config.sequencer_key,
         },
         operator,
