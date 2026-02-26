@@ -333,10 +333,7 @@ impl ProposalManager {
             .l2_execution_layer()
             .get_anchor_block_id_from_geth(parent_block_id)
             .await
-            .unwrap_or_else(|e| {
-                warn!("Failed to get last synced anchor block ID from Taiko Geth: {e}");
-                0
-            });
+            .map_err(|e| anyhow::anyhow!("Create new proposal: failed to get last synced anchor block ID from Taiko Geth: {e}"))?;
         let anchor_block_info = AnchorBlockInfo::from_chain_state(
             self.ethereum_l1.execution_layer.common(),
             self.l1_height_lag,
