@@ -8,6 +8,7 @@ pub struct NodeConfig {
     pub l1_height_lag: u64,
     pub propose_forced_inclusion: bool,
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
+    pub watchdog_max_counter: u64,
 }
 
 /*
