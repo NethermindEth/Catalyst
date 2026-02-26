@@ -91,6 +91,7 @@ pub async fn create_shasta_node(
         simulate_not_submitting_at_the_end_of_epoch: shasta_config
             .simulate_not_submitting_at_the_end_of_epoch,
         max_blocks_to_reanchor: shasta_config.max_blocks_to_reanchor,
+        watchdog_max_counter: config.watchdog_max_counter,
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {

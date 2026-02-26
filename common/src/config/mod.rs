@@ -74,6 +74,8 @@ pub struct Config {
     pub permissionless_timestamp_sec: u64,
     // Whitelist monitor
     pub whitelist_monitor_interval_sec: u64,
+    // Whatch dog
+    pub watchdog_max_counter: u64,
 }
 
 /// Creates a formatted error message for address parsing failures.
@@ -433,6 +435,11 @@ impl Config {
                 anyhow::anyhow!("WHITELIST_MONITOR_INTERVAL_SEC must be a number: {}", e)
             })?;
 
+        let watchdog_max_counter = std::env::var("WATCHDOG_MAX_COUNTER")
+            .unwrap_or("96".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("WATCHDOG_MAX_COUNTER must be a number: {}", e))?;
+
         let config = Self {
             preconfer_address,
             taiko_geth_rpc_url: std::env::var("TAIKO_GETH_RPC_URL")
@@ -491,6 +498,7 @@ impl Config {
             shasta_timestamp_sec,
             permissionless_timestamp_sec,
             whitelist_monitor_interval_sec,
+            watchdog_max_counter,
         };
 
         info!(
@@ -542,6 +550,7 @@ pacaya timestamp: {}s
 shasta timestamp: {}s
 permissionless timestamp: {}s
 whitelist monitor interval: {}s
+watchdog max counter: {}
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -601,6 +610,7 @@ whitelist monitor interval: {}s
             config.shasta_timestamp_sec,
             config.permissionless_timestamp_sec,
             config.whitelist_monitor_interval_sec,
+            config.watchdog_max_counter,
         );
 
         Ok(config)

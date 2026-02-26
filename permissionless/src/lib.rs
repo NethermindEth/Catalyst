@@ -143,6 +143,7 @@ pub async fn create_permissionless_node(
             l1_height_lag: permissionless_config.l1_height_lag,
             min_anchor_offset: config.min_anchor_offset,
             sequencer_key: permissionless_config.sequencer_key,
+            watchdog_max_counter: config.watchdog_max_counter,
         },
         operator,
         proposal_manager,
