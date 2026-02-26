@@ -15,10 +15,11 @@ pub struct BuildPreconfBlockResponse {
     pub number: u64,
     pub hash: B256,
     pub parent_hash: B256,
+    pub is_forced_inclusion: bool,
 }
 
 impl BuildPreconfBlockResponse {
-    pub fn new_from_value(value: serde_json::Value) -> Option<Self> {
+    pub fn new_from_value(value: serde_json::Value, is_forced_inclusion: bool) -> Option<Self> {
         let header = value.get("blockHeader")?;
 
         Some(Self {
@@ -29,6 +30,7 @@ impl BuildPreconfBlockResponse {
             .ok()?,
             hash: Self::to_b256(header.get("hash")?.as_str()?)?,
             parent_hash: Self::to_b256(header.get("parentHash")?.as_str()?)?,
+            is_forced_inclusion,
         })
     }
 
