@@ -74,7 +74,7 @@ pub struct Config {
     pub permissionless_timestamp_sec: u64,
     // Whitelist monitor
     pub whitelist_monitor_interval_sec: u64,
-    // Whatch dog
+    // Watchdog
     pub watchdog_max_counter: u64,
 }
 
