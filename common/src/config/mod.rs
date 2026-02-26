@@ -282,9 +282,19 @@ impl Config {
         }
 
         let min_anchor_offset = std::env::var("MIN_ANCHOR_OFFSET")
-            .unwrap_or("1".to_string())
+            .unwrap_or("2".to_string())
             .parse::<u64>()
-            .map_err(|e| anyhow::anyhow!("MIN_ANCHOR_OFFSET must be a number: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("MIN_ANCHOR_OFFSET must be a number: {}", e))
+            .and_then(|val| {
+                if val < 1 {
+                    Err(anyhow::anyhow!(
+                        "MIN_ANCHOR_OFFSET must be at least 1, but got {}.",
+                        val
+                    ))
+                } else {
+                    Ok(val)
+                }
+            })?;
 
         let min_priority_fee_per_gas_wei = std::env::var("MIN_PRIORITY_FEE_PER_GAS_WEI")
             .unwrap_or("1000000000".to_string()) // 1 Gwei
