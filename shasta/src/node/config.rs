@@ -8,4 +8,5 @@ pub struct NodeConfig {
     pub propose_forced_inclusion: bool,
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
     pub max_blocks_to_reanchor: u64,
+    pub watchdog_max_counter: u64,
 }

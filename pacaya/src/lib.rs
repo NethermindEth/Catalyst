@@ -137,6 +137,7 @@ pub async fn create_pacaya_node(
             propose_forced_inclusion: pacaya_config.propose_forced_inclusion,
             simulate_not_submitting_at_the_end_of_epoch: pacaya_config
                 .simulate_not_submitting_at_the_end_of_epoch,
+            watchdog_max_counter: config.watchdog_max_counter,
         },
         common::batch_builder::BatchBuilderConfig {
             max_bytes_size_of_batch: config.max_bytes_size_of_batch,

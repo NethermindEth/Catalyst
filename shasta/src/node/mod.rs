@@ -74,7 +74,7 @@ impl Node {
         .map_err(|e| anyhow::anyhow!("Failed to create Operator: {}", e))?;
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
-            ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
+            config.watchdog_max_counter,
         );
         let head_verifier = HeadVerifier::default();
 
