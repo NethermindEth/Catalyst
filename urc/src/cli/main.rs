@@ -21,7 +21,14 @@ use clap::Parser;
 use commands::{Cli, Commands};
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() {
+    if let Err(e) = run().await {
+        eprintln!("URC Error: {e:#}");
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> Result<(), Error> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -155,19 +162,28 @@ async fn opt_in_to_slasher(
     slasher: &str,
     committer: &str,
 ) -> Result<(), Error> {
-    let signer = PrivateKeySigner::from_str(owner_pk)?;
+    let signer = PrivateKeySigner::from_str(owner_pk)
+        .map_err(|e| anyhow::anyhow!("invalid owner_pk (private key): {e}"))?;
     let wallet = EthereumWallet::from(signer);
 
+    let rpc_url = rpc
+        .parse()
+        .map_err(|e| anyhow::anyhow!("invalid rpc URL: {e}"))?;
     let l1_provider = ProviderBuilder::new()
         .wallet(wallet)
-        .connect_http(rpc.parse()?)
+        .connect_http(rpc_url)
         .erased();
-    let registry_address = Address::from_str(registry)?;
+    let registry_address = Address::from_str(registry)
+        .map_err(|e| anyhow::anyhow!("invalid registry address: {e}"))?;
     let registry = IRegistry::new(registry_address, l1_provider);
 
-    let registration_root = FixedBytes::from_str(registration_root)?;
-    let slasher = Address::from_str(slasher)?;
-    let committer = Address::from_str(committer)?;
+    let registration_root = FixedBytes::from_str(registration_root).map_err(|e| {
+        anyhow::anyhow!("invalid registration_root (expected 0x-prefixed 64 hex chars): {e}")
+    })?;
+    let slasher = Address::from_str(slasher)
+        .map_err(|e| anyhow::anyhow!("invalid slasher address: {e}"))?;
+    let committer = Address::from_str(committer)
+        .map_err(|e| anyhow::anyhow!("invalid committer address: {e}"))?;
 
     let tx = registry.optInToSlasher(registration_root, slasher, committer);
 
