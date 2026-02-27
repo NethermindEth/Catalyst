@@ -180,8 +180,8 @@ async fn opt_in_to_slasher(
     let registration_root = FixedBytes::from_str(registration_root).map_err(|e| {
         anyhow::anyhow!("invalid registration_root (expected 0x-prefixed 64 hex chars): {e}")
     })?;
-    let slasher = Address::from_str(slasher)
-        .map_err(|e| anyhow::anyhow!("invalid slasher address: {e}"))?;
+    let slasher =
+        Address::from_str(slasher).map_err(|e| anyhow::anyhow!("invalid slasher address: {e}"))?;
     let committer = Address::from_str(committer)
         .map_err(|e| anyhow::anyhow!("invalid committer address: {e}"))?;
 
