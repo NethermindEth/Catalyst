@@ -61,7 +61,9 @@ impl TaikoDriver {
             )
             .await?;
 
-        if let Some(preconfirmed_block) = BuildPreconfBlockResponse::new_from_value(response) {
+        if let Some(preconfirmed_block) =
+            BuildPreconfBlockResponse::new_from_value(response, request_body.is_forced_inclusion)
+        {
             self.metrics.inc_blocks_preconfirmed();
             Ok(preconfirmed_block)
         } else {

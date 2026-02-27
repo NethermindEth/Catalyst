@@ -122,7 +122,7 @@ impl ProposalManager {
         pending_tx_list: Option<PreBuiltTxList>,
         l2_slot_context: &L2SlotContext,
     ) -> Result<BuildPreconfBlockResponse, Error> {
-        let (result, _) = self
+        let preconfed_block = self
             .add_new_l2_block(
                 pending_tx_list.unwrap_or_else(PreBuiltTxList::empty),
                 l2_slot_context,
@@ -139,7 +139,7 @@ impl ProposalManager {
             self.batch_builder.finalize_current_batch();
         }
 
-        Ok(result)
+        Ok(preconfed_block)
     }
 
     async fn add_new_l2_block_with_forced_inclusion_when_needed(
@@ -211,8 +211,7 @@ impl ProposalManager {
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
         allow_forced_inclusion: bool,
-        // TODO REPLACE with enum or struct
-    ) -> Result<(BuildPreconfBlockResponse, bool), Error> {
+    ) -> Result<BuildPreconfBlockResponse, Error> {
         let timestamp = l2_slot_context.info.slot_timestamp();
         if let Some(last_block_timestamp) = self
             .batch_builder
@@ -256,14 +255,14 @@ impl ProposalManager {
                 .add_new_l2_block_with_forced_inclusion_when_needed(l2_slot_context, operation_type)
                 .await?
         {
-            return Ok((fi_block, true));
+            return Ok(fi_block);
         }
 
         let preconfed_block = self
             .add_draft_block_to_proposal(l2_draft_block, l2_slot_context, operation_type)
             .await?;
 
-        Ok((preconfed_block, false))
+        Ok(preconfed_block)
     }
 
     async fn add_draft_block_to_proposal(
@@ -490,7 +489,6 @@ impl ProposalManager {
 
         let is_forced_inclusion = self.is_forced_inclusion(block_height).await?;
 
-        // TODO improve output
         debug!(
             "Recovering from L2 block {}, proposal_id: {} transactions: {} is_forced_inclusion: {}, timestamp: {}, anchor_block_number: {} coinbase: {}, gas_limit: {}",
             block_height,
@@ -548,23 +546,19 @@ impl ProposalManager {
         pending_tx_list: PreBuiltTxList,
         l2_slot_info: L2SlotInfoV2,
         allow_forced_inclusion: bool,
-        // TODO REPLACE with enum or struct
-    ) -> Result<(BuildPreconfBlockResponse, bool), Error> {
+    ) -> Result<BuildPreconfBlockResponse, Error> {
         let l2_slot_context = L2SlotContext {
             info: l2_slot_info,
             end_of_sequencing: false,
         };
 
-        let (block, is_forced_inclusion) = self
-            .add_new_l2_block(
-                pending_tx_list,
-                &l2_slot_context,
-                OperationType::Reanchor,
-                allow_forced_inclusion,
-            )
-            .await?;
-
-        Ok((block, is_forced_inclusion))
+        self.add_new_l2_block(
+            pending_tx_list,
+            &l2_slot_context,
+            OperationType::Reanchor,
+            allow_forced_inclusion,
+        )
+        .await
     }
 
     pub async fn is_forced_inclusion(&mut self, block_id: u64) -> Result<bool, Error> {
@@ -646,13 +640,15 @@ impl ProposalManager {
                 .reanchor_block(pending_tx_list, l2_slot_info, allow_forced_inclusion)
                 .await
             {
-                Ok((reanchored_block, is_forced_inclusion)) => {
+                Ok(preconfed_block) => {
                     debug!(
                         "Reanchored block {} hash {}, is_forced_inclusion: {}",
-                        reanchored_block.number, reanchored_block.hash, is_forced_inclusion,
+                        preconfed_block.number,
+                        preconfed_block.hash,
+                        preconfed_block.is_forced_inclusion,
                     );
                     processed_blocks += 1;
-                    if !is_forced_inclusion {
+                    if !preconfed_block.is_forced_inclusion {
                         is_common_block_processed = true;
                         current_block_pos += 1;
                     }
