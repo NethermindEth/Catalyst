@@ -14,7 +14,7 @@ use shasta::{
 };
 use std::sync::Arc;
 use tokio::{sync::mpsc::Receiver, time::Duration};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 pub mod config;
 pub mod operator;
 
@@ -99,9 +99,31 @@ impl Node {
             self.get_slot_info_and_status().await?;
 
         if current_status.is_preconfer() {
-            self.post_preconfirmation(l2_slot_info, pending_tx_list)
+            self.post_preconfirmation(l2_slot_info.clone(), pending_tx_list)
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to post preconfirmation: {}", e))?;
+        }
+
+        let tx_in_progress = self
+            .ethereum_l1
+            .execution_layer
+            .is_transaction_in_progress()
+            .await?;
+
+        if !tx_in_progress
+            && let Err(err) = self
+                .proposal_manager
+                .try_submit_oldest_proposal(
+                    current_status.is_preconfer(),
+                    l2_slot_info.slot_timestamp(),
+                )
+                .await
+        {
+            if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
+                self.handle_transaction_error(transaction_error).await?;
+            } else {
+                return Err(err);
+            }
         }
 
         Ok(())
@@ -250,5 +272,61 @@ impl Node {
             },
         );
         Ok(())
+    }
+
+    async fn handle_transaction_error(&mut self, error: &TransactionError) -> Result<(), Error> {
+        match error {
+            TransactionError::ReanchorRequired => {
+                warn!("Unexpected ReanchorRequired error received");
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "ReanchorRequired error received unexpectedly, exiting"
+                ))
+            }
+            TransactionError::NotConfirmed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Transaction not confirmed for a long time, exiting"
+                ))
+            }
+            TransactionError::UnsupportedTransactionType => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Unsupported transaction type. You can send eip1559 or eip4844 transactions only"
+                ))
+            }
+            TransactionError::GetBlockNumberFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Failed to get block number from L1"))
+            }
+            TransactionError::EstimationTooEarly => {
+                warn!("Transaction estimation too early");
+                Ok(())
+            }
+            TransactionError::InsufficientFunds => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Transaction reverted with InsufficientFunds error"
+                ))
+            }
+            TransactionError::EstimationFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Transaction estimation failed, exiting"))
+            }
+            TransactionError::TransactionReverted => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Transaction reverted, exiting"))
+            }
+            TransactionError::OldestForcedInclusionDue => {
+                warn!("OldestForcedInclusionDue critical error received");
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("OldestForcedInclusionDue error, exiting"))
+            }
+            // Note: simplified for now
+            TransactionError::NotTheOperatorInCurrentEpoch => {
+                warn!("Proposal transaction executed too late.");
+                Ok(())
+            }
+        }
     }
 }
