@@ -110,20 +110,19 @@ impl Node {
             .is_transaction_in_progress()
             .await?;
 
-        if !tx_in_progress {
-            if let Err(err) = self
+        if !tx_in_progress
+            && let Err(err) = self
                 .proposal_manager
                 .try_submit_oldest_proposal(
                     current_status.is_preconfer(),
                     l2_slot_info.slot_timestamp(),
                 )
                 .await
-            {
-                if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
-                    self.handle_transaction_error(transaction_error).await?;
-                } else {
-                    return Err(err);
-                }
+        {
+            if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
+                self.handle_transaction_error(transaction_error).await?;
+            } else {
+                return Err(err);
             }
         }
 
