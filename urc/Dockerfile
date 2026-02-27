@@ -1,3 +1,6 @@
+# NOTE: This Dockerfile requires the repository root as the build context.
+# Build with: docker build -f urc/Dockerfile .
+
 # Build stage: compile urc-cli only
 FROM rust:1.90-slim-bookworm AS builder
 
