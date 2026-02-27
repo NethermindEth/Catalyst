@@ -27,4 +27,5 @@ FROM gcr.io/distroless/cc-debian13
 COPY --from=builder /usr/local/bin/urc-cli /usr/local/bin/urc-cli
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
+USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/urc-cli"]
