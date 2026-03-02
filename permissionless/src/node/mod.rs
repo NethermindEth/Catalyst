@@ -139,7 +139,7 @@ impl Node {
             info: l2_slot_info,
             end_of_sequencing: false,
         };
-        let (tx_response, commitment_response) = self
+        let response = self
             .operator
             .preconfirmation_driver()
             .post_preconf_requests(
@@ -154,7 +154,7 @@ impl Node {
 
         info!(
             "Published preconfirmation: tx_list= {}, commitment= {}",
-            tx_response.tx_list_hash, commitment_response.commitment_hash
+            response.tx_list_hash, response.commitment_hash
         );
 
         Ok(())
