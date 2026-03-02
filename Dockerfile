@@ -1,4 +1,4 @@
-FROM rust:1.90 AS builder
+FROM rust:1.93 AS builder
 
 # Update CA certificates in builder stage
 RUN apt-get update && apt-get install -y \
