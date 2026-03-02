@@ -28,3 +28,4 @@ EXPOSE 8545
 # Run the binary
 # CMD in docker-compose
 # CMD ["p2p-boot-node"]
+ 

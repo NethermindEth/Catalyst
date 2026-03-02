@@ -263,13 +263,15 @@ impl Taiko {
             .header
             .timestamp()
             .checked_sub(grandparent_timestamp)
-            .ok_or_else(|| anyhow::anyhow!("Timestamp underflow occurred"))?;
+            .ok_or_else(|| anyhow::anyhow!("get_base_fee:Timestamp underflow occurred"))?;
 
-        let parent_base_fee_per_gas = parent_block
-            .header
-            .inner
-            .base_fee_per_gas
-            .ok_or_else(|| anyhow::anyhow!("Parent block missing base fee per gas"))?;
+        let parent_base_fee_per_gas =
+            parent_block.header.inner.base_fee_per_gas.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "get_base_fee: Parent block missing base fee per gas for block {}",
+                    parent_block.header.number()
+                )
+            })?;
         let base_fee = taiko_alethia_reth::eip4396::calculate_next_block_eip4396_base_fee(
             &parent_block.header.inner,
             timestamp_diff,
