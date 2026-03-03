@@ -40,13 +40,13 @@ impl LastSafeL2BlockFinder {
         let inbox_state = self.ethereum_l1.execution_layer.get_inbox_state().await?;
         if inbox_state.nextProposalId == 1 {
             self.taiko.l2_execution_layer().get_head_l1_origin().await.or_else(|_| {
-                tracing::warn!("LastSafeL2Block::get(): Failed to get L2 head from get_head_l1_origin, but nextProposalId is 1, so returning L2 height as 0");
+                tracing::warn!("LastSafeL2BlockFinder::get(): Failed to get L2 head from get_head_l1_origin, but nextProposalId is 1, so returning L2 height as 0");
                 Ok(0u64)
             })
         } else {
             let target_proposal_id = inbox_state.nextProposalId.to::<u64>() - 1;
             tracing::debug!(
-                "LastSafeL2Block::get(): Fetching L2 height from L1 nextProposalId: {}, target: {}",
+                "LastSafeL2BlockFinder::get(): Fetching L2 height from L1 nextProposalId: {}, target: {}",
                 inbox_state.nextProposalId,
                 target_proposal_id
             );
@@ -56,7 +56,7 @@ impl LastSafeL2BlockFinder {
                 let cache = self.cache.read().await;
                 if let Some(&block_id) = cache.get(&target_proposal_id) {
                     tracing::debug!(
-                        "LastSafeL2Block::get(): Cache hit for proposal_id {}: block_id {}",
+                        "LastSafeL2BlockFinder::get(): Cache hit for proposal_id {}: block_id {}",
                         target_proposal_id,
                         block_id
                     );
@@ -74,7 +74,7 @@ impl LastSafeL2BlockFinder {
             let mut cache = self.cache.write().await;
             cache.insert(target_proposal_id, result.block_id);
             tracing::debug!(
-                "LastSafeL2Block::get(): Cached block {} for proposal_id {}",
+                "LastSafeL2BlockFinder::get(): Cached block {} for proposal_id {}",
                 result.block_id,
                 target_proposal_id
             );
@@ -88,7 +88,7 @@ impl LastSafeL2BlockFinder {
         let removed_count = cache.len();
         cache.retain(|&key, _| key >= safe_proposal_id);
         tracing::debug!(
-            "LastSafeL2Block::clear_cache(): Removed {} entries below proposal_id {}",
+            "LastSafeL2BlockFinder::clear_cache(): Removed {} entries below proposal_id {}",
             removed_count - cache.len(),
             safe_proposal_id
         );
@@ -113,7 +113,7 @@ impl LastSafeL2BlockFinder {
             }
             Err(err) => {
                 tracing::warn!(
-                    "LastSafeL2Block::find_last_block_for_proposal_id(): Failed to get last block id by batch id: {}",
+                    "LastSafeL2BlockFinder::find_last_block_for_proposal_id(): Failed to get last block id by batch id: {}",
                     err
                 );
             }
@@ -133,7 +133,7 @@ impl LastSafeL2BlockFinder {
             .get_latest_block_id_and_proposal_id()
             .await?;
         tracing::debug!(
-            "LastSafeL2Block::find_last_block_for_proposal_id(): Last known safe block: {}, known safe proposal id: {}, target proposal id: {}, last block id: {}, last proposal id: {}",
+            "LastSafeL2BlockFinder::find_last_block_for_proposal_id(): Last known safe block: {}, known safe proposal id: {}, target proposal id: {}, last block id: {}, last proposal id: {}",
             last_known_safe_block_id,
             last_known_safe_proposal_id,
             target_proposal_id,
@@ -143,7 +143,7 @@ impl LastSafeL2BlockFinder {
 
         if last_proposal_id == target_proposal_id {
             tracing::debug!(
-                "LastSafeL2Block::find_last_block_for_proposal_id(): Last block {} has the target proposal_id {}, returning it",
+                "LastSafeL2BlockFinder::find_last_block_for_proposal_id(): Last block {} has the target proposal_id {}, returning it",
                 last_block_id,
                 target_proposal_id
             );
@@ -156,7 +156,7 @@ impl LastSafeL2BlockFinder {
         if target_proposal_id < last_known_safe_proposal_id || target_proposal_id > last_proposal_id
         {
             return Err(anyhow::anyhow!(
-                "LastSafeL2Block::find_last_block_for_proposal_id(): Target proposal id {} is out of range ({} - {})",
+                "LastSafeL2BlockFinder::find_last_block_for_proposal_id(): Target proposal id {} is out of range ({} - {})",
                 target_proposal_id,
                 last_known_safe_proposal_id,
                 last_proposal_id
@@ -174,7 +174,7 @@ impl LastSafeL2BlockFinder {
 
         if let Some(block_id) = result {
             tracing::debug!(
-                "LastSafeL2Block::find_last_block_for_proposal_id(): Found last block {} for proposal_id {}",
+                "LastSafeL2BlockFinder::find_last_block_for_proposal_id(): Found last block {} for proposal_id {}",
                 block_id,
                 target_proposal_id
             );
@@ -185,7 +185,7 @@ impl LastSafeL2BlockFinder {
         }
 
         Err(anyhow::anyhow!(
-            "LastSafeL2Block::find_last_block_for_proposal_id(): Failed to find block for proposal id {} in range {} - {}",
+            "LastSafeL2BlockFinder::find_last_block_for_proposal_id(): Failed to find block for proposal id {} in range {} - {}",
             target_proposal_id,
             last_known_safe_block_id,
             last_block_id
