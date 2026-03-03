@@ -13,6 +13,7 @@ use shasta::{
     ProposalManager, l1::execution_layer::ExecutionLayer as ShastaExecutionLayer, l2::taiko::Taiko,
 };
 use std::sync::Arc;
+use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 use tokio::{sync::mpsc::Receiver, time::Duration};
 use tracing::{debug, error, info, warn};
 pub mod config;
@@ -157,6 +158,31 @@ impl Node {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to calculate anchor block id: {}", e))?;
 
+        let anchor_block_info = self
+            .ethereum_l1
+            .execution_layer
+            .common()
+            .get_block_info_by_number(anchor_block_id)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get anchor block info: {}", e))?;
+
+        let anchor_block_params = Checkpoint {
+            blockNumber: anchor_block_id.try_into()?,
+            blockHash: anchor_block_info.hash,
+            stateRoot: anchor_block_info.state_root,
+        };
+
+        let anchor_tx = self
+            .taiko
+            .l2_execution_layer()
+            .construct_anchor_tx(&l2_slot_info, anchor_block_params)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to construct anchor tx: {}", e))?;
+
+        let tx_list = std::iter::once(anchor_tx)
+            .chain(pending_tx_list.tx_list.into_iter())
+            .collect::<Vec<_>>();
+
         let l2_slot_context = L2SlotContext {
             info: l2_slot_info,
             end_of_sequencing: false,
@@ -166,7 +192,7 @@ impl Node {
             .preconfirmation_driver()
             .post_preconf_requests(
                 &l2_slot_context,
-                &pending_tx_list.tx_list,
+                &tx_list,
                 self.config.coinbase,
                 anchor_block_id,
                 &self.config.sequencer_key,
