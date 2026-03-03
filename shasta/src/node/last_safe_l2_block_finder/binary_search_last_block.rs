@@ -55,31 +55,30 @@ pub async fn binary_search_last_block<F: ProposalIdFetcher>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     /// Mock implementation for testing binary search
     struct MockProposalIdFetcher {
         proposal_ids: Vec<u64>,
-        call_count: RefCell<usize>,
+        call_count: AtomicU32,
     }
 
     impl MockProposalIdFetcher {
         fn new(proposal_ids: Vec<u64>) -> Self {
             Self {
                 proposal_ids,
-                call_count: RefCell::new(0),
+                call_count: AtomicU32::new(0),
             }
         }
 
-        fn get_call_count(&self) -> usize {
-            *self.call_count.borrow()
+        fn get_call_count(&self) -> u32 {
+            self.call_count.load(Ordering::Relaxed)
         }
     }
 
     impl ProposalIdFetcher for MockProposalIdFetcher {
         async fn get_proposal_id(&self, block_id: u64) -> Result<u64, Error> {
-            let mut count = self.call_count.borrow_mut();
-            *count += 1;
+            self.call_count.fetch_add(1, Ordering::Relaxed);
 
             let idx = block_id as usize;
             if idx < self.proposal_ids.len() {
