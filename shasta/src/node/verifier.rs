@@ -1,7 +1,9 @@
 use super::proposal_manager::ProposalManager;
 use crate::{
-    l1::execution_layer::ExecutionLayer, l2::taiko::Taiko, metrics::Metrics,
-    node::get_l2_height_from_l1, node::proposal_manager::proposal::Proposals,
+    l1::execution_layer::ExecutionLayer,
+    l2::taiko::Taiko,
+    metrics::Metrics,
+    node::{LastSafeL2BlockFinder, proposal_manager::proposal::Proposals},
 };
 use alloy::primitives::B256;
 use anyhow::Error;
@@ -30,6 +32,7 @@ pub struct Verifier {
     verification_slot: Slot,
     verifier_thread: Option<VerifierThread>,
     verifier_thread_handle: Option<JoinHandle<Result<Proposals, Error>>>,
+    last_safe_l2_block_finder: Arc<LastSafeL2BlockFinder>,
 }
 
 struct VerifierThread {
@@ -46,6 +49,7 @@ impl Verifier {
         proposal_manager: ProposalManager,
         verification_slot: Slot,
         cancel_token: CancellationToken,
+        last_safe_l2_block_finder: Arc<LastSafeL2BlockFinder>,
     ) -> Result<Self, Error> {
         let hash = taiko.get_l2_block_hash(taiko_geth_height).await?;
         debug!(
@@ -65,6 +69,7 @@ impl Verifier {
             }),
             verification_slot,
             verifier_thread_handle: None,
+            last_safe_l2_block_finder,
         })
     }
 
@@ -94,7 +99,6 @@ impl Verifier {
     pub async fn verify(
         &mut self,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-        taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
     ) -> Result<VerificationResult, Error> {
         if let Some(handle) = self.verifier_thread_handle.as_mut() {
@@ -110,7 +114,7 @@ impl Verifier {
                         Ok(VerificationResult::SuccessWithProposals(proposals))
                     }
                     Err(err) => {
-                        let taiko_inbox_height = get_l2_height_from_l1(ethereum_l1, taiko).await?;
+                        let taiko_inbox_height = self.last_safe_l2_block_finder.get().await?;
                         Ok(VerificationResult::ReanchorNeeded(
                             taiko_inbox_height,
                             format!("Verifier return an error: {err}"),
@@ -132,7 +136,7 @@ impl Verifier {
                 return Ok(VerificationResult::SlotNotValid);
             }
 
-            let taiko_inbox_height = get_l2_height_from_l1(ethereum_l1, taiko).await?;
+            let taiko_inbox_height = self.last_safe_l2_block_finder.get().await?;
             self.start_verification_thread(taiko_inbox_height, metrics)
                 .await;
 
