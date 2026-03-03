@@ -53,12 +53,7 @@ impl LastSafeL2BlockFinder {
 
             // Check cache
             {
-                let cache = self.cache.read().map_err(|e| {
-                    anyhow::anyhow!(
-                        "LastSafeL2Block::Failed to acquire read lock on cache: {}",
-                        e
-                    )
-                })?;
+                let cache = self.cache.read().await;
                 if let Some(&block_id) = cache.get(&target_proposal_id) {
                     tracing::debug!(
                         "LastSafeL2Block::get(): Cache hit for proposal_id {}: block_id {}",
@@ -76,12 +71,7 @@ impl LastSafeL2BlockFinder {
             // Clear cache entries that are now outdated (below the safe proposal id)
             self.clear_cache(result.safe_proposal_id).await?;
             // Store result in cache
-            let mut cache = self.cache.write().map_err(|e| {
-                anyhow::anyhow!(
-                    "LastSafeL2Block::Failed to acquire write lock on cache: {}",
-                    e
-                )
-            })?;
+            let mut cache = self.cache.write().await;
             cache.insert(target_proposal_id, result.block_id);
             tracing::debug!(
                 "LastSafeL2Block::get(): Cached block {} for proposal_id {}",
@@ -93,13 +83,8 @@ impl LastSafeL2BlockFinder {
         }
     }
 
-    fn clear_cache(&self, safe_proposal_id: u64) -> Result<(), Error> {
-        let mut cache = self.cache.write().map_err(|e| {
-            anyhow::anyhow!(
-                "LastSafeL2Block::Failed to acquire write lock on cache: {}",
-                e
-            )
-        })?;
+    async fn clear_cache(&self, safe_proposal_id: u64) -> Result<(), Error> {
+        let mut cache = self.cache.write().await;
         let removed_count = cache.len();
         cache.retain(|&key, _| key >= safe_proposal_id);
         tracing::debug!(
