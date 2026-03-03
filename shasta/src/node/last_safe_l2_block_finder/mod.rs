@@ -1,10 +1,17 @@
 use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
 use anyhow::Error;
 use common::l1::ethereum_l1::EthereumL1;
-use std::{collections::HashMap, sync::Arc, sync::RwLock};
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::RwLock;
 
 mod binary_search_last_block;
 use binary_search_last_block::{ProposalIdFetcher, binary_search_last_block};
+
+struct FindBlockResult {
+    pub block_id: u64,
+    pub safe_proposal_id: u64,
+}
+
 pub struct LastSafeL2BlockFinder {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     taiko: Arc<Taiko>,
@@ -66,6 +73,8 @@ impl LastSafeL2BlockFinder {
                 .find_last_block_for_proposal_id(target_proposal_id)
                 .await?;
 
+            // Clear cache entries that are now outdated (below the safe proposal id)
+            self.clear_cache(result.safe_proposal_id).await?;
             // Store result in cache
             let mut cache = self.cache.write().map_err(|e| {
                 anyhow::anyhow!(
@@ -73,25 +82,50 @@ impl LastSafeL2BlockFinder {
                     e
                 )
             })?;
-            cache.insert(target_proposal_id, result);
+            cache.insert(target_proposal_id, result.block_id);
             tracing::debug!(
                 "LastSafeL2Block::get(): Cached block {} for proposal_id {}",
-                result,
+                result.block_id,
                 target_proposal_id
             );
 
-            Ok(result)
+            Ok(result.block_id)
         }
     }
 
-    async fn find_last_block_for_proposal_id(&self, target_proposal_id: u64) -> Result<u64, Error> {
+    fn clear_cache(&self, safe_proposal_id: u64) -> Result<(), Error> {
+        let mut cache = self.cache.write().map_err(|e| {
+            anyhow::anyhow!(
+                "LastSafeL2Block::Failed to acquire write lock on cache: {}",
+                e
+            )
+        })?;
+        let removed_count = cache.len();
+        cache.retain(|&key, _| key >= safe_proposal_id);
+        tracing::debug!(
+            "LastSafeL2Block::clear_cache(): Removed {} entries below proposal_id {}",
+            removed_count - cache.len(),
+            safe_proposal_id
+        );
+        Ok(())
+    }
+
+    async fn find_last_block_for_proposal_id(
+        &self,
+        target_proposal_id: u64,
+    ) -> Result<FindBlockResult, Error> {
         // Fast path: try direct lookup via Taiko
         match self
             .taiko
             .get_last_block_id_by_batch_id(target_proposal_id)
             .await
         {
-            Ok(block_id) => return Ok(block_id),
+            Ok(block_id) => {
+                return Ok(FindBlockResult {
+                    block_id,
+                    safe_proposal_id: target_proposal_id,
+                });
+            }
             Err(err) => {
                 tracing::warn!(
                     "LastSafeL2Block::find_last_block_for_proposal_id(): Failed to get last block id by batch id: {}",
@@ -128,7 +162,10 @@ impl LastSafeL2BlockFinder {
                 last_block_id,
                 target_proposal_id
             );
-            return Ok(last_block_id);
+            return Ok(FindBlockResult {
+                block_id: last_block_id,
+                safe_proposal_id: last_known_safe_proposal_id,
+            });
         }
 
         if target_proposal_id < last_known_safe_proposal_id || target_proposal_id > last_proposal_id
@@ -139,21 +176,6 @@ impl LastSafeL2BlockFinder {
                 last_known_safe_proposal_id,
                 last_proposal_id
             ));
-        }
-
-        // Clean up cache once: remove all keys less than last_known_safe_proposal_id
-        {
-            let mut cache = self.cache.write().map_err(|e| {
-                anyhow::anyhow!(
-                    "LastSafeL2Block::Failed to acquire write lock on cache: {}",
-                    e
-                )
-            })?;
-            cache.retain(|&key, _| key >= last_known_safe_proposal_id);
-            tracing::debug!(
-                "LastSafeL2Block::find_last_block_for_proposal_id(): Cleaned cache: removed entries < {}",
-                last_known_safe_proposal_id
-            );
         }
 
         // Binary search for the last block with target_proposal_id or last block of previous proposal_id
@@ -171,7 +193,10 @@ impl LastSafeL2BlockFinder {
                 block_id,
                 target_proposal_id
             );
-            return Ok(block_id);
+            return Ok(FindBlockResult {
+                block_id,
+                safe_proposal_id: last_known_safe_proposal_id,
+            });
         }
 
         Err(anyhow::anyhow!(
