@@ -2,6 +2,7 @@ use crate::node::operator::status::Status as OperatorStatus;
 use crate::node::{config::NodeConfig, operator::Operator};
 use anyhow::Error;
 use common::l1::traits::ELTrait;
+use common::shared::l2_block_v2::L2BlockV2;
 use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::{
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
@@ -9,15 +10,15 @@ use common::{
     shared::{l2_slot_info_v2::L2SlotInfoV2, l2_tx_lists::PreBuiltTxList},
     utils::{self as common_utils, cancellation_token::CancellationToken},
 };
-use shasta::{
-    ProposalManager, l1::execution_layer::ExecutionLayer as ShastaExecutionLayer, l2::taiko::Taiko,
-};
+use proposal_manager::ProposalManager;
+use shasta::{l1::execution_layer::ExecutionLayer as ShastaExecutionLayer, l2::taiko::Taiko};
 use std::sync::Arc;
 use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 use tokio::{sync::mpsc::Receiver, time::Duration};
 use tracing::{debug, error, info, warn};
 pub mod config;
 pub mod operator;
+pub(crate) mod proposal_manager;
 
 pub struct Node {
     cancel_token: CancellationToken,
@@ -105,21 +106,7 @@ impl Node {
                 .map_err(|e| anyhow::anyhow!("Failed to post preconfirmation: {}", e))?;
         }
 
-        let tx_in_progress = self
-            .ethereum_l1
-            .execution_layer
-            .is_transaction_in_progress()
-            .await?;
-
-        if !tx_in_progress
-            && let Err(err) = self
-                .proposal_manager
-                .try_submit_oldest_proposal(
-                    current_status.is_preconfer(),
-                    l2_slot_info.slot_timestamp(),
-                )
-                .await
-        {
+        if let Err(err) = self.proposal_manager.try_submit_oldest_proposal().await {
             if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
                 self.handle_transaction_error(transaction_error).await?;
             } else {
@@ -131,7 +118,7 @@ impl Node {
     }
 
     async fn post_preconfirmation(
-        &self,
+        &mut self,
         l2_slot_info: L2SlotInfoV2,
         pending_tx_list: Option<PreBuiltTxList>,
     ) -> Result<(), Error> {
@@ -142,21 +129,14 @@ impl Node {
             }
         };
 
-        let last_anchor_id = self
-            .taiko
-            .l2_execution_layer()
-            .get_anchor_block_id_from_geth(l2_slot_info.parent_id())
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get last anchor id from Taiko geth: {}", e))?;
-        let anchor_block_id =
-            common::shared::anchor_block_info::AnchorBlockInfo::calculate_anchor_block_id(
-                self.ethereum_l1.execution_layer.common(),
-                self.config.l1_height_lag,
-                last_anchor_id,
-                self.config.min_anchor_offset,
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to calculate anchor block id: {}", e))?;
+        // Reuse the current proposal's anchor block ID, or compute a new one
+        let anchor_block_id = if let Some(id) = self.proposal_manager.current_anchor_block_id() {
+            id
+        } else {
+            let id = self.calculate_anchor_block_id(&l2_slot_info).await?;
+            self.proposal_manager.create_proposal(id);
+            id
+        };
 
         let anchor_block_info = self
             .ethereum_l1
@@ -180,11 +160,11 @@ impl Node {
             .map_err(|e| anyhow::anyhow!("Failed to construct anchor tx: {}", e))?;
 
         let tx_list = std::iter::once(anchor_tx)
-            .chain(pending_tx_list.tx_list.into_iter())
+            .chain(pending_tx_list.tx_list.iter().cloned())
             .collect::<Vec<_>>();
 
         let l2_slot_context = L2SlotContext {
-            info: l2_slot_info,
+            info: l2_slot_info.clone(),
             end_of_sequencing: false,
         };
         let response = self
@@ -205,7 +185,33 @@ impl Node {
             response.tx_list_hash, response.commitment_hash
         );
 
+        let l2_block = L2BlockV2::new_from(
+            pending_tx_list,
+            l2_slot_info.slot_timestamp(),
+            self.config.coinbase,
+            anchor_block_id,
+            l2_slot_info.parent_gas_limit_without_anchor(),
+        );
+        self.proposal_manager.add_l2_block(l2_block);
+
         Ok(())
+    }
+
+    async fn calculate_anchor_block_id(&self, l2_slot_info: &L2SlotInfoV2) -> Result<u64, Error> {
+        let last_anchor_id = self
+            .taiko
+            .l2_execution_layer()
+            .get_anchor_block_id_from_geth(l2_slot_info.parent_id())
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get last anchor id from Taiko geth: {}", e))?;
+        common::shared::anchor_block_info::AnchorBlockInfo::calculate_anchor_block_id(
+            self.ethereum_l1.execution_layer.common(),
+            self.config.l1_height_lag,
+            last_anchor_id,
+            self.config.min_anchor_offset,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to calculate anchor block id: {}", e))
     }
 
     async fn get_slot_info_and_status(

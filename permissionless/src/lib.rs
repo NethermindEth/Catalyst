@@ -5,6 +5,7 @@ mod registration;
 mod utils;
 
 use crate::node::config::NodeConfig;
+use crate::node::proposal_manager::ProposalManager;
 use crate::utils::config::Config as PermissionlessConfig;
 use anyhow::Error;
 use common::{
@@ -22,9 +23,7 @@ use common::{
     utils::cancellation_token::CancellationToken,
 };
 use shasta::l1::execution_layer::ExecutionLayer as ShastaExecutionLayer;
-use shasta::{
-    ProposalManager, l1::config::EthereumL1Config as ShastaEthereumL1Config, l2::taiko::Taiko,
-};
+use shasta::{l1::config::EthereumL1Config as ShastaEthereumL1Config, l2::taiko::Taiko};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -109,19 +108,7 @@ pub async fn create_permissionless_node(
         proposal_max_time_sec: config.proposal_max_time_sec,
     };
 
-    let proposal_manager = ProposalManager::new(
-        permissionless_config.l1_height_lag,
-        config.min_anchor_offset,
-        batch_builder_config,
-        ethereum_l1.clone(),
-        taiko.clone(),
-        metrics.clone(),
-        cancel_token.clone(),
-        permissionless_config.max_blocks_to_reanchor,
-        permissionless_config.propose_forced_inclusion,
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!("Failed to create ProposalManager: {}", e))?;
+    let proposal_manager = ProposalManager::new(batch_builder_config, ethereum_l1.clone());
 
     let preconfirmation_driver = Arc::new(
         l2::preconfirmation_driver::PreconfirmationDriver::new_with_timeout(
