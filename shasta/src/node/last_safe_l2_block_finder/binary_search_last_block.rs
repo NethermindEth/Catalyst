@@ -43,7 +43,7 @@ pub async fn binary_search_last_block<F: ProposalIdFetcher>(
     }
 
     tracing::debug!(
-        "LastSafeL2Block::binary_search_last_block(): Block proposal_id binary search completed in {} ms, found block {:?} for target proposal_id {}",
+        "LastSafeL2BlockFinder::binary_search_last_block(): Block proposal_id binary search completed in {} ms, found block {:?} for target proposal_id {}",
         start.elapsed().as_millis(),
         result,
         target_proposal_id
