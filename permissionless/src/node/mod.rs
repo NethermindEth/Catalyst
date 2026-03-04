@@ -113,17 +113,17 @@ impl Node {
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to preconfirm block: {}", e))?;
             }
-        }
 
-        if let Err(err) = self
-            .proposal_manager
-            .try_submit_oldest_proposal(true, l2_slot_ctx.info.slot_timestamp())
-            .await
-        {
-            if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
-                self.handle_transaction_error(transaction_error).await?;
-            } else {
-                return Err(err);
+            if let Err(err) = self
+                .proposal_manager
+                .try_submit_oldest_proposal(true, l2_slot_ctx.info.slot_timestamp())
+                .await
+            {
+                if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
+                    self.handle_transaction_error(transaction_error).await?;
+                } else {
+                    return Err(err);
+                }
             }
         }
 
