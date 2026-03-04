@@ -56,7 +56,7 @@ impl BlockAdvancer for PermissionlessBlockAdvancer {
                 .map_err(|e| anyhow::anyhow!("Failed to construct anchor tx: {}", e))?;
 
             let tx_list = std::iter::once(anchor_tx)
-                .chain(l2_block_payload.tx_list.into_iter())
+                .chain(l2_block_payload.tx_list)
                 .collect::<Vec<_>>();
 
             let response = self

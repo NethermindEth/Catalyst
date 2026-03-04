@@ -122,7 +122,7 @@ pub async fn create_permissionless_node(
         preconfirmation_driver.clone(),
         taiko.clone(),
         preconfer_address,
-        permissionless_config.sequencer_key.clone(),
+        permissionless_config.sequencer_key,
     ));
 
     let proposal_manager = ProposalManager::new(
