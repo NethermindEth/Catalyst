@@ -32,7 +32,7 @@ impl OperatorsCache {
         }
     }
 
-    pub async fn get_operators_for_current_and_next_slot(
+    pub async fn get_operators_for_current_and_next_epoch(
         &self,
         current_epoch_timestamp: u64,
         current_slot_timestamp: u64,
@@ -44,7 +44,7 @@ impl OperatorsCache {
             return Ok(addresses);
         }
         let (result, should_cache) = self
-            .get_operators_for_current_and_next_slot_internal(
+            .get_operators_for_current_and_next_epoch_internal(
                 current_slot_timestamp,
                 current_epoch_timestamp,
             )
@@ -55,13 +55,13 @@ impl OperatorsCache {
         Ok(result)
     }
 
-    async fn get_operators_for_current_and_next_slot_internal(
+    async fn get_operators_for_current_and_next_epoch_internal(
         &self,
         current_slot_timestamp: u64,
         current_epoch_timestamp: u64,
     ) -> Result<((Address, Address), bool), OperatorError> {
         tracing::trace!(
-            "get_operators_for_current_and_next_slot_internal, for slot timestamp: {}, epoch timestamp: {}",
+            "get_operators_for_current_and_next_epoch_internal, for slot timestamp: {}, epoch timestamp: {}",
             current_slot_timestamp,
             current_epoch_timestamp
         );

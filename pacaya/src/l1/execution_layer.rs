@@ -456,13 +456,13 @@ impl PreconfOperator for ExecutionLayer {
         self.common().preconfer_address()
     }
 
-    async fn get_operators_for_current_and_next_slot(
+    async fn get_operators_for_current_and_next_epoch(
         &self,
         current_epoch_timestamp: u64,
         current_slot_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
         self.operators_cache
-            .get_operators_for_current_and_next_slot(
+            .get_operators_for_current_and_next_epoch(
                 current_epoch_timestamp,
                 current_slot_timestamp,
             )
