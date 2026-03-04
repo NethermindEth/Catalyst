@@ -1,3 +1,4 @@
+pub mod block_advancer;
 pub mod config;
 mod last_safe_l2_block_finder;
 pub mod proposal_manager;
@@ -84,12 +85,19 @@ impl Node {
         );
         let head_verifier = HeadVerifier::default();
 
+        let block_advancer = Arc::new(block_advancer::ShastaBlockAdvancer::new(
+            taiko.l2_execution_layer(),
+            taiko.get_protocol_config().clone(),
+            taiko.get_driver(),
+        ));
+
         let proposal_manager = ProposalManager::new(
             config.l1_height_lag,
             config.min_anchor_offset,
             batch_builder_config,
             ethereum_l1.clone(),
             taiko.clone(),
+            block_advancer,
             metrics.clone(),
             cancel_token.clone(),
             config.max_blocks_to_reanchor,

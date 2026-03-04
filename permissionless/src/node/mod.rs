@@ -1,7 +1,6 @@
 use crate::node::operator::status::Status as OperatorStatus;
 use crate::node::{config::NodeConfig, operator::Operator};
 use anyhow::Error;
-use common::l1::traits::ELTrait;
 use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::{
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
@@ -13,15 +12,19 @@ use shasta::{
     ProposalManager, l1::execution_layer::ExecutionLayer as ShastaExecutionLayer, l2::taiko::Taiko,
 };
 use std::sync::Arc;
-use tokio::{sync::mpsc::Receiver, time::Duration};
+use tokio::{
+    sync::mpsc::{Receiver, error::TryRecvError},
+    time::Duration,
+};
 use tracing::{debug, error, info, warn};
+pub mod block_advancer;
 pub mod config;
 pub mod operator;
 
 pub struct Node {
     cancel_token: CancellationToken,
     ethereum_l1: Arc<EthereumL1<ShastaExecutionLayer>>,
-    _transaction_error_channel: Receiver<TransactionError>,
+    transaction_error_channel: Receiver<TransactionError>,
     _metrics: Arc<Metrics>,
     watchdog: common_utils::watchdog::Watchdog,
     config: NodeConfig,
@@ -49,7 +52,7 @@ impl Node {
         Ok(Self {
             cancel_token,
             ethereum_l1,
-            _transaction_error_channel: transaction_error_channel,
+            transaction_error_channel,
             _metrics: metrics,
             watchdog,
             config,
@@ -98,86 +101,45 @@ impl Node {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
 
-        if current_status.is_preconfer() {
-            self.post_preconfirmation(l2_slot_info.clone(), pending_tx_list)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to post preconfirmation: {}", e))?;
-        }
+        let l2_slot_ctx = L2SlotContext {
+            info: l2_slot_info,
+            end_of_sequencing: false,
+        };
 
-        let tx_in_progress = self
+        // Get the transaction status before checking the error channel
+        // to avoid race condition
+        let transaction_in_progress = self
             .ethereum_l1
             .execution_layer
             .is_transaction_in_progress()
             .await?;
 
-        if !tx_in_progress
-            && let Err(err) = self
+        self.check_transaction_error_channel().await?;
+
+        if current_status.is_preconfer() {
+            if self
                 .proposal_manager
-                .try_submit_oldest_proposal(
-                    current_status.is_preconfer(),
-                    l2_slot_info.slot_timestamp(),
-                )
-                .await
-        {
-            if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
-                self.handle_transaction_error(transaction_error).await?;
-            } else {
-                return Err(err);
+                .should_new_block_be_created(&pending_tx_list, &l2_slot_ctx)
+            {
+                self.proposal_manager
+                    .preconfirm_block(pending_tx_list, &l2_slot_ctx)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to preconfirm block: {}", e))?;
+            }
+
+            if !transaction_in_progress
+                && let Err(err) = self
+                    .proposal_manager
+                    .try_submit_oldest_proposal(true, l2_slot_ctx.info.slot_timestamp())
+                    .await
+            {
+                if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
+                    self.handle_transaction_error(transaction_error).await?;
+                } else {
+                    return Err(err);
+                }
             }
         }
-
-        Ok(())
-    }
-
-    async fn post_preconfirmation(
-        &self,
-        l2_slot_info: L2SlotInfoV2,
-        pending_tx_list: Option<PreBuiltTxList>,
-    ) -> Result<(), Error> {
-        let pending_tx_list = match pending_tx_list {
-            Some(tx_list) => tx_list,
-            None => {
-                return Ok(());
-            }
-        };
-
-        let last_anchor_id = self
-            .taiko
-            .l2_execution_layer()
-            .get_anchor_block_id_from_geth(l2_slot_info.parent_id())
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get last anchor id from Taiko geth: {}", e))?;
-        let anchor_block_id =
-            common::shared::anchor_block_info::AnchorBlockInfo::calculate_anchor_block_id(
-                self.ethereum_l1.execution_layer.common(),
-                self.config.l1_height_lag,
-                last_anchor_id,
-                self.config.min_anchor_offset,
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to calculate anchor block id: {}", e))?;
-
-        let l2_slot_context = L2SlotContext {
-            info: l2_slot_info,
-            end_of_sequencing: false,
-        };
-        let response = self
-            .operator
-            .preconfirmation_driver()
-            .post_preconf_requests(
-                &l2_slot_context,
-                &pending_tx_list.tx_list,
-                self.config.coinbase,
-                anchor_block_id,
-                &self.config.sequencer_key,
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to post preconfirmation requests: {}", e))?;
-
-        info!(
-            "Published preconfirmation: tx_list= {}, commitment= {}",
-            response.tx_list_hash, response.commitment_hash
-        );
 
         Ok(())
     }
@@ -271,6 +233,25 @@ impl Node {
                 "Unknown".to_string()
             },
         );
+        Ok(())
+    }
+
+    async fn check_transaction_error_channel(&mut self) -> Result<(), Error> {
+        match self.transaction_error_channel.try_recv() {
+            Ok(error) => {
+                return self.handle_transaction_error(&error).await;
+            }
+            Err(err) => match err {
+                TryRecvError::Empty => {
+                    // no errors, proceed with preconfirmation
+                }
+                TryRecvError::Disconnected => {
+                    self.cancel_token.cancel_on_critical_error();
+                    return Err(anyhow::anyhow!("Transaction error channel disconnected"));
+                }
+            },
+        }
+
         Ok(())
     }
 
