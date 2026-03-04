@@ -32,7 +32,7 @@ impl OperatorsCache {
         }
     }
 
-    pub async fn get_operators_for_current_and_next_epoch(
+    pub async fn get_operators_for_current_and_next_slot(
         &self,
         current_epoch_timestamp: u64,
         current_slot_timestamp: u64,
@@ -43,21 +43,28 @@ impl OperatorsCache {
         {
             return Ok(addresses);
         }
-        let result = self
-            .get_operators_for_current_and_next_epoch_internal(current_epoch_timestamp)
+        let (result, should_cache) = self
+            .get_operators_for_current_and_next_slot_internal(
+                current_slot_timestamp,
+                current_epoch_timestamp,
+            )
             .await?;
-        if let Ok(mut guard) = self.cache.write() {
-            *guard = Some((current_slot_timestamp, result));
+        if should_cache {
+            if let Ok(mut guard) = self.cache.write() {
+                *guard = Some((current_slot_timestamp, result));
+            }
         }
         Ok(result)
     }
 
-    async fn get_operators_for_current_and_next_epoch_internal(
+    async fn get_operators_for_current_and_next_slot_internal(
         &self,
+        current_slot_timestamp: u64,
         current_epoch_timestamp: u64,
-    ) -> Result<(Address, Address), OperatorError> {
+    ) -> Result<((Address, Address), bool), OperatorError> {
         tracing::trace!(
-            "get_operators_for_current_and_next_epoch_internal, for timestamp: {}",
+            "get_operators_for_current_and_next_slot_internal, for slot timestamp: {}, epoch timestamp: {}",
+            current_slot_timestamp,
             current_epoch_timestamp
         );
         let contract = PreconfWhitelist::new(self.whitelist_address, &self.provider);
@@ -111,9 +118,6 @@ impl OperatorsCache {
         let block: alloy::rpc::types::Block = serde_json::from_value(block_result)
             .map_err(|e| OperatorError::Any(Error::msg(format!("Failed to parse block: {e}"))))?;
         let latest_block_timestamp = block.header.timestamp;
-        if latest_block_timestamp < current_epoch_timestamp {
-            return Err(OperatorError::OperatorCheckTooEarly);
-        }
 
         let current_operator_result: serde_json::Value =
             current_operator_waiter.await.map_err(|e| {
@@ -176,7 +180,23 @@ impl OperatorsCache {
                 )))
             })?;
 
-        Ok((current_operator, next_operator))
+        // check for epoch boundaries and return the next_operator as the current
+        if latest_block_timestamp < current_epoch_timestamp {
+            tracing::debug!("Epoch boundary: using the next_operator as current operator");
+            return Ok(((next_operator, next_operator), false));
+        }
+
+        // if rpc is behind the current slot, return the operator data but don't cache it
+        if latest_block_timestamp < current_slot_timestamp {
+            tracing::debug!(
+                "RPC behind current slot (latest: {}, current: {}), not caching operator data",
+                latest_block_timestamp,
+                current_slot_timestamp
+            );
+            return Ok(((current_operator, next_operator), false));
+        }
+
+        Ok(((current_operator, next_operator), true))
     }
 
     /// cached as constant since function has no parameters

@@ -5,7 +5,7 @@ use std::future::Future;
 
 pub trait PreconfOperator {
     fn get_preconfer_address(&self) -> Address;
-    fn get_operators_for_current_and_next_epoch(
+    fn get_operators_for_current_and_next_slot(
         &self,
         current_epoch_timestamp: u64,
         current_slot_timestamp: u64,

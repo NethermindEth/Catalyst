@@ -143,13 +143,13 @@ impl PreconfOperator for ExecutionLayer {
         self.common().preconfer_address()
     }
 
-    async fn get_operators_for_current_and_next_epoch(
+    async fn get_operators_for_current_and_next_slot(
         &self,
         current_epoch_timestamp: u64,
         current_slot_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
         self.operators_cache
-            .get_operators_for_current_and_next_epoch(
+            .get_operators_for_current_and_next_slot(
                 current_epoch_timestamp,
                 current_slot_timestamp,
             )
