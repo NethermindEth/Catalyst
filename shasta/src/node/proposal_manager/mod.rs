@@ -1,4 +1,5 @@
 mod batch_builder;
+pub mod block_advancer;
 pub mod l2_block_payload;
 pub mod proposal;
 
@@ -23,12 +24,14 @@ use tracing::{debug, error, info, warn};
 
 use crate::forced_inclusion::ForcedInclusion;
 use crate::node::L2SlotInfoV2;
+use block_advancer::BlockAdvancer;
 use proposal::Proposals;
 
 pub struct ProposalManager {
     batch_builder: BatchBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
+    block_advancer: Arc<dyn BlockAdvancer>,
     l1_height_lag: u64,
     min_anchor_offset: u64,
     forced_inclusion: ForcedInclusion,
@@ -46,6 +49,7 @@ impl ProposalManager {
         config: BatchBuilderConfig,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
+        block_advancer: Arc<dyn BlockAdvancer>,
         metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
         max_blocks_to_reanchor: u64,
@@ -77,6 +81,7 @@ impl ProposalManager {
             ),
             ethereum_l1,
             taiko,
+            block_advancer,
             l1_height_lag,
             min_anchor_offset,
             forced_inclusion,
@@ -176,7 +181,7 @@ impl ProposalManager {
 
             let payload = self.batch_builder.add_fi_block(fi_block, anchor_params)?;
             match self
-                .taiko
+                .block_advancer
                 .advance_head_to_new_l2_block(payload, l2_slot_context, operation_type)
                 .await
             {
@@ -274,7 +279,7 @@ impl ProposalManager {
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
 
         match self
-            .taiko
+            .block_advancer
             .advance_head_to_new_l2_block(payload, l2_slot_context, operation_type)
             .await
         {
@@ -523,6 +528,7 @@ impl ProposalManager {
             batch_builder: self.batch_builder.clone_without_batches(),
             ethereum_l1: self.ethereum_l1.clone(),
             taiko: self.taiko.clone(),
+            block_advancer: self.block_advancer.clone(),
             l1_height_lag: self.l1_height_lag,
             min_anchor_offset: self.min_anchor_offset,
             forced_inclusion: ForcedInclusion::new_with_index(self.ethereum_l1.clone(), fi_head),

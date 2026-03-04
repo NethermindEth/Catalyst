@@ -4,8 +4,8 @@ mod node;
 mod registration;
 mod utils;
 
+use crate::node::block_advancer::PermissionlessBlockAdvancer;
 use crate::node::config::NodeConfig;
-use crate::node::proposal_manager::ProposalManager;
 use crate::utils::config::Config as PermissionlessConfig;
 use anyhow::Error;
 use common::{
@@ -23,7 +23,9 @@ use common::{
     utils::cancellation_token::CancellationToken,
 };
 use shasta::l1::execution_layer::ExecutionLayer as ShastaExecutionLayer;
-use shasta::{l1::config::EthereumL1Config as ShastaEthereumL1Config, l2::taiko::Taiko};
+use shasta::{
+    ProposalManager, l1::config::EthereumL1Config as ShastaEthereumL1Config, l2::taiko::Taiko,
+};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -108,8 +110,6 @@ pub async fn create_permissionless_node(
         proposal_max_time_sec: config.proposal_max_time_sec,
     };
 
-    let proposal_manager = ProposalManager::new(batch_builder_config, ethereum_l1.clone());
-
     let preconfirmation_driver = Arc::new(
         l2::preconfirmation_driver::PreconfirmationDriver::new_with_timeout(
             &permissionless_config.preconfirmation_driver_url,
@@ -117,6 +117,29 @@ pub async fn create_permissionless_node(
         )
         .map_err(|e| anyhow::anyhow!("Failed to create PreconfirmationDriver: {}", e))?,
     );
+
+    let block_advancer = Arc::new(PermissionlessBlockAdvancer::new(
+        preconfirmation_driver.clone(),
+        taiko.clone(),
+        preconfer_address,
+        permissionless_config.sequencer_key.clone(),
+    ));
+
+    let proposal_manager = ProposalManager::new(
+        permissionless_config.l1_height_lag,
+        config.min_anchor_offset,
+        batch_builder_config,
+        ethereum_l1.clone(),
+        taiko.clone(),
+        block_advancer,
+        metrics.clone(),
+        cancel_token.clone(),
+        permissionless_config.max_blocks_to_reanchor,
+        false,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to create ProposalManager: {}", e))?;
+
     let operator = crate::node::operator::Operator::new(preconfirmation_driver, preconfer_address);
 
     let node = node::Node::new(
@@ -126,10 +149,6 @@ pub async fn create_permissionless_node(
         metrics,
         NodeConfig {
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-            coinbase: preconfer_address,
-            l1_height_lag: permissionless_config.l1_height_lag,
-            min_anchor_offset: config.min_anchor_offset,
-            sequencer_key: permissionless_config.sequencer_key,
             watchdog_max_counter: config.watchdog_max_counter,
         },
         operator,
