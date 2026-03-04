@@ -38,7 +38,7 @@ mod tests {
             PRECONFER_ADDRESS
         }
 
-        async fn get_operators_for_current_and_next_epoch(
+        async fn get_operators_for_current_and_next_slot(
             &self,
             _: u64,
             _: u64,
@@ -65,7 +65,7 @@ mod tests {
             PRECONFER_ADDRESS
         }
 
-        async fn get_operators_for_current_and_next_epoch(
+        async fn get_operators_for_current_and_next_slot(
             &self,
             _: u64,
             _: u64,
@@ -654,7 +654,7 @@ mod tests {
             PRECONFER_ADDRESS
         }
 
-        async fn get_operators_for_current_and_next_epoch(
+        async fn get_operators_for_current_and_next_slot(
             &self,
             _: u64,
             _: u64,
