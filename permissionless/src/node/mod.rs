@@ -98,12 +98,12 @@ impl Node {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
 
-        if current_status.is_preconfer() {
-            let l2_slot_ctx = L2SlotContext {
-                info: l2_slot_info,
-                end_of_sequencing: false,
-            };
+        let l2_slot_ctx = L2SlotContext {
+            info: l2_slot_info,
+            end_of_sequencing: false,
+        };
 
+        if current_status.is_preconfer() {
             if self
                 .proposal_manager
                 .should_new_block_be_created(&pending_tx_list, &l2_slot_ctx)
@@ -117,7 +117,7 @@ impl Node {
 
         if let Err(err) = self
             .proposal_manager
-            .try_submit_oldest_proposal(false, 0)
+            .try_submit_oldest_proposal(true, l2_slot_ctx.info.slot_timestamp())
             .await
         {
             if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
