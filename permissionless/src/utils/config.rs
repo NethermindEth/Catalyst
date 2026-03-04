@@ -127,6 +127,24 @@ impl ConfigTrait for Config {
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Contract addresses: {:#?}", self.contract_addresses)?;
+        writeln!(
+            f,
+            "Preconfirmation driver URL: {}",
+            self.preconfirmation_driver_url
+        )?;
+        writeln!(
+            f,
+            "Preconfirmation driver timeout: {:?}",
+            self.preconfirmation_driver_timeout
+        )?;
+        writeln!(f, "Shasta inbox: {}", self.shasta_inbox)?;
+        writeln!(f, "L1 height lag: {}", self.l1_height_lag)?;
+        writeln!(f, "Max blocks to reanchor: {}", self.max_blocks_to_reanchor)?;
+        writeln!(
+            f,
+            "Propose forced inclusion: {}",
+            self.propose_forced_inclusion
+        )?;
 
         Ok(())
     }
