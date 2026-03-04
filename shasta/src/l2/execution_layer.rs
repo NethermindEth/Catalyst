@@ -154,8 +154,19 @@ impl L2ExecutionLayer {
             .await
     }
 
+    pub async fn get_latest_block_id_and_proposal_id(&self) -> Result<(u64, u64), Error> {
+        let block = self
+            .common
+            .get_block_header(BlockNumberOrTag::Latest)
+            .await?;
+        let block_id = block.header.number;
+        let proposal_id =
+            super::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
+        Ok((block_id, proposal_id))
+    }
+
     pub async fn get_proposal_id_from_geth(&self, block: BlockNumberOrTag) -> Result<u64, Error> {
-        let block = self.common.get_block_with_txs(block).await?;
+        let block = self.common.get_block_header(block).await?;
         let proposal_id =
             super::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
         Ok(proposal_id)
