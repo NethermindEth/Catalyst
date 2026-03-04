@@ -117,6 +117,10 @@ impl OperatorsCache {
             .map_err(|e| OperatorError::Any(Error::msg(format!("Failed to parse block: {e}"))))?;
         let latest_block_timestamp = block.header.timestamp;
 
+        if latest_block_timestamp < current_epoch_timestamp {
+            return Err(OperatorError::OperatorCheckTooEarly);
+        }
+
         let current_operator_result: serde_json::Value =
             current_operator_waiter.await.map_err(|e| {
                 OperatorError::Any(Error::msg(format!(
@@ -177,12 +181,6 @@ impl OperatorsCache {
                     "Failed to decode next operator response: {e}"
                 )))
             })?;
-
-        // check for epoch boundaries and return the next_operator as the current
-        if latest_block_timestamp < current_epoch_timestamp {
-            tracing::debug!("Epoch boundary: using the next_operator as current operator");
-            return Ok(((next_operator, next_operator), false));
-        }
 
         // if rpc is behind the current slot, return the operator data but don't cache it
         if latest_block_timestamp < current_slot_timestamp {
