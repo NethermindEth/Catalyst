@@ -135,7 +135,7 @@ pub async fn create_permissionless_node(
         metrics.clone(),
         cancel_token.clone(),
         permissionless_config.max_blocks_to_reanchor,
-        false,
+        permissionless_config.propose_forced_inclusion,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create ProposalManager: {}", e))?;

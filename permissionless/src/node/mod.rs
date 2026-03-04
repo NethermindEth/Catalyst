@@ -12,7 +12,10 @@ use shasta::{
     ProposalManager, l1::execution_layer::ExecutionLayer as ShastaExecutionLayer, l2::taiko::Taiko,
 };
 use std::sync::Arc;
-use tokio::{sync::mpsc::Receiver, time::Duration};
+use tokio::{
+    sync::mpsc::{Receiver, error::TryRecvError},
+    time::Duration,
+};
 use tracing::{debug, error, info, warn};
 pub mod block_advancer;
 pub mod config;
@@ -21,7 +24,7 @@ pub mod operator;
 pub struct Node {
     cancel_token: CancellationToken,
     ethereum_l1: Arc<EthereumL1<ShastaExecutionLayer>>,
-    _transaction_error_channel: Receiver<TransactionError>,
+    transaction_error_channel: Receiver<TransactionError>,
     _metrics: Arc<Metrics>,
     watchdog: common_utils::watchdog::Watchdog,
     config: NodeConfig,
@@ -49,7 +52,7 @@ impl Node {
         Ok(Self {
             cancel_token,
             ethereum_l1,
-            _transaction_error_channel: transaction_error_channel,
+            transaction_error_channel,
             _metrics: metrics,
             watchdog,
             config,
@@ -103,6 +106,16 @@ impl Node {
             end_of_sequencing: false,
         };
 
+        // Get the transaction status before checking the error channel
+        // to avoid race condition
+        let transaction_in_progress = self
+            .ethereum_l1
+            .execution_layer
+            .is_transaction_in_progress()
+            .await?;
+
+        self.check_transaction_error_channel().await?;
+
         if current_status.is_preconfer() {
             if self
                 .proposal_manager
@@ -114,10 +127,11 @@ impl Node {
                     .map_err(|e| anyhow::anyhow!("Failed to preconfirm block: {}", e))?;
             }
 
-            if let Err(err) = self
-                .proposal_manager
-                .try_submit_oldest_proposal(true, l2_slot_ctx.info.slot_timestamp())
-                .await
+            if !transaction_in_progress
+                && let Err(err) = self
+                    .proposal_manager
+                    .try_submit_oldest_proposal(true, l2_slot_ctx.info.slot_timestamp())
+                    .await
             {
                 if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
                     self.handle_transaction_error(transaction_error).await?;
@@ -219,6 +233,25 @@ impl Node {
                 "Unknown".to_string()
             },
         );
+        Ok(())
+    }
+
+    async fn check_transaction_error_channel(&mut self) -> Result<(), Error> {
+        match self.transaction_error_channel.try_recv() {
+            Ok(error) => {
+                return self.handle_transaction_error(&error).await;
+            }
+            Err(err) => match err {
+                TryRecvError::Empty => {
+                    // no errors, proceed with preconfirmation
+                }
+                TryRecvError::Disconnected => {
+                    self.cancel_token.cancel_on_critical_error();
+                    return Err(anyhow::anyhow!("Transaction error channel disconnected"));
+                }
+            },
+        }
+
         Ok(())
     }
 

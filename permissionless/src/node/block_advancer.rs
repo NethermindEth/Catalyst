@@ -78,7 +78,7 @@ impl BlockAdvancer for PermissionlessBlockAdvancer {
 
             Ok(BuildPreconfBlockResponse {
                 number: l2_slot_context.info.parent_id() + 1,
-                hash: B256::ZERO,
+                hash: B256::ZERO, // TODO: missing hash from the response, do we need it for permissionless?
                 parent_hash: *l2_slot_context.info.parent_hash(),
                 is_forced_inclusion: l2_block_payload.is_forced_inclusion,
             })
