@@ -49,10 +49,8 @@ impl OperatorsCache {
                 current_epoch_timestamp,
             )
             .await?;
-        if should_cache {
-            if let Ok(mut guard) = self.cache.write() {
-                *guard = Some((current_slot_timestamp, result));
-            }
+        if should_cache && let Ok(mut guard) = self.cache.write() {
+            *guard = Some((current_slot_timestamp, result));
         }
         Ok(result)
     }
