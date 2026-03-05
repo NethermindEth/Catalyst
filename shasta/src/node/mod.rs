@@ -1,4 +1,6 @@
+pub mod block_advancer;
 pub mod config;
+mod last_safe_l2_block_finder;
 pub mod proposal_manager;
 use anyhow::Error;
 use common::{
@@ -29,9 +31,8 @@ use tokio::{
 mod verifier;
 use verifier::{VerificationResult, Verifier};
 
-mod l2_height_from_l1;
 use crate::chain_monitor::ShastaChainMonitor;
-pub use l2_height_from_l1::get_l2_height_from_l1;
+pub use last_safe_l2_block_finder::LastSafeL2BlockFinder;
 
 pub struct Node {
     config: NodeConfig,
@@ -46,6 +47,7 @@ pub struct Node {
     head_verifier: HeadVerifier,
     transaction_error_channel: Receiver<TransactionError>,
     chain_monitor: Arc<ShastaChainMonitor>,
+    last_safe_l2_block_finder: Arc<LastSafeL2BlockFinder>,
 }
 
 impl Node {
@@ -61,6 +63,11 @@ impl Node {
         fork_info: ForkInfo,
         chain_monitor: Arc<ShastaChainMonitor>,
     ) -> Result<Self, Error> {
+        let last_safe_l2_block_finder = Arc::new(LastSafeL2BlockFinder::new(
+            ethereum_l1.clone(),
+            taiko.clone(),
+        ));
+
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
             ethereum_l1.slot_clock.clone(),
@@ -78,12 +85,19 @@ impl Node {
         );
         let head_verifier = HeadVerifier::default();
 
+        let block_advancer = Arc::new(block_advancer::ShastaBlockAdvancer::new(
+            taiko.l2_execution_layer(),
+            taiko.get_protocol_config().clone(),
+            taiko.get_driver(),
+        ));
+
         let proposal_manager = ProposalManager::new(
             config.l1_height_lag,
             config.min_anchor_offset,
             batch_builder_config,
             ethereum_l1.clone(),
             taiko.clone(),
+            block_advancer,
             metrics.clone(),
             cancel_token.clone(),
             config.max_blocks_to_reanchor,
@@ -114,6 +128,7 @@ impl Node {
             head_verifier,
             transaction_error_channel,
             chain_monitor,
+            last_safe_l2_block_finder,
         })
     }
 
@@ -222,6 +237,7 @@ impl Node {
                     self.proposal_manager.clone_without_proposals(fi_head),
                     verification_slot,
                     self.cancel_token.clone(),
+                    self.last_safe_l2_block_finder.clone(),
                 )
                 .await;
                 match verifier_result {
@@ -354,6 +370,7 @@ impl Node {
                         self.proposal_manager.clone_without_proposals(0), // it does not matter here, we will update it in Verifier.handle_unprocessed_blocks
                         0,
                         self.cancel_token.clone(),
+                        self.last_safe_l2_block_finder.clone(),
                     )
                     .await?,
                 );
@@ -372,11 +389,7 @@ impl Node {
     async fn has_verified_unsent_proposals(&mut self) -> Result<bool, Error> {
         if let Some(mut verifier) = self.verifier.take() {
             match verifier
-                .verify(
-                    self.ethereum_l1.clone(),
-                    self.taiko.clone(),
-                    self.metrics.clone(),
-                )
+                .verify(self.ethereum_l1.clone(), self.metrics.clone())
                 .await
             {
                 Ok(res) => match res {
@@ -455,17 +468,15 @@ impl Node {
             TransactionError::OldestForcedInclusionDue => {
                 self.metrics.inc_critical_errors();
                 warn!("OldestForcedInclusionDue critical error received, reanchoring blocks");
-                let taiko_inbox_height =
-                    match get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await
-                    {
-                        Ok(height) => height,
-                        Err(err) => {
-                            let err_msg = format!("OldestForcedInclusionDue: {err}");
-                            error!("{}", err_msg);
-                            self.cancel_token.cancel_on_critical_error();
-                            return Err(anyhow::anyhow!("{}", err_msg));
-                        }
-                    };
+                let taiko_inbox_height = match self.last_safe_l2_block_finder.get().await {
+                    Ok(height) => height,
+                    Err(err) => {
+                        let err_msg = format!("OldestForcedInclusionDue: {err}");
+                        error!("{}", err_msg);
+                        self.cancel_token.cancel_on_critical_error();
+                        return Err(anyhow::anyhow!("{}", err_msg));
+                    }
+                };
                 if let Err(err) = self
                     .reanchor_blocks(taiko_inbox_height, "OldestForcedInclusionDue")
                     .await
@@ -558,8 +569,7 @@ impl Node {
         l2_slot_info: &L2SlotInfoV2,
     ) -> Result<bool, Error> {
         debug!("Checking anchor offset for unsafe L2 blocks to do fast reanchor when needed");
-        let taiko_inbox_height =
-            get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await?;
+        let taiko_inbox_height = self.last_safe_l2_block_finder.get().await?;
         if taiko_inbox_height < l2_slot_info.parent_id() {
             let l2_block_id = taiko_inbox_height + 1;
             let (anchor_offset, timestamp_offset) = self
@@ -594,8 +604,7 @@ impl Node {
     }
 
     async fn get_current_protocol_height(&self) -> Result<(u64, u64), Error> {
-        let taiko_inbox_height =
-            get_l2_height_from_l1(self.ethereum_l1.clone(), self.taiko.clone()).await?;
+        let taiko_inbox_height = self.last_safe_l2_block_finder.get().await?;
 
         let taiko_geth_height = self.taiko.get_latest_l2_block_id().await?;
 

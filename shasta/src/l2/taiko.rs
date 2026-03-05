@@ -1,6 +1,5 @@
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
-use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
@@ -8,27 +7,20 @@ use alloy::{
     rpc::types::Block,
 };
 use anyhow::Error;
-use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::{
     l1::slot_clock::SlotClock,
     l2::{
         engine::L2Engine,
-        taiko_driver::{
-            OperationType, TaikoDriver, TaikoDriverConfig,
-            models::{BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData},
-        },
+        taiko_driver::{TaikoDriver, TaikoDriverConfig},
         traits::Bridgeable,
     },
     metrics::Metrics,
-    shared::{
-        l2_slot_info_v2::L2SlotInfoV2,
-        l2_tx_lists::{self, PreBuiltTxList},
-    },
+    shared::{l2_slot_info_v2::L2SlotInfoV2, l2_tx_lists::PreBuiltTxList},
 };
 use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
-use taiko_bindings::anchor::{Anchor, ICheckpointStore::Checkpoint};
+use taiko_bindings::anchor::Anchor;
 use tracing::{debug, trace};
 
 pub struct Taiko {
@@ -280,74 +272,6 @@ impl Taiko {
         );
 
         Ok(base_fee)
-    }
-
-    pub async fn advance_head_to_new_l2_block(
-        &self,
-        l2_block_payload: L2BlockV2Payload,
-        l2_slot_context: &L2SlotContext,
-        operation_type: OperationType,
-    ) -> Result<BuildPreconfBlockResponse, Error> {
-        tracing::debug!(
-            "Submitting new L2 block to the Taiko driver with {} txs",
-            l2_block_payload.tx_list.len()
-        );
-
-        let anchor_block_params = Checkpoint {
-            blockNumber: l2_block_payload.anchor_block_id.try_into()?,
-            blockHash: l2_block_payload.anchor_block_hash,
-            stateRoot: l2_block_payload.anchor_state_root,
-        };
-
-        let anchor_tx = self
-            .l2_execution_layer
-            .construct_anchor_tx(&l2_slot_context.info, anchor_block_params)
-            .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "advance_head_to_new_l2_block: Failed to construct anchor tx: {}",
-                    e
-                )
-            })?;
-        let tx_list = std::iter::once(anchor_tx)
-            .chain(l2_block_payload.tx_list.into_iter())
-            .collect::<Vec<_>>();
-
-        let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
-
-        let sharing_pctg = self.protocol_config.get_basefee_sharing_pctg();
-        let extra_data = super::extra_data::ExtraData {
-            basefee_sharing_pctg: sharing_pctg,
-            proposal_id: l2_block_payload.proposal_id,
-        }
-        .encode()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "advance_head_to_new_l2_block: Failed to encode extra data: {}",
-                e
-            )
-        })?;
-
-        let executable_data = ExecutableData {
-            base_fee_per_gas: l2_slot_context.info.base_fee(),
-            block_number: l2_slot_context.info.parent_id() + 1,
-            extra_data: format!("0x{}", hex::encode(extra_data)),
-            fee_recipient: l2_block_payload.coinbase.to_string(),
-            gas_limit: l2_block_payload.gas_limit_without_anchor + ANCHOR_V3_V4_GAS_LIMIT,
-            parent_hash: format!("0x{}", hex::encode(l2_slot_context.info.parent_hash())),
-            timestamp: l2_block_payload.timestamp_sec,
-            transactions: format!("0x{}", hex::encode(tx_list_bytes)),
-        };
-
-        let request_body = BuildPreconfBlockRequestBody {
-            executable_data,
-            end_of_sequencing: l2_slot_context.end_of_sequencing,
-            is_forced_inclusion: l2_block_payload.is_forced_inclusion,
-        };
-
-        self.driver
-            .preconf_blocks(request_body, operation_type)
-            .await
     }
 
     pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
