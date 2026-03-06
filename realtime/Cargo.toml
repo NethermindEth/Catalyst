@@ -1,0 +1,45 @@
+[package]
+name = "realtime"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+alloy = { workspace = true }
+alloy-json-rpc = { workspace = true }
+alloy-rlp = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+common = { workspace = true }
+dotenvy = { workspace = true }
+flate2 = { workspace = true }
+futures-util = { workspace = true }
+hex = { workspace = true }
+http = { workspace = true }
+jsonrpsee = { workspace = true }
+jsonwebtoken = { workspace = true }
+pacaya = { workspace = true }
+prometheus = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sled = { workspace = true }
+taiko_alethia_reth = { workspace = true }
+taiko_bindings = { workspace = true }
+taiko_protocol = { workspace = true }
+taiko_rpc = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+warp = { workspace = true }
+
+[dev-dependencies]
+mockito = { workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+[lints]
+workspace = true
