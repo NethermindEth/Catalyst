@@ -24,7 +24,6 @@ pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
     shasta_anchor: Anchor::AnchorInstance<DynProvider>,
-    chain_id: u64,
     pub config: TaikoConfig,
 }
 
@@ -33,22 +32,20 @@ impl L2ExecutionLayer {
         let provider =
             alloy_tools::create_alloy_provider_without_wallet(&taiko_config.taiko_geth_url).await?;
 
-        let chain_id = provider
-            .get_chain_id()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get chain ID: {}", e))?;
-        info!("L2 Chain ID: {}", chain_id);
-
         let shasta_anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
-
+       
         let common =
             ExecutionLayerCommon::new(provider.clone(), taiko_config.signer.get_address()).await?;
 
+        info!(
+            "Initialized L2ExecutionLayer for chain {} (mainnet: {})",
+            common.chain_id(),
+            taiko_protocol::shasta::constants::is_mainnet(common.chain_id())
+        );
         Ok(Self {
             common,
             provider,
             shasta_anchor,
-            chain_id,
             config: taiko_config,
         })
     }
@@ -79,7 +76,7 @@ impl L2ExecutionLayer {
             .max_fee_per_gas(u128::from(l2_slot_info.base_fee())) // value expected by Taiko
             .max_priority_fee_per_gas(0) // value expected by Taiko
             .nonce(nonce)
-            .chain_id(self.chain_id);
+            .chain_id(self.common.chain_id());
 
         let typed_tx = call_builder
             .into_transaction_request()
@@ -124,7 +121,7 @@ impl L2ExecutionLayer {
     ) -> Result<(), Error> {
         info!(
             "Transfer ETH from L2 to L1: srcChainId: {}, dstChainId: {}",
-            self.chain_id, dest_chain_id
+            self.common.chain_id(), dest_chain_id
         );
 
         let provider =
@@ -135,7 +132,7 @@ impl L2ExecutionLayer {
             self.config.taiko_bridge_address,
             provider,
             amount,
-            self.chain_id,
+            self.common.chain_id(),
             dest_chain_id,
             preconfer_address,
             bridge_relayer_fee,
