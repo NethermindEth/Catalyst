@@ -11,9 +11,9 @@ pub struct ProtocolConfig {
 }
 
 impl ProtocolConfig {
-    pub fn from(chain_id: u64, shasta_config: &Config) -> Self {
+    pub fn from(chain_id: u64, inbox_config: &Config) -> Self {
         Self {
-            basefee_sharing_pctg: shasta_config.basefeeSharingPctg,
+            basefee_sharing_pctg: inbox_config.basefeeSharingPctg,
             max_anchor_offset: max_anchor_offset_for_chain(chain_id),
             timestamp_max_offset: timestamp_max_offset_for_chain(chain_id),
         }
