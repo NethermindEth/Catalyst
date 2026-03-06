@@ -311,29 +311,29 @@ impl L1BridgeHandlerOps for ExecutionLayer {
             tracing::debug!("Collected {} logs from call trace", all_logs.len());
 
             for log in all_logs {
-                if let Some(topics) = &log.topics {
-                    if !topics.is_empty() {
-                        if topics[0] == MessageSent::SIGNATURE_HASH {
-                            let log_data = alloy::primitives::LogData::new_unchecked(
-                                topics.clone(),
-                                log.data.clone().unwrap_or_default(),
-                            );
-                            let decoded = MessageSent::decode_log_data(&log_data).map_err(|e| {
-                                anyhow!("Failed to decode MessageSent event L1: {e}")
-                            })?;
+                if let Some(topics) = &log.topics
+                    && !topics.is_empty()
+                {
+                    if topics[0] == MessageSent::SIGNATURE_HASH {
+                        let log_data = alloy::primitives::LogData::new_unchecked(
+                            topics.clone(),
+                            log.data.clone().unwrap_or_default(),
+                        );
+                        let decoded = MessageSent::decode_log_data(&log_data).map_err(|e| {
+                            anyhow!("Failed to decode MessageSent event L1: {e}")
+                        })?;
 
-                            message = Some(decoded.message);
-                        } else if topics[0] == SignalSent::SIGNATURE_HASH {
-                            let log_data = alloy::primitives::LogData::new_unchecked(
-                                topics.clone(),
-                                log.data.clone().unwrap_or_default(),
-                            );
-                            let decoded = SignalSent::decode_log_data(&log_data).map_err(|e| {
-                                anyhow!("Failed to decode SignalSent event L1: {e}")
-                            })?;
+                        message = Some(decoded.message);
+                    } else if topics[0] == SignalSent::SIGNATURE_HASH {
+                        let log_data = alloy::primitives::LogData::new_unchecked(
+                            topics.clone(),
+                            log.data.clone().unwrap_or_default(),
+                        );
+                        let decoded = SignalSent::decode_log_data(&log_data).map_err(|e| {
+                            anyhow!("Failed to decode SignalSent event L1: {e}")
+                        })?;
 
-                            slot = Some(decoded.slot);
-                        }
+                        slot = Some(decoded.slot);
                     }
                 }
             }

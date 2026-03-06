@@ -94,12 +94,12 @@ impl ProposalTxBuilder {
         let mut multicalls: Vec<Multicall::Call> = vec![];
 
         // Add user op to multicall
-        if !batch.user_ops.is_empty() {
-            if let Some(user_op) = batch.user_ops.first() {
-                let user_op_call = self.build_user_op_call(user_op.clone());
-                info!("Added user op to Multicall: {:?}", &user_op_call);
-                multicalls.push(user_op_call);
-            }
+        if !batch.user_ops.is_empty()
+            && let Some(user_op) = batch.user_ops.first()
+        {
+            let user_op_call = self.build_user_op_call(user_op.clone());
+            info!("Added user op to Multicall: {:?}", &user_op_call);
+            multicalls.push(user_op_call);
         }
 
         // Add the proposal to the multicall
@@ -110,15 +110,15 @@ impl ProposalTxBuilder {
         multicalls.push(propose_call.clone());
 
         // Add L1 calls
-        if !batch.l1_calls.is_empty() {
-            if let Some(l1_call) = batch.l1_calls.first() {
-                let l1_call_call = self.build_l1_call_call(
-                    l1_call.clone(),
-                    contract_addresses.bridge,
-                );
-                info!("Added L1 call to Multicall: {:?}", &l1_call_call);
-                multicalls.push(l1_call_call.clone());
-            }
+        if !batch.l1_calls.is_empty()
+            && let Some(l1_call) = batch.l1_calls.first()
+        {
+            let l1_call_call = self.build_l1_call_call(
+                l1_call.clone(),
+                contract_addresses.bridge,
+            );
+            info!("Added L1 call to Multicall: {:?}", &l1_call_call);
+            multicalls.push(l1_call_call.clone());
         }
 
         let multicall = Multicall::new(contract_addresses.proposer_multicall, &self.provider);

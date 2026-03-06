@@ -236,17 +236,17 @@ impl BatchBuilder {
     }
 
     pub fn is_time_shift_between_blocks_expiring(&self, current_l2_slot_timestamp: u64) -> bool {
-        if let Some(current_proposal) = self.current_proposal.as_ref() {
-            if let Some(last_block) = current_proposal.l2_blocks.last() {
-                if current_l2_slot_timestamp < last_block.timestamp_sec {
-                    warn!("Preconfirmation timestamp is before the last block timestamp");
-                    return false;
-                }
-                return self.is_the_last_l1_slot_to_add_an_empty_l2_block(
-                    current_l2_slot_timestamp,
-                    last_block.timestamp_sec,
-                );
+        if let Some(current_proposal) = self.current_proposal.as_ref()
+            && let Some(last_block) = current_proposal.l2_blocks.last()
+        {
+            if current_l2_slot_timestamp < last_block.timestamp_sec {
+                warn!("Preconfirmation timestamp is before the last block timestamp");
+                return false;
             }
+            return self.is_the_last_l1_slot_to_add_an_empty_l2_block(
+                current_l2_slot_timestamp,
+                last_block.timestamp_sec,
+            );
         }
         false
     }

@@ -182,7 +182,7 @@ async fn submission_task(
 
     // Step 3: Compute new parent proposal hash
     let new_parent_proposal_hash = alloy::primitives::keccak256(
-        &alloy::sol_types::SolValue::abi_encode(&(
+        alloy::sol_types::SolValue::abi_encode(&(
             proposal.parent_proposal_hash,
             proposal.max_anchor_block_number,
             proposal.max_anchor_block_hash,

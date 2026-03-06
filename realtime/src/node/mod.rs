@@ -203,53 +203,50 @@ impl Node {
             if self
                 .proposal_manager
                 .should_new_block_be_created(&pending_tx_list, &l2_slot_context)
-            {
-                if pending_tx_list
+                && (pending_tx_list
                     .as_ref()
-                    .is_some_and(|pre_built_list| pre_built_list.tx_list.len() != 0)
-                    || self.proposal_manager.has_pending_user_ops().await
-                {
-                    let preconfed_block = self
-                        .proposal_manager
-                        .preconfirm_block(pending_tx_list, &l2_slot_context)
-                        .await?;
+                    .is_some_and(|pre_built_list| !pre_built_list.tx_list.is_empty())
+                    || self.proposal_manager.has_pending_user_ops().await)
+            {
+                let preconfed_block = self
+                    .proposal_manager
+                    .preconfirm_block(pending_tx_list, &l2_slot_context)
+                    .await?;
 
-                    self.verify_preconfed_block(preconfed_block).await?;
-                }
+                self.verify_preconfed_block(preconfed_block).await?;
             }
         }
 
         // Submission phase — non-blocking: starts async proof fetch + L1 tx
         if current_status.is_submitter()
             && !self.proposal_manager.is_submission_in_progress()
-        {
-            if let Err(err) = self
+            && let Err(err) = self
                 .proposal_manager
                 .try_start_submission(current_status.is_preconfer())
                 .await
-            {
-                if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
-                    self.handle_transaction_error(
-                        transaction_error,
-                        &current_status,
-                        &l2_slot_info,
-                    )
-                    .await?;
-                } else {
-                    return Err(err);
-                }
+        {
+            if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
+                self.handle_transaction_error(
+                    transaction_error,
+                    &current_status,
+                    &l2_slot_info,
+                )
+                .await?;
+            } else {
+                return Err(err);
             }
         }
 
         // Cleanup
-        if !current_status.is_submitter() && !current_status.is_preconfer() {
-            if self.proposal_manager.has_batches() {
-                error!(
-                    "Resetting batch builder. has batches: {}",
-                    self.proposal_manager.has_batches(),
-                );
-                self.proposal_manager.reset_builder().await?;
-            }
+        if !current_status.is_submitter()
+            && !current_status.is_preconfer()
+            && self.proposal_manager.has_batches()
+        {
+            error!(
+                "Resetting batch builder. has batches: {}",
+                self.proposal_manager.has_batches(),
+            );
+            self.proposal_manager.reset_builder().await?;
         }
 
         Ok(())
