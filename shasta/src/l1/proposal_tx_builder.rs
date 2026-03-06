@@ -43,7 +43,7 @@ impl ProposalTxBuilder {
         let tx_blob = self
             .build_propose_blob(l2_blocks, from, to, num_forced_inclusion)
             .await
-            .context("build_propose_blob")?;
+            .map_err(|e| Error::msg(format!("build_propose_blob failed: {e}")))?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
             Ok(gas) => gas,
             Err(e) => {
@@ -117,7 +117,7 @@ impl ProposalTxBuilder {
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
         let sidecar = sidecar_builder
             .build_7594()
-            .context("sidecar builder build_7594")?;
+            .map_err(|e| Error::msg(format!("sidecar builder build_7594 failed: {e}")))?;
 
         // Build the propose input.
         let input = ProposeInput {
@@ -139,7 +139,7 @@ impl ProposalTxBuilder {
             .encodeProposeInput(input)
             .call()
             .await
-            .context("inbox encodeProposeInput")?;
+            .map_err(|e| Error::msg(format!("inbox encodeProposeInput failed: {e}")))?;
 
         let tx = TransactionRequest::default()
             .with_from(from)
