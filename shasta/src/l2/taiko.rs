@@ -21,6 +21,8 @@ use pacaya::l2::config::TaikoConfig;
 use std::{sync::Arc, time::Duration};
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
 use taiko_bindings::anchor::Anchor;
+use taiko_bindings::inbox::IInbox::Config;
+use taiko_protocol::shasta::constants::min_base_fee_for_chain;
 use tracing::{debug, trace};
 
 pub struct Taiko {
@@ -34,7 +36,7 @@ pub struct Taiko {
 impl Taiko {
     pub async fn new(
         slot_clock: Arc<SlotClock>,
-        protocol_config: ProtocolConfig,
+        inbox_config: Config,
         metrics: Arc<Metrics>,
         taiko_config: TaikoConfig,
         l2_engine: L2Engine,
@@ -46,13 +48,17 @@ impl Taiko {
             jwt_secret_bytes: taiko_config.jwt_secret_bytes,
             call_timeout: Duration::from_millis(taiko_config.preconf_heartbeat_ms / 2),
         };
+
+        let l2_execution_layer = Arc::new(
+            L2ExecutionLayer::new(taiko_config.clone())
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
+        );
+        let protocol_config =
+            ProtocolConfig::from(l2_execution_layer.common().chain_id(), &inbox_config);
         Ok(Self {
             protocol_config,
-            l2_execution_layer: Arc::new(
-                L2ExecutionLayer::new(taiko_config.clone())
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
-            ),
+            l2_execution_layer,
             driver: Arc::new(TaikoDriver::new(&driver_config, metrics).await?),
             slot_clock,
             l2_engine,
@@ -268,7 +274,7 @@ impl Taiko {
             &parent_block.header.inner,
             timestamp_diff,
             parent_base_fee_per_gas,
-            taiko_alethia_reth::eip4396::MIN_BASE_FEE,
+            min_base_fee_for_chain(self.l2_execution_layer.common().chain_id()),
         );
 
         Ok(base_fee)

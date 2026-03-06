@@ -1962,7 +1962,7 @@ dependencies = [
 [[package]]
 name = "bindings"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=09954cbde59b3e756870a2b509a35c503c67239c#09954cbde59b3e756870a2b509a35c503c67239c"
 dependencies = [
  "alloy",
  "serde",
@@ -2622,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.33.15"
+version = "1.34.0"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -3441,7 +3441,7 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 [[package]]
 name = "driver"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=09954cbde59b3e756870a2b509a35c503c67239c#09954cbde59b3e756870a2b509a35c503c67239c"
 dependencies = [
  "alethia-reth-consensus",
  "alethia-reth-evm",
@@ -6728,7 +6728,7 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.33.15"
+version = "1.34.0"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -7345,7 +7345,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.33.15"
+version = "1.34.0"
 dependencies = [
  "anyhow",
  "discv5 0.10.2",
@@ -7357,7 +7357,7 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.33.15"
+version = "1.34.0"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -7501,7 +7501,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.33.15"
+version = "1.34.0"
 dependencies = [
  "alethia-reth-consensus",
  "alloy",
@@ -7723,7 +7723,7 @@ dependencies = [
 [[package]]
 name = "preconfirmation-driver"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=09954cbde59b3e756870a2b509a35c503c67239c#09954cbde59b3e756870a2b509a35c503c67239c"
 dependencies = [
  "alethia-reth-consensus",
  "alethia-reth-primitives",
@@ -7759,7 +7759,7 @@ dependencies = [
 [[package]]
 name = "preconfirmation-net"
 version = "0.1.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=09954cbde59b3e756870a2b509a35c503c67239c#09954cbde59b3e756870a2b509a35c503c67239c"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -7796,7 +7796,7 @@ dependencies = [
 [[package]]
 name = "preconfirmation-types"
 version = "0.1.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=09954cbde59b3e756870a2b509a35c503c67239c#09954cbde59b3e756870a2b509a35c503c67239c"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -8005,7 +8005,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=09954cbde59b3e756870a2b509a35c503c67239c#09954cbde59b3e756870a2b509a35c503c67239c"
 dependencies = [
  "alethia-reth-consensus",
  "alethia-reth-evm",
@@ -11884,7 +11884,7 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 [[package]]
 name = "rpc"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=09954cbde59b3e756870a2b509a35c503c67239c#09954cbde59b3e756870a2b509a35c503c67239c"
 dependencies = [
  "alethia-reth-evm",
  "alethia-reth-primitives",
@@ -12585,7 +12585,7 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.33.15"
+version = "1.34.0"
 dependencies = [
  "alethia-reth-consensus",
  "alloy",
@@ -14066,7 +14066,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.33.15"
+version = "1.34.0"
 dependencies = [
  "alloy",
  "alloy-json-rpc",

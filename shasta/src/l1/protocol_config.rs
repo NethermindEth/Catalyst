@@ -1,4 +1,7 @@
 use taiko_bindings::inbox::IInbox::Config;
+use taiko_protocol::shasta::constants::{
+    max_anchor_offset_for_chain, timestamp_max_offset_for_chain,
+};
 
 #[derive(Clone, Default)]
 pub struct ProtocolConfig {
@@ -8,11 +11,11 @@ pub struct ProtocolConfig {
 }
 
 impl ProtocolConfig {
-    pub fn from(shasta_config: &Config) -> Self {
+    pub fn from(chain_id: u64, inbox_config: &Config) -> Self {
         Self {
-            basefee_sharing_pctg: shasta_config.basefeeSharingPctg,
-            max_anchor_offset: taiko_protocol::shasta::constants::MAX_ANCHOR_OFFSET,
-            timestamp_max_offset: taiko_protocol::shasta::constants::TIMESTAMP_MAX_OFFSET,
+            basefee_sharing_pctg: inbox_config.basefeeSharingPctg,
+            max_anchor_offset: max_anchor_offset_for_chain(chain_id),
+            timestamp_max_offset: timestamp_max_offset_for_chain(chain_id),
         }
     }
 
