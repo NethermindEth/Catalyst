@@ -13,7 +13,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
-use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
+use taiko_bindings::anchor::Anchor;
 
 pub struct ShastaBlockAdvancer {
     l2_execution_layer: Arc<L2ExecutionLayer>,
@@ -48,10 +48,11 @@ impl BlockAdvancer for ShastaBlockAdvancer {
                 l2_block_payload.tx_list.len()
             );
 
-            let anchor_block_params = Checkpoint {
-                blockNumber: l2_block_payload.anchor_block_id.try_into()?,
-                blockHash: l2_block_payload.anchor_block_hash,
-                stateRoot: l2_block_payload.anchor_state_root,
+            let anchor_block_params = Anchor::BlockParams {
+                anchorBlockNumber: l2_block_payload.anchor_block_id.try_into()?,
+                anchorBlockHash: l2_block_payload.anchor_block_hash,
+                anchorStateRoot: l2_block_payload.anchor_state_root,
+                rawTxListHash: Default::default(),
             };
 
             let anchor_tx = self

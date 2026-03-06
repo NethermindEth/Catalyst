@@ -16,7 +16,7 @@ use common::shared::{
     l2_slot_info_v2::L2SlotInfoV2,
 };
 use pacaya::l2::config::TaikoConfig;
-use taiko_bindings::anchor::{Anchor, ICheckpointStore::Checkpoint};
+use taiko_bindings::anchor::Anchor;
 use tracing::{debug, info};
 
 use serde_json::Value;
@@ -60,7 +60,7 @@ impl L2ExecutionLayer {
     pub async fn construct_anchor_tx(
         &self,
         l2_slot_info: &L2SlotInfoV2,
-        anchor_block_params: Checkpoint,
+        anchor_block_params: Anchor::BlockParams,
     ) -> Result<Transaction, Error> {
         let nonce = self
             .provider
@@ -72,9 +72,13 @@ impl L2ExecutionLayer {
                     .chain_error("Failed to get transaction count", Some(&e.to_string()))
             })?;
 
+        let proposal_params = Anchor::ProposalParams {
+            submissionWindowEnd: Default::default(),
+        };
+
         let call_builder = self
             .shasta_anchor
-            .anchorV4(anchor_block_params)
+            .anchorV4(proposal_params, anchor_block_params)
             .gas(1_000_000) // value expected by Taiko
             .max_fee_per_gas(u128::from(l2_slot_info.base_fee())) // value expected by Taiko
             .max_priority_fee_per_gas(0) // value expected by Taiko
@@ -210,7 +214,7 @@ impl L2ExecutionLayer {
         let tx_data =
             <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
                 .map_err(|e| anyhow::anyhow!("Failed to decode anchor id from tx data: {}", e))?;
-        Ok(tx_data._checkpoint.blockNumber.to::<u64>())
+        Ok(tx_data._blockParams.anchorBlockNumber.to::<u64>())
     }
 
     pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
@@ -252,17 +256,20 @@ impl L2ExecutionLayer {
             .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
     }
 
-    pub async fn get_block_params_from_geth(&self, block_id: u64) -> Result<Checkpoint, Error> {
+    pub async fn get_block_params_from_geth(
+        &self,
+        block_id: u64,
+    ) -> Result<Anchor::BlockParams, Error> {
         self.get_anchor_transaction_input(BlockNumberOrTag::Number(block_id))
             .await
             .map_err(|e| anyhow::anyhow!("get_block_params_from_geth: {e}"))
             .and_then(|input| Self::decode_block_params_from_tx_data(&input))
     }
 
-    pub fn decode_block_params_from_tx_data(data: &[u8]) -> Result<Checkpoint, Error> {
+    pub fn decode_block_params_from_tx_data(data: &[u8]) -> Result<Anchor::BlockParams, Error> {
         let tx_data =
             <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
                 .map_err(|e| anyhow::anyhow!("Failed to decode proposal id from tx data: {}", e))?;
-        Ok(tx_data._checkpoint)
+        Ok(tx_data._blockParams)
     }
 }

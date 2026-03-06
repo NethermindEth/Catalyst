@@ -486,9 +486,9 @@ impl ProposalManager {
         let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
         let anchor_info = AnchorBlockInfo::from_precomputed_data(
             self.ethereum_l1.execution_layer.common(),
-            anchor_tx_data._checkpoint.blockNumber.to::<u64>(),
-            anchor_tx_data._checkpoint.blockHash,
-            anchor_tx_data._checkpoint.stateRoot,
+            anchor_tx_data._blockParams.anchorBlockNumber.to::<u64>(),
+            anchor_tx_data._blockParams.anchorBlockHash,
+            anchor_tx_data._blockParams.anchorStateRoot,
         )
         .await?;
 

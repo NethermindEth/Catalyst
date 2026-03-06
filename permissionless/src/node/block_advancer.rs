@@ -8,7 +8,7 @@ use shasta::{BlockAdvancer, L2BlockV2Payload, l2::taiko::Taiko};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
+use taiko_bindings::anchor::Anchor;
 use tracing::info;
 
 pub struct PermissionlessBlockAdvancer {
@@ -42,10 +42,11 @@ impl BlockAdvancer for PermissionlessBlockAdvancer {
         _operation_type: OperationType,
     ) -> Pin<Box<dyn Future<Output = Result<BuildPreconfBlockResponse, Error>> + Send + 'a>> {
         Box::pin(async move {
-            let anchor_block_params = Checkpoint {
-                blockNumber: l2_block_payload.anchor_block_id.try_into()?,
-                blockHash: l2_block_payload.anchor_block_hash,
-                stateRoot: l2_block_payload.anchor_state_root,
+            let anchor_block_params = Anchor::BlockParams {
+                anchorBlockNumber: l2_block_payload.anchor_block_id.try_into()?,
+                anchorBlockHash: l2_block_payload.anchor_block_hash,
+                anchorStateRoot: l2_block_payload.anchor_state_root,
+                rawTxListHash: Default::default(),
             };
 
             let anchor_tx = self

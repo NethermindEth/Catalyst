@@ -68,7 +68,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-block"
 version = "0.6.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=a575e625374de3403df8517069626d007102cfc8#a575e625374de3403df8517069626d007102cfc8"
+source = "git+https://github.com/mskrzypkows/alethia-reth?rev=8a4036dde26ce30204cf515a52d2014f491ba66e#8a4036dde26ce30204cf515a52d2014f491ba66e"
 dependencies = [
  "alethia-reth-chainspec",
  "alethia-reth-evm",
@@ -102,7 +102,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-chainspec"
 version = "0.6.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=a575e625374de3403df8517069626d007102cfc8#a575e625374de3403df8517069626d007102cfc8"
+source = "git+https://github.com/mskrzypkows/alethia-reth?rev=8a4036dde26ce30204cf515a52d2014f491ba66e#8a4036dde26ce30204cf515a52d2014f491ba66e"
 dependencies = [
  "alloy-chains",
  "alloy-consensus",
@@ -123,7 +123,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-consensus"
 version = "0.6.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=a575e625374de3403df8517069626d007102cfc8#a575e625374de3403df8517069626d007102cfc8"
+source = "git+https://github.com/mskrzypkows/alethia-reth?rev=8a4036dde26ce30204cf515a52d2014f491ba66e#8a4036dde26ce30204cf515a52d2014f491ba66e"
 dependencies = [
  "alethia-reth-chainspec",
  "alethia-reth-evm",
@@ -144,7 +144,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-db"
 version = "0.6.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=a575e625374de3403df8517069626d007102cfc8#a575e625374de3403df8517069626d007102cfc8"
+source = "git+https://github.com/mskrzypkows/alethia-reth?rev=8a4036dde26ce30204cf515a52d2014f491ba66e#8a4036dde26ce30204cf515a52d2014f491ba66e"
 dependencies = [
  "alethia-reth-primitives",
  "alloy-primitives",
@@ -160,7 +160,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-evm"
 version = "0.6.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=a575e625374de3403df8517069626d007102cfc8#a575e625374de3403df8517069626d007102cfc8"
+source = "git+https://github.com/mskrzypkows/alethia-reth?rev=8a4036dde26ce30204cf515a52d2014f491ba66e#8a4036dde26ce30204cf515a52d2014f491ba66e"
 dependencies = [
  "alloy-evm 0.27.3",
  "alloy-primitives",
@@ -173,7 +173,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-primitives"
 version = "0.6.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=a575e625374de3403df8517069626d007102cfc8#a575e625374de3403df8517069626d007102cfc8"
+source = "git+https://github.com/mskrzypkows/alethia-reth?rev=8a4036dde26ce30204cf515a52d2014f491ba66e#8a4036dde26ce30204cf515a52d2014f491ba66e"
 dependencies = [
  "alloy-consensus",
  "alloy-primitives",
@@ -198,7 +198,7 @@ dependencies = [
 [[package]]
 name = "alethia-reth-rpc"
 version = "0.6.0"
-source = "git+https://github.com/taikoxyz/alethia-reth.git?rev=a575e625374de3403df8517069626d007102cfc8#a575e625374de3403df8517069626d007102cfc8"
+source = "git+https://github.com/mskrzypkows/alethia-reth?rev=8a4036dde26ce30204cf515a52d2014f491ba66e#8a4036dde26ce30204cf515a52d2014f491ba66e"
 dependencies = [
  "alethia-reth-block",
  "alethia-reth-chainspec",
@@ -1962,7 +1962,7 @@ dependencies = [
 [[package]]
 name = "bindings"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=20166ed098060d24a4db60475470661baaac3326#20166ed098060d24a4db60475470661baaac3326"
 dependencies = [
  "alloy",
  "serde",
@@ -3441,7 +3441,7 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 [[package]]
 name = "driver"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=20166ed098060d24a4db60475470661baaac3326#20166ed098060d24a4db60475470661baaac3326"
 dependencies = [
  "alethia-reth-consensus",
  "alethia-reth-evm",
@@ -7723,7 +7723,7 @@ dependencies = [
 [[package]]
 name = "preconfirmation-driver"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=20166ed098060d24a4db60475470661baaac3326#20166ed098060d24a4db60475470661baaac3326"
 dependencies = [
  "alethia-reth-consensus",
  "alethia-reth-primitives",
@@ -7759,7 +7759,7 @@ dependencies = [
 [[package]]
 name = "preconfirmation-net"
 version = "0.1.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=20166ed098060d24a4db60475470661baaac3326#20166ed098060d24a4db60475470661baaac3326"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -7796,7 +7796,7 @@ dependencies = [
 [[package]]
 name = "preconfirmation-types"
 version = "0.1.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=20166ed098060d24a4db60475470661baaac3326#20166ed098060d24a4db60475470661baaac3326"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -8005,7 +8005,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=20166ed098060d24a4db60475470661baaac3326#20166ed098060d24a4db60475470661baaac3326"
 dependencies = [
  "alethia-reth-consensus",
  "alethia-reth-evm",
@@ -11884,7 +11884,7 @@ checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
 [[package]]
 name = "rpc"
 version = "2.0.0"
-source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=1dcf91c3402a0a6bbfacab157ba7edda9a436ea1#1dcf91c3402a0a6bbfacab157ba7edda9a436ea1"
+source = "git+https://github.com/taikoxyz/taiko-mono.git?rev=20166ed098060d24a4db60475470661baaac3326#20166ed098060d24a4db60475470661baaac3326"
 dependencies = [
  "alethia-reth-evm",
  "alethia-reth-primitives",

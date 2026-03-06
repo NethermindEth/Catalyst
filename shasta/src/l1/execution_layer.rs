@@ -182,7 +182,7 @@ impl ExecutionLayer {
     pub async fn send_batch_to_l1(
         &self,
         l2_blocks: Vec<L2BlockV2>,
-        num_forced_inclusion: u16,
+        num_forced_inclusion: u8,
     ) -> Result<(), Error> {
         info!(
             "📦 Proposing with {} blocks | num_forced_inclusion: {}",
@@ -202,10 +202,11 @@ impl ExecutionLayer {
             .await
             .map_err(|e| Error::msg(format!("build_propose_tx failed: {e}")))?;
 
-        let pending_nonce = self
-            .get_preconfer_nonce_pending()
-            .await
-            .map_err(|e| Error::msg(format!("get_preconfer_nonce_pending (send_batch_to_l1) failed: {e}")))?;
+        let pending_nonce = self.get_preconfer_nonce_pending().await.map_err(|e| {
+            Error::msg(format!(
+                "get_preconfer_nonce_pending (send_batch_to_l1) failed: {e}"
+            ))
+        })?;
         // Spawn a monitor for this transaction
         self.transaction_monitor
             .monitor_new_transaction(tx, pending_nonce)
