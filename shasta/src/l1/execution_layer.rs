@@ -202,10 +202,11 @@ impl ExecutionLayer {
             .await
             .map_err(|e| Error::msg(format!("build_propose_tx failed: {e}")))?;
 
-        let pending_nonce = self
-            .get_preconfer_nonce_pending()
-            .await
-            .map_err(|e| Error::msg(format!("get_preconfer_nonce_pending (send_batch_to_l1) failed: {e}")))?;
+        let pending_nonce = self.get_preconfer_nonce_pending().await.map_err(|e| {
+            Error::msg(format!(
+                "get_preconfer_nonce_pending (send_batch_to_l1) failed: {e}"
+            ))
+        })?;
         // Spawn a monitor for this transaction
         self.transaction_monitor
             .monitor_new_transaction(tx, pending_nonce)
