@@ -67,11 +67,11 @@ pub async fn create_permissionless_node(
         taiko_config.signer.get_address(),
     )?)
     .map_err(|e| anyhow::anyhow!("Failed to create L2Engine: {}", e))?;
-    let protocol_config = ethereum_l1.execution_layer.fetch_protocol_config().await?;
+    let inbox_config = ethereum_l1.execution_layer.fetch_inbox_config().await?;
 
     let taiko = Taiko::new(
         ethereum_l1.slot_clock.clone(),
-        protocol_config.clone(),
+        inbox_config,
         metrics.clone(),
         taiko_config,
         l2_engine,

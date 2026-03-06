@@ -87,11 +87,11 @@ ssz_rs = { version = "0.9.0" }
 strum = { version = "0.27", features = ["derive"] }
 
 taiko_alethia_reth = { git = "https://github.com/taikoxyz/alethia-reth.git", rev = "a575e625374de3403df8517069626d007102cfc8", package = "alethia-reth-consensus" }
-taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "1dcf91c3402a0a6bbfacab157ba7edda9a436ea1", package = "bindings" }
-taiko_preconfirmation_driver = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "1dcf91c3402a0a6bbfacab157ba7edda9a436ea1", package = "preconfirmation-driver" }
-taiko_preconfirmation_types = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "1dcf91c3402a0a6bbfacab157ba7edda9a436ea1", package = "preconfirmation-types" }
-taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "1dcf91c3402a0a6bbfacab157ba7edda9a436ea1", package = "protocol" }
-taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "1dcf91c3402a0a6bbfacab157ba7edda9a436ea1", package = "rpc" }
+taiko_bindings = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "b9f0fcbae4df77e216e8c5162f9b2037c4766437", package = "bindings" }
+taiko_preconfirmation_driver = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "b9f0fcbae4df77e216e8c5162f9b2037c4766437", package = "preconfirmation-driver" }
+taiko_preconfirmation_types = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "b9f0fcbae4df77e216e8c5162f9b2037c4766437", package = "preconfirmation-types" }
+taiko_protocol = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "b9f0fcbae4df77e216e8c5162f9b2037c4766437", package = "protocol" }
+taiko_rpc = { git = "https://github.com/taikoxyz/taiko-mono.git", rev = "b9f0fcbae4df77e216e8c5162f9b2037c4766437", package = "rpc" }
 tokio = { version = "1.49", default-features = false, features = ["full"] }
 tokio-util = { version = "0.7", default-features = false }
 tracing = { version = "0.1", default-features = false }

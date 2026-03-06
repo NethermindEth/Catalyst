@@ -1,6 +1,5 @@
 use super::config::EthereumL1Config;
 use super::proposal_tx_builder::ProposalTxBuilder;
-use super::protocol_config::ProtocolConfig;
 use crate::l1::config::ContractAddresses;
 use alloy::{
     eips::BlockNumberOrTag,
@@ -28,6 +27,7 @@ use pacaya::l1::{
 };
 use serde_json::json;
 use std::sync::{Arc, OnceLock};
+use taiko_bindings::inbox::IInbox::Config;
 use taiko_bindings::inbox::{
     IForcedInclusionStore::ForcedInclusion,
     IInbox::CoreState,
@@ -222,20 +222,12 @@ impl ExecutionLayer {
             .context("is_transaction_in_progress")
     }
 
-    pub async fn fetch_protocol_config(&self) -> Result<ProtocolConfig, Error> {
-        let shasta_config = self
-            .inbox_instance
+    pub async fn fetch_inbox_config(&self) -> Result<Config, Error> {
+        self.inbox_instance
             .getConfig()
             .call()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to call getConfig for Inbox: {e}"))?;
-
-        info!(
-            "Shasta config: basefeeSharingPctg: {}",
-            shasta_config.basefeeSharingPctg,
-        );
-
-        Ok(ProtocolConfig::from(&shasta_config))
+            .map_err(|e| anyhow::anyhow!("Failed to call getConfig for Inbox: {e}"))
     }
 
     pub async fn get_activation_timestamp(&self) -> Result<u64, Error> {

@@ -12,8 +12,7 @@ pub use node::proposal_manager::ProposalManager;
 use anyhow::Error;
 use common::{
     batch_builder::BatchBuilderConfig,
-    config::Config,
-    config::ConfigTrait,
+    config::{Config, ConfigTrait},
     fork_info::ForkInfo,
     funds_controller::FundsController,
     l1::{self as common_l1, traits::PreconferProvider},
@@ -61,11 +60,11 @@ pub async fn create_shasta_node(
         taiko_config.signer.get_address(),
     )?)
     .map_err(|e| anyhow::anyhow!("Failed to create L2Engine: {}", e))?;
-    let protocol_config = ethereum_l1.execution_layer.fetch_protocol_config().await?;
+    let inbox_config = ethereum_l1.execution_layer.fetch_inbox_config().await?;
 
     let taiko = crate::l2::taiko::Taiko::new(
         ethereum_l1.slot_clock.clone(),
-        protocol_config.clone(),
+        inbox_config,
         metrics.clone(),
         taiko_config,
         l2_engine,
