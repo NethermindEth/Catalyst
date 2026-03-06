@@ -6,7 +6,7 @@ The permissionless implementation has been suspended. The latest implementation 
 
 ## Repositories/branches
 
-- alethia-reth, anchorV4 and signature encoding modifications added 
+- alethia-reth, anchorV4 and signature encoding modifications added
   - branch: https://github.com/mskrzypkows/alethia-reth/tree/permissionless
 - taiko-mono, rebased `permissionless-preconfs/scripts` branch with latest main changes, corrected merge conflicts
   - docker image: `nethswitchboard/taiko-client-rs:permissionless`
