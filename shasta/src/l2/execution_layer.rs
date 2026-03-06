@@ -33,15 +33,12 @@ impl L2ExecutionLayer {
             alloy_tools::create_alloy_provider_without_wallet(&taiko_config.taiko_geth_url).await?;
 
         let shasta_anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
-       
+
         let common =
             ExecutionLayerCommon::new(provider.clone(), taiko_config.signer.get_address()).await?;
 
-        info!(
-            "Initialized L2ExecutionLayer for chain {} (mainnet: {})",
-            common.chain_id(),
-            taiko_protocol::shasta::constants::is_mainnet(common.chain_id())
-        );
+        info!("L2 chain ID {}", common.chain_id());
+
         Ok(Self {
             common,
             provider,
@@ -121,7 +118,8 @@ impl L2ExecutionLayer {
     ) -> Result<(), Error> {
         info!(
             "Transfer ETH from L2 to L1: srcChainId: {}, dstChainId: {}",
-            self.common.chain_id(), dest_chain_id
+            self.common.chain_id(),
+            dest_chain_id
         );
 
         let provider =
