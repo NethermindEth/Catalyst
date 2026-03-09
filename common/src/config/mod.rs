@@ -34,6 +34,7 @@ pub struct Config {
     pub rpc_l2_execution_layer_timeout: Duration,
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
+    pub rpc_driver_retry_timeout: Duration,
     // Taiko contracts
     pub taiko_anchor_address: Address,
     pub taiko_bridge_address: Address,
@@ -217,6 +218,12 @@ impl Config {
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("RPC_DRIVER_STATUS_TIMEOUT_MS must be a number: {}", e))?;
         let rpc_driver_status_timeout = Duration::from_millis(rpc_driver_status_timeout);
+
+        let rpc_driver_retry_timeout = std::env::var("RPC_DRIVER_RETRY_TIMEOUT_MS")
+            .unwrap_or("1000".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("RPC_DRIVER_RETRY_TIMEOUT_MS must be a number: {}", e))?;
+        let rpc_driver_retry_timeout = Duration::from_millis(rpc_driver_retry_timeout);
 
         let rpc_l2_execution_layer_timeout = std::env::var("RPC_L2_EXECUTION_LAYER_TIMEOUT_MS")
             .unwrap_or("1000".to_string())
@@ -467,6 +474,7 @@ impl Config {
             rpc_l2_execution_layer_timeout,
             rpc_driver_preconf_timeout,
             rpc_driver_status_timeout,
+            rpc_driver_retry_timeout,
             taiko_anchor_address,
             taiko_bridge_address,
             max_bytes_size_of_batch,
@@ -520,6 +528,7 @@ jwt secret file path: {}
 rpc L2 EL timeout: {}ms
 rpc driver preconf timeout: {}ms
 rpc driver status timeout: {}ms
+rpc driver retry timeout: {}ms
 taiko anchor address: {}
 taiko bridge address: {}
 max bytes per tx list from taiko driver: {}
@@ -580,6 +589,7 @@ watchdog max counter: {}
             config.rpc_l2_execution_layer_timeout.as_millis(),
             config.rpc_driver_preconf_timeout.as_millis(),
             config.rpc_driver_status_timeout.as_millis(),
+            config.rpc_driver_retry_timeout.as_millis(),
             config.taiko_anchor_address,
             config.taiko_bridge_address,
             config.max_bytes_per_tx_list,

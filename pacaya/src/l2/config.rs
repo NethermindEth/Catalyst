@@ -14,6 +14,7 @@ pub struct TaikoConfig {
     pub taiko_bridge_address: Address,
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
+    pub rpc_driver_retry_timeout: Duration,
     pub preconf_heartbeat_ms: u64,
     pub signer: Arc<Signer>,
 }
@@ -38,6 +39,7 @@ impl TaikoConfig {
             taiko_bridge_address: config.taiko_bridge_address,
             rpc_driver_preconf_timeout: config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: config.rpc_driver_status_timeout,
+            rpc_driver_retry_timeout: config.rpc_driver_retry_timeout,
             preconf_heartbeat_ms: config.preconf_heartbeat_ms,
             signer,
         })
