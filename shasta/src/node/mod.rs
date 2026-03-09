@@ -203,14 +203,16 @@ impl Node {
                 )
                 .await;
 
-            let (next_proposal_id, fi_head, fi_tail) = self
+            let inbox_forced_inclusion_state = self
                 .ethereum_l1
                 .execution_layer
                 .get_inbox_forced_inclusion_state()
                 .await?;
             debug!(
                 "Next proposal id: {}, FI head: {}, FI tail: {}",
-                next_proposal_id, fi_head, fi_tail
+                inbox_forced_inclusion_state.next_proposal_id,
+                inbox_forced_inclusion_state.head,
+                inbox_forced_inclusion_state.tail
             );
 
             if current_status.is_submitter() {
@@ -234,7 +236,8 @@ impl Node {
                 let verifier_result = Verifier::new_with_taiko_height(
                     taiko_geth_height,
                     self.taiko.clone(),
-                    self.proposal_manager.clone_without_proposals(fi_head),
+                    self.proposal_manager
+                        .clone_without_proposals(inbox_forced_inclusion_state.head),
                     verification_slot,
                     self.cancel_token.clone(),
                     self.last_safe_l2_block_finder.clone(),
@@ -258,7 +261,7 @@ impl Node {
             // Calculate the current forced inclusion unsafe head
             let current_fi_head = self
                 .taiko
-                .calculate_current_fi_head(next_proposal_id, fi_head, fi_tail)
+                .calculate_current_fi_head(inbox_forced_inclusion_state)
                 .await?;
 
             // Update proposal manager forced inclusion head
