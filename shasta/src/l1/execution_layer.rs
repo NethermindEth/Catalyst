@@ -1,5 +1,6 @@
 use super::config::EthereumL1Config;
 use super::proposal_tx_builder::ProposalTxBuilder;
+use crate::forced_inclusion::InboxForcedInclusionState;
 use crate::l1::config::ContractAddresses;
 use alloy::{
     eips::BlockNumberOrTag,
@@ -307,8 +308,7 @@ impl ExecutionLayer {
 
     pub async fn get_inbox_forced_inclusion_state(
         &self,
-        // TODO use struct: next_proposal_id, head, tail
-    ) -> Result<(u64, u64, u64), Error> {
+    ) -> Result<InboxForcedInclusionState, Error> {
         // Use BatchRequest to send all calls in a single RPC request
         // This ensures the load balancer forwards all calls to the same RPC node
         let client = self.provider.client();
@@ -377,11 +377,11 @@ impl ExecutionLayer {
                 anyhow::anyhow!("Failed to decode forced inclusion state response: {e}")
             })?;
 
-        Ok((
-            core_state.nextProposalId.to::<u64>(),
-            forced_inclusion_state.head_.to::<u64>(),
-            forced_inclusion_state.tail_.to::<u64>(),
-        ))
+        Ok(InboxForcedInclusionState {
+            next_proposal_id: core_state.nextProposalId.to::<u64>(),
+            head: forced_inclusion_state.head_.to::<u64>(),
+            tail: forced_inclusion_state.tail_.to::<u64>(),
+        })
     }
 
     fn get_core_state_calldata(&self, inbox: &InboxInstance<DynProvider>) -> &'static str {

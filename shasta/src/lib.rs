@@ -1,6 +1,6 @@
 mod chain_monitor;
 pub mod config;
-mod forced_inclusion;
+pub mod forced_inclusion;
 pub mod l1;
 pub mod l2;
 mod node;

@@ -1,4 +1,5 @@
 use super::execution_layer::L2ExecutionLayer;
+use crate::forced_inclusion::InboxForcedInclusionState;
 use crate::l1::protocol_config::ProtocolConfig;
 use alloy::{
     consensus::BlockHeader,
@@ -148,15 +149,15 @@ impl Taiko {
 
     pub async fn calculate_current_fi_head(
         &self,
-        next_proposal_id: u64,
-        fi_head: u64,
-        fi_tail: u64,
+        inbox_forced_inclusion_state: InboxForcedInclusionState,
     ) -> Result<u64, Error> {
-        let mut fi_head = fi_head;
-        if next_proposal_id > 2 && fi_head < fi_tail {
+        let mut fi_head = inbox_forced_inclusion_state.head;
+        if inbox_forced_inclusion_state.next_proposal_id > 2
+            && fi_head < inbox_forced_inclusion_state.tail
+        {
             let start = std::time::Instant::now();
             let safe_block_id = self
-                .get_last_block_id_by_batch_id(next_proposal_id - 1)
+                .get_last_block_id_by_batch_id(inbox_forced_inclusion_state.next_proposal_id - 1)
                 .await?;
             let unsafe_block_id = self.get_latest_l2_block_id().await?;
             for block_id in safe_block_id + 1..=unsafe_block_id {
@@ -164,7 +165,7 @@ impl Taiko {
                 if is_forced_inclusion {
                     fi_head += 1;
                 }
-                if fi_head == fi_tail {
+                if fi_head == inbox_forced_inclusion_state.tail {
                     break;
                 }
             }

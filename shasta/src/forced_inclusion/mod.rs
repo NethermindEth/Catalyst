@@ -7,6 +7,12 @@ use std::sync::Arc;
 
 use taiko_protocol::shasta::manifest::DerivationSourceManifest;
 
+pub struct InboxForcedInclusionState {
+    pub next_proposal_id: u64,
+    pub head: u64,
+    pub tail: u64,
+}
+
 pub struct ForcedInclusion {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     index: u64,
