@@ -25,7 +25,7 @@ use common::{
         l2_tx_lists::{self, PreBuiltTxList},
     },
 };
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tracing::{debug, trace};
 
 pub struct Taiko {
@@ -49,8 +49,8 @@ impl Taiko {
             driver_url: taiko_config.driver_url.clone(),
             rpc_driver_preconf_timeout: taiko_config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: taiko_config.rpc_driver_status_timeout,
+            rpc_driver_retry_timeout: taiko_config.rpc_driver_retry_timeout,
             jwt_secret_bytes: taiko_config.jwt_secret_bytes,
-            call_timeout: Duration::from_millis(taiko_config.preconf_heartbeat_ms / 2),
         };
         Ok(Self {
             protocol_config,

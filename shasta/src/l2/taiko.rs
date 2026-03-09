@@ -18,7 +18,7 @@ use common::{
     shared::{l2_slot_info_v2::L2SlotInfoV2, l2_tx_lists::PreBuiltTxList},
 };
 use pacaya::l2::config::TaikoConfig;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
 use taiko_bindings::anchor::Anchor;
 use taiko_bindings::inbox::IInbox::Config;
@@ -45,8 +45,8 @@ impl Taiko {
             driver_url: taiko_config.driver_url.clone(),
             rpc_driver_preconf_timeout: taiko_config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: taiko_config.rpc_driver_status_timeout,
+            rpc_driver_retry_timeout: taiko_config.rpc_driver_retry_timeout,
             jwt_secret_bytes: taiko_config.jwt_secret_bytes,
-            call_timeout: Duration::from_millis(taiko_config.preconf_heartbeat_ms / 2),
         };
 
         let l2_execution_layer = Arc::new(
