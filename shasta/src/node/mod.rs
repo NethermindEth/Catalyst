@@ -193,9 +193,9 @@ impl Node {
             .is_transaction_in_progress()
             .await?;
 
-        self.check_transaction_error_channel().await?;
+        let had_transaction_error = self.check_transaction_error_channel().await?;
 
-        if !transaction_in_progress {
+        if !transaction_in_progress && !had_transaction_error {
             self.proposal_manager.remove_confirmed_proposal();
         }
 
@@ -636,23 +636,21 @@ impl Node {
         Ok((l1_proposal_id, l2_proposal_id))
     }
 
-    async fn check_transaction_error_channel(&mut self) -> Result<(), Error> {
+    /// Returns Ok(true) if a transaction error was received, Ok(false) if no error.
+    async fn check_transaction_error_channel(&mut self) -> Result<bool, Error> {
         match self.transaction_error_channel.try_recv() {
             Ok(error) => {
-                return self.handle_transaction_error(&error).await;
+                self.handle_transaction_error(&error).await?;
+                Ok(true)
             }
             Err(err) => match err {
-                TryRecvError::Empty => {
-                    // no errors, proceed with preconfirmation
-                }
+                TryRecvError::Empty => Ok(false),
                 TryRecvError::Disconnected => {
                     self.cancel_token.cancel_on_critical_error();
-                    return Err(anyhow::anyhow!("Transaction error channel disconnected"));
+                    Err(anyhow::anyhow!("Transaction error channel disconnected"))
                 }
             },
         }
-
-        Ok(())
     }
 
     fn print_current_slots_info(

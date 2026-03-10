@@ -22,7 +22,7 @@ use taiko_protocol::shasta::{
 use tracing::{info, warn};
 
 /// Build the EIP-7594 blob sidecar from L2 blocks. This is a CPU-intensive operation
-/// (KZG commitment + cell proof computation) that can be offloaded to a blocking thread.
+/// (KZG commitment + cell proof computation).
 pub fn build_sidecar_from_l2_blocks(
     l2_blocks: &[L2BlockV2],
 ) -> Result<BlobTransactionSidecarEip7594, Error> {
