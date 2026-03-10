@@ -1,5 +1,6 @@
 use alloy::{
     consensus::SidecarBuilder,
+    eips::eip7594::BlobTransactionSidecarEip7594,
     network::{TransactionBuilder, TransactionBuilder7594},
     primitives::{
         Address, Bytes,
@@ -12,36 +13,91 @@ use alloy_json_rpc::RpcError;
 use anyhow::{Context, Error};
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use common::shared::l2_block_v2::L2BlockV2;
+use common::shared::transaction_monitor::TransactionRequestBuilder;
 use taiko_bindings::inbox::{IInbox::ProposeInput, Inbox, LibBlobs::BlobReference};
 use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},
 };
-use tracing::warn;
+use tracing::{info, warn};
+
+/// Build the EIP-7594 blob sidecar from L2 blocks. This is a CPU-intensive operation
+/// (KZG commitment + cell proof computation) that can be offloaded to a blocking thread.
+pub fn build_sidecar_from_l2_blocks(
+    l2_blocks: &[L2BlockV2],
+) -> Result<BlobTransactionSidecarEip7594, Error> {
+    let start = std::time::Instant::now();
+
+    let mut block_manifests = Vec::with_capacity(l2_blocks.len());
+    for l2_block in l2_blocks {
+        block_manifests.push(BlockManifest {
+            timestamp: l2_block.timestamp_sec,
+            coinbase: l2_block.coinbase,
+            anchor_block_number: l2_block.anchor_block_number,
+            gas_limit: l2_block.gas_limit_without_anchor,
+            transactions: l2_block
+                .prebuilt_tx_list
+                .tx_list
+                .iter()
+                .map(|tx| tx.clone().into())
+                .collect(),
+        });
+    }
+
+    let manifest = DerivationSourceManifest {
+        blocks: block_manifests,
+    };
+
+    let manifest_data = manifest
+        .encode_and_compress()
+        .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
+
+    let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
+    let sidecar = sidecar_builder
+        .build_7594()
+        .map_err(|e| Error::msg(format!("sidecar builder build_7594 failed: {e}")))?;
+
+    info!(
+        "⏱️ build_sidecar_from_l2_blocks ({} blocks, {} bytes compressed) took {:?}",
+        l2_blocks.len(),
+        manifest_data.len(),
+        start.elapsed()
+    );
+
+    Ok(sidecar)
+}
 
 pub struct ProposalTxBuilder {
     provider: DynProvider,
     extra_gas_percentage: u64,
+    l2_blocks: Vec<L2BlockV2>,
+    from: Address,
+    to: Address,
+    num_forced_inclusion: u16,
 }
 
 impl ProposalTxBuilder {
-    pub fn new(provider: DynProvider, extra_gas_percentage: u64) -> Self {
-        Self {
-            provider,
-            extra_gas_percentage,
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub async fn build_propose_tx(
-        &self,
+    pub fn new(
+        provider: DynProvider,
+        extra_gas_percentage: u64,
         l2_blocks: Vec<L2BlockV2>,
         from: Address,
         to: Address,
         num_forced_inclusion: u16,
-    ) -> Result<TransactionRequest, Error> {
+    ) -> Self {
+        Self {
+            provider,
+            extra_gas_percentage,
+            l2_blocks,
+            from,
+            to,
+            num_forced_inclusion,
+        }
+    }
+
+    async fn build_propose_tx(&self) -> Result<TransactionRequest, Error> {
         let tx_blob = self
-            .build_propose_blob(l2_blocks, from, to, num_forced_inclusion)
+            .build_propose_blob()
             .await
             .map_err(|e| Error::msg(format!("build_propose_blob failed: {e}")))?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
@@ -80,44 +136,8 @@ impl ProposalTxBuilder {
         Ok(tx_blob)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub async fn build_propose_blob(
-        &self,
-        l2_blocks: Vec<L2BlockV2>,
-        from: Address,
-        to: Address,
-        num_forced_inclusion: u16,
-    ) -> Result<TransactionRequest, Error> {
-        let mut block_manifests = <Vec<BlockManifest>>::with_capacity(l2_blocks.len());
-        for l2_block in &l2_blocks {
-            // Build the block manifests.
-            block_manifests.push(BlockManifest {
-                timestamp: l2_block.timestamp_sec,
-                coinbase: l2_block.coinbase,
-                anchor_block_number: l2_block.anchor_block_number,
-                gas_limit: l2_block.gas_limit_without_anchor,
-                transactions: l2_block
-                    .prebuilt_tx_list
-                    .tx_list
-                    .iter()
-                    .map(|tx| tx.clone().into())
-                    .collect(),
-            });
-        }
-
-        // Build the proposal manifest.
-        let manifest = DerivationSourceManifest {
-            blocks: block_manifests,
-        };
-
-        let manifest_data = manifest
-            .encode_and_compress()
-            .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
-
-        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
-        let sidecar = sidecar_builder
-            .build_7594()
-            .map_err(|e| Error::msg(format!("sidecar builder build_7594 failed: {e}")))?;
+    async fn build_propose_blob(&self) -> Result<TransactionRequest, Error> {
+        let sidecar = build_sidecar_from_l2_blocks(&self.l2_blocks)?;
 
         // Build the propose input.
         let input = ProposeInput {
@@ -131,10 +151,10 @@ impl ProposalTxBuilder {
                     .context("blobs len try_into")?,
                 offset: U24::ZERO,
             },
-            numForcedInclusions: num_forced_inclusion,
+            numForcedInclusions: self.num_forced_inclusion,
         };
 
-        let inbox = Inbox::new(to, self.provider.clone());
+        let inbox = Inbox::new(self.to, self.provider.clone());
         let encoded_proposal_input = inbox
             .encodeProposeInput(input)
             .call()
@@ -142,8 +162,8 @@ impl ProposalTxBuilder {
             .map_err(|e| Error::msg(format!("inbox encodeProposeInput failed: {e}")))?;
 
         let tx = TransactionRequest::default()
-            .with_from(from)
-            .with_to(to)
+            .with_from(self.from)
+            .with_to(self.to)
             .with_blob_sidecar(sidecar)
             .with_call(&Inbox::proposeCall {
                 _lookahead: Bytes::new(),
@@ -151,5 +171,14 @@ impl ProposalTxBuilder {
             });
 
         Ok(tx)
+    }
+}
+
+impl TransactionRequestBuilder for ProposalTxBuilder {
+    async fn build(self) -> Result<TransactionRequest, TransactionError> {
+        self.build_propose_tx().await.map_err(|e| {
+            e.downcast::<TransactionError>()
+                .unwrap_or(TransactionError::EstimationFailed)
+        })
     }
 }

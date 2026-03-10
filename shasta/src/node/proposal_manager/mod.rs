@@ -96,6 +96,10 @@ impl ProposalManager {
         self.batch_builder.get_number_of_batches_ready_to_send()
     }
 
+    pub fn remove_confirmed_proposal(&mut self) {
+        self.batch_builder.remove_confirmed_proposal();
+    }
+
     pub async fn try_submit_oldest_proposal(
         &mut self,
         submit_only_full_proposals: bool,

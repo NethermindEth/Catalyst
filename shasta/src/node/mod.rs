@@ -195,6 +195,10 @@ impl Node {
 
         self.check_transaction_error_channel().await?;
 
+        if !transaction_in_progress {
+            self.proposal_manager.remove_confirmed_proposal();
+        }
+
         if current_status.is_preconfirmation_start_slot() {
             self.head_verifier
                 .set(

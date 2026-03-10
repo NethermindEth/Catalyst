@@ -21,6 +21,9 @@ pub struct Proposal {
     pub anchor_state_root: B256,
     pub num_forced_inclusion: u16,
     pub created_at_sec: u64,
+    /// Set to true when this proposal has been dispatched to the transaction monitor
+    /// and is awaiting on-chain confirmation.
+    pub pending_confirmation: bool,
 }
 
 impl Proposal {
@@ -179,6 +182,7 @@ mod test {
             anchor_state_root: B256::ZERO,
             num_forced_inclusion: 0,
             created_at_sec: 0,
+            pending_confirmation: false,
         };
 
         proposal.compress();

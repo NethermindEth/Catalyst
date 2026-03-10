@@ -13,11 +13,11 @@ use common::{
     shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft},
 };
 use common::{
-    l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock, transaction_error::TransactionError},
+    l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock},
     shared::anchor_block_info::AnchorBlockInfo,
 };
 use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
-use tracing::{debug, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 pub struct BatchBuilder {
     config: BatchBuilderConfig,
@@ -105,6 +105,7 @@ impl BatchBuilder {
             anchor_state_root: anchor_block.state_root(),
             num_forced_inclusion: 0,
             created_at_sec: timestamp,
+            pending_confirmation: false,
         });
     }
 
@@ -221,6 +222,7 @@ impl BatchBuilder {
                 anchor_state_root: anchor_info.state_root(),
                 num_forced_inclusion: 0,
                 created_at_sec: l2_block_timestamp_sec,
+                pending_confirmation: false,
             });
         }
 
@@ -292,12 +294,26 @@ impl BatchBuilder {
         self.current_proposal.is_none() && self.proposals_to_send.is_empty()
     }
 
+    /// Remove the front proposal if it was dispatched and the transaction monitor has finished.
+    /// Must only be called when no transaction is in progress.
+    pub fn remove_confirmed_proposal(&mut self) {
+        if self
+            .proposals_to_send
+            .front()
+            .is_some_and(|p| p.pending_confirmation)
+        {
+            self.proposals_to_send.pop_front();
+        }
+    }
+
     pub async fn try_submit_oldest_batch(
         &mut self,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         submit_only_full_batches: bool,
         l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
+        let total_start = std::time::Instant::now();
+
         if let Some(current_proposal) = self.current_proposal.as_ref() {
             let block_count = u16::try_from(current_proposal.l2_blocks.len()).unwrap_or(0);
             let is_full = !self.config.is_within_block_limit(block_count + 1);
@@ -310,15 +326,11 @@ impl BatchBuilder {
             }
         }
 
-        if let Some(batch) = self.proposals_to_send.front() {
-            if ethereum_l1
-                .execution_layer
-                .transaction_monitor
-                .is_transaction_in_progress()
-                .await?
-            {
+        let proposals_number = self.proposals_to_send.len();
+        if let Some(proposal) = self.proposals_to_send.front_mut() {
+            if proposal.pending_confirmation {
                 debug!(
-                    proposals_to_send = %self.proposals_to_send.len(),
+                    proposals_to_send = %proposals_number,
                     current_proposal = %self.current_proposal.is_some(),
                     "Cannot submit batch, transaction is in progress.",
                 );
@@ -328,33 +340,30 @@ impl BatchBuilder {
             }
 
             debug!(
-                anchor_block_id = %batch.anchor_block_id,
-                coinbase = %batch.coinbase,
-                l2_blocks_len = %batch.l2_blocks.len(),
-                total_bytes = %batch.total_bytes,
-                proposals_to_send = %self.proposals_to_send.len(),
+                anchor_block_id = %proposal.anchor_block_id,
+                coinbase = %proposal.coinbase,
+                l2_blocks_len = %proposal.l2_blocks.len(),
+                total_bytes = %proposal.total_bytes,
+                proposals_to_send = %proposals_number,
                 current_proposal = %self.current_proposal.is_some(),
                 "Submitting batch"
             );
 
-            if let Err(err) = ethereum_l1
+            // Dispatches tx building + monitoring to a background task (returns immediately).
+            // Build errors (EstimationFailed, etc.) are reported via error_notification_channel.
+            ethereum_l1
                 .execution_layer
-                // TODO send a Proosal to function
-                .send_batch_to_l1(batch.l2_blocks.clone(), batch.num_forced_inclusion)
-                .await
-            {
-                if let Some(transaction_error) = err.downcast_ref::<TransactionError>()
-                    && !matches!(transaction_error, TransactionError::EstimationTooEarly)
-                {
-                    debug!("BatchBuilder: Transaction error, removing all batches");
-                    self.proposals_to_send.clear();
-                }
-                return Err(err);
-            }
+                .send_batch_to_l1(proposal.l2_blocks.clone(), proposal.num_forced_inclusion)
+                .await?;
 
-            self.proposals_to_send.pop_front();
+            // Mark the proposal as dispatched — it will be removed once the monitor confirms.
+            proposal.pending_confirmation = true;
         }
 
+        info!(
+            "⏱️ try_submit_oldest_batch total took {:?}",
+            total_start.elapsed()
+        );
         Ok(())
     }
 
