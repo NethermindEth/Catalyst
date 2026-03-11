@@ -17,7 +17,7 @@ use common::{
     shared::anchor_block_info::AnchorBlockInfo,
 };
 use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, trace, warn};
 
 pub struct BatchBuilder {
     config: BatchBuilderConfig,
@@ -306,14 +306,25 @@ impl BatchBuilder {
         }
     }
 
-    pub async fn try_submit_oldest_batch(
+    /// Mark the front proposal as not confirmed and ready to be resubmitted.
+    /// Must only be called when no transaction is in progress.
+    pub fn mark_not_confirmed_proposal_to_resubmit(&mut self) {
+        if let Some(proposal) = self.proposals_to_send.front_mut() {
+            if !proposal.pending_confirmation {
+                tracing::error!(
+                    "There is no pending confirmation proposal to mark as not confirmed."
+                );
+            }
+            proposal.pending_confirmation = false;
+        }
+    }
+
+    pub async fn try_submit_oldest_proposal(
         &mut self,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         submit_only_full_batches: bool,
         l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
-        let total_start = std::time::Instant::now();
-
         if let Some(current_proposal) = self.current_proposal.as_ref() {
             let block_count = u16::try_from(current_proposal.l2_blocks.len()).unwrap_or(0);
             let is_full = !self.config.is_within_block_limit(block_count + 1);
@@ -329,13 +340,8 @@ impl BatchBuilder {
         let proposals_number = self.proposals_to_send.len();
         if let Some(proposal) = self.proposals_to_send.front_mut() {
             if proposal.pending_confirmation {
-                debug!(
-                    proposals_to_send = %proposals_number,
-                    current_proposal = %self.current_proposal.is_some(),
-                    "Cannot submit batch, transaction is in progress.",
-                );
                 return Err(anyhow::anyhow!(
-                    "Cannot submit batch, transaction is in progress."
+                    "Cannot submit proposal {proposals_number}, proposal is pending confirmation."
                 ));
             }
 
@@ -360,10 +366,6 @@ impl BatchBuilder {
             proposal.pending_confirmation = true;
         }
 
-        info!(
-            "⏱️ try_submit_oldest_batch total took {:?}",
-            total_start.elapsed()
-        );
         Ok(())
     }
 

@@ -185,7 +185,6 @@ impl ExecutionLayer {
         l2_blocks: Vec<L2BlockV2>,
         num_forced_inclusion: u16,
     ) -> Result<(), Error> {
-        let send_batch_start = std::time::Instant::now();
         info!(
             "📦 Proposing with {} blocks | num_forced_inclusion: {}",
             l2_blocks.len(),
@@ -214,10 +213,6 @@ impl ExecutionLayer {
             .await
             .map_err(|e| Error::msg(format!("Sending batch to L1 failed: {e}")))?;
 
-        info!(
-            "⏱️ send_batch_to_l1 dispatched in {:?}",
-            send_batch_start.elapsed()
-        );
         Ok(())
     }
 

@@ -193,10 +193,14 @@ impl Node {
             .is_transaction_in_progress()
             .await?;
 
-        let had_transaction_error = self.check_transaction_error_channel().await?;
-
-        if !transaction_in_progress && !had_transaction_error {
-            self.proposal_manager.remove_confirmed_proposal();
+        if !transaction_in_progress {
+            let had_transaction_error = self.check_transaction_error_channel().await?;
+            if !had_transaction_error {
+                self.proposal_manager.remove_confirmed_proposal();
+            } else {
+                self.proposal_manager
+                    .mark_not_confirmed_proposal_to_resubmit();
+            }
         }
 
         if current_status.is_preconfirmation_start_slot() {

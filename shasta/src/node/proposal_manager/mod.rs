@@ -100,13 +100,17 @@ impl ProposalManager {
         self.batch_builder.remove_confirmed_proposal();
     }
 
+    pub fn mark_not_confirmed_proposal_to_resubmit(&mut self) {
+        self.batch_builder.mark_not_confirmed_proposal_to_resubmit();
+    }
+
     pub async fn try_submit_oldest_proposal(
         &mut self,
         submit_only_full_proposals: bool,
         l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
         self.batch_builder
-            .try_submit_oldest_batch(
+            .try_submit_oldest_proposal(
                 self.ethereum_l1.clone(),
                 submit_only_full_proposals,
                 l2_slot_timestamp,
