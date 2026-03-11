@@ -341,7 +341,9 @@ impl BatchBuilder {
         if let Some(proposal) = self.proposals_to_send.front_mut() {
             if proposal.pending_confirmation {
                 return Err(anyhow::anyhow!(
-                    "Cannot submit proposal {proposals_number}, proposal is pending confirmation."
+                    "Cannot submit proposal with anchor_block_id {} (proposals_to_send = {}), proposal is pending confirmation.",
+                    proposal.anchor_block_id,
+                    proposals_number,
                 ));
             }
 
