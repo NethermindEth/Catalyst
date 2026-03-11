@@ -77,11 +77,11 @@ impl Taiko {
     pub async fn get_pending_l2_tx_list_from_l2_engine(
         &self,
         base_fee: u64,
-        batches_ready_to_send: u64,
+        proposals_ready_to_send: u64,
         gas_limit: u64,
     ) -> Result<Option<PreBuiltTxList>, Error> {
         self.l2_engine
-            .get_pending_l2_tx_list(base_fee, batches_ready_to_send, gas_limit)
+            .get_pending_l2_tx_list(base_fee, proposals_ready_to_send, gas_limit)
             .await
     }
 
@@ -157,7 +157,7 @@ impl Taiko {
         {
             let start = std::time::Instant::now();
             let safe_block_id = self
-                .get_last_block_id_by_batch_id(inbox_forced_inclusion_state.next_proposal_id - 1)
+                .get_last_block_id_by_proposal_id(inbox_forced_inclusion_state.next_proposal_id - 1)
                 .await?;
             let unsafe_block_id = self.get_latest_l2_block_id().await?;
             for block_id in safe_block_id + 1..=unsafe_block_id {
@@ -180,16 +180,16 @@ impl Taiko {
         Ok(fi_head)
     }
 
-    pub async fn get_last_block_id_by_batch_id(&self, batch_id: u64) -> Result<u64, Error> {
+    pub async fn get_last_block_id_by_proposal_id(&self, proposal_id: u64) -> Result<u64, Error> {
         match self
             .l2_engine
-            .get_last_block_id_by_batch_id(batch_id)
+            .get_last_block_id_by_batch_id(proposal_id)
             .await?
         {
             Some(block_id) => Ok(block_id),
             None => Err(anyhow::anyhow!(
-                "last block id by batch id {} is None",
-                batch_id
+                "last block id by proposal id {} is None",
+                proposal_id
             )),
         }
     }

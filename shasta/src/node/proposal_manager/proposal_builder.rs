@@ -19,7 +19,7 @@ use common::{
 use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 use tracing::{debug, trace, warn};
 
-pub struct BatchBuilder {
+pub struct ProposalBuilder {
     config: BatchBuilderConfig,
     proposals_to_send: VecDeque<Proposal>,
     current_proposal: Option<Proposal>,
@@ -27,7 +27,7 @@ pub struct BatchBuilder {
     metrics: Arc<Metrics>,
 }
 
-impl BatchBuilder {
+impl ProposalBuilder {
     pub fn new(
         config: BatchBuilderConfig,
         slot_clock: Arc<SlotClock>,
@@ -47,27 +47,28 @@ impl BatchBuilder {
     }
 
     pub fn can_consume_l2_block(&mut self, l2_draft_block: &L2BlockV2Draft) -> bool {
-        self.current_proposal.as_mut().is_some_and(|batch| {
-            let new_block_count = match u16::try_from(batch.l2_blocks.len() + 1) {
+        self.current_proposal.as_mut().is_some_and(|proposal| {
+            let new_block_count = match u16::try_from(proposal.l2_blocks.len() + 1) {
                 Ok(n) => n,
                 Err(_) => return false,
             };
 
             let mut new_total_bytes =
-                batch.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
+                proposal.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
 
             if !self.config.is_within_bytes_limit(new_total_bytes) {
-                // first compression, compressing the batch without the new L2 block
-                batch.compress();
-                new_total_bytes = batch.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
+                // first compression, compressing the proposal without the new L2 block
+                proposal.compress();
+                new_total_bytes =
+                    proposal.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
                 if !self.config.is_within_bytes_limit(new_total_bytes) {
-                    // second compression, compressing the batch with the new L2 block
+                    // second compression, compressing the proposal with the new L2 block
                     // we can tolerate the processing overhead as it's a very rare case
                     let start = std::time::Instant::now();
-                    let mut batch_clone = batch.clone();
-                    batch_clone.add_l2_draft_block(l2_draft_block.clone());
-                    batch_clone.compress();
-                    new_total_bytes = batch_clone.total_bytes;
+                    let mut proposal_clone = proposal.clone();
+                    proposal_clone.add_l2_draft_block(l2_draft_block.clone());
+                    proposal_clone.compress();
+                    new_total_bytes = proposal_clone.total_bytes;
                     debug!(
                         "can_consume_l2_block: Second compression took {} ms, new total bytes: {}",
                         start.elapsed().as_millis(),
@@ -91,8 +92,8 @@ impl BatchBuilder {
         })
     }
 
-    pub fn create_new_batch(&mut self, id: u64, anchor_block: AnchorBlockInfo, timestamp: u64) {
-        self.finalize_current_batch();
+    pub fn create_new_proposal(&mut self, id: u64, anchor_block: AnchorBlockInfo, timestamp: u64) {
+        self.finalize_current_proposal();
 
         self.current_proposal = Some(Proposal {
             id,
@@ -117,14 +118,14 @@ impl BatchBuilder {
             let payload = current_proposal.add_l2_draft_block(l2_draft_block);
 
             debug!(
-                "Added L2 draft block to batch: forced inclusions {}, l2 blocks: {}, total bytes: {}",
+                "Added L2 draft block to proposal: forced inclusions {}, l2 blocks: {}, total bytes: {}",
                 current_proposal.num_forced_inclusion,
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
             Ok(payload)
         } else {
-            Err(anyhow::anyhow!("No current batch"))
+            Err(anyhow::anyhow!("No current proposal"))
         }
     }
 
@@ -137,14 +138,14 @@ impl BatchBuilder {
             let payload = current_proposal.add_forced_inclusion(fi_block, anchor_params);
 
             debug!(
-                "Added forced inclusion L2 block to batch: forced inclusions: {}, l2 blocks: {}, total bytes: {}",
+                "Added forced inclusion L2 block to proposal: forced inclusions: {}, l2 blocks: {}, total bytes: {}",
                 current_proposal.num_forced_inclusion,
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
             Ok(payload)
         } else {
-            Err(anyhow::anyhow!("No current batch"))
+            Err(anyhow::anyhow!("No current proposal"))
         }
     }
 
@@ -156,14 +157,14 @@ impl BatchBuilder {
             current_proposal.add_l2_block(l2_block);
 
             debug!(
-                "Added L2 block to batch: forced inclusions {}, l2 blocks: {}, total bytes: {}",
+                "Added L2 block to proposal: forced inclusions {}, l2 blocks: {}, total bytes: {}",
                 current_proposal.num_forced_inclusion,
                 current_proposal.l2_blocks.len(),
                 current_proposal.total_bytes
             );
             Ok(current_proposal)
         } else {
-            Err(anyhow::anyhow!("No current batch"))
+            Err(anyhow::anyhow!("No current proposal"))
         }
     }
 
@@ -182,7 +183,7 @@ impl BatchBuilder {
                     self.current_proposal = None;
                 }
                 debug!(
-                    "Removed L2 block from batch: {} txs, {} bytes",
+                    "Removed L2 block from proposal: {} txs, {} bytes",
                     removed_block.prebuilt_tx_list.tx_list.len(),
                     removed_block.prebuilt_tx_list.bytes_length
                 );
@@ -204,7 +205,7 @@ impl BatchBuilder {
         // We have a new proposal when proposal ID differs
         // Otherwise we continue with the current proposal
         if !self.is_same_proposal_id(proposal_id) {
-            self.finalize_current_batch();
+            self.finalize_current_proposal();
             debug!(
                 "Creating new proposal during recovery: proposal_id {}, anchor_block_id {} coinbase {}",
                 proposal_id,
@@ -236,13 +237,13 @@ impl BatchBuilder {
                 ));
             }
         } else {
-            if let Some(batch) = self.current_proposal.as_mut()
-                && batch.anchor_block_id < anchor_info.id()
+            if let Some(proposal) = self.current_proposal.as_mut()
+                && proposal.anchor_block_id < anchor_info.id()
             {
-                batch.anchor_block_id = anchor_info.id();
-                batch.anchor_block_timestamp_sec = anchor_info.timestamp_sec();
-                batch.anchor_block_hash = anchor_info.hash();
-                batch.anchor_state_root = anchor_info.state_root();
+                proposal.anchor_block_id = anchor_info.id();
+                proposal.anchor_block_timestamp_sec = anchor_info.timestamp_sec();
+                proposal.anchor_block_hash = anchor_info.hash();
+                proposal.anchor_state_root = anchor_info.state_root();
             }
 
             let bytes_length =
@@ -278,8 +279,7 @@ impl BatchBuilder {
     }
 
     fn is_same_proposal_id(&self, proposal_id: u64) -> bool {
-        // Note: proposal.id is not part of BatchLike trait, so we need to access it directly
-        // Since Proposal has a public id field, we can access it
+        // Since Proposal has a public id field, we can access it directly
         self.current_proposal
             .as_ref()
             .is_some_and(|proposal| proposal.id == proposal_id)
@@ -287,7 +287,7 @@ impl BatchBuilder {
 
     pub fn is_empty(&self) -> bool {
         trace!(
-            "batch_builder::is_empty: current_proposal is none: {}, proposals_to_send len: {}",
+            "proposal_builder::is_empty: current_proposal is none: {}, proposals_to_send len: {}",
             self.current_proposal.is_none(),
             self.proposals_to_send.len()
         );
@@ -322,7 +322,7 @@ impl BatchBuilder {
     pub async fn try_submit_oldest_proposal(
         &mut self,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-        submit_only_full_batches: bool,
+        submit_only_full_proposals: bool,
         l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
         if let Some(current_proposal) = self.current_proposal.as_ref() {
@@ -332,8 +332,8 @@ impl BatchBuilder {
                 .config
                 .is_within_time_limit(current_proposal.created_at_sec, l2_slot_timestamp);
 
-            if !submit_only_full_batches || is_full || is_expired {
-                self.finalize_current_batch();
+            if !submit_only_full_proposals || is_full || is_expired {
+                self.finalize_current_proposal();
             }
         }
 
@@ -354,14 +354,14 @@ impl BatchBuilder {
                 total_bytes = %proposal.total_bytes,
                 proposals_to_send = %proposals_number,
                 current_proposal = %self.current_proposal.is_some(),
-                "Submitting batch"
+                "Submitting proposal"
             );
 
             // Dispatches tx building + monitoring to a background task (returns immediately).
             // Build errors (EstimationFailed, etc.) are reported via error_notification_channel.
             ethereum_l1
                 .execution_layer
-                .send_batch_to_l1(proposal.l2_blocks.clone(), proposal.num_forced_inclusion)
+                .send_proposal_to_l1(proposal.l2_blocks.clone(), proposal.num_forced_inclusion)
                 .await?;
 
             // Mark the proposal as dispatched — it will be removed once the monitor confirms.
@@ -374,7 +374,7 @@ impl BatchBuilder {
     // TODO do we have that check in SC?
     pub fn is_time_shift_between_blocks_expiring(&self, current_l2_slot_timestamp: u64) -> bool {
         if let Some(current_proposal) = self.current_proposal.as_ref() {
-            // l1_batches is not empty
+            // current proposal is not empty
             if let Some(last_block) = current_proposal.l2_blocks.last() {
                 if current_l2_slot_timestamp < last_block.timestamp_sec {
                     warn!("Preconfirmation timestamp is before the last block timestamp");
@@ -413,7 +413,7 @@ impl BatchBuilder {
         self.is_time_shift_between_blocks_expiring(preconfirmation_timestamp)
     }
 
-    pub fn clone_without_batches(&self) -> Self {
+    pub fn clone_without_proposals(&self) -> Self {
         Self {
             config: self.config.clone(),
             proposals_to_send: VecDeque::new(),
@@ -423,7 +423,7 @@ impl BatchBuilder {
         }
     }
 
-    pub fn get_number_of_batches(&self) -> u64 {
+    pub fn get_number_of_proposals(&self) -> u64 {
         self.proposals_to_send.len() as u64
             + if self.current_proposal.is_some() {
                 1
@@ -432,27 +432,26 @@ impl BatchBuilder {
             }
     }
 
-    pub fn get_number_of_batches_ready_to_send(&self) -> u64 {
+    pub fn get_number_of_proposals_ready_to_send(&self) -> u64 {
         self.proposals_to_send.len() as u64
     }
 
-    /// Alias for `take_proposals_to_send` for compatibility
-    pub fn take_batches_to_send(&mut self) -> VecDeque<Proposal> {
+    pub fn take_proposals_to_send(&mut self) -> VecDeque<Proposal> {
         std::mem::take(&mut self.proposals_to_send)
     }
 
-    pub fn prepend_batches(&mut self, mut batches: Proposals) {
-        batches.append(&mut self.proposals_to_send);
-        self.proposals_to_send = batches;
+    pub fn prepend_proposals(&mut self, mut proposals: Proposals) {
+        proposals.append(&mut self.proposals_to_send);
+        self.proposals_to_send = proposals;
     }
 
     pub fn get_current_proposal_id(&self) -> Option<u64> {
         self.current_proposal.as_ref().map(|b| b.id)
     }
 
-    pub fn try_finalize_current_batch(&mut self) -> Result<(), Error> {
+    pub fn try_finalize_current_proposal(&mut self) -> Result<(), Error> {
         // TODO handle forced inclusion
-        self.finalize_current_batch();
+        self.finalize_current_proposal();
         Ok(())
     }
 
@@ -471,11 +470,11 @@ impl BatchBuilder {
         self.current_proposal = None;
     }
 
-    pub fn finalize_current_batch(&mut self) {
-        if let Some(batch) = self.current_proposal.take()
-            && !batch.l2_blocks.is_empty()
+    pub fn finalize_current_proposal(&mut self) {
+        if let Some(proposal) = self.current_proposal.take()
+            && !proposal.l2_blocks.is_empty()
         {
-            self.proposals_to_send.push_back(batch);
+            self.proposals_to_send.push_back(proposal);
         }
     }
 

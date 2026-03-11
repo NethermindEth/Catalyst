@@ -102,7 +102,7 @@ pub async fn create_shasta_node(
 
     let max_anchor_height_offset = taiko.get_protocol_config().get_max_anchor_height_offset();
 
-    let batch_builder_config = BatchBuilderConfig {
+    let proposal_builder_config = BatchBuilderConfig {
         max_bytes_size_of_batch: config.max_bytes_size_of_batch,
         max_blocks_per_batch,
         l1_slot_duration_sec: config.l1_slot_duration_sec,
@@ -142,7 +142,7 @@ pub async fn create_shasta_node(
         ethereum_l1.clone(),
         taiko.clone(),
         metrics.clone(),
-        batch_builder_config,
+        proposal_builder_config,
         transaction_error_receiver,
         fork_info,
         chain_monitor.clone(),

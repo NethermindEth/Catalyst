@@ -169,9 +169,9 @@ impl VerifierThread {
         match self.preconfirmation_root.number.cmp(&taiko_inbox_height) {
             Ordering::Greater => {
                 // preconfirmation_root.number > taiko_inbox_height
-                // make batches from blocks unprocessed by previous preconfer
+                // make proposals from blocks unprocessed by previous preconfer
                 info!(
-                    "Taiko geth has {} blocks more than Taiko Inbox. Preparing batch for submission.",
+                    "Taiko geth has {} blocks more than Taiko Inbox. Preparing proposal for submission.",
                     self.preconfirmation_root.number - taiko_inbox_height
                 );
 
