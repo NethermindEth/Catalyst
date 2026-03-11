@@ -23,7 +23,7 @@ use tracing::{info, warn};
 
 /// Build the EIP-7594 blob sidecar from L2 blocks. This is a CPU-intensive operation
 /// (KZG commitment + cell proof computation).
-pub fn build_sidecar_from_l2_blocks(
+fn build_sidecar_from_l2_blocks(
     l2_blocks: &[L2BlockV2],
 ) -> Result<BlobTransactionSidecarEip7594, Error> {
     let start = std::time::Instant::now();
