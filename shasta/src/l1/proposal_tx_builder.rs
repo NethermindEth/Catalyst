@@ -178,7 +178,7 @@ impl TransactionRequestBuilder for ProposalTxBuilder {
     async fn build(self) -> Result<TransactionRequest, TransactionError> {
         self.build_propose_tx().await.map_err(|e| {
             e.downcast::<TransactionError>()
-                .unwrap_or(TransactionError::EstimationFailed)
+                .unwrap_or(TransactionError::BuildFailed)
         })
     }
 }

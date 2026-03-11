@@ -505,6 +505,10 @@ impl Node {
                 warn!("Proposal transaction executed too late.");
                 Ok(())
             }
+            TransactionError::BuildFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Transaction build failed, exiting"))
+            }
         }
     }
 

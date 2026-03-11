@@ -80,6 +80,7 @@ impl L2Engine {
         }
     }
 
+    /// Batch (pacaya) is equivalent to the proposal (shasta).
     pub async fn get_pending_l2_tx_list(
         &self,
         base_fee: u64,

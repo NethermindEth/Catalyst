@@ -1,5 +1,6 @@
 #[derive(Debug, Clone)]
 pub enum TransactionError {
+    BuildFailed,
     EstimationFailed,
     EstimationTooEarly,
     TransactionReverted,
