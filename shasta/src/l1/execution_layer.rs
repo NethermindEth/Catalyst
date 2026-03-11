@@ -180,7 +180,7 @@ impl PreconfOperator for ExecutionLayer {
 }
 
 impl ExecutionLayer {
-    pub async fn send_batch_to_l1(
+    pub async fn send_proposal_to_l1(
         &self,
         l2_blocks: Vec<L2BlockV2>,
         num_forced_inclusion: u16,
@@ -191,28 +191,27 @@ impl ExecutionLayer {
             num_forced_inclusion,
         );
 
-        // Build propose transaction
-        let builder = ProposalTxBuilder::new(self.provider.clone(), self.extra_gas_percentage);
-        let tx = builder
-            .build_propose_tx(
-                l2_blocks,
-                self.common().preconfer_address(),
-                self.contract_addresses.shasta_inbox,
-                num_forced_inclusion,
-            )
-            .await
-            .map_err(|e| Error::msg(format!("build_propose_tx failed: {e}")))?;
-
         let pending_nonce = self.get_preconfer_nonce_pending().await.map_err(|e| {
             Error::msg(format!(
-                "get_preconfer_nonce_pending (send_batch_to_l1) failed: {e}"
+                "get_preconfer_nonce_pending (send_proposal_to_l1) failed: {e}"
             ))
         })?;
-        // Spawn a monitor for this transaction
+
+        // Build the transaction asynchronously inside the monitor's spawned task.
+        // This moves the ~650ms KZG sidecar computation off the hot path.
+        let tx_builder = ProposalTxBuilder::new(
+            self.provider.clone(),
+            self.extra_gas_percentage,
+            l2_blocks,
+            self.common().preconfer_address(),
+            self.contract_addresses.shasta_inbox,
+            num_forced_inclusion,
+        );
+
         self.transaction_monitor
-            .monitor_new_transaction(tx, pending_nonce)
+            .monitor_new_transaction_with_builder(tx_builder, pending_nonce)
             .await
-            .map_err(|e| Error::msg(format!("Sending batch to L1 failed: {e}")))?;
+            .map_err(|e| Error::msg(format!("Sending proposal to L1 failed: {e}")))?;
 
         Ok(())
     }

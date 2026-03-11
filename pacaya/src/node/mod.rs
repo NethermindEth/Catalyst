@@ -746,6 +746,10 @@ impl Node {
                 warn!("Propose batch transaction executed too late.");
                 return Ok(());
             }
+            TransactionError::BuildFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                return Err(anyhow::anyhow!("Transaction build failed, exiting"));
+            }
         }
 
         Ok(())

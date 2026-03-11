@@ -58,7 +58,7 @@ impl Node {
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
-        batch_builder_config: BatchBuilderConfig,
+        proposal_builder_config: BatchBuilderConfig,
         transaction_error_channel: Receiver<TransactionError>,
         fork_info: ForkInfo,
         chain_monitor: Arc<ShastaChainMonitor>,
@@ -94,7 +94,7 @@ impl Node {
         let proposal_manager = ProposalManager::new(
             config.l1_height_lag,
             config.min_anchor_offset,
-            batch_builder_config,
+            proposal_builder_config,
             ethereum_l1.clone(),
             taiko.clone(),
             block_advancer,
@@ -193,7 +193,15 @@ impl Node {
             .is_transaction_in_progress()
             .await?;
 
-        self.check_transaction_error_channel().await?;
+        if !transaction_in_progress {
+            let had_transaction_error = self.check_transaction_error_channel().await?;
+            if !had_transaction_error {
+                self.proposal_manager.remove_confirmed_proposal();
+            } else {
+                self.proposal_manager
+                    .mark_not_confirmed_proposal_to_resubmit();
+            }
+        }
 
         if current_status.is_preconfirmation_start_slot() {
             self.head_verifier
@@ -328,7 +336,7 @@ impl Node {
                 || self.proposal_manager.has_current_forced_inclusion()
             {
                 error!(
-                    "Resetting batch builder. has batches: {}, has current forced inclusion: {}",
+                    "Resetting proposal builder. has proposals: {}, has current forced inclusion: {}",
                     self.proposal_manager.has_proposals(),
                     self.proposal_manager.has_current_forced_inclusion()
                 );
@@ -497,6 +505,10 @@ impl Node {
                 warn!("Proposal transaction executed too late.");
                 Ok(())
             }
+            TransactionError::BuildFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Transaction build failed, exiting"))
+            }
         }
     }
 
@@ -632,23 +644,21 @@ impl Node {
         Ok((l1_proposal_id, l2_proposal_id))
     }
 
-    async fn check_transaction_error_channel(&mut self) -> Result<(), Error> {
+    /// Returns Ok(true) if a transaction error was received, Ok(false) if no error.
+    async fn check_transaction_error_channel(&mut self) -> Result<bool, Error> {
         match self.transaction_error_channel.try_recv() {
             Ok(error) => {
-                return self.handle_transaction_error(&error).await;
+                self.handle_transaction_error(&error).await?;
+                Ok(true)
             }
             Err(err) => match err {
-                TryRecvError::Empty => {
-                    // no errors, proceed with preconfirmation
-                }
+                TryRecvError::Empty => Ok(false), // no errors, proceed with preconfirmation
                 TryRecvError::Disconnected => {
                     self.cancel_token.cancel_on_critical_error();
-                    return Err(anyhow::anyhow!("Transaction error channel disconnected"));
+                    Err(anyhow::anyhow!("Transaction error channel disconnected"))
                 }
             },
         }
-
-        Ok(())
     }
 
     fn print_current_slots_info(
