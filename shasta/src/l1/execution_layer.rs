@@ -180,7 +180,7 @@ impl PreconfOperator for ExecutionLayer {
 }
 
 impl ExecutionLayer {
-    pub async fn send_batch_to_l1(
+    pub async fn send_proposal_to_l1(
         &self,
         l2_blocks: Vec<L2BlockV2>,
         num_forced_inclusion: u16,
@@ -193,7 +193,7 @@ impl ExecutionLayer {
 
         let pending_nonce = self.get_preconfer_nonce_pending().await.map_err(|e| {
             Error::msg(format!(
-                "get_preconfer_nonce_pending (send_batch_to_l1) failed: {e}"
+                "get_preconfer_nonce_pending (send_proposal_to_l1) failed: {e}"
             ))
         })?;
 
@@ -211,7 +211,7 @@ impl ExecutionLayer {
         self.transaction_monitor
             .monitor_new_transaction_with_builder(tx_builder, pending_nonce)
             .await
-            .map_err(|e| Error::msg(format!("Sending batch to L1 failed: {e}")))?;
+            .map_err(|e| Error::msg(format!("Sending proposal to L1 failed: {e}")))?;
 
         Ok(())
     }

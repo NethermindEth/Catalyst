@@ -102,7 +102,7 @@ impl LastSafeL2BlockFinder {
         // Fast path: try direct lookup via Taiko
         match self
             .taiko
-            .get_last_block_id_by_batch_id(target_proposal_id)
+            .get_last_block_id_by_proposal_id(target_proposal_id)
             .await
         {
             Ok(block_id) => {
@@ -113,7 +113,7 @@ impl LastSafeL2BlockFinder {
             }
             Err(err) => {
                 tracing::warn!(
-                    "LastSafeL2BlockFinder::find_last_block_for_proposal_id(): Failed to get last block id by batch id: {}",
+                    "LastSafeL2BlockFinder::find_last_block_for_proposal_id(): Failed to get last block id by proposal id: {}",
                     err
                 );
             }

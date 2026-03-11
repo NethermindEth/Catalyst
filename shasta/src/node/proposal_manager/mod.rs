@@ -1,7 +1,7 @@
-mod batch_builder;
 pub mod block_advancer;
 pub mod l2_block_payload;
 pub mod proposal;
+mod proposal_builder;
 
 use crate::{
     l1::execution_layer::ExecutionLayer,
@@ -11,7 +11,6 @@ use crate::{
 };
 use alloy::{consensus::BlockHeader, consensus::Transaction};
 use anyhow::Error;
-use batch_builder::BatchBuilder;
 use common::{batch_builder::BatchBuilderConfig, shared::l2_slot_info_v2::L2SlotContext};
 use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
@@ -19,6 +18,7 @@ use common::{
     shared::anchor_block_info::AnchorBlockInfo,
     utils::cancellation_token::CancellationToken,
 };
+use proposal_builder::ProposalBuilder;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
@@ -28,7 +28,7 @@ use block_advancer::BlockAdvancer;
 use proposal::Proposals;
 
 pub struct ProposalManager {
-    batch_builder: BatchBuilder,
+    proposal_builder: ProposalBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
     block_advancer: Arc<dyn BlockAdvancer>,
@@ -56,7 +56,7 @@ impl ProposalManager {
         propose_forced_inclusion: bool,
     ) -> Result<Self, Error> {
         info!(
-            "Batch builder config:\n\
+            "Proposal builder config:\n\
              max_bytes_size_of_batch: {}\n\
              max_blocks_per_batch: {}\n\
              l1_slot_duration_sec: {}\n\
@@ -74,7 +74,7 @@ impl ProposalManager {
         let forced_inclusion = ForcedInclusion::new(ethereum_l1.clone()).await?;
 
         Ok(Self {
-            batch_builder: BatchBuilder::new(
+            proposal_builder: ProposalBuilder::new(
                 config,
                 ethereum_l1.slot_clock.clone(),
                 metrics.clone(),
@@ -93,15 +93,17 @@ impl ProposalManager {
     }
 
     pub fn get_number_of_proposals_ready_to_send(&self) -> u64 {
-        self.batch_builder.get_number_of_batches_ready_to_send()
+        self.proposal_builder
+            .get_number_of_proposals_ready_to_send()
     }
 
     pub fn remove_confirmed_proposal(&mut self) {
-        self.batch_builder.remove_confirmed_proposal();
+        self.proposal_builder.remove_confirmed_proposal();
     }
 
     pub fn mark_not_confirmed_proposal_to_resubmit(&mut self) {
-        self.batch_builder.mark_not_confirmed_proposal_to_resubmit();
+        self.proposal_builder
+            .mark_not_confirmed_proposal_to_resubmit();
     }
 
     pub async fn try_submit_oldest_proposal(
@@ -109,7 +111,7 @@ impl ProposalManager {
         submit_only_full_proposals: bool,
         l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
-        self.batch_builder
+        self.proposal_builder
             .try_submit_oldest_proposal(
                 self.ethereum_l1.clone(),
                 submit_only_full_proposals,
@@ -123,7 +125,7 @@ impl ProposalManager {
         pending_tx_list: &Option<PreBuiltTxList>,
         l2_slot_context: &L2SlotContext,
     ) -> bool {
-        self.batch_builder.should_new_block_be_created(
+        self.proposal_builder.should_new_block_be_created(
             pending_tx_list,
             l2_slot_context.info.slot_timestamp(),
             l2_slot_context.end_of_sequencing,
@@ -144,12 +146,12 @@ impl ProposalManager {
             )
             .await?;
         if self
-            .batch_builder
+            .proposal_builder
             .is_greater_than_max_anchor_height_offset()?
         {
             // Handle max anchor height offset exceeded
-            info!("📈 Maximum allowed anchor height offset exceeded, finalizing current batch.");
-            self.batch_builder.finalize_current_batch();
+            info!("📈 Maximum allowed anchor height offset exceeded, finalizing current proposal.");
+            self.proposal_builder.finalize_current_proposal();
         }
 
         Ok(preconfed_block)
@@ -160,7 +162,7 @@ impl ProposalManager {
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<Option<BuildPreconfBlockResponse>, Error> {
-        if !self.batch_builder.can_add_forced_inclusion() {
+        if !self.proposal_builder.can_add_forced_inclusion() {
             return Ok(None);
         }
         // get next forced inclusion
@@ -187,7 +189,9 @@ impl ProposalManager {
                 .get_block_params_from_geth(l2_slot_context.info.parent_id())
                 .await?;
 
-            let payload = self.batch_builder.add_fi_block(fi_block, anchor_params)?;
+            let payload = self
+                .proposal_builder
+                .add_fi_block(fi_block, anchor_params)?;
             match self
                 .block_advancer
                 .advance_head_to_new_l2_block(payload, l2_slot_context, operation_type)
@@ -206,7 +210,7 @@ impl ProposalManager {
                         err
                     );
                     self.forced_inclusion.release_forced_inclusion().await;
-                    self.batch_builder.decrease_forced_inclusion_count();
+                    self.proposal_builder.decrease_forced_inclusion_count();
                     return Err(anyhow::anyhow!(
                         "Failed to advance head to new forced inclusion L2 block: {}",
                         err
@@ -227,7 +231,7 @@ impl ProposalManager {
     ) -> Result<BuildPreconfBlockResponse, Error> {
         let timestamp = l2_slot_context.info.slot_timestamp();
         if let Some(last_block_timestamp) = self
-            .batch_builder
+            .proposal_builder
             .get_current_proposal_last_block_timestamp()
             && timestamp == last_block_timestamp
         {
@@ -252,8 +256,8 @@ impl ProposalManager {
             gas_limit_without_anchor: l2_slot_context.info.parent_gas_limit_without_anchor(),
         };
 
-        if !self.batch_builder.can_consume_l2_block(&l2_draft_block) {
-            // Create new batch
+        if !self.proposal_builder.can_consume_l2_block(&l2_draft_block) {
+            // Create new proposal
             let _ = self
                 .create_new_proposal(
                     l2_slot_context.info.parent_id(),
@@ -284,7 +288,7 @@ impl ProposalManager {
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<BuildPreconfBlockResponse, Error> {
-        let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
+        let payload = self.proposal_builder.add_l2_draft_block(l2_draft_block)?;
 
         match self
             .block_advancer
@@ -304,7 +308,7 @@ impl ProposalManager {
     }
 
     async fn get_next_proposal_id(&self, parent_block_id: u64) -> Result<u64, Error> {
-        if let Some(current_proposal_id) = self.batch_builder.get_current_proposal_id() {
+        if let Some(current_proposal_id) = self.proposal_builder.get_current_proposal_id() {
             return Ok(current_proposal_id + 1);
         }
 
@@ -339,7 +343,7 @@ impl ProposalManager {
         parent_block_id: u64,
         l2_slot_timestamp: u64,
     ) -> Result<u64, Error> {
-        // Calculate the anchor block ID and create a new batch
+        // Calculate the anchor block ID and create a new proposal
         let last_anchor_id = self
             .taiko
             .l2_execution_layer()
@@ -357,23 +361,26 @@ impl ProposalManager {
         let proposal_id = self.get_next_proposal_id(parent_block_id).await?;
 
         let anchor_block_id = anchor_block_info.id();
-        // Create new batch
-        self.batch_builder
-            .create_new_batch(proposal_id, anchor_block_info, l2_slot_timestamp);
+        // Create new proposal
+        self.proposal_builder.create_new_proposal(
+            proposal_id,
+            anchor_block_info,
+            l2_slot_timestamp,
+        );
 
         Ok(anchor_block_id)
     }
 
     fn remove_last_l2_block(&mut self) {
-        self.batch_builder.remove_last_l2_block();
+        self.proposal_builder.remove_last_l2_block();
     }
 
     pub async fn reset_builder(&mut self) -> Result<(), Error> {
-        warn!("Resetting batch builder");
+        warn!("Resetting proposal builder");
         self.forced_inclusion.sync_queue_index_with_head().await?;
 
-        self.batch_builder = batch_builder::BatchBuilder::new(
-            self.batch_builder.get_config().clone(),
+        self.proposal_builder = proposal_builder::ProposalBuilder::new(
+            self.proposal_builder.get_config().clone(),
             self.ethereum_l1.slot_clock.clone(),
             self.metrics.clone(),
         );
@@ -382,23 +389,23 @@ impl ProposalManager {
     }
 
     pub fn has_proposals(&self) -> bool {
-        !self.batch_builder.is_empty()
+        !self.proposal_builder.is_empty()
     }
 
     pub fn has_current_forced_inclusion(&self) -> bool {
-        self.batch_builder.has_current_forced_inclusion()
+        self.proposal_builder.has_current_forced_inclusion()
     }
 
     pub fn get_number_of_proposals(&self) -> u64 {
-        self.batch_builder.get_number_of_batches()
+        self.proposal_builder.get_number_of_proposals()
     }
 
     pub fn try_finalize_current_proposal(&mut self) -> Result<(), Error> {
-        self.batch_builder.try_finalize_current_batch()
+        self.proposal_builder.try_finalize_current_proposal()
     }
 
     pub fn take_proposals_to_send(&mut self) -> Proposals {
-        self.batch_builder.take_batches_to_send()
+        self.proposal_builder.take_proposals_to_send()
     }
 
     pub fn is_offsets_valid(&self, anchor_block_offset: u64, timestamp_offset: u64) -> bool {
@@ -517,7 +524,7 @@ impl ProposalManager {
         let txs = txs.to_vec();
 
         // TODO validate block params
-        self.batch_builder
+        self.proposal_builder
             .recover_from(
                 proposal_id,
                 anchor_info,
@@ -533,7 +540,7 @@ impl ProposalManager {
 
     pub fn clone_without_proposals(&self, fi_head: u64) -> Self {
         Self {
-            batch_builder: self.batch_builder.clone_without_batches(),
+            proposal_builder: self.proposal_builder.clone_without_proposals(),
             ethereum_l1: self.ethereum_l1.clone(),
             taiko: self.taiko.clone(),
             block_advancer: self.block_advancer.clone(),
@@ -547,8 +554,8 @@ impl ProposalManager {
         }
     }
 
-    pub fn prepend_proposals(&mut self, batches: Proposals) {
-        self.batch_builder.prepend_batches(batches);
+    pub fn prepend_proposals(&mut self, proposals: Proposals) {
+        self.proposal_builder.prepend_proposals(proposals);
     }
 
     pub fn set_fi_head(&mut self, fi_head: u64) {
@@ -678,7 +685,7 @@ impl ProposalManager {
                 }
             }
         }
-        // finalize the current batch to avoid anchor and timestamp checks during preconfirmation
+        // finalize the current proposal to avoid anchor and timestamp checks during preconfirmation
         self.try_finalize_current_proposal()?;
         Ok(processed_blocks)
     }
