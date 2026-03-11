@@ -648,7 +648,7 @@ impl Node {
                 Ok(true)
             }
             Err(err) => match err {
-                TryRecvError::Empty => Ok(false),
+                TryRecvError::Empty => Ok(false), // no errors, proceed with preconfirmation
                 TryRecvError::Disconnected => {
                     self.cancel_token.cancel_on_critical_error();
                     Err(anyhow::anyhow!("Transaction error channel disconnected"))
