@@ -20,12 +20,20 @@ license = "MIT"
 
 [workspace.dependencies]
 alloy = { version = "1.7", default-features = false, features = [
-    "full",
-    "node-bindings",
-    "rlp",
-    "rpc-types-beacon",
-    "rpc-types",
+    "consensus",
+    "eips",
+    "k256",
     "kzg",
+    "network",
+    "provider-http",
+    "provider-ws",
+    "rlp",
+    "rpc-types",
+    "rpc-types-beacon",
+    "rpc-types-engine",
+    "rpc-types-eth",
+    "serde",
+    "signers",
 ] }
 alloy-json-rpc = { version = "1.7", default-features = false }
 alloy-rlp = { version = "0.3", default-features = false }
@@ -70,7 +78,6 @@ k256 = { version = "0.13", default-features = false, features = [
     "schnorr",
     "std",
 ] }
-lazy_static = { version = "1.5", default-features = false }
 mockito = { version = "1.7", default-features = false }
 pacaya = { path = "pacaya" }
 permissionless = { path = "permissionless" }
