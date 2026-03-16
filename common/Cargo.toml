@@ -10,7 +10,10 @@ publish = false
 test-gas = []
 
 [dependencies]
-alloy = { workspace = true }
+alloy = { workspace = true, features = [
+    "provider-debug-api",
+    "rpc-types-trace",
+] }
 alloy-json-rpc = { workspace = true }
 alloy-rlp = { workspace = true }
 anyhow = { workspace = true }
