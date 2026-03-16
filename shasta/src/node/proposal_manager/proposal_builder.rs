@@ -249,6 +249,14 @@ impl ProposalBuilder {
             let bytes_length =
                 crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
 
+            if !self.can_fit_recovered_block(bytes_length) {
+                return Err(anyhow::anyhow!(
+                    "recover_from: block does not fit in proposal {} (adding {} bytes would exceed blob size limit). Reorg needed.",
+                    proposal_id,
+                    bytes_length,
+                ));
+            }
+
             let l2_block = L2BlockV2::new_from(
                 crate::shared::l2_tx_lists::PreBuiltTxList {
                     tx_list,
@@ -261,10 +269,6 @@ impl ProposalBuilder {
                 gas_limit,
             );
 
-            // TODO we add block to the current proposal.
-            // But we should verify that it fit N blob data size
-            // Otherwise we should do a reorg
-
             // at previous step we check that proposal exists
             self.add_l2_block_and_get_current_proposal(l2_block)?;
         }
@@ -276,6 +280,25 @@ impl ProposalBuilder {
             .as_mut()
             .map(|proposal| proposal.num_forced_inclusion += 1)
             .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
+    }
+
+    fn can_fit_recovered_block(&mut self, bytes_length: u64) -> bool {
+        self.current_proposal.as_mut().is_some_and(|proposal| {
+            let new_block_count = match u16::try_from(proposal.l2_blocks.len() + 1) {
+                Ok(n) => n,
+                Err(_) => return false,
+            };
+
+            let mut new_total_bytes = proposal.total_bytes + bytes_length;
+
+            if !self.config.is_within_bytes_limit(new_total_bytes) {
+                proposal.compress();
+                new_total_bytes = proposal.total_bytes + bytes_length;
+            }
+
+            self.config.is_within_bytes_limit(new_total_bytes)
+                && self.config.is_within_block_limit(new_block_count)
+        })
     }
 
     fn is_same_proposal_id(&self, proposal_id: u64) -> bool {
