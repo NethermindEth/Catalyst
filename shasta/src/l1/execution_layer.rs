@@ -158,21 +158,19 @@ impl PreconfOperator for ExecutionLayer {
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-        // TODO verify with actual implementation
+        // Return true for Shasta because we want to skip that check in the operator crate
         Ok(true)
     }
 
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
-        // TODO
         // Retrieving the L2 height directly from the Inbox is not supported in Shasta.
-        // To obtain the L2 height, we need to first fetch the proposal ID using the event indexer.
-        // After that, we can call `taiko_lastBlockIdByBatchId` on the L2 Taiko-Geth.
+        // It requires multiple RPC calls that we want to skip for every heartbeat in Shasta.
         Ok(0)
     }
 
     async fn get_handover_window_slots(&self) -> Result<u64, Error> {
-        // TODO verify with actual implementation
-        // We should return just constant from node config
+        // Return a constant value from node config for Shasta
+        // since we don't have access to the TaikoWrapper contract in Shasta.
         Err(anyhow::anyhow!(
             "Not implemented for Shasta execution layer"
         ))

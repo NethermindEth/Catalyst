@@ -24,7 +24,6 @@ impl Default for ForkInfo {
 impl ForkInfo {
     pub fn from_config(config: ForkInfoConfig) -> Result<Self, Error> {
         let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?;
-        // TODO: consider changing l2_slot_info timestamp to Duration
         let fork = Self::choose_current_fork(&config, current_timestamp.as_secs())?;
         Ok(Self { fork, config })
     }
