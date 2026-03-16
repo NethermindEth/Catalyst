@@ -5,8 +5,6 @@ import subprocess
 import time
 
 import requests
-import web3
-from forced_inclusion_store import pacaya_fi_abi
 
 
 def send_transaction(nonce: int, account, amount, eth_client, private_key):
@@ -250,8 +248,6 @@ def get_current_operator(eth_client, l1_contract_address):
 
 
 def get_next_operator(eth_client, l1_contract_address):
-    import json
-
     with open("../pacaya/src/l1/abi/PreconfWhitelist.json") as f:
         abi = json.load(f)
 
@@ -263,7 +259,6 @@ def spam_txs_until_new_batch_is_proposed(
     l1_eth_client, l2_eth_client, beacon_client, env_vars
 ):
     current_block = l1_eth_client.eth.block_number
-    l1_slot_duration = int(beacon_client.get_spec()["data"]["SECONDS_PER_SLOT"])
 
     number_of_blocks = 10
     for i in range(number_of_blocks):

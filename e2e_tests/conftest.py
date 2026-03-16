@@ -5,14 +5,11 @@ from dataclasses import dataclass
 import pytest
 from dotenv import load_dotenv
 from eth_account import Account
-from taiko_inbox import get_last_block_id
 from utils import (
-    add_operator,
     check_empty_forced_inclusion_store,
     ensure_catalyst_node_running,
     forced_inclusion_store_is_empty,
     get_current_operator,
-    get_operator_count,
     spam_n_blocks,
 )
 from web3 import Web3

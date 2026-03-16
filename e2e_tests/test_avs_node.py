@@ -1,12 +1,5 @@
-import os
-import re
-import subprocess
-import sys
-
 import pytest
-import requests
 from utils import *
-from web3 import Web3
 
 
 def test_rpcs(l1_client, l2_client_node1, l2_client_node2, beacon_client, env_vars):
@@ -215,7 +208,7 @@ def test_end_of_sequencing(l2_client_node1, beacon_client, l1_client, env_vars):
     )
 
 
-def test_takeover_duites_of_ejected_node(
+def test_takeover_duties_of_ejected_node(
     l2_client_node1, beacon_client, l1_client, env_vars
 ):
     """Test that the remaining operator takes over preconfirmation duties when the current operator is ejected."""
