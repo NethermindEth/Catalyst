@@ -13,6 +13,7 @@ pub struct RealtimeConfig {
     pub proof_type: String,
     pub raiko_network: String,
     pub raiko_l1_network: String,
+    pub preconf_only: bool,
 }
 
 impl ConfigTrait for RealtimeConfig {
@@ -38,6 +39,10 @@ impl ConfigTrait for RealtimeConfig {
         let raiko_l1_network = std::env::var("RAIKO_L1_NETWORK")
             .unwrap_or_else(|_| "ethereum".to_string());
 
+        let preconf_only = std::env::var("PRECONF_ONLY")
+            .map(|v| v.to_lowercase() != "false" && v != "0")
+            .unwrap_or(true);
+
         Ok(RealtimeConfig {
             realtime_inbox,
             proposer_multicall,
@@ -47,6 +52,7 @@ impl ConfigTrait for RealtimeConfig {
             proof_type,
             raiko_network,
             raiko_l1_network,
+            preconf_only,
         })
     }
 }
@@ -58,6 +64,7 @@ impl fmt::Display for RealtimeConfig {
         writeln!(f, "Proposer multicall: {:#?}", self.proposer_multicall)?;
         writeln!(f, "Raiko URL: {}", self.raiko_url)?;
         writeln!(f, "Proof type: {}", self.proof_type)?;
+        writeln!(f, "Preconf only: {}", self.preconf_only)?;
         Ok(())
     }
 }

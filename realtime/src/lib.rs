@@ -126,13 +126,14 @@ pub async fn create_realtime_node(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start RealtimeChainMonitor: {}", e))?;
 
-    // Read the last proposal hash from L1
-    let parent_proposal_hash = ethereum_l1
+    // Read the last finalized block hash from L1
+    let last_finalized_block_hash = ethereum_l1
         .execution_layer
-        .get_last_proposal_hash()
+        .get_last_finalized_block_hash()
         .await?;
-    info!("Initial parentProposalHash: {}", parent_proposal_hash);
+    info!("Initial lastFinalizedBlockHash: {}", last_finalized_block_hash);
 
+    let preconf_only = realtime_config.preconf_only;
     let raiko_client = raiko::RaikoClient::new(&realtime_config);
 
     let node = Node::new(
@@ -144,9 +145,10 @@ pub async fn create_realtime_node(
         batch_builder_config,
         transaction_error_receiver,
         fork_info,
-        parent_proposal_hash,
+        last_finalized_block_hash,
         raiko_client,
         protocol_config.basefee_sharing_pctg,
+        preconf_only,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;

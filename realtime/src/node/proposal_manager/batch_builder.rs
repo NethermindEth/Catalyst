@@ -82,7 +82,7 @@ impl BatchBuilder {
     pub fn create_new_batch(
         &mut self,
         anchor_block: AnchorBlockInfo,
-        parent_proposal_hash: B256,
+        last_finalized_block_hash: B256,
     ) {
         self.finalize_current_batch();
 
@@ -93,7 +93,7 @@ impl BatchBuilder {
             max_anchor_block_number: anchor_block.id(),
             max_anchor_block_hash: anchor_block.hash(),
             checkpoint: Checkpoint::default(),
-            parent_proposal_hash,
+            last_finalized_block_hash,
             user_ops: vec![],
             signal_slots: vec![],
             l1_calls: vec![],
@@ -210,10 +210,10 @@ impl BatchBuilder {
         }
     }
 
-    /// Pop the oldest finalized batch, stamping it with the current parent_proposal_hash.
-    pub fn pop_oldest_batch(&mut self, parent_proposal_hash: B256) -> Option<Proposal> {
+    /// Pop the oldest finalized batch, stamping it with the current last_finalized_block_hash.
+    pub fn pop_oldest_batch(&mut self, last_finalized_block_hash: B256) -> Option<Proposal> {
         if let Some(mut batch) = self.proposals_to_send.pop_front() {
-            batch.parent_proposal_hash = parent_proposal_hash;
+            batch.last_finalized_block_hash = last_finalized_block_hash;
             Some(batch)
         } else {
             None

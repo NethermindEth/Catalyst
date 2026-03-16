@@ -24,7 +24,7 @@ pub struct Proposal {
 
     // Proof fields
     pub checkpoint: Checkpoint,
-    pub parent_proposal_hash: B256,
+    pub last_finalized_block_hash: B256,
 
     // Surge POC fields (carried over)
     pub user_ops: Vec<UserOp>,

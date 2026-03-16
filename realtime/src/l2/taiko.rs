@@ -271,8 +271,8 @@ impl Taiko {
 
         let sharing_pctg = self.protocol_config.get_basefee_sharing_pctg();
 
-        // RealTime: extra data only contains basefee_sharing_pctg (1 byte)
-        let extra_data = format!("0x{:02x}", sharing_pctg);
+        // RealTime: 7 bytes — basefee_sharing_pctg + 6 zero bytes (no proposal_id)
+        let extra_data = format!("0x{:02x}000000000000", sharing_pctg);
 
         let executable_data = ExecutableData {
             base_fee_per_gas: l2_slot_context.info.base_fee(),

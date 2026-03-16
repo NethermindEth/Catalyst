@@ -231,13 +231,13 @@ impl ExecutionLayer {
         Ok(ProtocolConfig::from(&config))
     }
 
-    pub async fn get_last_proposal_hash(&self) -> Result<B256, Error> {
+    pub async fn get_last_finalized_block_hash(&self) -> Result<B256, Error> {
         let result = self
             .realtime_inbox
-            .getLastProposalHash()
+            .getLastFinalizedBlockHash()
             .call()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to call getLastProposalHash: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("Failed to call getLastFinalizedBlockHash: {e}"))?;
 
         Ok(result)
     }

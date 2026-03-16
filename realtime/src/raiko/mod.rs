@@ -22,7 +22,7 @@ pub struct RaikoProofRequest {
     pub l2_block_numbers: Vec<u64>,
     pub proof_type: String,
     pub max_anchor_block_number: u64,
-    pub parent_proposal_hash: String,
+    pub last_finalized_block_hash: String,
     pub basefee_sharing_pctg: u8,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub network: Option<String>,

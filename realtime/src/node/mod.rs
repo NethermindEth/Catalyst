@@ -37,6 +37,7 @@ pub struct Node {
     proposal_manager: BatchManager,
     head_verifier: HeadVerifier,
     transaction_error_channel: Receiver<TransactionError>,
+    preconf_only: bool,
 }
 
 impl Node {
@@ -50,9 +51,10 @@ impl Node {
         batch_builder_config: BatchBuilderConfig,
         transaction_error_channel: Receiver<TransactionError>,
         fork_info: ForkInfo,
-        parent_proposal_hash: alloy::primitives::B256,
+        last_finalized_block_hash: alloy::primitives::B256,
         raiko_client: crate::raiko::RaikoClient,
         basefee_sharing_pctg: u8,
+        preconf_only: bool,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -78,7 +80,7 @@ impl Node {
             taiko.clone(),
             metrics.clone(),
             cancel_token.clone(),
-            parent_proposal_hash,
+            last_finalized_block_hash,
             raiko_client,
             basefee_sharing_pctg,
         )
@@ -103,6 +105,7 @@ impl Node {
             proposal_manager,
             head_verifier,
             transaction_error_channel,
+            preconf_only,
         })
     }
 
@@ -152,27 +155,29 @@ impl Node {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
 
-        // Always poll for completed async submissions (non-blocking)
-        if let Some(result) = self.proposal_manager.poll_submission_result() {
-            match result {
-                Ok(()) => info!("Async submission completed successfully"),
-                Err(e) => {
-                    if let Some(transaction_error) = e.downcast_ref::<TransactionError>() {
-                        self.handle_transaction_error(
-                            transaction_error,
-                            &current_status,
-                            &l2_slot_info,
-                        )
-                        .await?;
-                    } else {
-                        error!("Async submission failed: {}", e);
+        if !self.preconf_only {
+            // Poll for completed async submissions (non-blocking)
+            if let Some(result) = self.proposal_manager.poll_submission_result() {
+                match result {
+                    Ok(()) => info!("Async submission completed successfully"),
+                    Err(e) => {
+                        if let Some(transaction_error) = e.downcast_ref::<TransactionError>() {
+                            self.handle_transaction_error(
+                                transaction_error,
+                                &current_status,
+                                &l2_slot_info,
+                            )
+                            .await?;
+                        } else {
+                            error!("Async submission failed: {}", e);
+                        }
                     }
                 }
             }
-        }
 
-        self.check_transaction_error_channel(&current_status, &l2_slot_info)
-            .await?;
+            self.check_transaction_error_channel(&current_status, &l2_slot_info)
+                .await?;
+        }
 
         if current_status.is_preconfirmation_start_slot() {
             self.head_verifier
@@ -217,8 +222,11 @@ impl Node {
             }
         }
 
-        // Submission phase — non-blocking: starts async proof fetch + L1 tx
-        if current_status.is_submitter()
+        // Submission phase
+        if self.preconf_only {
+            // PRECONF_ONLY mode: drop finalized batches without proving/proposing
+            self.proposal_manager.drain_finalized_batches();
+        } else if current_status.is_submitter()
             && !self.proposal_manager.is_submission_in_progress()
             && let Err(err) = self
                 .proposal_manager
@@ -443,15 +451,15 @@ impl Node {
     async fn warmup(&mut self) -> Result<(), Error> {
         info!("Warmup RealTime node");
 
-        // Wait for RealTimeInbox activation (lastProposalHash != 0)
+        // Wait for RealTimeInbox activation (lastFinalizedBlockHash != 0)
         loop {
             let hash = self
                 .ethereum_l1
                 .execution_layer
-                .get_last_proposal_hash()
+                .get_last_finalized_block_hash()
                 .await?;
             if hash != alloy::primitives::B256::ZERO {
-                info!("RealTimeInbox is active, lastProposalHash: {}", hash);
+                info!("RealTimeInbox is active, lastFinalizedBlockHash: {}", hash);
                 break;
             }
             warn!("RealTimeInbox not yet activated. Waiting...");

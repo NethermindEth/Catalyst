@@ -47,7 +47,7 @@ pub struct BatchManager {
     l1_height_lag: u64,
     metrics: Arc<Metrics>,
     cancel_token: CancellationToken,
-    parent_proposal_hash: B256,
+    last_finalized_block_hash: B256,
 }
 
 impl BatchManager {
@@ -59,7 +59,7 @@ impl BatchManager {
         taiko: Arc<Taiko>,
         metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
-        parent_proposal_hash: B256,
+        last_finalized_block_hash: B256,
         raiko_client: RaikoClient,
         basefee_sharing_pctg: u8,
     ) -> Result<Self, Error> {
@@ -107,20 +107,20 @@ impl BatchManager {
             l1_height_lag,
             metrics,
             cancel_token,
-            parent_proposal_hash,
+            last_finalized_block_hash,
         })
     }
 
     /// Non-blocking poll: check if the in-flight submission has completed.
-    /// On success, updates `parent_proposal_hash`. Returns None if idle or still in progress.
+    /// On success, updates `last_finalized_block_hash`. Returns None if idle or still in progress.
     pub fn poll_submission_result(&mut self) -> Option<Result<(), Error>> {
         match self.async_submitter.try_recv_result() {
             Some(Ok(result)) => {
                 info!(
-                    "Submission completed. New parent proposal hash: {}",
-                    result.new_parent_proposal_hash
+                    "Submission completed. New last finalized block hash: {}",
+                    result.new_last_finalized_block_hash
                 );
-                self.parent_proposal_hash = result.new_parent_proposal_hash;
+                self.last_finalized_block_hash = result.new_last_finalized_block_hash;
                 Some(Ok(()))
             }
             Some(Err(e)) => Some(Err(e)),
@@ -139,7 +139,7 @@ impl BatchManager {
 
         self.batch_builder.finalize_if_needed(submit_only_full_batches);
 
-        let Some(batch) = self.batch_builder.pop_oldest_batch(self.parent_proposal_hash) else {
+        let Some(batch) = self.batch_builder.pop_oldest_batch(self.last_finalized_block_hash) else {
             return Ok(());
         };
 
@@ -158,9 +158,9 @@ impl BatchManager {
         let status_store = self.bridge_handler.lock().await.status_store();
 
         info!(
-            "Starting async submission: {} blocks, parent_hash: {}",
+            "Starting async submission: {} blocks, last_finalized_block_hash: {}",
             batch.l2_blocks.len(),
-            batch.parent_proposal_hash,
+            batch.last_finalized_block_hash,
         );
 
         self.async_submitter.submit(batch, Some(status_store));
@@ -169,6 +169,17 @@ impl BatchManager {
 
     pub fn is_submission_in_progress(&self) -> bool {
         self.async_submitter.is_busy()
+    }
+
+    /// Drop all finalized batches without submitting. Used in PRECONF_ONLY mode.
+    pub fn drain_finalized_batches(&mut self) {
+        self.batch_builder.finalize_if_needed(false);
+        while let Some(batch) = self.batch_builder.pop_oldest_batch(self.last_finalized_block_hash) {
+            info!(
+                "PRECONF_ONLY: dropping batch with {} blocks",
+                batch.l2_blocks.len(),
+            );
+        }
     }
 
     pub fn should_new_block_be_created(
@@ -368,7 +379,7 @@ impl BatchManager {
         .await?;
 
         let anchor_block_id = anchor_block_info.id();
-        // Use B256::ZERO as placeholder -- real parent hash is stamped at submission time
+        // Use B256::ZERO as placeholder -- real last_finalized_block_hash is stamped at submission time
         self.batch_builder
             .create_new_batch(anchor_block_info, B256::ZERO);
 

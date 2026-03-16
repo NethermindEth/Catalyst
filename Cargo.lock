@@ -5836,6 +5836,7 @@ dependencies = [
  "clap",
  "common",
  "pacaya",
+ "realtime",
  "serde_json",
  "shasta",
  "tokio",

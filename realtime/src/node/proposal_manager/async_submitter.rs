@@ -11,7 +11,7 @@ use tokio::task::JoinHandle;
 use tracing::info;
 
 pub struct SubmissionResult {
-    pub new_parent_proposal_hash: B256,
+    pub new_last_finalized_block_hash: B256,
 }
 
 struct InFlightSubmission {
@@ -120,7 +120,7 @@ async fn submission_task(
             l2_block_numbers,
             proof_type: raiko_client.proof_type.clone(),
             max_anchor_block_number: proposal.max_anchor_block_number,
-            parent_proposal_hash: format!("0x{}", hex::encode(proposal.parent_proposal_hash)),
+            last_finalized_block_hash: format!("0x{}", hex::encode(proposal.last_finalized_block_hash)),
             basefee_sharing_pctg,
             network: None,
             l1_network: None,
@@ -180,14 +180,8 @@ async fn submission_task(
         return Err(err);
     }
 
-    // Step 3: Compute new parent proposal hash
-    let new_parent_proposal_hash = alloy::primitives::keccak256(
-        alloy::sol_types::SolValue::abi_encode(&(
-            proposal.parent_proposal_hash,
-            proposal.max_anchor_block_number,
-            proposal.max_anchor_block_hash,
-        )),
-    );
+    // Step 3: After successful submission, the new lastFinalizedBlockHash is the checkpoint's blockHash
+    let new_last_finalized_block_hash = proposal.checkpoint.blockHash;
 
     // Step 4: Spawn user-op status tracker
     if let (Some(hash_rx), Some(result_rx), Some(store)) =
@@ -247,6 +241,6 @@ async fn submission_task(
     }
 
     Ok(SubmissionResult {
-        new_parent_proposal_hash,
+        new_last_finalized_block_hash,
     })
 }
