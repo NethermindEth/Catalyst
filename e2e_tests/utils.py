@@ -373,7 +373,7 @@ def wait_for_both_operators_active(
         abi = json.load(f)
     contract = l1_client.eth.contract(address=preconf_whitelist_address, abi=abi)
 
-    for i in range(100):
+    for i in range(10):
         wait_for_slot_beginning(beacon_client, 2)
         epoch_timestamp = contract.functions.epochStartTimestamp(0).call()
         op1_active = contract.functions.isOperatorActive(
