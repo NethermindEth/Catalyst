@@ -249,7 +249,16 @@ impl ProposalBuilder {
             let bytes_length =
                 crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
 
-            if !self.can_fit_recovered_block(bytes_length) {
+            let l2_draft_block = L2BlockV2Draft {
+                prebuilt_tx_list: PreBuiltTxList {
+                    tx_list: tx_list.clone(),
+                    estimated_gas_used: 0,
+                    bytes_length,
+                },
+                timestamp_sec: l2_block_timestamp_sec,
+                gas_limit_without_anchor: gas_limit,
+            };
+            if !self.can_consume_l2_block(&l2_draft_block) {
                 return Err(anyhow::anyhow!(
                     "recover_from: block does not fit in proposal {} (adding {} bytes would exceed blob size limit). Reorg needed.",
                     proposal_id,
@@ -280,25 +289,6 @@ impl ProposalBuilder {
             .as_mut()
             .map(|proposal| proposal.num_forced_inclusion += 1)
             .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
-    }
-
-    fn can_fit_recovered_block(&mut self, bytes_length: u64) -> bool {
-        self.current_proposal.as_mut().is_some_and(|proposal| {
-            let new_block_count = match u16::try_from(proposal.l2_blocks.len() + 1) {
-                Ok(n) => n,
-                Err(_) => return false,
-            };
-
-            let mut new_total_bytes = proposal.total_bytes + bytes_length;
-
-            if !self.config.is_within_bytes_limit(new_total_bytes) {
-                proposal.compress();
-                new_total_bytes = proposal.total_bytes + bytes_length;
-            }
-
-            self.config.is_within_bytes_limit(new_total_bytes)
-                && self.config.is_within_block_limit(new_block_count)
-        })
     }
 
     fn is_same_proposal_id(&self, proposal_id: u64) -> bool {
