@@ -77,6 +77,15 @@ impl AnchorBlockInfo {
         Ok(anchor_id)
     }
 
+    pub fn new(id: u64, timestamp_sec: u64, hash: B256, state_root: B256) -> Self {
+        Self {
+            id,
+            timestamp_sec,
+            hash,
+            state_root,
+        }
+    }
+
     pub fn id(&self) -> u64 {
         self.id
     }
