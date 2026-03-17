@@ -121,6 +121,37 @@ impl Proposal {
         let l2_block = self.create_block_from_draft(l2_draft_block);
         self.add_l2_block(l2_block)
     }
+
+    pub fn last_block_timestamp(&self) -> Option<u64> {
+        self.l2_blocks.last().map(|b| b.timestamp_sec)
+    }
+
+    pub fn remove_last_l2_block(&mut self) -> Option<L2BlockV2> {
+        let removed = self.l2_blocks.pop()?;
+        self.total_bytes -= removed.prebuilt_tx_list.bytes_length;
+        debug!(
+            "Removed L2 block from proposal: {} txs, {} bytes",
+            removed.prebuilt_tx_list.tx_list.len(),
+            removed.prebuilt_tx_list.bytes_length
+        );
+        Some(removed)
+    }
+
+    pub fn inc_forced_inclusion(&mut self) {
+        self.num_forced_inclusion += 1;
+    }
+
+    pub fn decrease_forced_inclusion_count(&mut self) {
+        self.num_forced_inclusion = self.num_forced_inclusion.saturating_sub(1);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.l2_blocks.is_empty() && self.num_forced_inclusion == 0
+    }
+
+    pub fn has_forced_inclusion(&self) -> bool {
+        self.num_forced_inclusion > 0
+    }
 }
 
 #[cfg(test)]

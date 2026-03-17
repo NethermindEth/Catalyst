@@ -2,6 +2,7 @@ pub mod block_advancer;
 pub mod l2_block_payload;
 pub mod proposal;
 mod proposal_builder;
+mod proposal_queue;
 
 use crate::{
     l1::execution_layer::ExecutionLayer,

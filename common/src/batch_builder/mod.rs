@@ -5,5 +5,5 @@ mod core;
 mod traits;
 
 pub use config::BatchBuilderConfig;
-pub use core::BatchBuilderCore;
+pub use core::{BatchBuilderCore, is_last_slot_for_empty_block};
 pub use traits::*;
