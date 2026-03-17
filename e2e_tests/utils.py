@@ -5,6 +5,7 @@ import subprocess
 import time
 
 import requests
+from forced_inclusion_store import pacaya_fi_abi
 
 
 def send_transaction(nonce: int, account, amount, eth_client, private_key):
