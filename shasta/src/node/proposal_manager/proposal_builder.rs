@@ -428,7 +428,7 @@ impl ProposalBuilder {
     /// Decreases the forced inclusion count and removes the current proposal if empty.
     pub fn decrease_forced_inclusion_count(&mut self) {
         if let Some(proposal) = self.current_proposal.as_mut() {
-            proposal.decrease_forced_inclusion_count();
+            proposal.dec_forced_inclusion();
             if proposal.is_empty() {
                 self.remove_current_proposal();
             }

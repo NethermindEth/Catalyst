@@ -141,7 +141,7 @@ impl Proposal {
         self.num_forced_inclusion += 1;
     }
 
-    pub fn decrease_forced_inclusion_count(&mut self) {
+    pub fn dec_forced_inclusion(&mut self) {
         self.num_forced_inclusion = self.num_forced_inclusion.saturating_sub(1);
     }
 
