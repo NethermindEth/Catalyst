@@ -232,27 +232,20 @@ impl VerifierThread {
             ));
         }
 
-        let mut parent_timestamp = self
-            .proposal_manager
-            .validate_block_timestamp(taiko_inbox_height, 0)
-            .await?;
-
         // Sync FI with L1 chain
         self.proposal_manager.reset_builder().await?;
+        let mut parent_timestamp = None;
 
         for current_height in first_block..=taiko_geth_height {
             if self.cancel_token.is_cancelled() {
                 return Err(anyhow::anyhow!("Verification cancelled"));
             }
 
-            parent_timestamp = self
-                .proposal_manager
-                .validate_block_timestamp(current_height, parent_timestamp)
-                .await?;
-
-            self.proposal_manager
-                .recover_from_l2_block(current_height)
-                .await?;
+            parent_timestamp = Some(
+                self.proposal_manager
+                    .recover_from_l2_block(current_height, parent_timestamp)
+                    .await?,
+            );
         }
 
         let elapsed = start.elapsed().as_millis();
