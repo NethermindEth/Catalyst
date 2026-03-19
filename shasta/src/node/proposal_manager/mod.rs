@@ -464,12 +464,36 @@ impl ProposalManager {
         Ok((anchor_offset, timestamp_offset))
     }
 
-    pub async fn recover_from_l2_block(&mut self, block_height: u64) -> Result<(), Error> {
+    pub async fn recover_from_l2_block(
+        &mut self,
+        block_height: u64,
+        parent_timestamp: Option<u64>,
+    ) -> Result<u64, Error> {
         debug!("Recovering from L2 block {}", block_height);
+
+        let parent_timestamp = if let Some(ts) = parent_timestamp {
+            ts
+        } else {
+            if block_height == 0 {
+                return Err(anyhow::anyhow!(
+                    "recover_from_l2_block: parent_timestamp must be provided for genesis (block_height == 0)"
+                ));
+            }
+
+            self.taiko
+                .get_l2_block_by_number(block_height - 1, false)
+                .await?
+                .header
+                .timestamp()
+        };
+
         let block = self
             .taiko
             .get_l2_block_by_number(block_height, true)
             .await?;
+
+        self.validate_block_timestamp(block_height, block.header.timestamp(), parent_timestamp)?;
+
         let (anchor_tx, txs) = match block.transactions.as_transactions() {
             Some(txs) => txs.split_first().ok_or_else(|| {
                 anyhow::anyhow!("recover_from_l2_block: Cannot get anchor transaction from block")
@@ -536,6 +560,35 @@ impl ProposalManager {
                 is_forced_inclusion,
             )
             .await?;
+        Ok(block.header.timestamp())
+    }
+
+    fn validate_block_timestamp(
+        &self,
+        block_height: u64,
+        block_timestamp: u64,
+        parent_timestamp: u64,
+    ) -> Result<(), Error> {
+        // Validate against derivation rules:
+        // block.timestamp must be in [lower_bound, proposal_timestamp]
+        // We use current time as an approximation for proposal_timestamp (upper bound).
+        let now_duration = std::time::SystemTime::now()
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "System time error while validating block timestamp at block {block_height}: {e}"
+                )
+            })?;
+        let now = now_duration.as_secs();
+        let timestamp_max_offset = self.taiko.get_protocol_config().get_timestamp_max_offset();
+        let lower_bound = (parent_timestamp + 1).max(now.saturating_sub(timestamp_max_offset));
+
+        if block_timestamp < lower_bound || block_timestamp > now {
+            return Err(anyhow::anyhow!(
+                "Derivation timestamp validation failed at block {block_height}: timestamp={block_timestamp}, lower_bound={lower_bound}, upper_bound(now)={now}, parent_timestamp={parent_timestamp}"
+            ));
+        }
+
         Ok(())
     }
 

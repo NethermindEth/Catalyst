@@ -212,40 +212,44 @@ impl VerifierThread {
         taiko_inbox_height: u64,
         taiko_geth_height: u64,
     ) -> Result<(), Error> {
+        let start = std::time::Instant::now();
+
+        let first_block = taiko_inbox_height + 1;
         let (anchor_offset, timestamp_offset) = self
             .proposal_manager
-            .get_l1_anchor_block_and_timestamp_offset_for_l2_block(taiko_inbox_height + 1)
+            .get_l1_anchor_block_and_timestamp_offset_for_l2_block(first_block)
             .await?;
-        // The first block anchor id is valid, so we can continue.
-        if self
+
+        if !self
             .proposal_manager
             .is_offsets_valid(anchor_offset, timestamp_offset)
         {
-            let start = std::time::Instant::now();
-
-            // Sync FI with L1 chain
-            self.proposal_manager.reset_builder().await?;
-
-            // recover all missed l2 blocks
-            for current_height in taiko_inbox_height + 1..=taiko_geth_height {
-                if self.cancel_token.is_cancelled() {
-                    return Err(anyhow::anyhow!("Verification cancelled"));
-                }
-
-                self.proposal_manager
-                    .recover_from_l2_block(current_height)
-                    .await?;
-            }
-            let elapsed = start.elapsed().as_millis();
-            info!("Recovered in {} milliseconds", elapsed);
-        } else {
-            // Error will lead to a reorg
             return Err(anyhow::anyhow!(
-                "Anchor offset exceeded during recovery: block {}, anchor_offset {}",
-                taiko_inbox_height + 1,
-                anchor_offset
+                "Offset exceeded during recovery at block {}: anchor_offset={}, timestamp_offset={}",
+                first_block,
+                anchor_offset,
+                timestamp_offset,
             ));
         }
+
+        // Sync FI with L1 chain
+        self.proposal_manager.reset_builder().await?;
+        let mut parent_timestamp = None;
+
+        for current_height in first_block..=taiko_geth_height {
+            if self.cancel_token.is_cancelled() {
+                return Err(anyhow::anyhow!("Verification cancelled"));
+            }
+
+            parent_timestamp = Some(
+                self.proposal_manager
+                    .recover_from_l2_block(current_height, parent_timestamp)
+                    .await?,
+            );
+        }
+
+        let elapsed = start.elapsed().as_millis();
+        info!("Recovered in {} milliseconds", elapsed);
 
         Ok(())
     }
