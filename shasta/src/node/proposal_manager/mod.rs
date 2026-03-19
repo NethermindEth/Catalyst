@@ -573,10 +573,14 @@ impl ProposalManager {
         // Validate against derivation rules:
         // block.timestamp must be in [lower_bound, proposal_timestamp]
         // We use current time as an approximation for proposal_timestamp (upper bound).
-        let now = std::time::SystemTime::now()
+        let now_duration = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "System time error while validating block timestamp at block {block_height}: {e}"
+                )
+            })?;
+        let now = now_duration.as_secs();
         let timestamp_max_offset = self.taiko.get_protocol_config().get_timestamp_max_offset();
         let lower_bound = (parent_timestamp + 1).max(now.saturating_sub(timestamp_max_offset));
 
