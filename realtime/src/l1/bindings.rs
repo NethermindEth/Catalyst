@@ -33,4 +33,60 @@ sol! {
         bytes32[] signalSlots;
         uint48 maxAnchorBlockNumber;
     }
+
+    // SurgeVerifier SubProof encoding
+    struct SubProof {
+        uint8 proofBitFlag;
+        bytes data;
+    }
+}
+
+/// Proof types supported by the SurgeVerifier.
+/// Each variant maps to a bit flag used in `SubProof.proofBitFlag`.
+#[derive(Debug, Clone, Copy)]
+pub enum ProofType {
+    Risc0,  // 0b00000001
+    Sp1,    // 0b00000010
+    Zisk,   // 0b00000100
+}
+
+impl ProofType {
+    pub fn proof_bit_flag(&self) -> u8 {
+        match self {
+            ProofType::Risc0 => 1,
+            ProofType::Sp1 => 1 << 1,
+            ProofType::Zisk => 1 << 2,
+        }
+    }
+
+    /// Returns the proof type string expected by Raiko.
+    pub fn raiko_proof_type(&self) -> &'static str {
+        match self {
+            ProofType::Risc0 => "risc0",
+            ProofType::Sp1 => "sp1",
+            ProofType::Zisk => "zisk",
+        }
+    }
+}
+
+impl std::str::FromStr for ProofType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "risc0" => Ok(ProofType::Risc0),
+            "sp1" => Ok(ProofType::Sp1),
+            "zisk" => Ok(ProofType::Zisk),
+            _ => Err(anyhow::anyhow!(
+                "Invalid PROOF_TYPE '{}'. Must be one of: sp1, risc0, zisk",
+                s
+            )),
+        }
+    }
+}
+
+impl std::fmt::Display for ProofType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.raiko_proof_type())
+    }
 }

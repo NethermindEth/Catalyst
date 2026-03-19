@@ -1,3 +1,4 @@
+use crate::l1::bindings::ProofType;
 use crate::utils::config::RealtimeConfig;
 use anyhow::Error;
 use reqwest::Client;
@@ -10,7 +11,7 @@ pub struct RaikoClient {
     client: Client,
     pub base_url: String,
     pub api_key: Option<String>,
-    pub proof_type: String,
+    pub proof_type: ProofType,
     l2_network: String,
     l1_network: String,
     poll_interval: Duration,

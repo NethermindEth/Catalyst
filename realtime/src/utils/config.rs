@@ -1,3 +1,4 @@
+use crate::l1::bindings::ProofType;
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::config::{ConfigTrait, address_parse_error};
@@ -10,7 +11,7 @@ pub struct RealtimeConfig {
     pub bridge: Address,
     pub raiko_url: String,
     pub raiko_api_key: Option<String>,
-    pub proof_type: String,
+    pub proof_type: ProofType,
     pub raiko_network: String,
     pub raiko_l1_network: String,
     pub preconf_only: bool,
@@ -33,8 +34,9 @@ impl ConfigTrait for RealtimeConfig {
         let raiko_url = std::env::var("RAIKO_URL")
             .unwrap_or_else(|_| "http://localhost:8080".to_string());
         let raiko_api_key = std::env::var("RAIKO_API_KEY").ok();
-        let proof_type = std::env::var("RAIKO_PROOF_TYPE")
-            .unwrap_or_else(|_| "sgx".to_string());
+        let proof_type: ProofType = std::env::var("PROOF_TYPE")
+            .unwrap_or_else(|_| "sp1".to_string())
+            .parse()?;
         let raiko_network = std::env::var("RAIKO_L2_NETWORK")
             .unwrap_or_else(|_| "taiko_mainnet".to_string());
         let raiko_l1_network = std::env::var("RAIKO_L1_NETWORK")
@@ -69,7 +71,7 @@ impl fmt::Display for RealtimeConfig {
         writeln!(f, "RealTime inbox: {:#?}", self.realtime_inbox)?;
         writeln!(f, "Proposer multicall: {:#?}", self.proposer_multicall)?;
         writeln!(f, "Raiko URL: {}", self.raiko_url)?;
-        writeln!(f, "Proof type: {}", self.proof_type)?;
+        writeln!(f, "Proof type: {} (bit flag: {})", self.proof_type, self.proof_type.proof_bit_flag())?;
         writeln!(f, "Preconf only: {}", self.preconf_only)?;
         writeln!(f, "Proof request bypass: {}", self.proof_request_bypass)?;
         Ok(())

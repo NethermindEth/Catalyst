@@ -44,6 +44,7 @@ pub struct ExecutionLayer {
     contract_addresses: ContractAddresses,
     realtime_inbox: RealTimeInboxInstance<DynProvider>,
     raiko_client: RaikoClient,
+    proof_type: crate::l1::bindings::ProofType,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -99,6 +100,7 @@ impl ELTrait for ExecutionLayer {
         // Read Raiko config from environment
         let realtime_config = crate::utils::config::RealtimeConfig::read_env_variables()
             .map_err(|e| anyhow::anyhow!("Failed to read RealtimeConfig for Raiko: {e}"))?;
+        let proof_type = realtime_config.proof_type;
         let raiko_client = RaikoClient::new(&realtime_config);
 
         Ok(Self {
@@ -109,6 +111,7 @@ impl ELTrait for ExecutionLayer {
             contract_addresses,
             realtime_inbox,
             raiko_client,
+            proof_type,
         })
     }
 
@@ -192,7 +195,7 @@ impl ExecutionLayer {
             batch.zk_proof.is_some(),
         );
 
-        let builder = ProposalTxBuilder::new(self.provider.clone(), 10);
+        let builder = ProposalTxBuilder::new(self.provider.clone(), 10, self.proof_type);
 
         let tx = builder
             .build_propose_tx(

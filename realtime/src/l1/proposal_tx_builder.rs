@@ -1,5 +1,5 @@
 use crate::l1::{
-    bindings::{BlobReference, Multicall, ProposeInput, RealTimeInbox},
+    bindings::{BlobReference, Multicall, ProofType, ProposeInput, RealTimeInbox, SubProof},
     config::ContractAddresses,
 };
 use crate::node::proposal_manager::{
@@ -31,13 +31,15 @@ use tracing::{info, warn};
 pub struct ProposalTxBuilder {
     provider: DynProvider,
     extra_gas_percentage: u64,
+    proof_type: ProofType,
 }
 
 impl ProposalTxBuilder {
-    pub fn new(provider: DynProvider, extra_gas_percentage: u64) -> Self {
+    pub fn new(provider: DynProvider, extra_gas_percentage: u64, proof_type: ProofType) -> Self {
         Self {
             provider,
             extra_gas_percentage,
+            proof_type,
         }
     }
 
@@ -113,10 +115,7 @@ impl ProposalTxBuilder {
         if !batch.l1_calls.is_empty()
             && let Some(l1_call) = batch.l1_calls.first()
         {
-            let l1_call_call = self.build_l1_call_call(
-                l1_call.clone(),
-                contract_addresses.bridge,
-            );
+            let l1_call_call = self.build_l1_call_call(l1_call.clone(), contract_addresses.bridge);
             info!("Added L1 call to Multicall: {:?}", &l1_call_call);
             multicalls.push(l1_call_call.clone());
         }
@@ -170,19 +169,23 @@ impl ProposalTxBuilder {
             .encode_and_compress()
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
-        let sidecar_builder: SidecarBuilder<BlobCoder> =
-            SidecarBuilder::from_slice(&manifest_data);
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
         let sidecar: BlobTransactionSidecar = sidecar_builder.build()?;
 
         let inbox = RealTimeInbox::new(inbox_address, self.provider.clone());
 
-        let proof = Bytes::from(
-            batch
-                .zk_proof
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("ZK proof not set on proposal"))?
-                .clone(),
-        );
+        // Encode the raw proof as SubProof[] for the SurgeVerifier
+        let raw_proof = batch
+            .zk_proof
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("ZK proof not set on proposal"))?
+            .clone();
+
+        let sub_proofs = vec![SubProof {
+            proofBitFlag: self.proof_type.proof_bit_flag(),
+            data: Bytes::from(raw_proof),
+        }];
+        let proof = Bytes::from(sub_proofs.abi_encode());
 
         // Build ProposeInput and ABI-encode it as the _data parameter
         let blob_reference = BlobReference {
