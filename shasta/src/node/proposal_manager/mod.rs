@@ -492,8 +492,7 @@ impl ProposalManager {
             .get_l2_block_by_number(block_height, true)
             .await?;
 
-        self.validate_block_timestamp(block_height, block.header.timestamp(), parent_timestamp)
-            .await?;
+        self.validate_block_timestamp(block_height, block.header.timestamp(), parent_timestamp)?;
 
         let (anchor_tx, txs) = match block.transactions.as_transactions() {
             Some(txs) => txs.split_first().ok_or_else(|| {
@@ -564,7 +563,7 @@ impl ProposalManager {
         Ok(block.header.timestamp())
     }
 
-    pub async fn validate_block_timestamp(
+    fn validate_block_timestamp(
         &self,
         block_height: u64,
         block_timestamp: u64,
