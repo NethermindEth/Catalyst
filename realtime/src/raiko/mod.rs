@@ -67,6 +67,10 @@ pub struct RaikoResponse {
     #[serde(default)]
     pub data: Option<RaikoData>,
     #[serde(default)]
+    pub proof_type: Option<String>,
+    #[serde(default)]
+    pub batch_id: Option<u64>,
+    #[serde(default)]
     pub error: Option<String>,
     #[serde(default)]
     pub message: Option<String>,
@@ -75,8 +79,25 @@ pub struct RaikoResponse {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum RaikoData {
-    Proof { proof: String },
-    Status { status: String },
+    Proof {
+        proof: RaikoProof,
+    },
+    Status {
+        status: String,
+    },
+}
+
+#[derive(Deserialize)]
+pub struct RaikoProof {
+    pub proof: Option<String>,
+    #[serde(default)]
+    pub input: Option<String>,
+    #[serde(default)]
+    pub quote: Option<String>,
+    #[serde(default)]
+    pub uuid: Option<String>,
+    #[serde(default)]
+    pub kzg_proof: Option<String>,
 }
 
 impl RaikoClient {
@@ -116,9 +137,12 @@ impl RaikoClient {
             }
 
             match body.data {
-                Some(RaikoData::Proof { proof }) => {
+                Some(RaikoData::Proof { proof: proof_obj }) => {
+                    let proof_hex = proof_obj.proof.ok_or_else(|| {
+                        anyhow::anyhow!("Raiko returned proof object with null proof field")
+                    })?;
                     info!("ZK proof received (attempt {})", attempt + 1);
-                    let proof_bytes = hex::decode(proof.trim_start_matches("0x"))?;
+                    let proof_bytes = hex::decode(proof_hex.trim_start_matches("0x"))?;
                     return Ok(proof_bytes);
                 }
                 Some(RaikoData::Status { ref status }) if status == "ZKAnyNotDrawn" => {
