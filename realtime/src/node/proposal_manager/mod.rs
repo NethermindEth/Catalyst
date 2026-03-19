@@ -62,6 +62,7 @@ impl BatchManager {
         last_finalized_block_hash: B256,
         raiko_client: RaikoClient,
         basefee_sharing_pctg: u8,
+        proof_request_bypass: bool,
     ) -> Result<Self, Error> {
         info!(
             "Batch builder config:\n\
@@ -92,6 +93,7 @@ impl BatchManager {
             raiko_client,
             basefee_sharing_pctg,
             ethereum_l1.clone(),
+            proof_request_bypass,
         );
 
         Ok(Self {

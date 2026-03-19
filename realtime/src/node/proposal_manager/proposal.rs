@@ -21,6 +21,7 @@ pub struct Proposal {
     // RealTime: maxAnchor instead of anchor
     pub max_anchor_block_number: u64,
     pub max_anchor_block_hash: B256,
+    pub max_anchor_state_root: B256,
 
     // Proof fields
     pub checkpoint: Checkpoint,
@@ -95,7 +96,7 @@ impl Proposal {
             gas_limit_without_anchor: l2_block.gas_limit_without_anchor,
             anchor_block_id: self.max_anchor_block_number,
             anchor_block_hash: self.max_anchor_block_hash,
-            anchor_state_root: B256::ZERO, // Not used in RealTime anchor
+            anchor_state_root: self.max_anchor_state_root,
         };
         self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
         self.l2_blocks.push(l2_block);

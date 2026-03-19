@@ -92,6 +92,7 @@ impl BatchBuilder {
             coinbase: self.config.default_coinbase,
             max_anchor_block_number: anchor_block.id(),
             max_anchor_block_hash: anchor_block.hash(),
+            max_anchor_state_root: anchor_block.state_root(),
             checkpoint: Checkpoint::default(),
             last_finalized_block_hash,
             user_ops: vec![],

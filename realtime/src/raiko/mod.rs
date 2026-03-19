@@ -8,8 +8,8 @@ use tracing::{debug, info, warn};
 #[derive(Clone)]
 pub struct RaikoClient {
     client: Client,
-    base_url: String,
-    api_key: Option<String>,
+    pub base_url: String,
+    pub api_key: Option<String>,
     pub proof_type: String,
     l2_network: String,
     l1_network: String,
@@ -31,10 +31,26 @@ pub struct RaikoProofRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prover: Option<String>,
     pub signal_slots: Vec<String>,
-    pub sources: Vec<serde_json::Value>,
+    pub sources: Vec<RaikoDerivationSource>,
+    pub blobs: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint: Option<RaikoCheckpoint>,
     pub blob_proof_type: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RaikoDerivationSource {
+    pub is_forced_inclusion: bool,
+    pub blob_slice: RaikoBlobSlice,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RaikoBlobSlice {
+    pub blob_hashes: Vec<String>,
+    pub offset: u32,
+    pub timestamp: u64,
 }
 
 #[derive(Serialize, Deserialize)]

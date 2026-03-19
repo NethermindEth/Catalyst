@@ -14,6 +14,7 @@ pub struct RealtimeConfig {
     pub raiko_network: String,
     pub raiko_l1_network: String,
     pub preconf_only: bool,
+    pub proof_request_bypass: bool,
 }
 
 impl ConfigTrait for RealtimeConfig {
@@ -43,6 +44,10 @@ impl ConfigTrait for RealtimeConfig {
             .map(|v| v.to_lowercase() != "false" && v != "0")
             .unwrap_or(true);
 
+        let proof_request_bypass = std::env::var("PROOF_REQUEST_BYPASS")
+            .map(|v| v.to_lowercase() != "false" && v != "0")
+            .unwrap_or(false);
+
         Ok(RealtimeConfig {
             realtime_inbox,
             proposer_multicall,
@@ -53,6 +58,7 @@ impl ConfigTrait for RealtimeConfig {
             raiko_network,
             raiko_l1_network,
             preconf_only,
+            proof_request_bypass,
         })
     }
 }
@@ -65,6 +71,7 @@ impl fmt::Display for RealtimeConfig {
         writeln!(f, "Raiko URL: {}", self.raiko_url)?;
         writeln!(f, "Proof type: {}", self.proof_type)?;
         writeln!(f, "Preconf only: {}", self.preconf_only)?;
+        writeln!(f, "Proof request bypass: {}", self.proof_request_bypass)?;
         Ok(())
     }
 }

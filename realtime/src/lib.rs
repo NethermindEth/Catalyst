@@ -134,6 +134,7 @@ pub async fn create_realtime_node(
     info!("Initial lastFinalizedBlockHash: {}", last_finalized_block_hash);
 
     let preconf_only = realtime_config.preconf_only;
+    let proof_request_bypass = realtime_config.proof_request_bypass;
     let raiko_client = raiko::RaikoClient::new(&realtime_config);
 
     let node = Node::new(
@@ -149,6 +150,7 @@ pub async fn create_realtime_node(
         raiko_client,
         protocol_config.basefee_sharing_pctg,
         preconf_only,
+        proof_request_bypass,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
