@@ -474,6 +474,12 @@ impl ProposalManager {
         let parent_timestamp = if let Some(ts) = parent_timestamp {
             ts
         } else {
+            if block_height == 0 {
+                return Err(anyhow::anyhow!(
+                    "recover_from_l2_block: parent_timestamp must be provided for genesis (block_height == 0)"
+                ));
+            }
+
             self.taiko
                 .get_l2_block_by_number(block_height - 1, false)
                 .await?
