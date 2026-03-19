@@ -148,6 +148,23 @@ impl Taiko {
             .await
     }
 
+    /// Scan backward from L2 head to find the block number matching a given hash.
+    /// Used during recovery to resolve `lastFinalizedBlockHash` from L1 to an L2 block number.
+    pub async fn find_l2_block_number_by_hash(&self, block_hash: B256) -> Result<u64, Error> {
+        let head = self.get_latest_l2_block_id().await?;
+        for n in (0..=head).rev() {
+            let hash = self.get_l2_block_hash(n).await?;
+            if hash == block_hash {
+                return Ok(n);
+            }
+        }
+        Err(anyhow::anyhow!(
+            "L2 block with hash {} not found on Geth (scanned {} blocks)",
+            block_hash,
+            head + 1
+        ))
+    }
+
     pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfoV2, Error> {
         self.get_l2_slot_info_by_parent_block(BlockNumberOrTag::Latest)
             .await

@@ -25,8 +25,8 @@ use common::{
     l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
     shared::{
         anchor_block_info::AnchorBlockInfo,
-        l2_block_v2::L2BlockV2Draft,
-        l2_tx_lists::PreBuiltTxList,
+        l2_block_v2::{L2BlockV2, L2BlockV2Draft},
+        l2_tx_lists::{self, PreBuiltTxList},
     },
     utils::cancellation_token::CancellationToken,
 };
@@ -412,6 +412,157 @@ impl BatchManager {
 
     pub fn get_number_of_batches(&self) -> u64 {
         self.batch_builder.get_number_of_batches()
+    }
+
+    /// Detect and recover L2 blocks that were preconfirmed but never proposed to L1.
+    /// Returns the number of recovered blocks.
+    pub async fn recover_unproposed_blocks(&mut self) -> Result<u64, Error> {
+        let last_finalized_hash = self
+            .ethereum_l1
+            .execution_layer
+            .get_last_finalized_block_hash()
+            .await?;
+
+        if last_finalized_hash == B256::ZERO {
+            info!("No finalized block hash on L1 (genesis). Nothing to recover.");
+            return Ok(0);
+        }
+
+        // Resolve the L1 lastFinalizedBlockHash to an L2 block number.
+        // If the hash isn't found on L2, it means no blocks have been proposed yet
+        // (the hash is the initial contract value, not an actual L2 block hash),
+        // so we treat the last proposed block number as 0.
+        let last_proposed_block_number = match self
+            .taiko
+            .find_l2_block_number_by_hash(last_finalized_hash)
+            .await
+        {
+            Ok(n) => n,
+            Err(_) => {
+                info!(
+                    "lastFinalizedBlockHash {} not found on L2 — treating as no blocks proposed yet",
+                    last_finalized_hash
+                );
+                0
+            }
+        };
+
+        let l2_head = self.taiko.get_latest_l2_block_id().await?;
+
+        if l2_head <= last_proposed_block_number {
+            info!(
+                "No unproposed blocks: L2 head {} <= last proposed {}",
+                l2_head, last_proposed_block_number
+            );
+            return Ok(0);
+        }
+
+        let gap = l2_head - last_proposed_block_number;
+        info!(
+            "Detected {} unproposed L2 blocks ({} to {}). Starting recovery.",
+            gap,
+            last_proposed_block_number + 1,
+            l2_head
+        );
+
+        for block_number in (last_proposed_block_number + 1)..=l2_head {
+            self.recover_from_l2_block(block_number).await?;
+        }
+
+        self.last_finalized_block_hash = last_finalized_hash;
+
+        info!("Recovery complete: {} blocks recovered into proposals", gap);
+        Ok(gap)
+    }
+
+    /// Fetch a single L2 block from Geth, extract anchor + user txs, and rebuild a Proposal.
+    async fn recover_from_l2_block(&mut self, block_height: u64) -> Result<(), Error> {
+        use alloy::consensus::{BlockHeader, Transaction};
+        use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
+
+        info!("Recovering unproposed L2 block {}", block_height);
+
+        let block = self
+            .taiko
+            .get_l2_block_by_number(block_height, true)
+            .await?;
+
+        let (anchor_tx, user_txs) = match block.transactions.as_transactions() {
+            Some(txs) => txs.split_first().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "recover_from_l2_block: No anchor transaction in block {}",
+                    block_height
+                )
+            })?,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "recover_from_l2_block: No transactions in block {}",
+                    block_height
+                ));
+            }
+        };
+
+        let gas_limit_without_anchor =
+            block.header.gas_limit().checked_sub(ANCHOR_V3_V4_GAS_LIMIT).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Block {} gas limit {} < ANCHOR_V3_V4_GAS_LIMIT {}",
+                    block_height,
+                    block.header.gas_limit(),
+                    ANCHOR_V3_V4_GAS_LIMIT
+                )
+            })?;
+
+        let coinbase = block.header.beneficiary();
+
+        let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
+        let anchor_block_number = anchor_tx_data._checkpoint.blockNumber.to::<u64>();
+        let anchor_block_hash = anchor_tx_data._checkpoint.blockHash;
+        let anchor_state_root = anchor_tx_data._checkpoint.stateRoot;
+
+        let user_txs = user_txs.to_vec();
+        let bytes_length = l2_tx_lists::encode_and_compress(&user_txs)?.len() as u64;
+
+        let l2_block = L2BlockV2::new_from(
+            PreBuiltTxList {
+                tx_list: user_txs.clone(),
+                estimated_gas_used: 0,
+                bytes_length,
+            },
+            block.header.timestamp(),
+            coinbase,
+            anchor_block_number,
+            gas_limit_without_anchor,
+        );
+
+        let anchor_info = AnchorBlockInfo::from_precomputed_data(
+            self.ethereum_l1.execution_layer.common(),
+            anchor_block_number,
+            anchor_block_hash,
+            anchor_state_root,
+        )
+        .await?;
+
+        self.batch_builder
+            .create_new_batch(anchor_info, B256::ZERO);
+        self.batch_builder.add_recovered_l2_block(l2_block)?;
+
+        self.batch_builder.set_proposal_checkpoint(Checkpoint {
+            blockNumber: U48::from(block_height),
+            blockHash: block.header.hash_slow(),
+            stateRoot: block.header.state_root(),
+        })?;
+
+        self.batch_builder.finalize_current_batch();
+
+        info!(
+            "Recovered L2 block {} into proposal: anchor={}, coinbase={}, user_txs={}",
+            block_height,
+            anchor_block_number,
+            coinbase,
+            user_txs.len()
+        );
+
+        Ok(())
     }
 
     pub async fn reanchor_block(

@@ -9,7 +9,7 @@ use anyhow::Error;
 use common::metrics::Metrics;
 use common::{
     batch_builder::BatchBuilderConfig,
-    shared::l2_block_v2::L2BlockV2Draft,
+    shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft},
 };
 use common::{
     l1::slot_clock::SlotClock,
@@ -117,6 +117,18 @@ impl BatchBuilder {
             Ok(payload)
         } else {
             Err(anyhow::anyhow!("No current batch"))
+        }
+    }
+
+    /// Add a pre-built L2BlockV2 directly to the current proposal.
+    /// Used during recovery to bypass the draft/payload flow.
+    pub fn add_recovered_l2_block(&mut self, l2_block: L2BlockV2) -> Result<(), Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            current_proposal.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
+            current_proposal.l2_blocks.push(l2_block);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("No current batch for recovered block"))
         }
     }
 
