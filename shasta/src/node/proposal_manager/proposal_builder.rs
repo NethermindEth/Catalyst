@@ -242,6 +242,23 @@ impl ProposalBuilder {
             let bytes_length =
                 crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
 
+            let l2_draft_block = L2BlockV2Draft {
+                prebuilt_tx_list: PreBuiltTxList {
+                    tx_list: tx_list.clone(),
+                    estimated_gas_used: 0,
+                    bytes_length,
+                },
+                timestamp_sec: l2_block_timestamp_sec,
+                gas_limit_without_anchor: gas_limit,
+            };
+            if !self.can_consume_l2_block(&l2_draft_block) {
+                return Err(anyhow::anyhow!(
+                    "recover_from: block does not fit in proposal {} (adding {} bytes would exceed blob size limit). Reorg needed.",
+                    proposal_id,
+                    bytes_length,
+                ));
+            }
+
             let l2_block = L2BlockV2::new_from(
                 crate::shared::l2_tx_lists::PreBuiltTxList {
                     tx_list,
@@ -253,10 +270,6 @@ impl ProposalBuilder {
                 anchor_info.id(),
                 gas_limit,
             );
-
-            // TODO we add block to the current proposal.
-            // But we should verify that it fit N blob data size
-            // Otherwise we should do a reorg
 
             // at previous step we check that proposal exists
             self.add_l2_block_and_get_current_proposal(l2_block)?;
