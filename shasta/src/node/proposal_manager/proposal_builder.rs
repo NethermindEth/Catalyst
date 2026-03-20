@@ -239,8 +239,7 @@ impl ProposalBuilder {
                 proposal.anchor_state_root = anchor_info.state_root();
             }
 
-            let bytes_length =
-                crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
+            let bytes_length = crate::shared::l2_tx_lists::rlp_encode(&tx_list).len() as u64;
 
             let l2_draft_block = L2BlockV2Draft {
                 prebuilt_tx_list: PreBuiltTxList {
@@ -251,6 +250,7 @@ impl ProposalBuilder {
                 timestamp_sec: l2_block_timestamp_sec,
                 gas_limit_without_anchor: gas_limit,
             };
+
             if !self.can_consume_l2_block(&l2_draft_block) {
                 return Err(anyhow::anyhow!(
                     "recover_from: block does not fit in proposal {} (adding {} bytes would exceed blob size limit). Reorg needed.",
@@ -504,6 +504,7 @@ mod tests {
     use alloy::primitives::{B256, Uint};
     use common::l1::slot_clock::SlotClock;
     use common::metrics::Metrics;
+    use rand::Rng;
 
     const COINBASE: Address = Address::ZERO;
 
@@ -535,6 +536,38 @@ mod tests {
         .expect("valid test tx json")
     }
 
+    fn make_tx_with_size(size: usize) -> alloy::rpc::types::Transaction {
+        let mut bytes = vec![0_u8; size];
+        rand::rng().fill(bytes.as_mut_slice());
+        let input = format!("0x{}", hex::encode(bytes));
+        serde_json::from_str(&format!(
+            r#"{{
+            "blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000",
+            "blockNumber":"0x1",
+            "from":"0x0000000000000000000000000000000000000001",
+            "gas":"0x5208",
+            "gasPrice":"0x1",
+            "hash":"0x0000000000000000000000000000000000000000000000000000000000000001",
+            "input":"{}",
+            "nonce":"0x0",
+            "to":"0x0000000000000000000000000000000000000002",
+            "transactionIndex":"0x0",
+            "value":"0x0",
+            "type":"0x2",
+            "accessList":[],
+            "chainId":"0x1",
+            "maxFeePerGas":"0x1",
+            "maxPriorityFeePerGas":"0x0",
+            "v":"0x0",
+            "r":"0x0000000000000000000000000000000000000000000000000000000000000000",
+            "s":"0x0000000000000000000000000000000000000000000000000000000000000000",
+            "yParity":"0x0"
+        }}"#,
+            input
+        ))
+        .expect("valid test tx json")
+    }
+
     fn make_config() -> BatchBuilderConfig {
         BatchBuilderConfig {
             max_bytes_size_of_batch: 10_000,
@@ -557,6 +590,29 @@ mod tests {
         let slot_clock = Arc::new(SlotClock::new(0, 0, 12, 32, 3000));
         let metrics = Arc::new(Metrics::new());
         ProposalBuilder::new(config, slot_clock, metrics)
+    }
+
+    fn make_recovery_stress_config() -> BatchBuilderConfig {
+        BatchBuilderConfig {
+            max_bytes_size_of_batch: 10_000,
+            max_blocks_per_batch: 100,
+            l1_slot_duration_sec: 12,
+            max_time_shift_between_blocks_sec: 255,
+            max_anchor_height_offset: 64,
+            default_coinbase: COINBASE,
+            preconf_min_txs: 3,
+            preconf_max_skipped_l2_slots: 5,
+            proposal_max_time_sec: 120,
+        }
+    }
+
+    fn build_recovery_txs_list(
+        tx_per_block: usize,
+        tx_size: usize,
+    ) -> Vec<alloy::rpc::types::Transaction> {
+        (0..tx_per_block)
+            .map(|_| make_tx_with_size(tx_size))
+            .collect()
     }
 
     fn make_anchor(id: u64, timestamp_sec: u64) -> AnchorBlockInfo {
@@ -1002,6 +1058,99 @@ mod tests {
     }
 
     // --- Recovery ---
+
+    #[tokio::test]
+    async fn test_overfill_proposal() {
+        const RECOVERABLE_BLOCKS_PER_PROPOSAL: u64 = 47;
+        const RECOVERY_TXS_PER_BLOCK: usize = 2;
+        const RECOVERY_TX_INPUT_BYTES: usize = 100;
+
+        let mut builder = make_builder_with_config(make_recovery_stress_config());
+
+        for block_id in 1..=RECOVERABLE_BLOCKS_PER_PROPOSAL {
+            let anchor = make_anchor(100, 1000);
+            builder
+                .recover_from(
+                    1,
+                    anchor,
+                    COINBASE,
+                    build_recovery_txs_list(RECOVERY_TXS_PER_BLOCK, RECOVERY_TX_INPUT_BYTES),
+                    1000 + block_id,
+                    1_000_000,
+                    false,
+                )
+                .await
+                .expect("recovering a fitting block should succeed");
+        }
+
+        let anchor = make_anchor(100, 1000);
+        let res = builder
+            .recover_from(
+                1,
+                anchor,
+                COINBASE,
+                build_recovery_txs_list(RECOVERY_TXS_PER_BLOCK, RECOVERY_TX_INPUT_BYTES),
+                1000 + RECOVERABLE_BLOCKS_PER_PROPOSAL + 1,
+                1_000_000,
+                false,
+            )
+            .await;
+        assert!(
+            res.is_err(),
+            "should not be able to recover when proposal is full"
+        );
+        assert_eq!(builder.get_current_proposal_id(), Some(1));
+        assert_eq!(
+            builder
+                .current_proposal
+                .as_ref()
+                .expect("proposal should still exist")
+                .l2_blocks
+                .len(),
+            RECOVERABLE_BLOCKS_PER_PROPOSAL as usize
+        );
+    }
+
+    #[tokio::test]
+    async fn test_recover_three_full_proposals() {
+        const PROPOSALS: u64 = 3;
+        const RECOVERABLE_BLOCKS_PER_PROPOSAL: u64 = 47;
+        const RECOVERY_TXS_PER_BLOCK: usize = 2;
+        const RECOVERY_TX_INPUT_BYTES: usize = 100;
+
+        let mut builder = make_builder_with_config(make_recovery_stress_config());
+
+        for proposal_id in 1..=PROPOSALS {
+            let timestamp_base = 1000 * proposal_id;
+            for block_id in 1..=RECOVERABLE_BLOCKS_PER_PROPOSAL {
+                let anchor = make_anchor(100 * proposal_id, timestamp_base);
+                builder
+                    .recover_from(
+                        proposal_id,
+                        anchor,
+                        COINBASE,
+                        build_recovery_txs_list(RECOVERY_TXS_PER_BLOCK, RECOVERY_TX_INPUT_BYTES),
+                        timestamp_base + block_id,
+                        1_000_000,
+                        false,
+                    )
+                    .await
+                    .expect("recovering a fitting block should succeed");
+            }
+        }
+
+        builder.finalize_current_proposal();
+        assert_eq!(builder.get_current_proposal_id(), None);
+        assert_eq!(builder.queue.len(), PROPOSALS);
+        builder.queue.take_all().iter_mut().for_each(|proposal| {
+            proposal.compress();
+            assert_eq!(
+                proposal.l2_blocks.len(),
+                RECOVERABLE_BLOCKS_PER_PROPOSAL as usize
+            );
+            assert!(proposal.total_bytes < builder.config.max_bytes_size_of_batch as u64);
+        });
+    }
 
     #[tokio::test]
     async fn test_recover_from_creates_new_proposal() {
