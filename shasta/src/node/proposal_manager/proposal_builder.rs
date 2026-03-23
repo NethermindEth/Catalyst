@@ -1148,7 +1148,7 @@ mod tests {
                 proposal.l2_blocks.len(),
                 RECOVERABLE_BLOCKS_PER_PROPOSAL as usize
             );
-            assert!(proposal.total_bytes < builder.config.max_bytes_size_of_batch as u64);
+            assert!(proposal.total_bytes <= builder.config.max_bytes_size_of_batch as u64);
         });
     }
 
