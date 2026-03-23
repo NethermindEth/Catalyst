@@ -27,6 +27,7 @@ tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 mockito = { workspace = true }
+rand = { workspace = true, features = ["std", "thread_rng"] }
 tokio = { workspace = true, features = ["full", "test-util"] }
 
 [lints]
