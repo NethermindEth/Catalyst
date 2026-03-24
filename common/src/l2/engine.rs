@@ -56,16 +56,16 @@ impl L2Engine {
         Ok(Self { auth_rpc, config })
     }
 
-    pub async fn get_last_block_id_by_batch_id(&self, batch_id: u64) -> Result<Option<u64>, Error> {
+    pub async fn get_last_certain_block_id_by_batch_id(&self, batch_id: u64) -> Result<Option<u64>, Error> {
         let hex_batch_id = format!("0x{:x}", batch_id);
         let params = vec![Value::String(hex_batch_id)];
         let result = self
             .auth_rpc
-            .call_method("taikoAuth_lastBlockIDByBatchID", params)
+            .call_method("taikoAuth_lastCertainBlockIDByBatchID", params)
             .await
             .map_err(|e| {
                 anyhow::anyhow!(
-                    "taikoAuth_lastBlockIDByBatchID failed: batch id {}: {}",
+                    "taikoAuth_lastCertainBlockIDByBatchID failed: batch id {}: {}",
                     batch_id,
                     e
                 )
