@@ -157,7 +157,9 @@ impl Taiko {
         {
             let start = std::time::Instant::now();
             let safe_block_id = self
-                .get_last_certain_block_id_by_proposal_id(inbox_forced_inclusion_state.next_proposal_id - 1)
+                .get_last_certain_block_id_by_proposal_id(
+                    inbox_forced_inclusion_state.next_proposal_id - 1,
+                )
                 .await?;
             let unsafe_block_id = self.get_latest_l2_block_id().await?;
             for block_id in safe_block_id + 1..=unsafe_block_id {
@@ -180,7 +182,10 @@ impl Taiko {
         Ok(fi_head)
     }
 
-    pub async fn get_last_certain_block_id_by_proposal_id(&self, proposal_id: u64) -> Result<u64, Error> {
+    pub async fn get_last_certain_block_id_by_proposal_id(
+        &self,
+        proposal_id: u64,
+    ) -> Result<u64, Error> {
         match self
             .l2_engine
             .get_last_certain_block_id_by_batch_id(proposal_id)

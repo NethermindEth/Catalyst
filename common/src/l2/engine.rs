@@ -56,7 +56,10 @@ impl L2Engine {
         Ok(Self { auth_rpc, config })
     }
 
-    pub async fn get_last_certain_block_id_by_batch_id(&self, batch_id: u64) -> Result<Option<u64>, Error> {
+    pub async fn get_last_certain_block_id_by_batch_id(
+        &self,
+        batch_id: u64,
+    ) -> Result<Option<u64>, Error> {
         let hex_batch_id = format!("0x{:x}", batch_id);
         let params = vec![Value::String(hex_batch_id)];
         let result = self
