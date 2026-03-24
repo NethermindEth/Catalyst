@@ -193,7 +193,7 @@ impl Taiko {
         {
             Some(block_id) => Ok(block_id),
             None => Err(anyhow::anyhow!(
-                "last certain block id by proposal id {} is None",
+                "no last certain block id returned for proposal_id {} via get_last_certain_block_id_by_batch_id",
                 proposal_id
             )),
         }
