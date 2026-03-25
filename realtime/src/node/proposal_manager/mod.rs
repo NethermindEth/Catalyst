@@ -78,7 +78,7 @@ impl BatchManager {
             config.max_anchor_height_offset,
         );
 
-        let bridge_addr: SocketAddr = "127.0.0.1:4545".parse()?;
+        let bridge_addr: SocketAddr = "0.0.0.0:4545".parse()?;
         let bridge_handler = Arc::new(Mutex::new(
             BridgeHandler::new(
                 bridge_addr,
