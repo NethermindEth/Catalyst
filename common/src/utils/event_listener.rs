@@ -171,7 +171,9 @@ where
         }
 
         if latest_block - next_block > MAX_BLOCKS_PER_POLL {
-            debug!("{event_name}: gap too large: latest={latest_block}, next={next_block}, fetching last {MAX_BLOCKS_PER_POLL}");
+            debug!(
+                "{event_name}: gap too large: latest={latest_block}, next={next_block}, fetching last {MAX_BLOCKS_PER_POLL}"
+            );
             next_block = latest_block - MAX_BLOCKS_PER_POLL;
         }
 
