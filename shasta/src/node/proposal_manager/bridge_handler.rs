@@ -28,6 +28,7 @@ use tracing::{error, info, warn};
 pub enum UserOpStatus {
     Pending,
     Processing { tx_hash: FixedBytes<32> },
+    ProvingBlock { block_id: u64 },
     Rejected { reason: String },
     Executed,
 }

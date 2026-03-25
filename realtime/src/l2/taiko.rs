@@ -313,6 +313,13 @@ impl Taiko {
             .await
     }
 
+    pub async fn reorg_stale_block(
+        &self,
+        new_head_block_number: u64,
+    ) -> Result<common::l2::taiko_driver::models::ReorgStaleBlockResponse, Error> {
+        self.driver.reorg_stale_block(new_head_block_number).await
+    }
+
     pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
         L2ExecutionLayer::decode_anchor_id_from_tx_data(data)
     }

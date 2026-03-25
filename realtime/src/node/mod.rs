@@ -471,60 +471,11 @@ impl Node {
         // Wait for the last sent transaction to be executed
         self.wait_for_sent_transactions().await?;
 
-        // Recover and submit any preconfirmed-but-unproposed L2 blocks
+        // Reorg any preconfirmed-but-unproposed L2 blocks back to the last proposed block
         if !self.preconf_only {
-            let recovered = self.proposal_manager.recover_unproposed_blocks().await?;
-            if recovered > 0 {
-                self.submit_recovered_batches().await?;
-            }
+            self.proposal_manager.reorg_unproposed_blocks().await?;
         }
 
-        Ok(())
-    }
-
-    async fn submit_recovered_batches(&mut self) -> Result<(), Error> {
-        info!("Submitting recovered batches to L1...");
-
-        loop {
-            if !self.proposal_manager.has_batches() {
-                break;
-            }
-
-            if self.cancel_token.is_cancelled() {
-                return Err(anyhow::anyhow!("Shutdown during recovery submission"));
-            }
-
-            // Start async submission (proves via Raiko + sends L1 tx)
-            self.proposal_manager.try_start_submission(false).await?;
-
-            // Wait for submission to complete
-            loop {
-                if self.cancel_token.is_cancelled() {
-                    return Err(anyhow::anyhow!("Shutdown during recovery submission"));
-                }
-
-                if let Some(result) = self.proposal_manager.poll_submission_result() {
-                    match result {
-                        Ok(()) => {
-                            info!("Recovery batch submitted successfully");
-                            break;
-                        }
-                        Err(e) => {
-                            return Err(anyhow::anyhow!(
-                                "Recovery batch submission failed: {}",
-                                e
-                            ));
-                        }
-                    }
-                }
-                sleep(Duration::from_millis(500)).await;
-            }
-
-            // Wait for L1 transaction to be confirmed before next batch
-            self.wait_for_sent_transactions().await?;
-        }
-
-        info!("All recovered batches submitted successfully");
         Ok(())
     }
 

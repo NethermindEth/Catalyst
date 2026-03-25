@@ -228,6 +228,18 @@ async fn submission_task(
             });
         }
 
+        // Set user op status to ProvingBlock before requesting proof from Raiko
+        if let Some(ref store) = status_store {
+            for op in &proposal.user_ops {
+                store.set(
+                    op.id,
+                    &UserOpStatus::ProvingBlock {
+                        block_id: proposal.checkpoint.blockNumber.to::<u64>(),
+                    },
+                );
+            }
+        }
+
         let proof = raiko_client.get_proof(&request).await?;
         proposal.zk_proof = Some(proof);
     }

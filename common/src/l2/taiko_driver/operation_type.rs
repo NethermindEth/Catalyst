@@ -4,6 +4,7 @@ use std::fmt;
 pub enum OperationType {
     Preconfirm,
     Reanchor,
+    ReorgStaleBlock,
     Status,
 }
 
@@ -12,6 +13,7 @@ impl fmt::Display for OperationType {
         let s = match self {
             OperationType::Preconfirm => "Preconfirm",
             OperationType::Reanchor => "Reanchor",
+            OperationType::ReorgStaleBlock => "ReorgStaleBlock",
             OperationType::Status => "Status",
         };
         write!(f, "{s}")

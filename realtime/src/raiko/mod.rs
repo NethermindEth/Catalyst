@@ -109,7 +109,7 @@ impl RaikoClient {
             proof_type: config.proof_type.clone(),
             l2_network: config.raiko_network.clone(),
             l1_network: config.raiko_l1_network.clone(),
-            poll_interval: Duration::from_secs(10),
+            poll_interval: Duration::from_secs(2),
             max_retries: 60,
         }
     }

@@ -57,18 +57,10 @@ impl ProposalTxBuilder {
             Ok(gas) => gas,
             Err(e) => {
                 warn!(
-                    "Build proposeBatch: Failed to estimate gas for blob transaction: {}",
+                    "Build proposeBatch: Failed to estimate gas for blob transaction: {}. Force-sending with 500000 gas.",
                     e
                 );
-                match e {
-                    RpcError::ErrorResp(err) => {
-                        return Err(anyhow::anyhow!(
-                            tools::convert_error_payload(&err.to_string())
-                                .unwrap_or(TransactionError::EstimationFailed)
-                        ));
-                    }
-                    _ => return Ok(tx_blob),
-                }
+                500_000
             }
         };
         let tx_blob_gas = tx_blob_gas + tx_blob_gas * self.extra_gas_percentage / 100;
@@ -104,10 +96,22 @@ impl ProposalTxBuilder {
             multicalls.push(user_op_call);
         }
 
-        // Add the proposal to the multicall
+        // Build the propose call and blob sidecar
         let (propose_call, blob_sidecar) = self
             .build_propose_call(&batch, contract_addresses.realtime_inbox)
             .await?;
+
+        // If no user ops or L1 calls, send directly to inbox (skip multicall)
+        if batch.user_ops.is_empty() && batch.l1_calls.is_empty() {
+            info!("Sending proposal directly to RealTimeInbox (no multicall)");
+            let tx = TransactionRequest::default()
+                .to(contract_addresses.realtime_inbox)
+                .from(from)
+                .input(propose_call.data.into())
+                .with_blob_sidecar(blob_sidecar);
+            return Ok(tx);
+        }
+
         info!("Added proposal to Multicall: {:?}", &propose_call);
         multicalls.push(propose_call.clone());
 
