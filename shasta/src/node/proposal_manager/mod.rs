@@ -74,7 +74,7 @@ impl BatchManager {
         let forced_inclusion = Arc::new(ForcedInclusion::new(ethereum_l1.clone()).await?);
 
         // Initialize bridge handler listening on port 4545
-        let bridge_addr: SocketAddr = "127.0.0.1:4545".parse()?;
+        let bridge_addr: SocketAddr = "0.0.0.0:4545".parse()?;
         let bridge_handler = Arc::new(Mutex::new(
             BridgeHandler::new(
                 bridge_addr,
