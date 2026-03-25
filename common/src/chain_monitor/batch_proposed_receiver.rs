@@ -12,7 +12,7 @@ const RECONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const POLL_INTERVAL: Duration = Duration::from_secs(12);
 
 pub struct EventReceiver<T> {
-    ws_rpc_url: String,
+    rpc_url: String,
     contract_address: Address,
     event_tx: Sender<T>,
     cancel_token: CancellationToken,
@@ -24,14 +24,14 @@ where
     T: SolEvent + Send + 'static,
 {
     pub async fn new(
-        ws_rpc_url: String,
+        rpc_url: String,
         contract_address: Address,
         event_tx: Sender<T>,
         cancel_token: CancellationToken,
         event_name: &'static str,
     ) -> Result<Self, Error> {
         Ok(Self {
-            ws_rpc_url,
+            rpc_url,
             contract_address,
             event_tx,
             cancel_token,
@@ -41,7 +41,7 @@ where
 
     pub fn start(&self) {
         info!("Starting {} event receiver", self.event_name);
-        let ws_rpc_url = self.ws_rpc_url.clone();
+        let rpc_url = self.rpc_url.clone();
         let contract_address = self.contract_address;
         let event_tx = self.event_tx.clone();
         let cancel_token = self.cancel_token.clone();
@@ -50,7 +50,7 @@ where
         tokio::spawn(async move {
             listen_for_event(
                 EventListenerConfig {
-                    rpc_url: ws_rpc_url,
+                    rpc_url,
                     contract_address,
                     event_name,
                     signature_hash: T::SIGNATURE_HASH,

@@ -15,6 +15,8 @@ use tokio::{
 };
 use tracing::{debug, error, info, warn};
 
+const MAX_BLOCKS_PER_POLL: u64 = 10;
+
 pub struct EventListenerConfig {
     pub rpc_url: String,
     pub contract_address: Address,
@@ -68,7 +70,7 @@ pub async fn listen_for_event<T>(
                     .await
             }
             Err(e) => {
-                warn!("{event_name}: subscription failed ({e:?}), falling back to HTTP polling");
+                debug!("{event_name}: subscription failed ({e:?}), falling back to HTTP polling");
                 run_polling_loop(
                     &provider,
                     filter,
@@ -166,6 +168,11 @@ where
 
         if latest_block < next_block {
             continue;
+        }
+
+        if latest_block - next_block > MAX_BLOCKS_PER_POLL {
+            debug!("{event_name}: gap too large: latest={latest_block}, next={next_block}, fetching last {MAX_BLOCKS_PER_POLL}");
+            next_block = latest_block - MAX_BLOCKS_PER_POLL;
         }
 
         let logs = match provider
