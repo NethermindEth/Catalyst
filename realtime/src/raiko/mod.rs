@@ -109,8 +109,8 @@ impl RaikoClient {
             proof_type: config.proof_type.clone(),
             l2_network: config.raiko_network.clone(),
             l1_network: config.raiko_l1_network.clone(),
-            poll_interval: Duration::from_secs(2),
-            max_retries: 60,
+            poll_interval: Duration::from_millis(config.raiko_poll_interval_ms),
+            max_retries: config.raiko_max_retries,
         }
     }
 
@@ -127,7 +127,21 @@ impl RaikoClient {
             }
 
             let resp = req.send().await?;
-            let body: RaikoResponse = resp.json().await?;
+            let http_status = resp.status();
+            let raw_body = resp.text().await?;
+            warn!(
+                "Raiko response (attempt {}): HTTP {} | body: {}",
+                attempt + 1,
+                http_status,
+                raw_body
+            );
+            let body: RaikoResponse = serde_json::from_str(&raw_body)
+                .map_err(|e| anyhow::anyhow!(
+                    "Failed to parse Raiko response (HTTP {}): {} | body: {}",
+                    http_status,
+                    e,
+                    raw_body
+                ))?;
 
             if body.status == "error" {
                 return Err(anyhow::anyhow!(

@@ -14,6 +14,8 @@ pub struct RealtimeConfig {
     pub proof_type: ProofType,
     pub raiko_network: String,
     pub raiko_l1_network: String,
+    pub raiko_poll_interval_ms: u64,
+    pub raiko_max_retries: u32,
     pub preconf_only: bool,
     pub proof_request_bypass: bool,
 }
@@ -42,6 +44,16 @@ impl ConfigTrait for RealtimeConfig {
         let raiko_l1_network = std::env::var("RAIKO_L1_NETWORK")
             .unwrap_or_else(|_| "ethereum".to_string());
 
+        let raiko_poll_interval_ms: u64 = std::env::var("RAIKO_POLL_INTERVAL_MS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2000);
+
+        let raiko_max_retries: u32 = std::env::var("RAIKO_MAX_RETRIES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(60);
+
         let preconf_only = std::env::var("PRECONF_ONLY")
             .map(|v| v.to_lowercase() != "false" && v != "0")
             .unwrap_or(true);
@@ -59,6 +71,8 @@ impl ConfigTrait for RealtimeConfig {
             proof_type,
             raiko_network,
             raiko_l1_network,
+            raiko_poll_interval_ms,
+            raiko_max_retries,
             preconf_only,
             proof_request_bypass,
         })
