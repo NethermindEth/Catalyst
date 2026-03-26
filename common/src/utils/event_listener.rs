@@ -70,7 +70,7 @@ pub async fn listen_for_event<T>(
                     .await
             }
             Err(e) => {
-                debug!("{event_name}: subscription failed ({e:?}), falling back to HTTP polling");
+                info!("{event_name}: subscription failed ({e:?}), falling back to HTTP polling");
                 run_polling_loop(
                     &provider,
                     filter,
