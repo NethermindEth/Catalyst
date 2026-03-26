@@ -64,7 +64,7 @@ pub async fn listen_for_event<T>(
 
         let reconnect = match provider.subscribe_logs(&filter).await {
             Ok(subscription) => {
-                debug!("{event_name}: subscribed via WebSocket");
+                info!("{event_name}: subscribed via WebSocket");
                 let mut stream = subscription.into_stream();
                 run_subscription_loop(&mut stream, event_name, to_event, &sender_tx, &cancel_token)
                     .await
