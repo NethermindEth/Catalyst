@@ -11,10 +11,7 @@ use common::{
     batch_builder::BatchBuilderConfig,
     shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft},
 };
-use common::{
-    l1::slot_clock::SlotClock,
-    shared::anchor_block_info::AnchorBlockInfo,
-};
+use common::{l1::slot_clock::SlotClock, shared::anchor_block_info::AnchorBlockInfo};
 use std::{collections::VecDeque, sync::Arc};
 use tracing::{debug, info, trace, warn};
 

@@ -4,8 +4,7 @@ use crate::{
     l1::execution_layer::{ExecutionLayer, L1BridgeHandlerOps},
     l2::execution_layer::L2BridgeHandlerOps,
 };
-use alloy::primitives::{Address, Bytes, FixedBytes};
-use alloy::signers::Signer;
+use alloy::primitives::{Address, B256, Bytes, FixedBytes};
 use anyhow::Result;
 use common::{l1::ethereum_l1::EthereumL1, utils::cancellation_token::CancellationToken};
 use jsonrpsee::server::{RpcModule, ServerBuilder};
@@ -92,7 +91,6 @@ pub struct BridgeHandler {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     taiko: Arc<Taiko>,
     rx: Receiver<UserOp>,
-    l1_call_proof_signer: alloy::signers::local::PrivateKeySigner,
     status_store: UserOpStatusStore,
 }
 
@@ -180,11 +178,6 @@ impl BridgeHandler {
             ethereum_l1,
             taiko,
             rx,
-            // Surge: Hard coding the private key for the POC
-            l1_call_proof_signer: alloy::signers::local::PrivateKeySigner::from_bytes(
-                &"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                    .parse::<alloy::primitives::FixedBytes<32>>()?,
-            )?,
             status_store,
         })
     }
@@ -227,23 +220,23 @@ impl BridgeHandler {
         Ok(None)
     }
 
-    pub async fn find_l1_call(&mut self, block_id: u64) -> Result<Option<L1Call>, anyhow::Error> {
-        if let Some((message_from_l2, signal_slot)) = self
-            .taiko
-            .l2_execution_layer()
-            .find_message_and_signal_slot(block_id)
-            .await?
-        {
-            let signature = self.l1_call_proof_signer.sign_hash(&signal_slot).await?;
+    pub async fn find_l1_call(
+        &mut self,
+        block_id: u64,
+        state_root: B256,
+    ) -> Result<Option<L1Call>, anyhow::Error> {
+        let l2_el = self.taiko.l2_execution_layer();
 
-            let mut signal_slot_proof = [0_u8; 65];
-            signal_slot_proof[..32].copy_from_slice(signature.r().to_be_bytes::<32>().as_slice());
-            signal_slot_proof[32..64].copy_from_slice(signature.s().to_be_bytes::<32>().as_slice());
-            signal_slot_proof[64] = u8::from(signature.v()) + 27;
+        if let Some((message_from_l2, signal_slot)) =
+            l2_el.find_message_and_signal_slot(block_id).await?
+        {
+            let signal_slot_proof = l2_el
+                .get_hop_proof(signal_slot, block_id, state_root)
+                .await?;
 
             return Ok(Some(L1Call {
                 message_from_l2,
-                signal_slot_proof: Bytes::from(signal_slot_proof),
+                signal_slot_proof,
             }));
         }
 

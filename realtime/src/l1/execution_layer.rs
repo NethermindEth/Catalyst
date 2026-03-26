@@ -3,7 +3,7 @@ use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
 use crate::node::proposal_manager::proposal::Proposal;
 use crate::raiko::RaikoClient;
-use crate::shared_abi::bindings::{Bridge::MessageSent, IBridge::Message, SignalSent};
+use crate::shared_abi::bindings::{Bridge::MessageSent, IBridge::Message, SignalService::SignalSent};
 use crate::{l1::config::ContractAddresses, node::proposal_manager::bridge_handler::UserOp};
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},

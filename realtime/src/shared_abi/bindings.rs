@@ -10,8 +10,24 @@ sol!(
     "src/shared_abi/Bridge.json"
 );
 
-// SignalSent event emitted by the SignalService contract
-sol! {
+sol!(
     #[allow(missing_docs)]
-    event SignalSent(address app, bytes32 signal, bytes32 slot, bytes32 value);
+    #[sol(rpc)]
+    #[derive(Debug)]
+    SignalService,
+    "src/shared_abi/SignalService.json"
+);
+
+// HopProof encoding struct for cross-chain signal verification via storage proofs.
+// Not part of the SignalService ABI directly — it is the encoding format for the
+// `_proof` bytes parameter in proveSignalReceived / verifySignalReceived.
+sol! {
+    struct HopProof {
+        uint64 chainId;
+        uint64 blockId;
+        bytes32 rootHash;
+        uint8 cacheOption;
+        bytes[] accountProof;
+        bytes[] storageProof;
+    }
 }

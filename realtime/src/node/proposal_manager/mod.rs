@@ -341,7 +341,7 @@ impl BatchManager {
                     .bridge_handler
                     .lock()
                     .await
-                    .find_l1_call(preconfed_block.number)
+                    .find_l1_call(preconfed_block.number, preconfed_block.state_root)
                     .await?
                 {
                     self.batch_builder.add_l1_call(l1_call)?;

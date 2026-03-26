@@ -1,8 +1,9 @@
 use crate::l2::bindings::{Anchor, ICheckpointStore::Checkpoint};
 use crate::shared_abi::bindings::{
     Bridge::{self, MessageSent},
+    HopProof,
     IBridge::Message,
-    SignalSent,
+    SignalService::SignalSent,
 };
 use alloy::{
     consensus::{
@@ -241,6 +242,12 @@ pub trait L2BridgeHandlerOps {
         &self,
         block_id: u64,
     ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error>;
+    async fn get_hop_proof(
+        &self,
+        slot: FixedBytes<32>,
+        block_id: u64,
+        state_root: B256,
+    ) -> Result<Bytes, anyhow::Error>;
 }
 
 impl L2BridgeHandlerOps for L2ExecutionLayer {
@@ -365,5 +372,46 @@ impl L2BridgeHandlerOps for L2ExecutionLayer {
         };
 
         Ok(Some((message, slot)))
+    }
+
+    async fn get_hop_proof(
+        &self,
+        slot: FixedBytes<32>,
+        block_id: u64,
+        state_root: B256,
+    ) -> Result<Bytes, anyhow::Error> {
+        use alloy::sol_types::SolValue;
+
+        let proof = self
+            .provider
+            .get_proof(self.signal_service, vec![slot.into()])
+            .block_id(block_id.into())
+            .await
+            .map_err(|e| anyhow::anyhow!("eth_getProof failed for signal slot: {e}"))?;
+
+        let storage_proof = proof
+            .storage_proof
+            .first()
+            .ok_or_else(|| anyhow::anyhow!("No storage proof returned for signal slot"))?;
+
+        let hop_proof = HopProof {
+            chainId: self.chain_id,
+            blockId: block_id,
+            rootHash: state_root,
+            cacheOption: 0,
+            accountProof: proof.account_proof.clone(),
+            storageProof: storage_proof.proof.clone(),
+        };
+
+        info!(
+            "Built HopProof: chainId={}, blockId={}, rootHash={}, accountProof_len={}, storageProof_len={}",
+            hop_proof.chainId,
+            hop_proof.blockId,
+            hop_proof.rootHash,
+            hop_proof.accountProof.len(),
+            hop_proof.storageProof.len(),
+        );
+
+        Ok(Bytes::from(vec![hop_proof].abi_encode_params()))
     }
 }
