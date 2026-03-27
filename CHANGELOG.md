@@ -2,6 +2,13 @@
 
 All notable changes to Catalyst are documented here, organized by release version.
 
+## [v1.34.12] — 2026-03-27
+
+### Features
+- Support HTTP URLs as the main RPC (#918)
+
+---
+
 ## [v1.34.11] — 2026-03-26
 
 ### Features
