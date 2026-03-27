@@ -19,7 +19,7 @@ env:
   DOCKER_PUBLIC_REGISTRY: docker.io
   DOCKER_PUBLIC_REPOSITORY: nethermind/catalyst-node
   DOCKER_REGISTRY: nethermind.jfrog.io
-  DOCKER_REPOSITORY_STAGING: core-oci-local-staging/catalyst-node
+  DOCKER_REPOSITORY_PROD: core-oci-local-prod/catalyst-node
   MASTER_BRANCH: refs/heads/master
 
 jobs:
@@ -66,7 +66,7 @@ jobs:
           file: Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }},push-by-digest=true,name-canonical=true
+          outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }},push-by-digest=true,name-canonical=true
 
       - name: Set digest output
         id: digest
@@ -129,7 +129,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}
           tags: ${{ steps.tags.outputs.tag_list }}
 
       - name: Create and push manifest list
@@ -151,7 +151,7 @@ jobs:
       - name: Tag with commit SHA
         run: |
           docker buildx imagetools create \
-            -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}:${{ steps.sha.outputs.tag }} \
+            -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}:${{ steps.sha.outputs.tag }} \
             ${{ needs.build.outputs.digest-amd64 }} \
             ${{ needs.build.outputs.digest-arm64 }}
 
@@ -175,7 +175,7 @@ jobs:
           set -e
           echo "Tags to promote: $PROMOTE_TAGS"
           for tag in $PROMOTE_TAGS; do
-            source_image="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}:${tag}"
+            source_image="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}:${tag}"
             prod_image="${{ env.DOCKER_PUBLIC_REGISTRY }}/${{ env.DOCKER_PUBLIC_REPOSITORY }}:${tag}"
             echo ""
             echo "=== Promoting tag: ${tag} ==="
@@ -219,7 +219,7 @@ jobs:
           
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Repository Information" >> $GITHUB_STEP_SUMMARY
-          echo "- **Staging**: \`${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Production**: \`${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Production**: \`${{ env.DOCKER_PUBLIC_REGISTRY }}/${{ env.DOCKER_PUBLIC_REPOSITORY }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: \`${{ github.sha }}\` (\`${{ steps.sha.outputs.short }}\`)" >> $GITHUB_STEP_SUMMARY
