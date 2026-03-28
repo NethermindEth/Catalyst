@@ -171,7 +171,12 @@ impl Node {
                             )
                             .await?;
                         } else {
-                            error!("Async submission failed: {}", e);
+                            error!("Async submission failed: {}. Restarting node.", e);
+                            self.cancel_token.cancel_on_critical_error();
+                            return Err(anyhow::anyhow!(
+                                "Async submission failed: {}",
+                                e
+                            ));
                         }
                     }
                 }
@@ -187,8 +192,11 @@ impl Node {
                 .await;
         }
 
-        // Preconfirmation phase — runs even while proof is being fetched async
-        if current_status.is_preconfer() && current_status.is_driver_synced() {
+        // Preconfirmation phase — skip if a proof request or submission is already in progress
+        if current_status.is_preconfer()
+            && current_status.is_driver_synced()
+            && !self.proposal_manager.is_submission_in_progress()
+        {
             if !self
                 .head_verifier
                 .verify(l2_slot_info.parent_id(), l2_slot_info.parent_hash())
