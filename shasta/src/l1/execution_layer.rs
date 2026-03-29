@@ -500,6 +500,7 @@ fn collect_logs_recursive(frame: &CallFrame) -> Vec<CallLogFrame> {
     logs
 }
 
+#[allow(async_fn_in_trait)]
 pub trait L1BridgeHandlerOps {
     // Surge: This can be made to retrieve multiple signal slots
     async fn find_message_and_signal_slot(

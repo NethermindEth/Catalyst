@@ -296,6 +296,7 @@ impl L2ExecutionLayer {
 
 // Surge: L2 EL ops for Bridge Handler
 
+#[allow(async_fn_in_trait)]
 pub trait L2BridgeHandlerOps {
     // Surge: Builds the L2 call expected to be initiated an L1 contract via the Bridge
     // This is initially sent as a user op to the bridge handler RPC

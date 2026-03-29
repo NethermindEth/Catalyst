@@ -47,10 +47,10 @@ impl UserOpStatusStore {
     }
 
     pub fn set(&self, id: u64, status: &UserOpStatus) {
-        if let Ok(value) = serde_json::to_vec(status) {
-            if let Err(e) = self.db.insert(id.to_be_bytes(), value) {
-                error!("Failed to write user op status: {}", e);
-            }
+        if let Ok(value) = serde_json::to_vec(status)
+            && let Err(e) = self.db.insert(id.to_be_bytes(), value)
+        {
+            error!("Failed to write user op status: {}", e);
         }
     }
 
@@ -258,7 +258,7 @@ impl BridgeHandler {
             let mut signal_slot_proof = [0_u8; 65];
             signal_slot_proof[..32].copy_from_slice(signature.r().to_be_bytes::<32>().as_slice());
             signal_slot_proof[32..64].copy_from_slice(signature.s().to_be_bytes::<32>().as_slice());
-            signal_slot_proof[64] = (signature.v() as u8) + 27;
+            signal_slot_proof[64] = u8::from(signature.v()) + 27;
 
             return Ok(Some(L1Call {
                 message_from_l2,
