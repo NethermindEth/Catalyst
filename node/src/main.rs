@@ -1,9 +1,10 @@
 use anyhow::Error;
 use common::{
-    fork_info::ForkInfo,
+    fork_info::{Fork, ForkInfo},
     metrics::{self, Metrics},
     utils::cancellation_token::CancellationToken,
 };
+use pacaya::create_pacaya_node;
 use realtime::create_realtime_node;
 use std::sync::Arc;
 use tokio::signal::unix::{SignalKind, signal};
@@ -81,15 +82,52 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
         info!("Cancellation token triggered, initiating shutdown...");
     }));
 
-    // Surge: Real-time POC mode - bypass fork detection
-    info!("Current fork: REALTIME ⚡");
-    create_realtime_node(
-        config.clone(),
-        metrics.clone(),
-        cancel_token.clone(),
-        fork_info,
-    )
-    .await?;
+    match fork_info.fork {
+        Fork::Pacaya => {
+            let next_fork_timestamp = fork_info.config.fork_switch_timestamps.get(1);
+            info!(
+                "Current fork: PACAYA, next fork timestamp: {:?}",
+                next_fork_timestamp
+            );
+            create_pacaya_node(
+                config.clone(),
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info,
+            )
+            .await?;
+        }
+        Fork::Shasta => {
+            info!("Current fork: SHASTA");
+            shasta::create_shasta_node(
+                config.clone(),
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info,
+            )
+            .await?;
+        }
+        Fork::Permissionless => {
+            info!("Current fork: PERMISSIONLESS");
+            permissionless::create_permissionless_node(
+                config.clone(),
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info,
+            )
+            .await?;
+        }
+        Fork::Realtime => {
+            info!("Current fork: REALTIME");
+            create_realtime_node(
+                config.clone(),
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info,
+            )
+            .await?;
+        }
+    }
 
     metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());
 

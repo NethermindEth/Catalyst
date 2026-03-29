@@ -3,8 +3,10 @@ pub mod fork;
 use anyhow::Error;
 use config::ForkInfoConfig;
 pub use fork::Fork;
+use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use strum::IntoEnumIterator;
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub struct ForkInfo {
@@ -23,6 +25,13 @@ impl Default for ForkInfo {
 
 impl ForkInfo {
     pub fn from_config(config: ForkInfoConfig) -> Result<Self, Error> {
+        // FORK env var overrides timestamp-based fork detection
+        if let Ok(fork_override) = std::env::var("FORK") {
+            let fork = Fork::from_str(&fork_override)?;
+            info!("FORK env var set, overriding fork detection to: {}", fork);
+            return Ok(Self { fork, config });
+        }
+
         let current_timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?;
         let fork = Self::choose_current_fork(&config, current_timestamp.as_secs())?;
         Ok(Self { fork, config })
