@@ -63,6 +63,8 @@ impl BatchManager {
         raiko_client: RaikoClient,
         basefee_sharing_pctg: u8,
         proof_request_bypass: bool,
+        l1_chain_id: u64,
+        l2_chain_id: u64,
     ) -> Result<Self, Error> {
         info!(
             "Batch builder config:\n\
@@ -85,6 +87,8 @@ impl BatchManager {
                 ethereum_l1.clone(),
                 taiko.clone(),
                 cancel_token.clone(),
+                l1_chain_id,
+                l2_chain_id,
             )
             .await?,
         ));
@@ -263,39 +267,89 @@ impl BatchManager {
         self.bridge_handler.lock().await.has_pending_user_ops()
     }
 
-    async fn add_pending_l2_call_to_draft_block(
+    /// Process all pending UserOps: route each to L1 or L2 based on its chainId field.
+    ///
+    /// - L1→L2 deposits: UserOp added to proposal (for L1 multicall), processMessage tx added to L2 block
+    /// - L2 direct (bridge-out): UserOp execution tx added to L2 block, L2→L1 relay handled post-execution
+    async fn add_pending_user_ops_to_draft_block(
         &mut self,
         l2_draft_block: &mut L2BlockV2Draft,
     ) -> Result<Option<(UserOp, FixedBytes<32>)>, anyhow::Error> {
-        if let Some((user_op_data, l2_call)) = self
-            .bridge_handler
-            .lock()
-            .await
-            .next_user_op_and_l2_call()
-            .await?
-        {
-            info!("Processing pending L2 call: {:?}", l2_call);
+        use bridge_handler::UserOpRouting;
 
-            let l2_call_bridge_tx = self
-                .taiko
-                .l2_execution_layer()
-                .construct_l2_call_tx(l2_call.message_from_l1)
-                .await?;
+        let (routing, status_store) = {
+            let mut handler = self.bridge_handler.lock().await;
+            let routing = handler.next_user_op_routed().await?;
+            (routing, handler.status_store())
+        };
 
-            info!(
-                "Inserting L2 call bridge transaction into tx list: {:?}",
-                l2_call_bridge_tx
-            );
+        let Some(routing) = routing else {
+            return Ok(None);
+        };
 
-            l2_draft_block
-                .prebuilt_tx_list
-                .tx_list
-                .push(l2_call_bridge_tx);
+        match routing {
+            UserOpRouting::L1ToL2 { user_op, l2_call } => {
+                info!("Processing L1→L2 deposit: UserOp id={}", user_op.id);
 
-            return Ok(Some((user_op_data, l2_call.signal_slot_on_l2)));
+                let l2_call_bridge_tx = self
+                    .taiko
+                    .l2_execution_layer()
+                    .construct_l2_call_tx(l2_call.message_from_l1)
+                    .await?;
+
+                info!("Inserting processMessage tx into L2 block");
+                l2_draft_block
+                    .prebuilt_tx_list
+                    .tx_list
+                    .push(l2_call_bridge_tx);
+
+                Ok(Some((user_op, l2_call.signal_slot_on_l2)))
+            }
+            UserOpRouting::L2Direct { user_op } => {
+                info!(
+                    "Processing L2 UserOp (bridge-out): id={} submitter={}",
+                    user_op.id, user_op.submitter
+                );
+
+                match self
+                    .taiko
+                    .l2_execution_layer()
+                    .construct_l2_user_op_tx(&user_op)
+                    .await
+                {
+                    Ok(tx) => {
+                        // Track L2 UserOp ID first — only insert tx if tracking succeeds,
+                        // otherwise we'd execute on L2 but show Rejected in the status store.
+                        if let Err(e) = self.batch_builder.add_l2_user_op_id(user_op.id) {
+                            error!(
+                                "Failed to track L2 UserOp id={}: {}. Dropping tx.",
+                                user_op.id, e
+                            );
+                            status_store.set(
+                                user_op.id,
+                                &bridge_handler::UserOpStatus::Rejected {
+                                    reason: format!("Failed to track UserOp: {}", e),
+                                },
+                            );
+                        } else {
+                            info!("Inserting L2 UserOp execution tx into block");
+                            l2_draft_block.prebuilt_tx_list.tx_list.push(tx);
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to construct L2 UserOp tx: {}", e);
+                        status_store.set(
+                            user_op.id,
+                            &bridge_handler::UserOpStatus::Rejected {
+                                reason: format!("Failed to construct L2 tx: {}", e),
+                            },
+                        );
+                    }
+                }
+                // No L1 UserOp or signal slot for L2-direct ops
+                Ok(None)
+            }
         }
-
-        Ok(None)
     }
 
     async fn add_draft_block_to_proposal(
@@ -306,17 +360,18 @@ impl BatchManager {
     ) -> Result<BuildPreconfBlockResponse, Error> {
         let mut anchor_signal_slots: Vec<FixedBytes<32>> = vec![];
 
-        debug!("Checking for pending L2 calls");
+        debug!("Checking for pending UserOps (L1→L2 deposits and L2 direct)");
         if let Some((user_op_data, signal_slot)) = self
-            .add_pending_l2_call_to_draft_block(&mut l2_draft_block)
+            .add_pending_user_ops_to_draft_block(&mut l2_draft_block)
             .await?
         {
             self.batch_builder.add_user_op(user_op_data)?;
             self.batch_builder.add_signal_slot(signal_slot)?;
             anchor_signal_slots.push(signal_slot);
         } else {
-            debug!("No pending L2 calls");
+            debug!("No L1→L2 UserOps (L2 direct ops, if any, were handled inline)");
         }
+
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
 
         match self

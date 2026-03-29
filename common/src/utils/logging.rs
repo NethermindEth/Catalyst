@@ -14,6 +14,11 @@ pub fn init_logging() {
                     .expect("assert: can parse env filter directive"),
             )
             .add_directive(
+                "h2=info"
+                    .parse()
+                    .expect("assert: can parse env filter directive"),
+            )
+            .add_directive(
                 "alloy_transport=info"
                     .parse()
                     .expect("assert: can parse env filter directive"),

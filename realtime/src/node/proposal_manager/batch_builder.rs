@@ -93,6 +93,7 @@ impl BatchBuilder {
             checkpoint: Checkpoint::default(),
             last_finalized_block_hash,
             user_ops: vec![],
+            l2_user_op_ids: vec![],
             signal_slots: vec![],
             l1_calls: vec![],
             zk_proof: None,
@@ -136,6 +137,15 @@ impl BatchBuilder {
             Ok(current_proposal)
         } else {
             Err(anyhow::anyhow!("No current batch"))
+        }
+    }
+
+    pub fn add_l2_user_op_id(&mut self, id: u64) -> Result<(), Error> {
+        if let Some(current_proposal) = self.current_proposal.as_mut() {
+            current_proposal.l2_user_op_ids.push(id);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("No current batch for L2 user op id"))
         }
     }
 

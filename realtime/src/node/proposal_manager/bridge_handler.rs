@@ -64,6 +64,8 @@ pub struct UserOp {
     pub id: u64,
     pub submitter: Address,
     pub calldata: Bytes,
+    #[serde(default, rename = "chainId")]
+    pub chain_id: u64,
 }
 
 // Data required to build the L1 call transaction initiated by an L2 contract via the bridge
@@ -80,6 +82,15 @@ pub struct L2Call {
     pub signal_slot_on_l2: FixedBytes<32>,
 }
 
+/// Result of routing a UserOp: either it targets L1 (and triggers an L2 bridge call)
+/// or it targets L2 (for direct execution on L2, e.g. bridge-out).
+pub enum UserOpRouting {
+    /// L1 UserOp that triggers a bridge deposit (L1→L2).
+    L1ToL2 { user_op: UserOp, l2_call: L2Call },
+    /// L2 UserOp for direct execution on L2 (e.g. bridge-out L2→L1).
+    L2Direct { user_op: UserOp },
+}
+
 #[derive(Clone)]
 struct BridgeRpcContext {
     tx: mpsc::Sender<UserOp>,
@@ -92,6 +103,8 @@ pub struct BridgeHandler {
     taiko: Arc<Taiko>,
     rx: Receiver<UserOp>,
     status_store: UserOpStatusStore,
+    l1_chain_id: u64,
+    l2_chain_id: u64,
 }
 
 impl BridgeHandler {
@@ -100,6 +113,8 @@ impl BridgeHandler {
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
         cancellation_token: CancellationToken,
+        l1_chain_id: u64,
+        l2_chain_id: u64,
     ) -> Result<Self, anyhow::Error> {
         let (tx, rx) = mpsc::channel::<UserOp>(1024);
         let status_store = UserOpStatusStore::open("data/user_op_status")?;
@@ -179,6 +194,8 @@ impl BridgeHandler {
             taiko,
             rx,
             status_store,
+            l1_chain_id,
+            l2_chain_id,
         })
     }
 
@@ -186,37 +203,67 @@ impl BridgeHandler {
         self.status_store.clone()
     }
 
-    pub async fn next_user_op_and_l2_call(
+    /// Dequeue the next UserOp and route it based on the `chainId` param.
+    ///
+    /// If `chainId` matches L1, simulates on L1 to extract bridge message (L1→L2 deposit).
+    /// If `chainId` matches L2, returns it for direct L2 block inclusion (bridge-out).
+    /// If `chainId` is 0 or missing, defaults to L1 (backwards compatible).
+    pub async fn next_user_op_routed(
         &mut self,
-    ) -> Result<Option<(UserOp, L2Call)>, anyhow::Error> {
-        if let Ok(user_op) = self.rx.try_recv() {
-            if let Some((message_from_l1, signal_slot_on_l2)) = self
-                .ethereum_l1
-                .execution_layer
-                .find_message_and_signal_slot(user_op.clone())
-                .await?
-            {
-                return Ok(Some((
-                    user_op,
-                    L2Call {
-                        message_from_l1,
-                        signal_slot_on_l2,
-                    },
-                )));
-            }
+    ) -> Result<Option<UserOpRouting>, anyhow::Error> {
+        let Ok(user_op) = self.rx.try_recv() else {
+            return Ok(None);
+        };
 
+        if user_op.chain_id == self.l2_chain_id {
+            info!(
+                "UserOp id={} targets L2 (chainId={}), queueing for L2 execution",
+                user_op.id, user_op.chain_id
+            );
+            return Ok(Some(UserOpRouting::L2Direct { user_op }));
+        }
+
+        // Reject unknown chain IDs (0 is allowed as default-to-L1)
+        if user_op.chain_id != 0 && user_op.chain_id != self.l1_chain_id {
             warn!(
-                "UserOp id={} rejected: no L2 call found in user op",
-                user_op.id
+                "UserOp id={} has unknown chainId={}, rejecting",
+                user_op.id, user_op.chain_id
             );
             self.status_store.set(
                 user_op.id,
                 &UserOpStatus::Rejected {
-                    reason: "No L2 call found in user op".to_string(),
+                    reason: format!("Unknown chainId: {}", user_op.chain_id),
                 },
             );
+            return Ok(None);
         }
 
+        // L1 UserOp — simulate on L1 to extract bridge message
+        if let Some((message_from_l1, signal_slot_on_l2)) = self
+            .ethereum_l1
+            .execution_layer
+            .find_message_and_signal_slot(user_op.clone())
+            .await?
+        {
+            return Ok(Some(UserOpRouting::L1ToL2 {
+                user_op,
+                l2_call: L2Call {
+                    message_from_l1,
+                    signal_slot_on_l2,
+                },
+            }));
+        }
+
+        warn!(
+            "UserOp id={} targets L1 but no bridge message found",
+            user_op.id
+        );
+        self.status_store.set(
+            user_op.id,
+            &UserOpStatus::Rejected {
+                reason: "L1 UserOp with no bridge message".to_string(),
+            },
+        );
         Ok(None)
     }
 
