@@ -103,7 +103,7 @@ impl L2ExecutionLayer {
         let call_builder = self
             .anchor
             .anchorV4WithSignalSlots(anchor_block_params.0, anchor_block_params.1)
-            .gas(3_000_000)
+            .gas(1_000_000)
             .max_fee_per_gas(u128::from(l2_slot_info.base_fee()))
             .max_priority_fee_per_gas(0)
             .nonce(nonce)
