@@ -69,6 +69,18 @@ impl RegistryMonitor {
                     ));
                 }
 
+                if let Err(e) = self.index_unregister(start_block, end_block).await {
+                    return Err(anyhow::anyhow!(
+                        "Failed to index OperatorUnregistered events: {e}"
+                    ));
+                }
+
+                if let Err(e) = self.index_slash(start_block, end_block).await {
+                    return Err(anyhow::anyhow!(
+                        "Failed to index OperatorSlashed events: {e}"
+                    ));
+                }
+
                 self.indexed_block = end_block;
 
                 if let Err(e) = self.db.update_status(self.indexed_block).await {
@@ -212,6 +224,83 @@ impl RegistryMonitor {
 
             self.db
                 .insert_protocol(&registration_root, slasher, committer, opt_in_at)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn index_unregister(&self, start_block: u64, end_block: u64) -> Result<(), Error> {
+        let operator_unregistered = IRegistry::OperatorUnregistered::SIGNATURE_HASH;
+        let filter = Filter::new()
+            .address(self.registry_address)
+            .event_signature(operator_unregistered)
+            .from_block(start_block)
+            .to_block(end_block);
+        let logs = self.l1_provider.get_logs(&filter).await?;
+
+        for log in logs {
+            let operator_unregistered = log.log_decode::<IRegistry::OperatorUnregistered>()?;
+            let registration_root = operator_unregistered.inner.registrationRoot.to_string();
+            let block_number = match log.block_number {
+                Some(n) => n,
+                None => return Err(anyhow::anyhow!("Block number not found")),
+            };
+            let block = self
+                .l1_provider
+                .get_block(block_number.into())
+                .await?
+                .expect("Block not found");
+            let unregistered_at = block.header.inner.timestamp;
+
+            tracing::info!(
+                "OperatorUnregistered: registration_root: {} unregistered_at: {}",
+                registration_root,
+                unregistered_at
+            );
+            self.db
+                .set_operator_unregistered(&registration_root, unregistered_at)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn index_slash(&self, start_block: u64, end_block: u64) -> Result<(), Error> {
+        let operator_slashed = IRegistry::OperatorSlashed::SIGNATURE_HASH;
+        let filter = Filter::new()
+            .address(self.registry_address)
+            .event_signature(operator_slashed)
+            .from_block(start_block)
+            .to_block(end_block);
+        let logs = self.l1_provider.get_logs(&filter).await?;
+
+        for log in logs {
+            let operator_slashed = log.log_decode::<IRegistry::OperatorSlashed>()?;
+            let registration_root = operator_slashed.inner.registrationRoot.to_string();
+            let block_number = match log.block_number {
+                Some(n) => n,
+                None => return Err(anyhow::anyhow!("Block number not found")),
+            };
+            let block = self
+                .l1_provider
+                .get_block(block_number.into())
+                .await?
+                .expect("Block not found");
+            let slashed_at = block.header.inner.timestamp;
+
+            tracing::info!(
+                "OperatorSlashed: registration_root: {} slashing_type: {} owner: {} challenger: {} slasher: {} slash_amount_wei: {} slashed_at: {}",
+                registration_root,
+                operator_slashed.inner.slashingType,
+                operator_slashed.inner.owner,
+                operator_slashed.inner.challenger,
+                operator_slashed.inner.slasher,
+                operator_slashed.inner.slashAmountWei,
+                slashed_at
+            );
+            self.db
+                .set_operator_slashed(&registration_root, slashed_at)
                 .await?;
         }
 

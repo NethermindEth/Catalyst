@@ -1,5 +1,5 @@
 use super::{
-    OperatorError, PreconfOperator,
+    OperatorError,
     bindings::{
         BatchParams, BlockParams, PreconfWhitelist,
         forced_inclusion_store::{IForcedInclusionStore, IForcedInclusionStore::ForcedInclusion},
@@ -7,34 +7,31 @@ use super::{
         taiko_inbox, taiko_wrapper,
     },
     config::EthereumL1Config,
+    operators_cache::OperatorsCache,
     propose_batch_builder::ProposeBatchBuilder,
     protocol_config::ProtocolConfig,
-    traits::WhitelistProvider,
+    traits::{PreconfOperator, WhitelistProvider},
 };
 use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, U256},
-    providers::{DynProvider, Provider},
-    rpc::client::BatchRequest,
-    sol_types::SolCall,
+    providers::DynProvider,
 };
-use anyhow::{Error, anyhow};
-use common::l1::traits::PreconferBondProvider;
+use anyhow::{Context, Error, anyhow};
 use common::{
     l1::{
         bindings::IERC20,
-        traits::{ELTrait, PreconferProvider},
+        traits::{ELTrait, PreconferBondProvider, PreconferProvider},
         transaction_error::TransactionError,
     },
     metrics::Metrics,
-    shared::execution_layer::ExecutionLayer as ExecutionLayerCommon,
-    shared::transaction_monitor::TransactionMonitor,
-    shared::{alloy_tools, l2_block::L2Block, l2_tx_lists::encode_and_compress},
+    shared::{
+        alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon, l2_block::L2Block,
+        l2_tx_lists::encode_and_compress, transaction_monitor::TransactionMonitor,
+    },
 };
-use hex;
-use serde_json::json;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 use tracing::{debug, info, warn};
@@ -42,12 +39,12 @@ use tracing::{debug, info, warn};
 pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
-    preconfer_address: Address,
     config: EthereumL1Config,
     taiko_wrapper_contract: taiko_wrapper::TaikoWrapper::TaikoWrapperInstance<DynProvider>,
     pub transaction_monitor: TransactionMonitor,
     metrics: Arc<Metrics>,
     extra_gas_percentage: u64,
+    operators_cache: OperatorsCache,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -65,8 +62,12 @@ impl ELTrait for ExecutionLayer {
                 .first()
                 .ok_or_else(|| anyhow!("L1 RPC URL is required"))?,
         )
-        .await?;
-        let common = ExecutionLayerCommon::new(provider.clone()).await?;
+        .await
+        .context("construct_alloy_provider")?;
+        let common =
+            ExecutionLayerCommon::new(provider.clone(), common_config.signer.get_address())
+                .await
+                .context("ExecutionLayerCommon::new")?;
 
         let taiko_wrapper_contract = taiko_wrapper::TaikoWrapper::new(
             specific_config.contract_addresses.taiko_wrapper,
@@ -83,15 +84,20 @@ impl ELTrait for ExecutionLayer {
         .await
         .map_err(|e| Error::msg(format!("Failed to create TransactionMonitor: {e}")))?;
 
+        let operators_cache = OperatorsCache::new(
+            provider.clone(),
+            specific_config.contract_addresses.preconf_whitelist,
+        );
+
         Ok(Self {
             common,
             provider,
-            preconfer_address: common_config.signer.get_address(),
             config: specific_config,
             taiko_wrapper_contract,
             transaction_monitor,
             metrics,
             extra_gas_percentage: common_config.extra_gas_percentage,
+            operators_cache,
         })
     }
 
@@ -120,24 +126,27 @@ impl PreconferBondProvider for ExecutionLayer {
 impl PreconferProvider for ExecutionLayer {
     async fn get_preconfer_wallet_eth(&self) -> Result<alloy::primitives::U256, Error> {
         self.common()
-            .get_account_balance(self.preconfer_address)
+            .get_account_balance(self.common().preconfer_address())
             .await
+            .context("get_preconfer_wallet_eth")
     }
 
     async fn get_preconfer_nonce_pending(&self) -> Result<u64, Error> {
         self.common()
-            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Pending)
+            .get_account_nonce(self.common().preconfer_address(), BlockNumberOrTag::Pending)
             .await
+            .context("get_preconfer_nonce_pending")
     }
 
     async fn get_preconfer_nonce_latest(&self) -> Result<u64, Error> {
         self.common()
-            .get_account_nonce(self.preconfer_address, BlockNumberOrTag::Latest)
+            .get_account_nonce(self.common().preconfer_address(), BlockNumberOrTag::Latest)
             .await
+            .context("get_preconfer_nonce_latest")
     }
 
-    fn get_preconfer_alloy_address(&self) -> Address {
-        self.preconfer_address
+    fn get_preconfer_address(&self) -> Address {
+        self.common().preconfer_address()
     }
 }
 
@@ -226,7 +235,7 @@ impl ExecutionLayer {
         let builder = ProposeBatchBuilder::new(self.provider.clone(), self.extra_gas_percentage);
         let tx = builder
             .build_propose_batch_tx(
-                self.preconfer_address,
+                self.common().preconfer_address(),
                 self.config.contract_addresses.preconf_router,
                 tx_lists_bytes,
                 blocks.clone(),
@@ -235,9 +244,13 @@ impl ExecutionLayer {
                 coinbase,
                 forced_inclusion,
             )
-            .await?;
+            .await
+            .context("build_propose_batch_tx")?;
 
-        let pending_nonce = self.get_preconfer_nonce_pending().await?;
+        let pending_nonce = self
+            .get_preconfer_nonce_pending()
+            .await
+            .context("get_preconfer_nonce_pending (send_batch_to_l1)")?;
         // Spawn a monitor for this transaction
         self.transaction_monitor
             .monitor_new_transaction(tx, pending_nonce, None, None)
@@ -252,7 +265,11 @@ impl ExecutionLayer {
             self.config.contract_addresses.taiko_inbox,
             &self.provider,
         );
-        let pacaya_config = contract.pacayaConfig().call().await?;
+        let pacaya_config = contract
+            .pacayaConfig()
+            .call()
+            .await
+            .context("ITaikoInbox::pacayaConfig")?;
 
         info!(
             "Pacaya config: chainid {}, maxUnverifiedBatches {}, batchRingBufferSize {}, maxAnchorHeightOffset {}",
@@ -270,9 +287,18 @@ impl ExecutionLayer {
             self.config.contract_addresses.taiko_inbox,
             self.provider.clone(),
         );
-        let num_batches = contract.getStats2().call().await?.numBatches;
+        let num_batches = contract
+            .getStats2()
+            .call()
+            .await
+            .context("ITaikoInbox::getStats2")?
+            .numBatches;
         // It is safe because num_batches initial value is 1
-        let batch = contract.getBatch(num_batches - 1).call().await?;
+        let batch = contract
+            .getBatch(num_batches - 1)
+            .call()
+            .await
+            .context("ITaikoInbox::getBatch")?;
 
         Ok(batch.lastBlockId)
     }
@@ -283,7 +309,7 @@ impl ExecutionLayer {
             &self.provider,
         );
         let bonds_balance = contract
-            .bondBalanceOf(self.preconfer_address)
+            .bondBalanceOf(self.common().preconfer_address())
             .call()
             .await
             .map_err(|e| Error::msg(format!("Failed to get bonds balance: {e}")))?;
@@ -313,7 +339,7 @@ impl ExecutionLayer {
         let contract = IERC20::new(*taiko_token, &self.provider);
         let allowance = contract
             .allowance(
-                self.preconfer_address,
+                self.common().preconfer_address(),
                 self.config.contract_addresses.taiko_inbox,
             )
             .call()
@@ -321,167 +347,12 @@ impl ExecutionLayer {
             .map_err(|e| Error::msg(format!("Failed to get allowance: {e}")))?;
 
         let balance = contract
-            .balanceOf(self.preconfer_address)
+            .balanceOf(self.common().preconfer_address())
             .call()
             .await
             .map_err(|e| Error::msg(format!("Failed to get preconfer balance: {e}")))?;
 
         Ok(balance.min(allowance))
-    }
-
-    /// cached as constant since function has no parameters
-    fn get_current_epoch_call_data(
-        contract: &PreconfWhitelist::PreconfWhitelistInstance<&DynProvider>,
-    ) -> &'static [u8] {
-        static CALL_DATA: OnceLock<Vec<u8>> = OnceLock::new();
-        CALL_DATA.get_or_init(|| {
-            let tx_req = contract
-                .getOperatorForCurrentEpoch()
-                .into_transaction_request();
-            tx_req
-                .input
-                .input
-                .as_ref()
-                .expect("get_current_epoch_call_data: Failed to get current epoch call data. Check the whitelist contract bindings.")
-                .to_vec()
-        })
-    }
-
-    /// cached as constant since function has no parameters
-    fn get_next_epoch_call_data(
-        contract: &PreconfWhitelist::PreconfWhitelistInstance<&DynProvider>,
-    ) -> &'static [u8] {
-        static CALL_DATA: OnceLock<Vec<u8>> = OnceLock::new();
-        CALL_DATA.get_or_init(|| {
-            let tx_req = contract
-                .getOperatorForNextEpoch()
-                .into_transaction_request();
-            tx_req.input.input.as_ref().expect("get_next_epoch_call_data: Failed to get next epoch call data. Check the whitelist contract bindings.").to_vec()
-        })
-    }
-
-    pub async fn get_operators_for_current_and_next_epoch(
-        provider: &DynProvider,
-        whitelist_address: Address,
-        current_epoch_timestamp: u64,
-    ) -> Result<(Address, Address), OperatorError> {
-        let contract = PreconfWhitelist::new(whitelist_address, provider);
-        let current_epoch_call_data = Self::get_current_epoch_call_data(&contract);
-        let next_epoch_call_data = Self::get_next_epoch_call_data(&contract);
-
-        // Use BatchRequest to send all calls in a single RPC request
-        // This ensures the load balancer forwards all calls to the same RPC node
-        let client = provider.client();
-        let mut batch = BatchRequest::new(client);
-
-        let block_waiter = batch
-            .add_call("eth_getBlockByNumber", &("latest", false))
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to add block call to batch: {e}"
-                )))
-            })?;
-
-        let current_operator_call_params = json!([{
-            "to": whitelist_address,
-            "data": format!("0x{}", hex::encode(current_epoch_call_data))
-        }, "latest"]);
-        let current_operator_waiter = batch
-            .add_call("eth_call", &current_operator_call_params)
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to add current operator call to batch: {e}"
-                )))
-            })?;
-
-        let next_operator_call_params = json!([{
-            "to": whitelist_address,
-            "data": format!("0x{}", hex::encode(next_epoch_call_data))
-        }, "latest"]);
-        let next_operator_waiter = batch
-            .add_call("eth_call", &next_operator_call_params)
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to add next operator call to batch: {e}"
-                )))
-            })?;
-
-        batch.send().await.map_err(|e| {
-            OperatorError::Any(Error::msg(format!("Failed to send batch request: {e}")))
-        })?;
-
-        let block_result: serde_json::Value = block_waiter.await.map_err(|e| {
-            OperatorError::Any(Error::msg(format!("Failed to get block from batch: {e}")))
-        })?;
-        let block: alloy::rpc::types::Block = serde_json::from_value(block_result)
-            .map_err(|e| OperatorError::Any(Error::msg(format!("Failed to parse block: {e}"))))?;
-        let latest_block_timestamp = block.header.timestamp;
-        if latest_block_timestamp < current_epoch_timestamp {
-            return Err(OperatorError::OperatorCheckTooEarly);
-        }
-
-        let current_operator_result: serde_json::Value =
-            current_operator_waiter.await.map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to get current operator from batch: {}, contract: {:?}",
-                    e, whitelist_address
-                )))
-            })?;
-
-        let next_operator_result: serde_json::Value = next_operator_waiter.await.map_err(|e| {
-            OperatorError::Any(Error::msg(format!(
-                "Failed to get next operator from batch: {}, contract: {:?}",
-                e, whitelist_address
-            )))
-        })?;
-
-        let current_operator_bytes = hex::decode(
-            current_operator_result
-                .as_str()
-                .ok_or_else(|| {
-                    OperatorError::Any(Error::msg("Invalid current operator result format"))
-                })?
-                .strip_prefix("0x")
-                .unwrap_or_default(),
-        )
-        .map_err(|e| {
-            OperatorError::Any(Error::msg(format!(
-                "Failed to decode current operator: {e}"
-            )))
-        })?;
-        let current_operator =
-            <PreconfWhitelist::getOperatorForCurrentEpochCall as SolCall>::abi_decode_returns(
-                &current_operator_bytes,
-            )
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to decode current operator response: {e}"
-                )))
-            })?;
-
-        let next_operator_bytes = hex::decode(
-            next_operator_result
-                .as_str()
-                .ok_or_else(|| {
-                    OperatorError::Any(Error::msg("Invalid next operator result format"))
-                })?
-                .strip_prefix("0x")
-                .unwrap_or_default(),
-        )
-        .map_err(|e| {
-            OperatorError::Any(Error::msg(format!("Failed to decode next operator: {e}")))
-        })?;
-        let next_operator =
-            <PreconfWhitelist::getOperatorForNextEpochCall as SolCall>::abi_decode_returns(
-                &next_operator_bytes,
-            )
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to decode next operator response: {e}"
-                )))
-            })?;
-
-        Ok((current_operator, next_operator))
     }
 
     pub async fn get_forced_inclusion_head(&self) -> Result<u64, Error> {
@@ -532,7 +403,7 @@ impl ExecutionLayer {
         info: &ForcedInclusionInfo,
     ) -> BatchParams {
         ProposeBatchBuilder::build_forced_inclusion_batch(
-            self.preconfer_address,
+            self.common().preconfer_address(),
             coinbase,
             last_anchor_origin_height,
             last_l2_block_timestamp,
@@ -553,7 +424,10 @@ impl ExecutionLayer {
     }
 
     pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {
-        self.transaction_monitor.is_transaction_in_progress().await
+        self.transaction_monitor
+            .is_transaction_in_progress()
+            .await
+            .context("is_transaction_in_progress")
     }
 }
 
@@ -564,7 +438,7 @@ impl WhitelistProvider for ExecutionLayer {
             &self.provider,
         );
         let operators = contract
-            .operators(self.preconfer_address)
+            .operators(self.common().preconfer_address())
             .call()
             .await
             .map_err(|e| {
@@ -579,19 +453,20 @@ impl WhitelistProvider for ExecutionLayer {
 
 impl PreconfOperator for ExecutionLayer {
     fn get_preconfer_address(&self) -> Address {
-        self.preconfer_address
+        self.common().preconfer_address()
     }
 
     async fn get_operators_for_current_and_next_epoch(
         &self,
         current_epoch_timestamp: u64,
+        current_slot_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
-        Self::get_operators_for_current_and_next_epoch(
-            &self.provider,
-            self.config.contract_addresses.preconf_whitelist,
-            current_epoch_timestamp,
-        )
-        .await
+        self.operators_cache
+            .get_operators_for_current_and_next_epoch(
+                current_epoch_timestamp,
+                current_slot_timestamp,
+            )
+            .await
     }
 
     async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {

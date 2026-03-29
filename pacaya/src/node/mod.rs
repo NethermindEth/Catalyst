@@ -91,7 +91,7 @@ impl Node {
         let head_verifier = HeadVerifier::default();
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
-            ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
+            config.watchdog_max_counter,
         );
         Ok(Self {
             cancel_token,
@@ -192,7 +192,7 @@ impl Node {
     }
 
     async fn preconfirmation_loop(&mut self) {
-        debug!("Main perconfirmation loop started");
+        debug!("Main preconfirmation loop started");
         common_utils::synchronization::synchronize_with_l1_slot_start(&self.ethereum_l1).await;
 
         let mut interval =
@@ -745,6 +745,10 @@ impl Node {
             TransactionError::NotTheOperatorInCurrentEpoch => {
                 warn!("Propose batch transaction executed too late.");
                 return Ok(());
+            }
+            TransactionError::BuildFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                return Err(anyhow::anyhow!("Transaction build failed, exiting"));
             }
         }
 

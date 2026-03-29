@@ -22,7 +22,7 @@ use alloy::{
     sol_types::SolValue,
 };
 use alloy_json_rpc::RpcError;
-use anyhow::Error;
+use anyhow::{Context, Error};
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use taiko_protocol::shasta::{
     BlobCoder,
@@ -178,7 +178,6 @@ impl ProposalTxBuilder {
     ) -> Result<(Multicall::Call, BlobTransactionSidecar), anyhow::Error> {
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
         for l2_block in &batch.l2_blocks {
-            // Build the block manifests.
             block_manifests.push(BlockManifest {
                 timestamp: l2_block.timestamp_sec,
                 coinbase: l2_block.coinbase,
@@ -193,7 +192,6 @@ impl ProposalTxBuilder {
             });
         }
 
-        // Build the proposal manifest.
         let manifest = DerivationSourceManifest {
             blocks: block_manifests,
         };
@@ -210,14 +208,22 @@ impl ProposalTxBuilder {
             deadline: U48::ZERO,
             blobReference: BlobReference {
                 blobStartIndex: 0,
-                numBlobs: sidecar.blobs.len().try_into()?,
+                numBlobs: sidecar
+                    .blobs
+                    .len()
+                    .try_into()
+                    .context("blobs len try_into")?,
                 offset: U24::ZERO,
             },
             numForcedInclusions: u16::from(batch.num_forced_inclusion),
         };
 
         let inbox = SurgeInbox::new(inbox_address, self.provider.clone());
-        let encoded_proposal_input = inbox.encodeProposeInput(input).call().await?;
+        let encoded_proposal_input = inbox
+            .encodeProposeInput(input)
+            .call()
+            .await
+            .map_err(|e| Error::msg(format!("inbox encodeProposeInput failed: {e}")))?;
 
         // Surge: using `proposeWithProof(..)` in Surge Inbox
         let proof_data = self.build_proof_data(&batch.checkpoint).await?;
@@ -249,3 +255,6 @@ impl ProposalTxBuilder {
         }
     }
 }
+
+// Note: The POC uses direct build_propose_tx calls with multicall,
+// so TransactionRequestBuilder is not implemented here.

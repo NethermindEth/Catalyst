@@ -213,7 +213,6 @@ impl Node {
             let l2_slot_context = L2SlotContext {
                 info: l2_slot_info.clone(),
                 end_of_sequencing: current_status.is_end_of_sequencing(),
-                allow_forced_inclusion: false,
             };
 
             if self
@@ -321,6 +320,10 @@ impl Node {
             TransactionError::NotTheOperatorInCurrentEpoch => {
                 warn!("Propose batch transaction executed too late.");
                 Ok(())
+            }
+            TransactionError::BuildFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Transaction build failed, exiting"))
             }
         }
     }

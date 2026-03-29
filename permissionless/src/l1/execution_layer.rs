@@ -42,7 +42,8 @@ impl ELTrait for ExecutionLayer {
         .await?;
         let protocol_config = ProtocolConfig::default();
 
-        let common = ExecutionLayerCommon::new(provider.clone()).await?;
+        let common =
+            ExecutionLayerCommon::new(provider.clone(), common_config.signer.get_address()).await?;
 
         Ok(Self {
             common,

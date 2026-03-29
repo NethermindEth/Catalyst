@@ -1,45 +1,64 @@
-use crate::{l1::execution_layer::ExecutionLayer, node::config::NodeConfig};
+use crate::node::operator::status::Status as OperatorStatus;
+use crate::node::{config::NodeConfig, operator::Operator};
 use anyhow::Error;
+use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::{
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     metrics::Metrics,
-    utils as common_utils,
-    utils::cancellation_token::CancellationToken,
+    shared::{l2_slot_info_v2::L2SlotInfoV2, l2_tx_lists::PreBuiltTxList},
+    utils::{self as common_utils, cancellation_token::CancellationToken},
+};
+use shasta::{
+    ProposalManager, l1::execution_layer::ExecutionLayer as ShastaExecutionLayer, l2::taiko::Taiko,
 };
 use std::sync::Arc;
-use tokio::{sync::mpsc::Receiver, time::Duration};
-use tracing::{debug, error, info};
-
+use tokio::{
+    sync::mpsc::{Receiver, error::TryRecvError},
+    time::Duration,
+};
+use tracing::{debug, error, info, warn};
+pub mod block_advancer;
 pub mod config;
+pub mod operator;
 
 pub struct Node {
     cancel_token: CancellationToken,
-    ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-    _transaction_error_channel: Receiver<TransactionError>,
+    ethereum_l1: Arc<EthereumL1<ShastaExecutionLayer>>,
+    transaction_error_channel: Receiver<TransactionError>,
     _metrics: Arc<Metrics>,
     watchdog: common_utils::watchdog::Watchdog,
     config: NodeConfig,
+    operator: Operator,
+    proposal_manager: ProposalManager,
+    taiko: Arc<Taiko>,
 }
 
 impl Node {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cancel_token: CancellationToken,
-        ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
+        ethereum_l1: Arc<EthereumL1<ShastaExecutionLayer>>,
         transaction_error_channel: Receiver<TransactionError>,
         metrics: Arc<Metrics>,
         config: NodeConfig,
+        operator: Operator,
+        proposal_manager: ProposalManager,
+        taiko: Arc<Taiko>,
     ) -> Result<Self, Error> {
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
-            ethereum_l1.slot_clock.get_l2_slots_per_epoch() / 2,
+            config.watchdog_max_counter,
         );
         Ok(Self {
             cancel_token,
             ethereum_l1,
-            _transaction_error_channel: transaction_error_channel,
+            transaction_error_channel,
             _metrics: metrics,
             watchdog,
             config,
+            operator,
+            proposal_manager,
+            taiko,
         })
     }
 
@@ -55,7 +74,7 @@ impl Node {
     }
 
     async fn preconfirmation_loop(&mut self) {
-        debug!("Main perconfirmation loop started");
+        debug!("Main preconfirmation loop started");
         common_utils::synchronization::synchronize_with_l1_slot_start(&self.ethereum_l1).await;
 
         let mut interval =
@@ -79,20 +98,220 @@ impl Node {
     }
 
     async fn main_block_preconfirmation_step(&mut self) -> Result<(), Error> {
-        self.print_current_slots_info()?;
+        let (l2_slot_info, current_status, pending_tx_list) =
+            self.get_slot_info_and_status().await?;
+
+        let l2_slot_ctx = L2SlotContext {
+            info: l2_slot_info,
+            end_of_sequencing: false,
+        };
+
+        // Get the transaction status before checking the error channel
+        // to avoid race condition
+        let transaction_in_progress = self
+            .ethereum_l1
+            .execution_layer
+            .is_transaction_in_progress()
+            .await?;
+
+        self.check_transaction_error_channel().await?;
+
+        if current_status.is_preconfer() {
+            if self
+                .proposal_manager
+                .should_new_block_be_created(&pending_tx_list, &l2_slot_ctx)
+            {
+                self.proposal_manager
+                    .preconfirm_block(pending_tx_list, &l2_slot_ctx)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to preconfirm block: {}", e))?;
+            }
+
+            if !transaction_in_progress
+                && let Err(err) = self
+                    .proposal_manager
+                    .try_submit_oldest_proposal(true, l2_slot_ctx.info.slot_timestamp())
+                    .await
+            {
+                if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
+                    self.handle_transaction_error(transaction_error).await?;
+                } else {
+                    return Err(err);
+                }
+            }
+        }
+
         Ok(())
     }
 
-    fn print_current_slots_info(&self) -> Result<(), Error> {
+    async fn get_slot_info_and_status(
+        &mut self,
+    ) -> Result<(L2SlotInfoV2, OperatorStatus, Option<PreBuiltTxList>), Error> {
+        let l2_slot_info = self.taiko.get_l2_slot_info().await;
+        let current_status = match &l2_slot_info {
+            Ok(info) => self.operator.get_status(info.clone()).await,
+            Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
+        };
+
+        let gas_limit_without_anchor = match &l2_slot_info {
+            Ok(info) => info.parent_gas_limit_without_anchor(),
+            Err(_) => {
+                error!("Failed to get L2 slot info; set gas_limit_without_anchor to 0");
+                0u64
+            }
+        };
+
+        let pending_tx_list = if gas_limit_without_anchor != 0 {
+            let proposals_ready_to_send = self
+                .proposal_manager
+                .get_number_of_proposals_ready_to_send();
+            match &l2_slot_info {
+                Ok(info) => {
+                    self.taiko
+                        .get_pending_l2_tx_list_from_l2_engine(
+                            info.base_fee(),
+                            proposals_ready_to_send,
+                            gas_limit_without_anchor,
+                        )
+                        .await
+                }
+                Err(_) => Err(anyhow::anyhow!("Failed to get L2 slot info")),
+            }
+        } else {
+            Ok(None)
+        };
+
+        self.print_current_slots_info(
+            &current_status,
+            &pending_tx_list,
+            &l2_slot_info,
+            self.proposal_manager.get_number_of_proposals(),
+        )?;
+
+        Ok((l2_slot_info?, current_status?, pending_tx_list?))
+    }
+
+    fn print_current_slots_info(
+        &self,
+        current_status: &Result<OperatorStatus, Error>,
+        pending_tx_list: &Result<Option<PreBuiltTxList>, Error>,
+        l2_slot_info: &Result<L2SlotInfoV2, Error>,
+        proposals_number: u64,
+    ) -> Result<(), Error> {
         let l1_slot = self.ethereum_l1.slot_clock.get_current_slot()?;
         info!(target: "heartbeat",
-            "| Epoch: {:<6} | Slot: {:<2} | L2 Slot: {:<2} |",
+            "| Epoch: {:<6} | Slot: {:<2} | L2 Slot: {:<2} | {}{} Proposals: {proposals_number} | {} |",
             self.ethereum_l1.slot_clock.get_epoch_from_slot(l1_slot),
             self.ethereum_l1.slot_clock.slot_of_epoch(l1_slot),
             self.ethereum_l1
                 .slot_clock
                 .get_current_l2_slot_within_l1_slot()?,
+            if let Ok(pending_tx_list) = pending_tx_list {
+                format!(
+                    "Txs: {:<4} |",
+                    pending_tx_list
+                        .as_ref()
+                        .map_or(0, |tx_list| tx_list.tx_list.len())
+                )
+            } else {
+                "Txs: unknown |".to_string()
+            },
+            if let Ok(l2_slot_info) = l2_slot_info {
+                format!(
+                    " Fee: {:<7} | L2: {:<6} | Time: {:<10} | Hash: {} |",
+                    l2_slot_info.base_fee(),
+                    l2_slot_info.parent_id(),
+                    l2_slot_info.slot_timestamp(),
+                    &l2_slot_info.parent_hash().to_string()[..8]
+                )
+            } else {
+                " L2 slot info unknown |".to_string()
+            },
+            if let Ok(status) = current_status {
+                status.to_string()
+            } else {
+                "Unknown".to_string()
+            },
         );
         Ok(())
+    }
+
+    async fn check_transaction_error_channel(&mut self) -> Result<(), Error> {
+        match self.transaction_error_channel.try_recv() {
+            Ok(error) => {
+                return self.handle_transaction_error(&error).await;
+            }
+            Err(err) => match err {
+                TryRecvError::Empty => {
+                    // no errors, proceed with preconfirmation
+                }
+                TryRecvError::Disconnected => {
+                    self.cancel_token.cancel_on_critical_error();
+                    return Err(anyhow::anyhow!("Transaction error channel disconnected"));
+                }
+            },
+        }
+
+        Ok(())
+    }
+
+    async fn handle_transaction_error(&mut self, error: &TransactionError) -> Result<(), Error> {
+        match error {
+            TransactionError::ReanchorRequired => {
+                warn!("Unexpected ReanchorRequired error received");
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "ReanchorRequired error received unexpectedly, exiting"
+                ))
+            }
+            TransactionError::NotConfirmed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Transaction not confirmed for a long time, exiting"
+                ))
+            }
+            TransactionError::UnsupportedTransactionType => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Unsupported transaction type. You can send eip1559 or eip4844 transactions only"
+                ))
+            }
+            TransactionError::GetBlockNumberFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Failed to get block number from L1"))
+            }
+            TransactionError::EstimationTooEarly => {
+                warn!("Transaction estimation too early");
+                Ok(())
+            }
+            TransactionError::InsufficientFunds => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!(
+                    "Transaction reverted with InsufficientFunds error"
+                ))
+            }
+            TransactionError::EstimationFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Transaction estimation failed, exiting"))
+            }
+            TransactionError::TransactionReverted => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Transaction reverted, exiting"))
+            }
+            TransactionError::OldestForcedInclusionDue => {
+                warn!("OldestForcedInclusionDue critical error received");
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("OldestForcedInclusionDue error, exiting"))
+            }
+            // Note: simplified for now
+            TransactionError::NotTheOperatorInCurrentEpoch => {
+                warn!("Proposal transaction executed too late.");
+                Ok(())
+            }
+            TransactionError::BuildFailed => {
+                self.cancel_token.cancel_on_critical_error();
+                Err(anyhow::anyhow!("Transaction build failed, exiting"))
+            }
+        }
     }
 }

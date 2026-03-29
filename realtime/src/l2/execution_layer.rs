@@ -61,7 +61,8 @@ impl L2ExecutionLayer {
         let signal_service: Address =
             format!("0x{}{}05", chain_id_string, "0".repeat(zeros_needed)).parse()?;
 
-        let common = ExecutionLayerCommon::new(provider.clone()).await?;
+        let common =
+            ExecutionLayerCommon::new(provider.clone(), taiko_config.signer.get_address()).await?;
         let l2_call_signer = taiko_config.signer.clone();
 
         Ok(Self {

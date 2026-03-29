@@ -33,7 +33,7 @@ use common::{
         transaction_monitor::TransactionMonitor,
     },
 };
-use pacaya::l1::traits::{OperatorError, PreconfOperator};
+use pacaya::l1::{operators_cache::OperatorError, traits::PreconfOperator};
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 use tracing::info;
@@ -65,7 +65,8 @@ impl ELTrait for ExecutionLayer {
                 .ok_or_else(|| anyhow!("L1 RPC URL is required"))?,
         )
         .await?;
-        let common = ExecutionLayerCommon::new(provider.clone()).await?;
+        let common =
+            ExecutionLayerCommon::new(provider.clone(), common_config.signer.get_address()).await?;
 
         let transaction_monitor = TransactionMonitor::new(
             provider.clone(),
@@ -142,7 +143,7 @@ impl PreconferProvider for ExecutionLayer {
             .await
     }
 
-    fn get_preconfer_alloy_address(&self) -> Address {
+    fn get_preconfer_address(&self) -> Address {
         self.preconfer_address
     }
 }
@@ -155,6 +156,7 @@ impl PreconfOperator for ExecutionLayer {
     async fn get_operators_for_current_and_next_epoch(
         &self,
         _current_epoch_timestamp: u64,
+        _current_slot_timestamp: u64,
     ) -> Result<(Address, Address), OperatorError> {
         // RealTime: anyone can propose, but we still use operator tracking for slot management.
         // Return self as both current and next operator.

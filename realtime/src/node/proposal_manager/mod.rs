@@ -542,7 +542,6 @@ impl BatchManager {
         let l2_slot_context = L2SlotContext {
             info: l2_slot_info,
             end_of_sequencing: false,
-            allow_forced_inclusion: false,
         };
 
         let block = self

@@ -1,5 +1,6 @@
 use crate::metrics::Metrics;
 use crate::utils::cancellation_token::CancellationToken;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing::info;
 use warp::Filter;
@@ -11,13 +12,17 @@ pub fn serve_metrics(metrics: Arc<Metrics>, cancel_token: CancellationToken) {
             warp::reply::with_header(output, "Content-Type", "text/plain; version=0.0.4")
         });
 
-        let (addr, server) =
-            warp::serve(route).bind_with_graceful_shutdown(([0, 0, 0, 0], 9898), async move {
-                cancel_token.cancelled().await;
-                info!("Shutdown signal received, stopping metrics server...");
-            });
-
+        let addr: SocketAddr = ([0, 0, 0, 0], 9898).into();
         info!("Metrics server listening on {}", addr);
-        server.await;
+        let server = warp::serve(route).bind(addr).await;
+
+        let shutdown_token = cancel_token.clone();
+        server
+            .graceful(async move {
+                shutdown_token.cancelled().await;
+                info!("Shutdown signal received, stopping metrics server...");
+            })
+            .run()
+            .await;
     });
 }

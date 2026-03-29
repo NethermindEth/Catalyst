@@ -20,7 +20,7 @@ pub struct TaikoDriver {
     preconf_rpc: HttpRPCClient,
     status_rpc: HttpRPCClient,
     metrics: Arc<Metrics>,
-    call_timeout: Duration,
+    retry_timeout: Duration,
 }
 
 impl TaikoDriver {
@@ -43,7 +43,7 @@ impl TaikoDriver {
                 anyhow::anyhow!("Failed to create HttpRPCClient for driver status: {}", e)
             })?,
             metrics,
-            call_timeout: config.call_timeout,
+            retry_timeout: config.rpc_driver_retry_timeout,
         })
     }
 
@@ -64,7 +64,9 @@ impl TaikoDriver {
             )
             .await?;
 
-        if let Some(preconfirmed_block) = BuildPreconfBlockResponse::new_from_value(response) {
+        if let Some(preconfirmed_block) =
+            BuildPreconfBlockResponse::new_from_value(response, request_body.is_forced_inclusion)
+        {
             self.metrics.inc_blocks_preconfirmed();
             Ok(preconfirmed_block)
         } else {
@@ -114,7 +116,7 @@ impl TaikoDriver {
         let start_time = std::time::Instant::now();
 
         match client
-            .retry_request_with_timeout(method, endpoint, payload, self.call_timeout)
+            .retry_request_with_timeout(method, endpoint, payload, self.retry_timeout)
             .await
         {
             Ok(response) => {

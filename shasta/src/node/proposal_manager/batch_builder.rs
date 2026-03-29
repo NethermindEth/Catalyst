@@ -7,9 +7,9 @@ use crate::node::proposal_manager::{
     l2_block_payload::L2BlockV2Payload,
     proposal::Proposal,
 };
-use crate::shared::l2_tx_lists::PreBuiltTxList;
 use alloy::primitives::{Address, FixedBytes};
 use anyhow::Error;
+use common::shared::l2_tx_lists::PreBuiltTxList;
 use common::{
     batch_builder::BatchBuilderConfig,
     shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft},
@@ -105,6 +105,8 @@ impl BatchBuilder {
             anchor_block_hash: anchor_block.hash(),
             anchor_state_root: anchor_block.state_root(),
             num_forced_inclusion: 0,
+            created_at_sec: 0,
+            pending_confirmation: false,
             checkpoint: Checkpoint::default(),
             user_ops: vec![],
             signal_slots: vec![],
@@ -270,10 +272,10 @@ impl BatchBuilder {
                 anchor_block_hash: anchor_info.hash(),
                 anchor_state_root: anchor_info.state_root(),
                 num_forced_inclusion: 0,
+                created_at_sec: 0,
+                pending_confirmation: false,
                 checkpoint: Checkpoint::default(),
                 // Surge: This is NOT OK for recovery, but fine for the POC.
-                // Any previously inititated user ops will not be valid during recovery
-                // leading to proposal failure
                 user_ops: vec![],
                 signal_slots: vec![],
                 l1_calls: vec![],
@@ -301,10 +303,10 @@ impl BatchBuilder {
             }
 
             let bytes_length =
-                crate::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
+                common::shared::l2_tx_lists::encode_and_compress(&tx_list)?.len() as u64;
 
             let l2_block = L2BlockV2::new_from(
-                crate::shared::l2_tx_lists::PreBuiltTxList {
+                common::shared::l2_tx_lists::PreBuiltTxList {
                     tx_list,
                     estimated_gas_used: 0,
                     bytes_length,
@@ -413,7 +415,7 @@ impl BatchBuilder {
             if let Err(err) = ethereum_l1
                 .execution_layer
                 // TODO send a Proosal to function
-                .send_batch_to_l1(batch.clone(), tx_hash_sender, tx_result_sender)
+                .send_proposal_to_l1(batch.clone(), tx_hash_sender, tx_result_sender)
                 .await
             {
                 // Reject all user ops in failed batches

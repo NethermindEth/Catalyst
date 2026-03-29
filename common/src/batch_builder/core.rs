@@ -10,6 +10,15 @@ use crate::{
 use std::{collections::VecDeque, sync::Arc};
 use tracing::{debug, trace, warn};
 
+pub fn is_last_slot_for_empty_block(
+    current_timestamp: u64,
+    last_block_timestamp: u64,
+    max_time_shift_sec: u64,
+    slot_duration_sec: u64,
+) -> bool {
+    current_timestamp - last_block_timestamp >= max_time_shift_sec - slot_duration_sec
+}
+
 /// Core batch builder that encapsulates common logic for working with batches or proposals.
 ///
 /// This struct owns the current batch/proposal and the queue of batches ready to send,
@@ -112,8 +121,12 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
         current_l2_slot_timestamp: u64,
         last_block_timestamp: u64,
     ) -> bool {
-        current_l2_slot_timestamp - last_block_timestamp
-            >= self.config.max_time_shift_between_blocks_sec - self.config.l1_slot_duration_sec
+        is_last_slot_for_empty_block(
+            current_l2_slot_timestamp,
+            last_block_timestamp,
+            self.config.max_time_shift_between_blocks_sec,
+            self.config.l1_slot_duration_sec,
+        )
     }
 
     /// Checks if the anchor height offset is greater than the maximum allowed.
@@ -359,6 +372,7 @@ mod tests {
                 default_coinbase: Address::ZERO,
                 preconf_min_txs: 5,
                 preconf_max_skipped_l2_slots: 3,
+                proposal_max_time_sec: 100,
             },
             Arc::new(SlotClock::new(0, 5, 12, 32, 3000)),
             Arc::new(Metrics::new()),
@@ -381,6 +395,7 @@ mod tests {
             default_coinbase: Address::ZERO,
             preconf_min_txs: 5,
             preconf_max_skipped_l2_slots: 3,
+            proposal_max_time_sec: 100,
         };
 
         let slot_clock = Arc::new(SlotClock::new(0, 5, 12, 32, 2000));

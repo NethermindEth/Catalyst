@@ -1,7 +1,4 @@
-// TODO remove allow dead_code when the module is used
-#![allow(dead_code)]
-
-use crate::utils::config::ShastaConfig;
+use crate::config::ShastaConfig;
 use alloy::primitives::Address;
 
 #[derive(Clone)]

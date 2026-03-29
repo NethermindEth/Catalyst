@@ -16,10 +16,11 @@ pub struct BuildPreconfBlockResponse {
     pub hash: B256,
     pub state_root: B256,
     pub parent_hash: B256,
+    pub is_forced_inclusion: bool,
 }
 
 impl BuildPreconfBlockResponse {
-    pub fn new_from_value(value: serde_json::Value) -> Option<Self> {
+    pub fn new_from_value(value: serde_json::Value, is_forced_inclusion: bool) -> Option<Self> {
         let header = value.get("blockHeader")?;
 
         Some(Self {
@@ -31,6 +32,7 @@ impl BuildPreconfBlockResponse {
             hash: Self::to_b256(header.get("hash")?.as_str()?)?,
             state_root: Self::to_b256(header.get("stateRoot")?.as_str()?)?,
             parent_hash: Self::to_b256(header.get("parentHash")?.as_str()?)?,
+            is_forced_inclusion,
         })
     }
 
@@ -55,7 +57,10 @@ pub struct ExecutableData {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TaikoStatus {
-    #[serde(rename = "highestUnsafeL2PayloadBlockID")]
+    #[serde(
+        rename = "highestUnsafeL2PayloadBlockID",
+        alias = "highestUnsafeL2PayloadBlockId"
+    )]
     pub highest_unsafe_l2_payload_block_id: u64,
     #[serde(
         rename = "endOfSequencingBlockHash",

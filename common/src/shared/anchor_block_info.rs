@@ -54,7 +54,7 @@ impl AnchorBlockInfo {
         })
     }
 
-    async fn calculate_anchor_block_id(
+    pub async fn calculate_anchor_block_id(
         execution_layer: &ExecutionLayer,
         l1_height_lag: u64,
         last_anchor_id: u64,
@@ -75,6 +75,15 @@ impl AnchorBlockInfo {
         }
 
         Ok(anchor_id)
+    }
+
+    pub fn new(id: u64, timestamp_sec: u64, hash: B256, state_root: B256) -> Self {
+        Self {
+            id,
+            timestamp_sec,
+            hash,
+            state_root,
+        }
     }
 
     pub fn id(&self) -> u64 {

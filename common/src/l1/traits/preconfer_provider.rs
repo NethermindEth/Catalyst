@@ -2,7 +2,7 @@ use alloy::primitives::{Address, U256};
 use anyhow::Error;
 
 pub trait PreconferProvider {
-    fn get_preconfer_alloy_address(&self) -> Address;
+    fn get_preconfer_address(&self) -> Address;
     // nonce
     fn get_preconfer_nonce_pending(&self) -> impl Future<Output = Result<u64, Error>> + Send;
     fn get_preconfer_nonce_latest(&self) -> impl Future<Output = Result<u64, Error>> + Send;

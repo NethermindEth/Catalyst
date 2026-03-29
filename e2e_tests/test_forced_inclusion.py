@@ -195,7 +195,7 @@ def test_preconf_forced_inclusion_after_restart(l1_client, beacon_client, l2_cli
     # Verify reorg after L1 inclusion
     before_l1_inclusion_chain_info.check_reorg(l2_client_node1)
     wait_for_tx_to_be_included(l2_client_node1, forced_inclusion_tx_hash)
-    check_empty_forced_inclusion_store(l1_client, env_vars)
+    wait_for_forced_inclusion_store_to_be_empty(l1_client, env_vars)
 
 def test_recover_forced_inclusion_after_restart(l1_client, beacon_client, l2_client_node1, env_vars, forced_inclusion_teardown, forced_inclusion_parameters):
     """

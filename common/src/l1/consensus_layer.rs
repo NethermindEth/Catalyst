@@ -1,6 +1,8 @@
 use std::{error::Error as std_error, time::Duration};
 
-use alloy::rpc::types::beacon::sidecar::BeaconBlobBundle;
+use alloy::eips::eip4844::Blob;
+use alloy::primitives::B256;
+use alloy::rpc::types::beacon::sidecar::{BeaconBlobBundle, GetBlobsResponse};
 use anyhow::Error;
 use reqwest;
 
@@ -21,6 +23,29 @@ impl ConsensusLayer {
         })
     }
 
+    pub async fn get_blobs(
+        &self,
+        slot: u64,
+        versioned_hashes: &[B256],
+    ) -> Result<Vec<Blob>, Error> {
+        let mut path = format!("eth/v1/beacon/blobs/{slot}");
+        if !versioned_hashes.is_empty() {
+            let hashes = versioned_hashes
+                .iter()
+                .map(|hash| hash.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            path = format!("{path}?versioned_hashes={hashes}");
+        }
+
+        let res = self.get(path.as_str()).await?;
+        let blobs: GetBlobsResponse = serde_json::from_value(res)?;
+        Ok(blobs.data)
+    }
+
+    #[deprecated(
+        note = "This method is deprecated in favor of get_blobs, which allows fetching only specific blobs."
+    )]
     pub async fn get_blob_sidecars(&self, slot: u64) -> Result<BeaconBlobBundle, Error> {
         let res = self
             .get(format!("eth/v1/beacon/blob_sidecars/{slot}").as_str())
@@ -97,6 +122,7 @@ impl ConsensusLayer {
     }
 
     async fn get(&self, path: &str) -> Result<serde_json::Value, Error> {
+        let start = std::time::Instant::now();
         let response = self
             .client
             .get(self.url.join(path)?)
@@ -124,6 +150,11 @@ impl ConsensusLayer {
 
         let body = response.text().await?;
         let v: serde_json::Value = serde_json::from_str(&body)?;
+        tracing::debug!(
+            "ConsensusLayer ({}) took {} ms",
+            path,
+            start.elapsed().as_millis()
+        );
         Ok(v)
     }
 }

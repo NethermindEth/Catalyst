@@ -13,11 +13,19 @@ use alloy::{
 };
 use alloy_json_rpc::RpcError;
 use anyhow::Error;
+use std::future::Future;
 use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
+
+/// Trait for types that can asynchronously build a `TransactionRequest`.
+/// Implement this on protocol-specific builders (e.g. `ProposalTxBuilder`)
+/// to pass them into `monitor_new_transaction_with_builder`.
+pub trait TransactionRequestBuilder: Send + 'static {
+    fn build(self) -> impl Future<Output = Result<TransactionRequest, TransactionError>> + Send;
+}
 
 // Transaction status enum
 #[derive(Debug, Clone, PartialEq)]
@@ -125,6 +133,36 @@ impl TransactionMonitor {
         Ok(())
     }
 
+    /// Monitor a transaction built by a deferred builder.
+    /// The builder future is awaited inside the spawned task, so this method returns immediately.
+    /// If the builder fails, the error is sent via the error notification channel.
+    pub async fn monitor_new_transaction_with_builder(
+        &self,
+        tx_builder: impl TransactionRequestBuilder,
+        nonce: u64,
+    ) -> Result<(), Error> {
+        let mut guard = self.join_handle.lock().await;
+        if let Some(join_handle) = guard.as_ref()
+            && !join_handle.is_finished()
+        {
+            return Err(Error::msg(
+                "Cannot monitor new transaction, previous transaction is in progress",
+            ));
+        }
+
+        let monitor_thread = TransactionMonitorThread::new(
+            self.provider.clone(),
+            self.config.clone(),
+            nonce,
+            self.error_notification_channel.clone(),
+            self.metrics.clone(),
+            self.chain_id,
+        );
+        let join_handle = monitor_thread.spawn_monitoring_task_with_builder(tx_builder);
+        *guard = Some(join_handle);
+        Ok(())
+    }
+
     pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {
         let guard = self.join_handle.lock().await;
         if let Some(join_handle) = guard.as_ref() {
@@ -165,6 +203,23 @@ impl TransactionMonitorThread {
         if let Some(notifier) = self.tx_result_notifier.take() {
             let _ = notifier.send(success);
         }
+    }
+
+    pub fn spawn_monitoring_task_with_builder(
+        mut self,
+        tx_builder: impl TransactionRequestBuilder,
+    ) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            match tx_builder.build().await {
+                Ok(tx) => {
+                    self.monitor_transaction(tx).await;
+                }
+                Err(err) => {
+                    error!("Transaction builder failed: {}", err);
+                    self.send_error_signal(err).await;
+                }
+            }
+        })
     }
 
     async fn monitor_transaction(&mut self, mut tx: TransactionRequest) {

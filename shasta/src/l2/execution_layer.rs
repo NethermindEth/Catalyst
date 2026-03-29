@@ -9,6 +9,7 @@ use alloy::{
         BlockHeader, SignableTransaction, Transaction as AnchorTransaction, TxEnvelope,
         transaction::Recovered,
     },
+    eips::BlockNumberOrTag,
     primitives::{Address, B256, Bytes, FixedBytes},
     providers::{DynProvider, Provider},
     rpc::types::Transaction,
@@ -27,7 +28,7 @@ use common::{
 use pacaya::l2::config::TaikoConfig;
 use serde_json::Value;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -45,13 +46,13 @@ impl L2ExecutionLayer {
         let provider =
             alloy_tools::create_alloy_provider_without_wallet(&taiko_config.taiko_geth_url).await?;
 
-        let chain_id = provider
-            .get_chain_id()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get chain ID: {}", e))?;
-        info!("L2 Chain ID: {}", chain_id);
-
         let shasta_anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
+
+        let common =
+            ExecutionLayerCommon::new(provider.clone(), taiko_config.signer.get_address()).await?;
+
+        let chain_id = common.chain_id();
+        info!("L2 chain ID {}", chain_id);
 
         // Surge: Store the bridge for processing L2 calls
         let chain_id_string = format!("{}", chain_id);
@@ -64,7 +65,6 @@ impl L2ExecutionLayer {
         let signal_service: Address =
             format!("0x{}{}05", chain_id_string, "0".repeat(zeros_needed)).parse()?;
 
-        let common = ExecutionLayerCommon::new(provider.clone()).await?;
         let l2_call_signer = taiko_config.signer.clone();
 
         Ok(Self {
@@ -88,10 +88,6 @@ impl L2ExecutionLayer {
         l2_slot_info: &L2SlotInfoV2,
         anchor_block_params: (Checkpoint, Vec<FixedBytes<32>>),
     ) -> Result<Transaction, Error> {
-        debug!(
-            "Constructing anchor transaction for block number: {}",
-            l2_slot_info.parent_id() + 1
-        );
         let nonce = self
             .provider
             .get_transaction_count(GOLDEN_TOUCH_ADDRESS)
@@ -109,7 +105,7 @@ impl L2ExecutionLayer {
             .max_fee_per_gas(u128::from(l2_slot_info.base_fee())) // value expected by Taiko
             .max_priority_fee_per_gas(0) // value expected by Taiko
             .nonce(nonce)
-            .chain_id(self.chain_id);
+            .chain_id(self.common.chain_id());
 
         let typed_tx = call_builder
             .into_transaction_request()
@@ -125,7 +121,11 @@ impl L2ExecutionLayer {
 
         let tx_envelope = TxEnvelope::from(sig_tx);
 
-        debug!("AnchorTX transaction hash: {}", tx_envelope.tx_hash());
+        debug!(
+            "AnchorTX transaction hash: {}, block number: {}",
+            tx_envelope.tx_hash(),
+            l2_slot_info.parent_id() + 1
+        );
 
         let tx = Transaction {
             inner: Recovered::new_unchecked(tx_envelope, GOLDEN_TOUCH_ADDRESS),
@@ -150,51 +150,64 @@ impl L2ExecutionLayer {
     ) -> Result<(), Error> {
         info!(
             "Transfer ETH from L2 to L1: srcChainId: {}, dstChainId: {}",
-            self.chain_id, dest_chain_id
+            self.common.chain_id(),
+            dest_chain_id
         );
 
         let provider =
             alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.taiko_geth_url)
                 .await?;
 
-        self.transfer_eth_from_l2_to_l1_with_provider(
+        pacaya::l2::execution_layer::L2ExecutionLayer::transfer_eth_from_l2_to_l1_with_provider(
+            self.config.taiko_bridge_address,
             provider,
             amount,
+            self.common.chain_id(),
             dest_chain_id,
             preconfer_address,
             bridge_relayer_fee,
         )
-        .await?;
-
-        Ok(())
-    }
-
-    async fn transfer_eth_from_l2_to_l1_with_provider(
-        &self,
-        _provider: DynProvider,
-        _amount: u128,
-        _dest_chain_id: u64,
-        _preconfer_address: Address,
-        _bridge_relayer_fee: u64,
-    ) -> Result<(), Error> {
-        // TODO: implement the actual transfer logic
-        warn!("Implement bridge transfer logic here");
-        Ok(())
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to transfer ETH from L2 to L1: {}", e))
     }
 
     pub async fn get_last_synced_proposal_id_from_geth(&self) -> Result<u64, Error> {
-        let block = self.common.get_latest_block_with_txs().await?;
+        self.get_proposal_id_from_geth(BlockNumberOrTag::Latest)
+            .await
+    }
+
+    pub async fn get_proposal_id_from_geth_by_block_id(&self, block_id: u64) -> Result<u64, Error> {
+        self.get_proposal_id_from_geth(BlockNumberOrTag::Number(block_id))
+            .await
+    }
+
+    pub async fn get_latest_block_id_and_proposal_id(&self) -> Result<(u64, u64), Error> {
+        let block = self
+            .common
+            .get_block_header(BlockNumberOrTag::Latest)
+            .await?;
+        let block_id = block.header.number;
+        let proposal_id =
+            super::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
+        Ok((block_id, proposal_id))
+    }
+
+    pub async fn get_proposal_id_from_geth(&self, block: BlockNumberOrTag) -> Result<u64, Error> {
+        let block = self.common.get_block_header(block).await?;
         let proposal_id =
             super::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
         Ok(proposal_id)
     }
 
-    async fn get_latest_anchor_transaction_input(&self) -> Result<Vec<u8>, Error> {
-        let block = self.common.get_latest_block_with_txs().await?;
+    async fn get_anchor_transaction_input(
+        &self,
+        block: BlockNumberOrTag,
+    ) -> Result<Vec<u8>, Error> {
+        let block = self.common.get_block_with_txs(block).await?;
         let anchor_tx = match block.transactions.as_transactions() {
             Some(txs) => txs.first().ok_or_else(|| {
                 anyhow::anyhow!(
-                    "get_latest_anchor_transaction_input: Cannot get anchor transaction from block {}",
+                    "get_anchor_transaction_input: Cannot get anchor transaction from block {}",
                     block.number()
                 )
             })?,
@@ -209,10 +222,14 @@ impl L2ExecutionLayer {
         Ok(anchor_tx.input().to_vec())
     }
 
-    pub async fn get_last_synced_anchor_block_id_from_geth(&self) -> Result<u64, Error> {
-        self.get_latest_anchor_transaction_input()
+    pub async fn get_anchor_block_id_from_geth(&self, block_id: u64) -> Result<u64, Error> {
+        // Genesis block (0) has no anchor transaction; return 0 as last anchor id.
+        if block_id == 0 {
+            return Ok(0);
+        }
+        self.get_anchor_transaction_input(BlockNumberOrTag::Number(block_id))
             .await
-            .map_err(|e| anyhow::anyhow!("get_last_synced_anchor_block_id_from_geth: {e}"))
+            .map_err(|e| anyhow::anyhow!("get_anchor_block_id_from_geth: {e}"))
             .and_then(|input| Self::decode_anchor_id_from_tx_data(&input))
     }
 
@@ -262,10 +279,10 @@ impl L2ExecutionLayer {
             .ok_or_else(|| anyhow::anyhow!("Failed to parse isForcedInclusion"))
     }
 
-    pub async fn get_last_synced_block_params_from_geth(&self) -> Result<Checkpoint, Error> {
-        self.get_latest_anchor_transaction_input()
+    pub async fn get_block_params_from_geth(&self, block_id: u64) -> Result<Checkpoint, Error> {
+        self.get_anchor_transaction_input(BlockNumberOrTag::Number(block_id))
             .await
-            .map_err(|e| anyhow::anyhow!("get_last_synced_proposal_id_from_geth: {e}"))
+            .map_err(|e| anyhow::anyhow!("get_block_params_from_geth: {e}"))
             .and_then(|input| Self::decode_block_params_from_tx_data(&input))
     }
 

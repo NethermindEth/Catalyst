@@ -1,17 +1,19 @@
 mod chain_monitor;
-mod forced_inclusion;
-mod l1;
-mod l2;
+pub mod config;
+pub mod forced_inclusion;
+pub mod l1;
+pub mod l2;
 mod node;
 mod shared_abi;
-mod utils;
+pub use node::proposal_manager::block_advancer::BlockAdvancer;
+pub use node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 
-use crate::utils::config::ShastaConfig;
+pub use node::proposal_manager::ProposalManager;
+
 use anyhow::Error;
 use common::{
     batch_builder::BatchBuilderConfig,
-    config::Config,
-    config::ConfigTrait,
+    config::{Config, ConfigTrait},
     fork_info::ForkInfo,
     funds_controller::FundsController,
     l1::{self as common_l1, traits::PreconferProvider},
@@ -19,6 +21,7 @@ use common::{
     metrics, shared,
     utils::cancellation_token::CancellationToken,
 };
+use config::ShastaConfig;
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
 use std::sync::Arc;
@@ -32,12 +35,6 @@ pub async fn create_shasta_node(
     fork_info: ForkInfo,
 ) -> Result<(), Error> {
     info!("Creating Shasta node");
-
-    if !config.disable_bridging {
-        return Err(anyhow::anyhow!(
-            "Bridging is not implemented. Exiting Shasta node creation."
-        ));
-    }
 
     let shasta_config = ShastaConfig::read_env_variables()
         .map_err(|e| anyhow::anyhow!("Failed to read Shasta configuration: {}", e))?;
@@ -64,11 +61,11 @@ pub async fn create_shasta_node(
         taiko_config.signer.get_address(),
     )?)
     .map_err(|e| anyhow::anyhow!("Failed to create L2Engine: {}", e))?;
-    let protocol_config = ethereum_l1.execution_layer.fetch_protocol_config().await?;
+    let inbox_config = ethereum_l1.execution_layer.fetch_inbox_config().await?;
 
     let taiko = crate::l2::taiko::Taiko::new(
         ethereum_l1.slot_clock.clone(),
-        protocol_config.clone(),
+        inbox_config,
         metrics.clone(),
         taiko_config,
         l2_engine,
@@ -76,34 +73,47 @@ pub async fn create_shasta_node(
     .await?;
     let taiko = Arc::new(taiko);
 
-    // TODO fix
-    let node_config = pacaya::node::config::NodeConfig {
+    if shasta_config.max_blocks_to_reanchor
+        >= taiko.get_protocol_config().get_timestamp_max_offset()
+    {
+        return Err(anyhow::anyhow!(
+            "MAX_BLOCKS_TO_REANCHOR ({}) must be less than TIMESTAMP_MAX_OFFSET ({})",
+            shasta_config.max_blocks_to_reanchor,
+            taiko.get_protocol_config().get_timestamp_max_offset()
+        ));
+    }
+    let node_config = node::config::NodeConfig {
         preconf_heartbeat_ms: config.preconf_heartbeat_ms,
-        handover_window_slots: 8,
-        handover_start_buffer_ms: 500,
-        l1_height_lag: 8,
-        propose_forced_inclusion: true,
-        simulate_not_submitting_at_the_end_of_epoch: false,
+        handover_window_slots: shasta_config.handover_window_slots,
+        handover_start_buffer_ms: shasta_config.handover_start_buffer_ms,
+        l1_height_lag: shasta_config.l1_height_lag,
+        min_anchor_offset: config.min_anchor_offset,
+        propose_forced_inclusion: shasta_config.propose_forced_inclusion,
+        simulate_not_submitting_at_the_end_of_epoch: shasta_config
+            .simulate_not_submitting_at_the_end_of_epoch,
+        max_blocks_to_reanchor: shasta_config.max_blocks_to_reanchor,
+        watchdog_max_counter: config.watchdog_max_counter,
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
-        taiko_protocol::shasta::constants::PROPOSAL_MAX_BLOCKS.try_into()?
+        taiko_protocol::shasta::constants::DERIVATION_SOURCE_MAX_BLOCKS.try_into()?
     } else {
         config.max_blocks_per_batch
     };
 
-    let max_anchor_height_offset = taiko_protocol::shasta::constants::MAX_ANCHOR_OFFSET;
+    let max_anchor_height_offset = taiko.get_protocol_config().get_max_anchor_height_offset();
 
-    let batch_builder_config = BatchBuilderConfig {
+    let proposal_builder_config = BatchBuilderConfig {
         max_bytes_size_of_batch: config.max_bytes_size_of_batch,
         max_blocks_per_batch,
         l1_slot_duration_sec: config.l1_slot_duration_sec,
         max_time_shift_between_blocks_sec: config.max_time_shift_between_blocks_sec,
         max_anchor_height_offset: max_anchor_height_offset
             - config.max_anchor_height_offset_reduction,
-        default_coinbase: ethereum_l1.execution_layer.get_preconfer_alloy_address(),
+        default_coinbase: ethereum_l1.execution_layer.get_preconfer_address(),
         preconf_min_txs: config.preconf_min_txs,
         preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
+        proposal_max_time_sec: config.proposal_max_time_sec,
     };
 
     let chain_monitor = Arc::new(
@@ -118,6 +128,7 @@ pub async fn create_shasta_node(
             cancel_token.clone(),
             "Proposed",
             chain_monitor::print_proposed_info,
+            metrics.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create ShastaChainMonitor: {}", e))?,
     );
@@ -132,9 +143,10 @@ pub async fn create_shasta_node(
         ethereum_l1.clone(),
         taiko.clone(),
         metrics.clone(),
-        batch_builder_config,
+        proposal_builder_config,
         transaction_error_receiver,
         fork_info,
+        chain_monitor.clone(),
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;

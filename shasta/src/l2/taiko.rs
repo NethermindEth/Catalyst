@@ -1,11 +1,7 @@
-//TODO remove
-#![allow(dead_code)]
-
 use super::execution_layer::L2ExecutionLayer;
+use crate::forced_inclusion::InboxForcedInclusionState;
 use crate::l1::protocol_config::ProtocolConfig;
-use crate::l2::bindings::{Anchor, ICheckpointStore::Checkpoint};
-use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
-use alloy::primitives::FixedBytes;
+use crate::l2::bindings::Anchor;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
@@ -13,26 +9,21 @@ use alloy::{
     rpc::types::Block,
 };
 use anyhow::Error;
-use common::shared::l2_slot_info_v2::L2SlotContext;
 use common::{
     l1::slot_clock::SlotClock,
     l2::{
         engine::L2Engine,
-        taiko_driver::{
-            OperationType, TaikoDriver, TaikoDriverConfig,
-            models::{BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ExecutableData},
-        },
+        taiko_driver::{TaikoDriver, TaikoDriverConfig},
         traits::Bridgeable,
     },
     metrics::Metrics,
-    shared::{
-        l2_slot_info_v2::L2SlotInfoV2,
-        l2_tx_lists::{self, PreBuiltTxList},
-    },
+    shared::{l2_slot_info_v2::L2SlotInfoV2, l2_tx_lists::PreBuiltTxList},
 };
 use pacaya::l2::config::TaikoConfig;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
+use taiko_bindings::inbox::IInbox::Config;
+use taiko_protocol::shasta::constants::min_base_fee_for_chain;
 use tracing::{debug, trace};
 
 pub struct Taiko {
@@ -40,14 +31,13 @@ pub struct Taiko {
     l2_execution_layer: Arc<L2ExecutionLayer>,
     driver: Arc<TaikoDriver>,
     slot_clock: Arc<SlotClock>,
-    coinbase: String,
     l2_engine: L2Engine,
 }
 
 impl Taiko {
     pub async fn new(
         slot_clock: Arc<SlotClock>,
-        protocol_config: ProtocolConfig,
+        inbox_config: Config,
         metrics: Arc<Metrics>,
         taiko_config: TaikoConfig,
         l2_engine: L2Engine,
@@ -56,19 +46,22 @@ impl Taiko {
             driver_url: taiko_config.driver_url.clone(),
             rpc_driver_preconf_timeout: taiko_config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: taiko_config.rpc_driver_status_timeout,
+            rpc_driver_retry_timeout: taiko_config.rpc_driver_retry_timeout,
             jwt_secret_bytes: taiko_config.jwt_secret_bytes,
-            call_timeout: Duration::from_millis(taiko_config.preconf_heartbeat_ms / 2),
         };
+
+        let l2_execution_layer = Arc::new(
+            L2ExecutionLayer::new(taiko_config.clone())
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
+        );
+        let protocol_config =
+            ProtocolConfig::from(l2_execution_layer.common().chain_id(), &inbox_config);
         Ok(Self {
             protocol_config,
-            l2_execution_layer: Arc::new(
-                L2ExecutionLayer::new(taiko_config.clone())
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
-            ),
+            l2_execution_layer,
             driver: Arc::new(TaikoDriver::new(&driver_config, metrics).await?),
             slot_clock,
-            coinbase: format!("0x{}", hex::encode(taiko_config.signer.get_address())),
             l2_engine,
         })
     }
@@ -84,11 +77,11 @@ impl Taiko {
     pub async fn get_pending_l2_tx_list_from_l2_engine(
         &self,
         base_fee: u64,
-        batches_ready_to_send: u64,
+        proposals_ready_to_send: u64,
         gas_limit: u64,
     ) -> Result<Option<PreBuiltTxList>, Error> {
         self.l2_engine
-            .get_pending_l2_tx_list(base_fee, batches_ready_to_send, gas_limit)
+            .get_pending_l2_tx_list(base_fee, proposals_ready_to_send, gas_limit)
             .await
     }
 
@@ -152,6 +145,58 @@ impl Taiko {
     pub async fn get_l2_slot_info(&self) -> Result<L2SlotInfoV2, Error> {
         self.get_l2_slot_info_by_parent_block(BlockNumberOrTag::Latest)
             .await
+    }
+
+    pub async fn calculate_current_fi_head(
+        &self,
+        inbox_forced_inclusion_state: InboxForcedInclusionState,
+    ) -> Result<u64, Error> {
+        let mut fi_head = inbox_forced_inclusion_state.head;
+        if inbox_forced_inclusion_state.next_proposal_id > 2
+            && fi_head < inbox_forced_inclusion_state.tail
+        {
+            let start = std::time::Instant::now();
+            let safe_block_id = self
+                .get_last_certain_block_id_by_proposal_id(
+                    inbox_forced_inclusion_state.next_proposal_id - 1,
+                )
+                .await?;
+            let unsafe_block_id = self.get_latest_l2_block_id().await?;
+            for block_id in safe_block_id + 1..=unsafe_block_id {
+                let is_forced_inclusion = self.get_forced_inclusion_form_l1origin(block_id).await?;
+                if is_forced_inclusion {
+                    fi_head += 1;
+                }
+                if fi_head == inbox_forced_inclusion_state.tail {
+                    break;
+                }
+            }
+            debug!(
+                "Calculated forced inclusion head: {} in {} ms (unsafe head: {}, safe head: {})",
+                fi_head,
+                start.elapsed().as_millis(),
+                unsafe_block_id,
+                safe_block_id
+            );
+        }
+        Ok(fi_head)
+    }
+
+    pub async fn get_last_certain_block_id_by_proposal_id(
+        &self,
+        proposal_id: u64,
+    ) -> Result<u64, Error> {
+        match self
+            .l2_engine
+            .get_last_certain_block_id_by_batch_id(proposal_id)
+            .await?
+        {
+            Some(block_id) => Ok(block_id),
+            None => Err(anyhow::anyhow!(
+                "no last certain block id returned for proposal_id {} via get_last_certain_block_id_by_batch_id",
+                proposal_id
+            )),
+        }
     }
 
     pub async fn get_l2_slot_info_by_parent_block(
@@ -222,88 +267,23 @@ impl Taiko {
             .header
             .timestamp()
             .checked_sub(grandparent_timestamp)
-            .ok_or_else(|| anyhow::anyhow!("Timestamp underflow occurred"))?;
+            .ok_or_else(|| anyhow::anyhow!("get_base_fee:Timestamp underflow occurred"))?;
 
+        let parent_base_fee_per_gas =
+            parent_block.header.inner.base_fee_per_gas.ok_or_else(|| {
+                anyhow::anyhow!(
+                    "get_base_fee: Parent block missing base fee per gas for block {}",
+                    parent_block.header.number()
+                )
+            })?;
         let base_fee = taiko_alethia_reth::eip4396::calculate_next_block_eip4396_base_fee(
             &parent_block.header.inner,
             timestamp_diff,
+            parent_base_fee_per_gas,
+            min_base_fee_for_chain(self.l2_execution_layer.common().chain_id()),
         );
 
         Ok(base_fee)
-    }
-
-    // TODO fix that function
-    #[allow(clippy::too_many_arguments)]
-    pub async fn advance_head_to_new_l2_block(
-        &self,
-        l2_block_payload: L2BlockV2Payload,
-        l2_slot_context: &L2SlotContext,
-        anchor_signal_slots: Vec<FixedBytes<32>>,
-        operation_type: OperationType,
-    ) -> Result<BuildPreconfBlockResponse, Error> {
-        tracing::debug!(
-            "Submitting new L2 block to the Taiko driver with {} txs",
-            l2_block_payload.tx_list.len()
-        );
-
-        let anchor_block_params = (
-            Checkpoint {
-                blockNumber: l2_block_payload.anchor_block_id.try_into()?,
-                blockHash: l2_block_payload.anchor_block_hash,
-                stateRoot: l2_block_payload.anchor_state_root,
-            },
-            anchor_signal_slots,
-        );
-
-        let anchor_tx = self
-            .l2_execution_layer
-            .construct_anchor_tx(&l2_slot_context.info, anchor_block_params)
-            .await
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "advance_head_to_new_l2_block: Failed to construct anchor tx: {}",
-                    e
-                )
-            })?;
-        let tx_list = std::iter::once(anchor_tx)
-            .chain(l2_block_payload.tx_list.into_iter())
-            .collect::<Vec<_>>();
-
-        let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;
-
-        let sharing_pctg = self.protocol_config.get_basefee_sharing_pctg();
-        let extra_data = super::extra_data::ExtraData {
-            basefee_sharing_pctg: sharing_pctg,
-            proposal_id: l2_block_payload.proposal_id,
-        }
-        .encode()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "advance_head_to_new_l2_block: Failed to encode extra data: {}",
-                e
-            )
-        })?;
-
-        let executable_data = ExecutableData {
-            base_fee_per_gas: l2_slot_context.info.base_fee(),
-            block_number: l2_slot_context.info.parent_id() + 1,
-            extra_data: format!("0x{}", hex::encode(extra_data)),
-            fee_recipient: l2_block_payload.coinbase.to_string(),
-            gas_limit: l2_block_payload.gas_limit_without_anchor + ANCHOR_V3_V4_GAS_LIMIT,
-            parent_hash: format!("0x{}", hex::encode(l2_slot_context.info.parent_hash())),
-            timestamp: l2_block_payload.timestamp_sec,
-            transactions: format!("0x{}", hex::encode(tx_list_bytes)),
-        };
-
-        let request_body = BuildPreconfBlockRequestBody {
-            executable_data,
-            end_of_sequencing: l2_slot_context.end_of_sequencing,
-            is_forced_inclusion: l2_block_payload.is_forced_inclusion,
-        };
-
-        self.driver
-            .preconf_blocks(request_body, operation_type)
-            .await
     }
 
     pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {

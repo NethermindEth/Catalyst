@@ -24,10 +24,8 @@ impl<T: ELTrait> EthereumL1<T> {
         metrics: Arc<Metrics>,
     ) -> Result<Self, Error> {
         tracing::info!("Creating EthereumL1 instance");
-        let consensus_layer = ConsensusLayer::new(
-            &config.consensus_rpc_url,
-            Duration::from_millis(config.preconf_heartbeat_ms / 2),
-        )?;
+        let consensus_layer =
+            ConsensusLayer::new(&config.consensus_rpc_url, config.consensus_rpc_timeout)?;
 
         let blob_indexer = if let Some(blob_indexer_url) = &config.blob_indexer_url {
             tracing::info!("Blob Indexer configured at {}", blob_indexer_url);

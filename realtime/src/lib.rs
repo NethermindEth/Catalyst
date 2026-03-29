@@ -76,10 +76,11 @@ pub async fn create_realtime_node(
         l1_height_lag: 8,
         propose_forced_inclusion: false,
         simulate_not_submitting_at_the_end_of_epoch: false,
+        watchdog_max_counter: config.watchdog_max_counter,
     };
 
     let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
-        taiko_protocol::shasta::constants::PROPOSAL_MAX_BLOCKS.try_into()?
+        taiko_protocol::shasta::constants::DERIVATION_SOURCE_MAX_BLOCKS.try_into()?
     } else {
         config.max_blocks_per_batch
     };
@@ -94,9 +95,10 @@ pub async fn create_realtime_node(
         max_time_shift_between_blocks_sec: config.max_time_shift_between_blocks_sec,
         max_anchor_height_offset: max_anchor_height_offset
             - config.max_anchor_height_offset_reduction,
-        default_coinbase: ethereum_l1.execution_layer.get_preconfer_alloy_address(),
+        default_coinbase: ethereum_l1.execution_layer.get_preconfer_address(),
         preconf_min_txs: config.preconf_min_txs,
         preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
+        proposal_max_time_sec: config.proposal_max_time_sec,
     };
 
     // Initialize chain monitor for ProposedAndProved events
@@ -112,6 +114,7 @@ pub async fn create_realtime_node(
             cancel_token.clone(),
             "ProposedAndProved",
             chain_monitor::print_proposed_and_proved_info,
+            metrics.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create RealtimeChainMonitor: {}", e))?,
     );

@@ -7,7 +7,8 @@ use std::str::FromStr;
 use std::time::Duration;
 use tracing::{info, warn};
 
-use crate::blob::constants::MAX_BLOB_DATA_SIZE;
+/// Maximum payload size that fits in a single blob with Kona encoding.
+const BLOB_MAX_DATA_SIZE: usize = (4 * 31 + 3) * 1024 - 4;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -19,6 +20,7 @@ pub struct Config {
     // L1
     pub l1_rpc_urls: Vec<String>,
     pub l1_beacon_url: String,
+    pub l1_beacon_timeout: Duration,
     pub blob_indexer_url: Option<String>,
     pub l1_slot_duration_sec: u64,
     pub l1_slots_per_epoch: u64,
@@ -32,6 +34,7 @@ pub struct Config {
     pub rpc_l2_execution_layer_timeout: Duration,
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
+    pub rpc_driver_retry_timeout: Duration,
     // Taiko contracts
     pub taiko_anchor_address: Address,
     pub taiko_bridge_address: Address,
@@ -40,6 +43,8 @@ pub struct Config {
     pub max_blocks_per_batch: u16,
     pub max_time_shift_between_blocks_sec: u64,
     pub max_anchor_height_offset_reduction: u64,
+    /// Minimum offset between calculated anchor block ID and latest L1 height
+    pub min_anchor_offset: u64,
     // Transaction parameters
     pub min_priority_fee_per_gas_wei: u64,
     pub tx_fees_increase_percentage: u64,
@@ -62,12 +67,16 @@ pub struct Config {
     pub throttling_factor: u64,
     pub preconf_min_txs: u64,
     pub preconf_max_skipped_l2_slots: u64,
+    pub proposal_max_time_sec: u64,
     // fork info
     pub fork_switch_transition_period_sec: u64,
     pub pacaya_timestamp_sec: u64,
     pub shasta_timestamp_sec: u64,
+    pub permissionless_timestamp_sec: u64,
     // Whitelist monitor
     pub whitelist_monitor_interval_sec: u64,
+    // Watchdog
+    pub watchdog_max_counter: u64,
 }
 
 /// Creates a formatted error message for address parsing failures.
@@ -134,6 +143,12 @@ impl Config {
             }
             url
         };
+
+        let l1_beacon_timeout = std::env::var("L1_BEACON_TIMEOUT_MS")
+            .unwrap_or("1000".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("L1_BEACON_TIMEOUT_MS must be a number: {}", e))
+            .map(Duration::from_millis)?;
 
         let extra_gas_percentage = std::env::var("EXTRA_GAS_PERCENTAGE")
             .unwrap_or("100".to_string())
@@ -204,6 +219,12 @@ impl Config {
             .map_err(|e| anyhow::anyhow!("RPC_DRIVER_STATUS_TIMEOUT_MS must be a number: {}", e))?;
         let rpc_driver_status_timeout = Duration::from_millis(rpc_driver_status_timeout);
 
+        let rpc_driver_retry_timeout = std::env::var("RPC_DRIVER_RETRY_TIMEOUT_MS")
+            .unwrap_or("1000".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("RPC_DRIVER_RETRY_TIMEOUT_MS must be a number: {}", e))?;
+        let rpc_driver_retry_timeout = Duration::from_millis(rpc_driver_retry_timeout);
+
         let rpc_l2_execution_layer_timeout = std::env::var("RPC_L2_EXECUTION_LAYER_TIMEOUT_MS")
             .unwrap_or("1000".to_string())
             .parse::<u64>()
@@ -234,10 +255,10 @@ impl Config {
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("BLOBS_PER_BATCH must be a number: {}", e))?;
 
-        let max_bytes_size_of_batch = u64::try_from(MAX_BLOB_DATA_SIZE)
-            .map_err(|_| anyhow::anyhow!("MAX_BLOB_DATA_SIZE must be a u64 number"))?
+        let max_bytes_size_of_batch = u64::try_from(BLOB_MAX_DATA_SIZE)
+            .map_err(|_| anyhow::anyhow!("BLOB_MAX_DATA_SIZE must be a u64 number"))?
             .checked_mul(blobs_per_batch)
-            .ok_or_else(|| anyhow::anyhow!("Overflow while computing BLOBS_PER_BATCH * MAX_BLOB_DATA_SIZE. Try to reduce BLOBS_PER_BATCH"))?;
+            .ok_or_else(|| anyhow::anyhow!("Overflow while computing BLOBS_PER_BATCH * BLOB_MAX_DATA_SIZE. Try to reduce BLOBS_PER_BATCH"))?;
 
         let max_blocks_per_batch = std::env::var("MAX_BLOCKS_PER_BATCH")
             .unwrap_or("0".to_string())
@@ -268,6 +289,21 @@ impl Config {
                 "MAX_ANCHOR_HEIGHT_OFFSET_REDUCTION_VALUE is less than 5: you have a small number of slots to call the proposeBatch transaction"
             );
         }
+
+        let min_anchor_offset = std::env::var("MIN_ANCHOR_OFFSET")
+            .unwrap_or("2".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("MIN_ANCHOR_OFFSET must be a number: {}", e))
+            .and_then(|val| {
+                if val < 1 {
+                    Err(anyhow::anyhow!(
+                        "MIN_ANCHOR_OFFSET must be at least 1, but got {}.",
+                        val
+                    ))
+                } else {
+                    Ok(val)
+                }
+            })?;
 
         let min_priority_fee_per_gas_wei = std::env::var("MIN_PRIORITY_FEE_PER_GAS_WEI")
             .unwrap_or("1000000000".to_string()) // 1 Gwei
@@ -336,7 +372,7 @@ impl Config {
             .map_err(|e| anyhow::anyhow!("DISABLE_BRIDGING must be a boolean: {}", e))?;
 
         let max_bytes_per_tx_list = std::env::var("MAX_BYTES_PER_TX_LIST")
-            .unwrap_or(MAX_BLOB_DATA_SIZE.to_string())
+            .unwrap_or(BLOB_MAX_DATA_SIZE.to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("MAX_BYTES_PER_TX_LIST must be a number: {}", e))?;
 
@@ -360,6 +396,11 @@ impl Config {
             .unwrap_or("2".to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("PRECONF_MAX_SKIPPED_L2_SLOTS must be a number: {}", e))?;
+
+        let proposal_max_time_sec = std::env::var("PROPOSAL_MAX_TIME_SEC")
+            .unwrap_or("384".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("PROPOSAL_MAX_TIME_SEC must be a number: {}", e))?;
 
         // 0.003 eth
         let bridge_relayer_fee = std::env::var("BRIDGE_RELAYER_FEE")
@@ -389,6 +430,10 @@ impl Config {
             .unwrap_or("99999999999".to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("SHASTA_TIMESTAMP_SEC must be a number: {}", e))?;
+        let permissionless_timestamp_sec = std::env::var("PERMISSIONLESS_TIMESTAMP_SEC")
+            .unwrap_or("99999999999".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("PERMISSIONLESS_TIMESTAMP_SEC must be a number: {}", e))?;
 
         let whitelist_monitor_interval_sec = std::env::var("WHITELIST_MONITOR_INTERVAL_SEC")
             .unwrap_or("60".to_string())
@@ -396,6 +441,11 @@ impl Config {
             .map_err(|e| {
                 anyhow::anyhow!("WHITELIST_MONITOR_INTERVAL_SEC must be a number: {}", e)
             })?;
+
+        let watchdog_max_counter = std::env::var("WATCHDOG_MAX_COUNTER")
+            .unwrap_or("96".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("WATCHDOG_MAX_COUNTER must be a number: {}", e))?;
 
         let config = Self {
             preconfer_address,
@@ -412,6 +462,7 @@ impl Config {
                 .map(|s| s.to_string())
                 .collect(),
             l1_beacon_url,
+            l1_beacon_timeout,
             blob_indexer_url: std::env::var("BLOB_INDEXER_URL").ok(),
             web3signer_l1_url,
             web3signer_l2_url,
@@ -423,12 +474,14 @@ impl Config {
             rpc_l2_execution_layer_timeout,
             rpc_driver_preconf_timeout,
             rpc_driver_status_timeout,
+            rpc_driver_retry_timeout,
             taiko_anchor_address,
             taiko_bridge_address,
             max_bytes_size_of_batch,
             max_blocks_per_batch,
             max_time_shift_between_blocks_sec,
             max_anchor_height_offset_reduction,
+            min_anchor_offset,
             min_priority_fee_per_gas_wei,
             tx_fees_increase_percentage,
             max_attempts_to_send_tx,
@@ -445,12 +498,15 @@ impl Config {
             extra_gas_percentage,
             preconf_min_txs,
             preconf_max_skipped_l2_slots,
+            proposal_max_time_sec,
             bridge_relayer_fee,
             bridge_transaction_fee,
             fork_switch_transition_period_sec,
             pacaya_timestamp_sec,
             shasta_timestamp_sec,
+            permissionless_timestamp_sec,
             whitelist_monitor_interval_sec,
+            watchdog_max_counter,
         };
 
         info!(
@@ -461,6 +517,7 @@ Taiko geth auth RPC URL: {},
 Taiko driver URL: {},
 L1 RPC URL: {},
 Consensus layer URL: {},
+Consensus layer timeout: {}ms,
 Blob Indexer URL: {},
 Web3signer L1 URL: {},
 Web3signer L2 URL: {},
@@ -471,6 +528,7 @@ jwt secret file path: {}
 rpc L2 EL timeout: {}ms
 rpc driver preconf timeout: {}ms
 rpc driver status timeout: {}ms
+rpc driver retry timeout: {}ms
 taiko anchor address: {}
 taiko bridge address: {}
 max bytes per tx list from taiko driver: {}
@@ -480,6 +538,7 @@ max bytes size of batch: {}
 max blocks per batch value: {}
 max time shift between blocks: {}s
 max anchor height offset reduction value: {}
+min anchor offset: {}
 min priority fee per gas: {}wei
 tx fees increase percentage: {}
 max attempts to send tx: {}
@@ -492,12 +551,15 @@ amount to bridge from l2 to l1: {}
 disable bridging: {}
 min number of transaction to create a L2 block: {}
 max number of skipped L2 slots while creating a L2 block: {}
+max time before submit: {}s
 bridge relayer fee: {}wei
 bridge transaction fee: {}wei
 fork switch transition time: {}s
 pacaya timestamp: {}s
 shasta timestamp: {}s
+permissionless timestamp: {}s
 whitelist monitor interval: {}s
+watchdog max counter: {}
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -516,6 +578,7 @@ whitelist monitor interval: {}s
                 None => String::new(),
             },
             config.l1_beacon_url,
+            config.l1_beacon_timeout.as_millis(),
             config.blob_indexer_url.as_deref().unwrap_or("not set"),
             config.web3signer_l1_url.as_deref().unwrap_or("not set"),
             config.web3signer_l2_url.as_deref().unwrap_or("not set"),
@@ -526,6 +589,7 @@ whitelist monitor interval: {}s
             config.rpc_l2_execution_layer_timeout.as_millis(),
             config.rpc_driver_preconf_timeout.as_millis(),
             config.rpc_driver_status_timeout.as_millis(),
+            config.rpc_driver_retry_timeout.as_millis(),
             config.taiko_anchor_address,
             config.taiko_bridge_address,
             config.max_bytes_per_tx_list,
@@ -535,6 +599,7 @@ whitelist monitor interval: {}s
             config.max_blocks_per_batch,
             config.max_time_shift_between_blocks_sec,
             config.max_anchor_height_offset_reduction,
+            config.min_anchor_offset,
             config.min_priority_fee_per_gas_wei,
             config.tx_fees_increase_percentage,
             config.max_attempts_to_send_tx,
@@ -547,12 +612,15 @@ whitelist monitor interval: {}s
             config.disable_bridging,
             config.preconf_min_txs,
             config.preconf_max_skipped_l2_slots,
+            config.proposal_max_time_sec,
             config.bridge_relayer_fee,
             config.bridge_transaction_fee,
             config.fork_switch_transition_period_sec,
             config.pacaya_timestamp_sec,
             config.shasta_timestamp_sec,
+            config.permissionless_timestamp_sec,
             config.whitelist_monitor_interval_sec,
+            config.watchdog_max_counter,
         );
 
         Ok(config)

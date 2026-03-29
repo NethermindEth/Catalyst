@@ -5,6 +5,7 @@ use strum::{EnumIter, IntoEnumIterator};
 pub enum Fork {
     Pacaya,
     Shasta,
+    Permissionless,
 }
 
 impl Fork {

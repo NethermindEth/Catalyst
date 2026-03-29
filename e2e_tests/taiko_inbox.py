@@ -24,10 +24,7 @@ def get_last_block_id(l1_client, env_vars):
         last_block_id = result[1]
         return last_block_id
     else:
-        core_state = get_core_state(l1_client, env_vars)
-        last_block_id = core_state[1]
-        #print(f"Last L2 block id from core state: {last_block_id}, next proposal id: {core_state[0]}")
-        return last_block_id
+        return 0 # not needed for shasta
 
 def get_core_state(l1_client, env_vars):
     shasta_abi = get_shasta_inbox_abi()

@@ -103,6 +103,7 @@ pub async fn create_pacaya_node(
             cancel_token.clone(),
             "BatchProposed",
             chain_monitor::print_batch_proposed_info,
+            metrics.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create PacayaChainMonitor: {}", e))?,
     );
@@ -136,6 +137,7 @@ pub async fn create_pacaya_node(
             propose_forced_inclusion: pacaya_config.propose_forced_inclusion,
             simulate_not_submitting_at_the_end_of_epoch: pacaya_config
                 .simulate_not_submitting_at_the_end_of_epoch,
+            watchdog_max_counter: config.watchdog_max_counter,
         },
         common::batch_builder::BatchBuilderConfig {
             max_bytes_size_of_batch: config.max_bytes_size_of_batch,
@@ -144,9 +146,10 @@ pub async fn create_pacaya_node(
             max_time_shift_between_blocks_sec: config.max_time_shift_between_blocks_sec,
             max_anchor_height_offset: max_anchor_height_offset
                 - config.max_anchor_height_offset_reduction,
-            default_coinbase: ethereum_l1.execution_layer.get_preconfer_alloy_address(),
+            default_coinbase: ethereum_l1.execution_layer.get_preconfer_address(),
             preconf_min_txs: config.preconf_min_txs,
             preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
+            proposal_max_time_sec: config.proposal_max_time_sec,
         },
         fork_info,
     )

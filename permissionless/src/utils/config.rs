@@ -1,10 +1,11 @@
 #![allow(unused)] // TODO: remove this once we have a used contract_addresses field
 
+use alloy::hex;
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::config::{ConfigTrait, address_parse_error};
-use std::fmt;
-use std::str::FromStr;
+use secp256k1::SecretKey;
+use std::{fmt, str::FromStr, time::Duration};
 use tracing::warn;
 
 #[derive(Debug, Clone)]
@@ -15,9 +16,16 @@ pub struct L1ContractAddresses {
     pub preconf_slasher_address: Address,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Config {
     pub contract_addresses: L1ContractAddresses,
+    pub preconfirmation_driver_url: String,
+    pub preconfirmation_driver_timeout: Duration,
+    pub shasta_inbox: Address,
+    pub l1_height_lag: u64,
+    pub max_blocks_to_reanchor: u64,
+    pub propose_forced_inclusion: bool,
+    pub sequencer_key: SecretKey,
 }
 
 impl ConfigTrait for Config {
@@ -52,6 +60,52 @@ impl ConfigTrait for Config {
                 address_parse_error(PRECONF_SLASHER_ADDRESS, e, &preconf_slasher_address_str)
             })?;
 
+        const PRECONFIRMATION_DRIVER_URL: &str = "PRECONFIRMATION_DRIVER_URL";
+        let preconfirmation_driver_url = std::env::var(PRECONFIRMATION_DRIVER_URL)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", PRECONFIRMATION_DRIVER_URL, e))?;
+        const PRECONFIRMATION_DRIVER_TIMEOUT_MS: &str = "PRECONFIRMATION_DRIVER_TIMEOUT_MS";
+        let preconfirmation_driver_timeout = Duration::from_millis(
+            std::env::var(PRECONFIRMATION_DRIVER_TIMEOUT_MS)
+                .unwrap_or("1500".to_string())
+                .parse::<u64>()
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to read {}: {}",
+                        PRECONFIRMATION_DRIVER_TIMEOUT_MS,
+                        e
+                    )
+                })?,
+        );
+
+        const SHASTA_INBOX_ADDRESS: &str = "SHASTA_INBOX_ADDRESS";
+        let shasta_inbox_str = std::env::var(SHASTA_INBOX_ADDRESS)
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", SHASTA_INBOX_ADDRESS, e))?;
+        let shasta_inbox = Address::from_str(&shasta_inbox_str)
+            .map_err(|e| address_parse_error(SHASTA_INBOX_ADDRESS, e, &shasta_inbox_str))?;
+
+        let l1_height_lag = std::env::var("L1_HEIGHT_LAG")
+            .unwrap_or("4".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("L1_HEIGHT_LAG must be a number: {}", e))?;
+
+        let max_blocks_to_reanchor = std::env::var("MAX_BLOCKS_TO_REANCHOR")
+            .unwrap_or("1000".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("MAX_BLOCKS_TO_REANCHOR must be a number: {}", e))?;
+
+        let propose_forced_inclusion = std::env::var("PROPOSE_FORCED_INCLUSION")
+            .unwrap_or("true".to_string())
+            .parse::<bool>()
+            .map_err(|e| anyhow::anyhow!("PROPOSE_FORCED_INCLUSION must be a boolean: {}", e))?;
+
+        let sequencer_key_str = std::env::var("SEQUENCER_KEY")
+            .map_err(|e| anyhow::anyhow!("Failed to read {}: {}", "SEQUENCER_KEY", e))?;
+        let sequencer_key_bytes = hex::decode(sequencer_key_str.trim_start_matches("0x"))
+            .map_err(|e| anyhow::anyhow!("{} must be valid hex: {}", "SEQUENCER_KEY", e))?;
+        let sequencer_key = SecretKey::from_slice(&sequencer_key_bytes).map_err(|e| {
+            anyhow::anyhow!("{} must be a valid secp256k1 key: {}", "SEQUENCER_KEY", e)
+        })?;
+
         Ok(Config {
             contract_addresses: L1ContractAddresses {
                 registry_address,
@@ -59,6 +113,13 @@ impl ConfigTrait for Config {
                 lookahead_slasher_address,
                 preconf_slasher_address,
             },
+            preconfirmation_driver_url,
+            preconfirmation_driver_timeout,
+            shasta_inbox,
+            l1_height_lag,
+            max_blocks_to_reanchor,
+            propose_forced_inclusion,
+            sequencer_key,
         })
     }
 }
@@ -66,6 +127,24 @@ impl ConfigTrait for Config {
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Contract addresses: {:#?}", self.contract_addresses)?;
+        writeln!(
+            f,
+            "Preconfirmation driver URL: {}",
+            self.preconfirmation_driver_url
+        )?;
+        writeln!(
+            f,
+            "Preconfirmation driver timeout: {:?}",
+            self.preconfirmation_driver_timeout
+        )?;
+        writeln!(f, "Shasta inbox: {}", self.shasta_inbox)?;
+        writeln!(f, "L1 height lag: {}", self.l1_height_lag)?;
+        writeln!(f, "Max blocks to reanchor: {}", self.max_blocks_to_reanchor)?;
+        writeln!(
+            f,
+            "Propose forced inclusion: {}",
+            self.propose_forced_inclusion
+        )?;
 
         Ok(())
     }
