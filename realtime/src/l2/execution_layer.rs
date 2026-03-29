@@ -103,7 +103,7 @@ impl L2ExecutionLayer {
         let call_builder = self
             .anchor
             .anchorV4WithSignalSlots(anchor_block_params.0, anchor_block_params.1)
-            .gas(1_000_000)
+            .gas(3_000_000)
             .max_fee_per_gas(u128::from(l2_slot_info.base_fee()))
             .max_priority_fee_per_gas(0)
             .nonce(nonce)
@@ -258,7 +258,7 @@ impl L2ExecutionLayer {
         let typed_tx = alloy::consensus::TxEip1559 {
             chain_id: self.chain_id,
             nonce,
-            gas_limit: 1_000_000,
+            gas_limit: 3_000_000,
             max_fee_per_gas: 1_000_000_000,
             max_priority_fee_per_gas: 0,
             to: alloy::primitives::TxKind::Call(user_op.submitter),
@@ -329,7 +329,7 @@ impl L2BridgeHandlerOps for L2ExecutionLayer {
         let call_builder = self
             .bridge
             .processMessage(message, Bytes::new())
-            .gas(1_000_000)
+            .gas(3_000_000)
             .max_fee_per_gas(1_000_000_000)
             .max_priority_fee_per_gas(0)
             .nonce(nonce)
