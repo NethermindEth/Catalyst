@@ -215,13 +215,27 @@ impl BridgeHandler {
             return Ok(None);
         };
 
-        // Default to L1 when chain_id is 0 or matches L1
         if user_op.chain_id == self.l2_chain_id {
             info!(
                 "UserOp id={} targets L2 (chainId={}), queueing for L2 execution",
                 user_op.id, user_op.chain_id
             );
             return Ok(Some(UserOpRouting::L2Direct { user_op }));
+        }
+
+        // Reject unknown chain IDs (0 is allowed as default-to-L1)
+        if user_op.chain_id != 0 && user_op.chain_id != self.l1_chain_id {
+            warn!(
+                "UserOp id={} has unknown chainId={}, rejecting",
+                user_op.id, user_op.chain_id
+            );
+            self.status_store.set(
+                user_op.id,
+                &UserOpStatus::Rejected {
+                    reason: format!("Unknown chainId: {}", user_op.chain_id),
+                },
+            );
+            return Ok(None);
         }
 
         // L1 UserOp — simulate on L1 to extract bridge message

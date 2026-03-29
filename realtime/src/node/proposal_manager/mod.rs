@@ -318,12 +318,11 @@ impl BatchManager {
                     .await
                 {
                     Ok(tx) => {
-                        info!("Inserting L2 UserOp execution tx into block");
-                        l2_draft_block.prebuilt_tx_list.tx_list.push(tx);
-                        // Track L2 UserOp ID for status updates after submission
+                        // Track L2 UserOp ID first — only insert tx if tracking succeeds,
+                        // otherwise we'd execute on L2 but show Rejected in the status store.
                         if let Err(e) = self.batch_builder.add_l2_user_op_id(user_op.id) {
                             error!(
-                                "Failed to track L2 UserOp id={}: {}. Status will not be updated.",
+                                "Failed to track L2 UserOp id={}: {}. Dropping tx.",
                                 user_op.id, e
                             );
                             status_store.set(
@@ -332,6 +331,9 @@ impl BatchManager {
                                     reason: format!("Failed to track UserOp: {}", e),
                                 },
                             );
+                        } else {
+                            info!("Inserting L2 UserOp execution tx into block");
+                            l2_draft_block.prebuilt_tx_list.tx_list.push(tx);
                         }
                     }
                     Err(e) => {

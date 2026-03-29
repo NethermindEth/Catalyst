@@ -276,12 +276,20 @@ async fn submission_task(
         .send_batch_to_l1(proposal.clone(), tx_hash_sender, tx_result_sender)
         .await
     {
-        // Mark user ops as rejected on failure
+        // Mark all user ops (L1 and L2) as rejected on failure
         if let Some(ref store) = status_store {
             let reason = format!("L1 multicall failed: {}", err);
             for op in &proposal.user_ops {
                 store.set(
                     op.id,
+                    &UserOpStatus::Rejected {
+                        reason: reason.clone(),
+                    },
+                );
+            }
+            for id in &proposal.l2_user_op_ids {
+                store.set(
+                    *id,
                     &UserOpStatus::Rejected {
                         reason: reason.clone(),
                     },
