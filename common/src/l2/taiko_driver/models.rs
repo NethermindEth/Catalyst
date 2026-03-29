@@ -64,6 +64,19 @@ pub struct TaikoStatus {
     pub end_of_sequencing_block_hash: B256,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorgStaleBlockRequest {
+    pub new_head_block_number: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorgStaleBlockResponse {
+    pub new_head_block_hash: B256,
+    pub blocks_removed: u64,
+}
+
 fn deserialize_end_of_sequencing_block_hash<'de, D>(deserializer: D) -> Result<B256, D::Error>
 where
     D: Deserializer<'de>,

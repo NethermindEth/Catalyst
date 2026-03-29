@@ -5836,6 +5836,7 @@ dependencies = [
  "clap",
  "common",
  "pacaya",
+ "realtime",
  "serde_json",
  "shasta",
  "tokio",
@@ -7188,6 +7189,42 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "realtime"
+version = "1.26.12"
+dependencies = [
+ "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=3e0fdad9b9fbf7f6550c7209185fd6623468452c)",
+ "alloy",
+ "alloy-json-rpc",
+ "alloy-rlp",
+ "anyhow",
+ "async-trait",
+ "bindings",
+ "chrono",
+ "common",
+ "dotenvy",
+ "flate2",
+ "futures-util",
+ "hex",
+ "http 1.4.0",
+ "jsonrpsee",
+ "jsonwebtoken",
+ "mockito",
+ "pacaya",
+ "prometheus",
+ "protocol",
+ "reqwest",
+ "rpc",
+ "serde",
+ "serde_json",
+ "sled",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber 0.3.22",
+ "warp",
 ]
 
 [[package]]

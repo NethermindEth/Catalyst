@@ -4,8 +4,7 @@ use crate::{
     l1::execution_layer::{ExecutionLayer, L1BridgeHandlerOps},
     l2::execution_layer::L2BridgeHandlerOps,
 };
-use alloy::primitives::{Address, Bytes, FixedBytes};
-use alloy::signers::Signer;
+use alloy::primitives::{Address, B256, Bytes, FixedBytes};
 use anyhow::Result;
 use common::{l1::ethereum_l1::EthereumL1, utils::cancellation_token::CancellationToken};
 use jsonrpsee::server::{RpcModule, ServerBuilder};
@@ -14,14 +13,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc::{self, Receiver};
 use tracing::{error, info, warn};
-
-// Sequence of calls on L1:
-// 1. User op calldata submission to the submitter
-// 2. Proposal with signal slot
-// 3. L1Call initiated by an L2 contract
-
-// Sequence of calls on l2:
-// 1. L2Call initiated by an L1 contract
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "status")]
@@ -47,10 +38,10 @@ impl UserOpStatusStore {
     }
 
     pub fn set(&self, id: u64, status: &UserOpStatus) {
-        if let Ok(value) = serde_json::to_vec(status) {
-            if let Err(e) = self.db.insert(id.to_be_bytes(), value) {
-                error!("Failed to write user op status: {}", e);
-            }
+        if let Ok(value) = serde_json::to_vec(status)
+            && let Err(e) = self.db.insert(id.to_be_bytes(), value)
+        {
+            error!("Failed to write user op status: {}", e);
         }
     }
 
@@ -73,13 +64,14 @@ pub struct UserOp {
     pub id: u64,
     pub submitter: Address,
     pub calldata: Bytes,
+    #[serde(default, rename = "chainId")]
+    pub chain_id: u64,
 }
 
 // Data required to build the L1 call transaction initiated by an L2 contract via the bridge
 #[derive(Clone, Debug)]
 pub struct L1Call {
     pub message_from_l2: Message,
-    // For this POC, this is a signature based proof, but must be a merkle proof in production
     pub signal_slot_proof: Bytes,
 }
 
@@ -88,6 +80,15 @@ pub struct L1Call {
 pub struct L2Call {
     pub message_from_l1: Message,
     pub signal_slot_on_l2: FixedBytes<32>,
+}
+
+/// Result of routing a UserOp: either it targets L1 (and triggers an L2 bridge call)
+/// or it targets L2 (for direct execution on L2, e.g. bridge-out).
+pub enum UserOpRouting {
+    /// L1 UserOp that triggers a bridge deposit (L1→L2).
+    L1ToL2 { user_op: UserOp, l2_call: L2Call },
+    /// L2 UserOp for direct execution on L2 (e.g. bridge-out L2→L1).
+    L2Direct { user_op: UserOp },
 }
 
 #[derive(Clone)]
@@ -101,9 +102,9 @@ pub struct BridgeHandler {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     taiko: Arc<Taiko>,
     rx: Receiver<UserOp>,
-    // Surge: For signing the L1 call signal slot proofs
-    l1_call_proof_signer: alloy::signers::local::PrivateKeySigner,
     status_store: UserOpStatusStore,
+    l1_chain_id: u64,
+    l2_chain_id: u64,
 }
 
 impl BridgeHandler {
@@ -112,6 +113,8 @@ impl BridgeHandler {
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
         cancellation_token: CancellationToken,
+        l1_chain_id: u64,
+        l2_chain_id: u64,
     ) -> Result<Self, anyhow::Error> {
         let (tx, rx) = mpsc::channel::<UserOp>(1024);
         let status_store = UserOpStatusStore::open("data/user_op_status")?;
@@ -141,7 +144,6 @@ impl BridgeHandler {
                 user_op.calldata.len()
             );
 
-            // Set status to Pending
             ctx.status_store.set(id, &UserOpStatus::Pending);
 
             ctx.tx.send(user_op).await.map_err(|e| {
@@ -191,13 +193,9 @@ impl BridgeHandler {
             ethereum_l1,
             taiko,
             rx,
-            // Surge: Hard coding the private key for the POC
-            // (This is the first private key from foundry anvil)
-            l1_call_proof_signer: alloy::signers::local::PrivateKeySigner::from_bytes(
-                &"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                    .parse::<alloy::primitives::FixedBytes<32>>()?,
-            )?,
             status_store,
+            l1_chain_id,
+            l2_chain_id,
         })
     }
 
@@ -205,64 +203,85 @@ impl BridgeHandler {
         self.status_store.clone()
     }
 
-    // Returns any L2 calls initiated by an L1 contract via the Bridge.
-    // For seamless composability, the users will be submitting a `UserOp` on L1 to interact with
-    // the Bridge and any other intermediate contract.
-    pub async fn next_user_op_and_l2_call(
-        &mut self,
-    ) -> Result<Option<(UserOp, L2Call)>, anyhow::Error> {
-        if let Ok(user_op) = self.rx.try_recv() {
-            // This is the message sent from the L1 contract to the L2, and the
-            // associated signal that is set when the user op is executed
-            if let Some((message_from_l1, signal_slot_on_l2)) = self
-                .ethereum_l1
-                .execution_layer
-                .find_message_and_signal_slot(user_op.clone())
-                .await?
-            {
-                return Ok(Some((
-                    user_op,
-                    L2Call {
-                        message_from_l1,
-                        signal_slot_on_l2,
-                    },
-                )));
-            }
+    /// Dequeue the next UserOp and route it based on the `chainId` param.
+    ///
+    /// If `chainId` matches L1, simulates on L1 to extract bridge message (L1→L2 deposit).
+    /// If `chainId` matches L2, returns it for direct L2 block inclusion (bridge-out).
+    /// If `chainId` is 0 or missing, defaults to L1 (backwards compatible).
+    pub async fn next_user_op_routed(&mut self) -> Result<Option<UserOpRouting>, anyhow::Error> {
+        let Ok(user_op) = self.rx.try_recv() else {
+            return Ok(None);
+        };
 
-            // No L2 call found in the user op - reject it
+        if user_op.chain_id == self.l2_chain_id {
+            info!(
+                "UserOp id={} targets L2 (chainId={}), queueing for L2 execution",
+                user_op.id, user_op.chain_id
+            );
+            return Ok(Some(UserOpRouting::L2Direct { user_op }));
+        }
+
+        // Reject unknown chain IDs (0 is allowed as default-to-L1)
+        if user_op.chain_id != 0 && user_op.chain_id != self.l1_chain_id {
             warn!(
-                "UserOp id={} rejected: no L2 call found in user op",
-                user_op.id
+                "UserOp id={} has unknown chainId={}, rejecting",
+                user_op.id, user_op.chain_id
             );
             self.status_store.set(
                 user_op.id,
                 &UserOpStatus::Rejected {
-                    reason: "No L2 call found in user op".to_string(),
+                    reason: format!("Unknown chainId: {}", user_op.chain_id),
                 },
             );
+            return Ok(None);
         }
 
+        // L1 UserOp — simulate on L1 to extract bridge message
+        if let Some((message_from_l1, signal_slot_on_l2)) = self
+            .ethereum_l1
+            .execution_layer
+            .find_message_and_signal_slot(user_op.clone())
+            .await?
+        {
+            return Ok(Some(UserOpRouting::L1ToL2 {
+                user_op,
+                l2_call: L2Call {
+                    message_from_l1,
+                    signal_slot_on_l2,
+                },
+            }));
+        }
+
+        warn!(
+            "UserOp id={} targets L1 but no bridge message found",
+            user_op.id
+        );
+        self.status_store.set(
+            user_op.id,
+            &UserOpStatus::Rejected {
+                reason: "L1 UserOp with no bridge message".to_string(),
+            },
+        );
         Ok(None)
     }
 
-    // Surge: Finds L1 calls initiated in a specific L2 block
-    pub async fn find_l1_call(&mut self, block_id: u64) -> Result<Option<L1Call>, anyhow::Error> {
-        if let Some((message_from_l2, signal_slot)) = self
-            .taiko
-            .l2_execution_layer()
-            .find_message_and_signal_slot(block_id)
-            .await?
-        {
-            let signature = self.l1_call_proof_signer.sign_hash(&signal_slot).await?;
+    pub async fn find_l1_call(
+        &mut self,
+        block_id: u64,
+        state_root: B256,
+    ) -> Result<Option<L1Call>, anyhow::Error> {
+        let l2_el = self.taiko.l2_execution_layer();
 
-            let mut signal_slot_proof = [0_u8; 65];
-            signal_slot_proof[..32].copy_from_slice(signature.r().to_be_bytes::<32>().as_slice());
-            signal_slot_proof[32..64].copy_from_slice(signature.s().to_be_bytes::<32>().as_slice());
-            signal_slot_proof[64] = (signature.v() as u8) + 27;
+        if let Some((message_from_l2, signal_slot)) =
+            l2_el.find_message_and_signal_slot(block_id).await?
+        {
+            let signal_slot_proof = l2_el
+                .get_hop_proof(signal_slot, block_id, state_root)
+                .await?;
 
             return Ok(Some(L1Call {
                 message_from_l2,
-                signal_slot_proof: Bytes::from(signal_slot_proof),
+                signal_slot_proof,
             }));
         }
 
