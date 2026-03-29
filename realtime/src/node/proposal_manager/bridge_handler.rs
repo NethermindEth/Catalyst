@@ -215,13 +215,8 @@ impl BridgeHandler {
             return Ok(None);
         };
 
-        let target_chain = if user_op.chain_id == self.l2_chain_id {
-            self.l2_chain_id
-        } else {
-            self.l1_chain_id // default to L1 (includes chain_id == 0)
-        };
-
-        if target_chain == self.l2_chain_id {
+        // Default to L1 when chain_id is 0 or matches L1
+        if user_op.chain_id == self.l2_chain_id {
             info!(
                 "UserOp id={} targets L2 (chainId={}), queueing for L2 execution",
                 user_op.id, user_op.chain_id

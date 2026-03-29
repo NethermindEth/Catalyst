@@ -284,6 +284,8 @@ impl L2ExecutionLayer {
 
         debug!("L2 UserOp execution tx hash: {}", tx_envelope.tx_hash());
 
+        // SAFETY: `new_unchecked` is safe here because we just signed `tx_envelope` with
+        // `l2_call_signer` and `signer_address` is derived from the same key.
         let tx = Transaction {
             inner: Recovered::new_unchecked(tx_envelope, signer_address),
             block_hash: None,
