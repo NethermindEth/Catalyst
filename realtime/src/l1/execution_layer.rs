@@ -1,9 +1,12 @@
 use super::config::EthereumL1Config;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
+use crate::l1::bindings::RealTimeInbox::{self, RealTimeInboxInstance};
 use crate::node::proposal_manager::proposal::Proposal;
 use crate::raiko::RaikoClient;
-use crate::shared_abi::bindings::{Bridge::MessageSent, IBridge::Message, SignalService::SignalSent};
+use crate::shared_abi::bindings::{
+    Bridge::MessageSent, IBridge::Message, SignalService::SignalSent,
+};
 use crate::{l1::config::ContractAddresses, node::proposal_manager::bridge_handler::UserOp};
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
@@ -30,7 +33,6 @@ use common::{
         transaction_monitor::TransactionMonitor,
     },
 };
-use crate::l1::bindings::RealTimeInbox::{self, RealTimeInboxInstance};
 use pacaya::l1::traits::{OperatorError, PreconfOperator};
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
@@ -75,8 +77,7 @@ impl ELTrait for ExecutionLayer {
         .await
         .map_err(|e| Error::msg(format!("Failed to create TransactionMonitor: {e}")))?;
 
-        let realtime_inbox =
-            RealTimeInbox::new(specific_config.realtime_inbox, provider.clone());
+        let realtime_inbox = RealTimeInbox::new(specific_config.realtime_inbox, provider.clone());
 
         let config = realtime_inbox
             .getConfig()
@@ -322,9 +323,8 @@ impl L1BridgeHandlerOps for ExecutionLayer {
                             topics.clone(),
                             log.data.clone().unwrap_or_default(),
                         );
-                        let decoded = MessageSent::decode_log_data(&log_data).map_err(|e| {
-                            anyhow!("Failed to decode MessageSent event L1: {e}")
-                        })?;
+                        let decoded = MessageSent::decode_log_data(&log_data)
+                            .map_err(|e| anyhow!("Failed to decode MessageSent event L1: {e}"))?;
 
                         message = Some(decoded.message);
                     } else if topics[0] == SignalSent::SIGNATURE_HASH {
@@ -332,9 +332,8 @@ impl L1BridgeHandlerOps for ExecutionLayer {
                             topics.clone(),
                             log.data.clone().unwrap_or_default(),
                         );
-                        let decoded = SignalSent::decode_log_data(&log_data).map_err(|e| {
-                            anyhow!("Failed to decode SignalSent event L1: {e}")
-                        })?;
+                        let decoded = SignalSent::decode_log_data(&log_data)
+                            .map_err(|e| anyhow!("Failed to decode SignalSent event L1: {e}"))?;
 
                         slot = Some(decoded.slot);
                     }

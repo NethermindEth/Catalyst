@@ -45,9 +45,9 @@ sol! {
 /// Each variant maps to a bit flag used in `SubProof.proofBitFlag`.
 #[derive(Debug, Clone, Copy)]
 pub enum ProofType {
-    Risc0,  // 0b00000001
-    Sp1,    // 0b00000010
-    Zisk,   // 0b00000100
+    Risc0, // 0b00000001
+    Sp1,   // 0b00000010
+    Zisk,  // 0b00000100
 }
 
 impl ProofType {

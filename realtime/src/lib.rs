@@ -125,7 +125,10 @@ pub async fn create_realtime_node(
         .execution_layer
         .get_last_finalized_block_hash()
         .await?;
-    info!("Initial lastFinalizedBlockHash: {}", last_finalized_block_hash);
+    info!(
+        "Initial lastFinalizedBlockHash: {}",
+        last_finalized_block_hash
+    );
 
     let preconf_only = realtime_config.preconf_only;
     let proof_request_bypass = realtime_config.proof_request_bypass;

@@ -208,9 +208,7 @@ impl BridgeHandler {
     /// If `chainId` matches L1, simulates on L1 to extract bridge message (L1→L2 deposit).
     /// If `chainId` matches L2, returns it for direct L2 block inclusion (bridge-out).
     /// If `chainId` is 0 or missing, defaults to L1 (backwards compatible).
-    pub async fn next_user_op_routed(
-        &mut self,
-    ) -> Result<Option<UserOpRouting>, anyhow::Error> {
+    pub async fn next_user_op_routed(&mut self) -> Result<Option<UserOpRouting>, anyhow::Error> {
         let Ok(user_op) = self.rx.try_recv() else {
             return Ok(None);
         };

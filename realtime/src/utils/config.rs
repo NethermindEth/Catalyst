@@ -33,16 +33,16 @@ impl ConfigTrait for RealtimeConfig {
         let proposer_multicall = read_contract_address("PROPOSER_MULTICALL_ADDRESS")?;
         let bridge = read_contract_address("L1_BRIDGE_ADDRESS")?;
 
-        let raiko_url = std::env::var("RAIKO_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".to_string());
+        let raiko_url =
+            std::env::var("RAIKO_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
         let raiko_api_key = std::env::var("RAIKO_API_KEY").ok();
         let proof_type: ProofType = std::env::var("PROOF_TYPE")
             .unwrap_or_else(|_| "sp1".to_string())
             .parse()?;
-        let raiko_network = std::env::var("RAIKO_L2_NETWORK")
-            .unwrap_or_else(|_| "taiko_mainnet".to_string());
-        let raiko_l1_network = std::env::var("RAIKO_L1_NETWORK")
-            .unwrap_or_else(|_| "ethereum".to_string());
+        let raiko_network =
+            std::env::var("RAIKO_L2_NETWORK").unwrap_or_else(|_| "taiko_mainnet".to_string());
+        let raiko_l1_network =
+            std::env::var("RAIKO_L1_NETWORK").unwrap_or_else(|_| "ethereum".to_string());
 
         let raiko_poll_interval_ms: u64 = std::env::var("RAIKO_POLL_INTERVAL_MS")
             .ok()
@@ -85,7 +85,12 @@ impl fmt::Display for RealtimeConfig {
         writeln!(f, "RealTime inbox: {:#?}", self.realtime_inbox)?;
         writeln!(f, "Proposer multicall: {:#?}", self.proposer_multicall)?;
         writeln!(f, "Raiko URL: {}", self.raiko_url)?;
-        writeln!(f, "Proof type: {} (bit flag: {})", self.proof_type, self.proof_type.proof_bit_flag())?;
+        writeln!(
+            f,
+            "Proof type: {} (bit flag: {})",
+            self.proof_type,
+            self.proof_type.proof_bit_flag()
+        )?;
         writeln!(f, "Preconf only: {}", self.preconf_only)?;
         writeln!(f, "Proof request bypass: {}", self.proof_request_bypass)?;
         Ok(())

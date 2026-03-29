@@ -8,12 +8,9 @@ use crate::l1::bindings::ICheckpointStore::Checkpoint;
 use crate::l2::execution_layer::L2BridgeHandlerOps;
 use crate::node::proposal_manager::bridge_handler::UserOp;
 use crate::raiko::RaikoClient;
-use crate::{
-    l1::execution_layer::ExecutionLayer,
-    l2::taiko::Taiko,
-};
-use alloy::primitives::{B256, FixedBytes};
+use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
 use alloy::primitives::aliases::U48;
+use alloy::primitives::{B256, FixedBytes};
 use anyhow::Error;
 use async_submitter::AsyncSubmitter;
 use batch_builder::BatchBuilder;
@@ -143,9 +140,13 @@ impl BatchManager {
             return Ok(());
         }
 
-        self.batch_builder.finalize_if_needed(submit_only_full_batches);
+        self.batch_builder
+            .finalize_if_needed(submit_only_full_batches);
 
-        let Some(batch) = self.batch_builder.pop_oldest_batch(self.last_finalized_block_hash) else {
+        let Some(batch) = self
+            .batch_builder
+            .pop_oldest_batch(self.last_finalized_block_hash)
+        else {
             return Ok(());
         };
 
@@ -180,7 +181,10 @@ impl BatchManager {
     /// Drop all finalized batches without submitting. Used in PRECONF_ONLY mode.
     pub fn drain_finalized_batches(&mut self) {
         self.batch_builder.finalize_if_needed(false);
-        while let Some(batch) = self.batch_builder.pop_oldest_batch(self.last_finalized_block_hash) {
+        while let Some(batch) = self
+            .batch_builder
+            .pop_oldest_batch(self.last_finalized_block_hash)
+        {
             info!(
                 "PRECONF_ONLY: dropping batch with {} blocks",
                 batch.l2_blocks.len(),
@@ -529,7 +533,6 @@ impl BatchManager {
         self.last_finalized_block_hash = last_finalized_hash;
         Ok(())
     }
-
 
     pub async fn reanchor_block(
         &mut self,

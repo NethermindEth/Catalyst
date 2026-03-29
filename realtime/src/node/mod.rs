@@ -177,10 +177,7 @@ impl Node {
                         } else {
                             error!("Async submission failed: {}. Restarting node.", e);
                             self.cancel_token.cancel_on_critical_error();
-                            return Err(anyhow::anyhow!(
-                                "Async submission failed: {}",
-                                e
-                            ));
+                            return Err(anyhow::anyhow!("Async submission failed: {}", e));
                         }
                     }
                 }
@@ -248,12 +245,8 @@ impl Node {
                 .await
         {
             if let Some(transaction_error) = err.downcast_ref::<TransactionError>() {
-                self.handle_transaction_error(
-                    transaction_error,
-                    &current_status,
-                    &l2_slot_info,
-                )
-                .await?;
+                self.handle_transaction_error(transaction_error, &current_status, &l2_slot_info)
+                    .await?;
             } else {
                 return Err(err);
             }
@@ -296,9 +289,7 @@ impl Node {
             }
             TransactionError::UnsupportedTransactionType => {
                 self.cancel_token.cancel_on_critical_error();
-                Err(anyhow::anyhow!(
-                    "Unsupported transaction type"
-                ))
+                Err(anyhow::anyhow!("Unsupported transaction type"))
             }
             TransactionError::GetBlockNumberFailed => {
                 self.cancel_token.cancel_on_critical_error();

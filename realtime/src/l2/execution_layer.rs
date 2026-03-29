@@ -7,8 +7,7 @@ use crate::shared_abi::bindings::{
 };
 use alloy::{
     consensus::{
-        SignableTransaction, Transaction as AnchorTransaction, TxEnvelope,
-        transaction::Recovered,
+        SignableTransaction, Transaction as AnchorTransaction, TxEnvelope, transaction::Recovered,
     },
     primitives::{Address, B256, Bytes, FixedBytes},
     providers::{DynProvider, Provider},
@@ -245,7 +244,10 @@ impl L2ExecutionLayer {
         use alloy::signers::local::PrivateKeySigner;
         use std::str::FromStr;
 
-        debug!("Constructing L2 UserOp execution tx for submitter={}", user_op.submitter);
+        debug!(
+            "Constructing L2 UserOp execution tx for submitter={}",
+            user_op.submitter
+        );
 
         let signer_address = self.l2_call_signer.get_address();
 

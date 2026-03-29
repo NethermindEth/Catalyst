@@ -9,8 +9,8 @@ use alloy::primitives::B256;
 use anyhow::Error;
 use common::l1::ethereum_l1::EthereumL1;
 use std::sync::Arc;
-use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use taiko_protocol::shasta::BlobCoder;
+use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -117,10 +117,10 @@ async fn submission_task(
 ) -> Result<SubmissionResult, Error> {
     // Step 1: Fetch ZK proof from Raiko (or bypass)
     if proposal.zk_proof.is_none() {
-        let l2_block_numbers: Vec<u64> = (proposal.checkpoint.blockNumber.to::<u64>()
-            - u64::try_from(proposal.l2_blocks.len())? + 1
-            ..=proposal.checkpoint.blockNumber.to::<u64>())
-            .collect();
+        let l2_block_numbers: Vec<u64> =
+            (proposal.checkpoint.blockNumber.to::<u64>() - u64::try_from(proposal.l2_blocks.len())?
+                + 1..=proposal.checkpoint.blockNumber.to::<u64>())
+                .collect();
 
         // Build the blob sidecar (same as proposal_tx_builder) to get blob hashes and raw data
         let mut block_manifests = Vec::with_capacity(proposal.l2_blocks.len());
@@ -142,8 +142,7 @@ async fn submission_task(
             blocks: block_manifests,
         };
         let manifest_data = manifest.encode_and_compress()?;
-        let sidecar_builder: SidecarBuilder<BlobCoder> =
-            SidecarBuilder::from_slice(&manifest_data);
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
         let sidecar: alloy::eips::eip4844::BlobTransactionSidecar = sidecar_builder.build()?;
 
         // Extract versioned blob hashes
@@ -173,7 +172,10 @@ async fn submission_task(
             l2_block_numbers,
             proof_type: raiko_client.proof_type.raiko_proof_type().to_string(),
             max_anchor_block_number: proposal.max_anchor_block_number,
-            last_finalized_block_hash: format!("0x{}", hex::encode(proposal.last_finalized_block_hash)),
+            last_finalized_block_hash: format!(
+                "0x{}",
+                hex::encode(proposal.last_finalized_block_hash)
+            ),
             basefee_sharing_pctg,
             network: None,
             l1_network: None,
@@ -199,7 +201,9 @@ async fn submission_task(
 
             std::fs::write("/tmp/raiko_request.json", &json)?;
 
-            let api_key_header = raiko_client.api_key.as_ref()
+            let api_key_header = raiko_client
+                .api_key
+                .as_ref()
                 .map(|k| format!("  -H 'X-API-KEY: {}' \\\n", k))
                 .unwrap_or_default();
             let curl_script = format!(

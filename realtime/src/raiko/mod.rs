@@ -79,12 +79,8 @@ pub struct RaikoResponse {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub enum RaikoData {
-    Proof {
-        proof: RaikoProof,
-    },
-    Status {
-        status: String,
-    },
+    Proof { proof: RaikoProof },
+    Status { status: String },
 }
 
 #[derive(Deserialize)]
@@ -135,13 +131,14 @@ impl RaikoClient {
                 http_status,
                 raw_body
             );
-            let body: RaikoResponse = serde_json::from_str(&raw_body)
-                .map_err(|e| anyhow::anyhow!(
+            let body: RaikoResponse = serde_json::from_str(&raw_body).map_err(|e| {
+                anyhow::anyhow!(
                     "Failed to parse Raiko response (HTTP {}): {} | body: {}",
                     http_status,
                     e,
                     raw_body
-                ))?;
+                )
+            })?;
 
             if body.status == "error" {
                 return Err(anyhow::anyhow!(
