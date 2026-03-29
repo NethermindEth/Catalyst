@@ -30,7 +30,7 @@ use common::{
     },
 };
 use pacaya::l2::config::TaikoConfig;
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
 use tracing::{debug, trace};
 

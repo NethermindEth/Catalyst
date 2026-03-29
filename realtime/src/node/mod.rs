@@ -33,6 +33,7 @@ pub struct Node {
     taiko: Arc<Taiko>,
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
+    #[allow(dead_code)]
     metrics: Arc<Metrics>,
     proposal_manager: BatchManager,
     head_verifier: HeadVerifier,

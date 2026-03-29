@@ -35,6 +35,7 @@ pub struct L2ExecutionLayer {
     pub bridge: Bridge::BridgeInstance<DynProvider>,
     pub signal_service: Address,
     pub chain_id: u64,
+    #[allow(dead_code)]
     pub config: TaikoConfig,
     l2_call_signer: Arc<Signer>,
 }
@@ -195,6 +196,7 @@ impl L2ExecutionLayer {
         Ok(tx_data)
     }
 
+    #[allow(dead_code)]
     pub async fn get_head_l1_origin(&self) -> Result<u64, Error> {
         let response = self
             .provider
@@ -217,6 +219,7 @@ impl L2ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to parse 'blockID' as u64: {}", e))
     }
 
+    #[allow(dead_code)]
     pub async fn get_last_synced_block_params_from_geth(&self) -> Result<Checkpoint, Error> {
         self.get_latest_anchor_transaction_input()
             .await
@@ -224,6 +227,7 @@ impl L2ExecutionLayer {
             .and_then(|input| Self::decode_block_params_from_tx_data(&input))
     }
 
+    #[allow(dead_code)]
     pub fn decode_block_params_from_tx_data(data: &[u8]) -> Result<Checkpoint, Error> {
         let tx_data =
             <Anchor::anchorV4WithSignalSlotsCall as alloy::sol_types::SolCall>::abi_decode_validate(
@@ -450,7 +454,7 @@ impl L2BridgeHandlerOps for L2ExecutionLayer {
 
         let proof = self
             .provider
-            .get_proof(self.signal_service, vec![slot.into()])
+            .get_proof(self.signal_service, vec![slot])
             .block_id(block_id.into())
             .await
             .map_err(|e| anyhow::anyhow!("eth_getProof failed for signal slot: {e}"))?;

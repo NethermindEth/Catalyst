@@ -10,6 +10,7 @@ use std::time::Instant;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
 
+#[allow(dead_code)]
 pub type Proposals = VecDeque<Proposal>;
 
 #[derive(Default, Clone)]

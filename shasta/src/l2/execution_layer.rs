@@ -411,7 +411,9 @@ impl L2BridgeHandlerOps for L2ExecutionLayer {
 
         // Decode MessageSent event
         let message = {
-            let log = bridge_logs.first().unwrap();
+            let log = bridge_logs
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("bridge_logs is empty despite non-empty check"))?;
             let log_data = alloy::primitives::LogData::new_unchecked(
                 log.topics().to_vec(),
                 log.data().data.clone(),
@@ -423,7 +425,9 @@ impl L2BridgeHandlerOps for L2ExecutionLayer {
 
         // Decode SignalSent event
         let slot = {
-            let log = signal_logs.first().unwrap();
+            let log = signal_logs
+                .first()
+                .ok_or_else(|| anyhow::anyhow!("signal_logs is empty despite non-empty check"))?;
             let log_data = alloy::primitives::LogData::new_unchecked(
                 log.topics().to_vec(),
                 log.data().data.clone(),

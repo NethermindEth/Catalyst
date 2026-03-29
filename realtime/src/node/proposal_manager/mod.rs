@@ -21,9 +21,8 @@ use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
     l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse},
     shared::{
-        anchor_block_info::AnchorBlockInfo,
-        l2_block_v2::{L2BlockV2, L2BlockV2Draft},
-        l2_tx_lists::{self, PreBuiltTxList},
+        anchor_block_info::AnchorBlockInfo, l2_block_v2::L2BlockV2Draft,
+        l2_tx_lists::PreBuiltTxList,
     },
     utils::cancellation_token::CancellationToken,
 };
@@ -42,7 +41,9 @@ pub struct BatchManager {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
     l1_height_lag: u64,
+    #[allow(dead_code)]
     metrics: Arc<Metrics>,
+    #[allow(dead_code)]
     cancel_token: CancellationToken,
     last_finalized_block_hash: B256,
 }
@@ -541,6 +542,7 @@ impl BatchManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn reanchor_block(
         &mut self,
         pending_tx_list: PreBuiltTxList,

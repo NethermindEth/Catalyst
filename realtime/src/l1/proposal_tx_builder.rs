@@ -19,9 +19,8 @@ use alloy::{
     rpc::types::TransactionRequest,
     sol_types::SolValue,
 };
-use alloy_json_rpc::RpcError;
 use anyhow::Error;
-use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
+use common::l1::fees_per_gas::FeesPerGas;
 use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},

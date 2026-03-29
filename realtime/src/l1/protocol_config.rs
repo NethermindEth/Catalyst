@@ -4,7 +4,9 @@ use alloy::primitives::Address;
 #[derive(Clone, Default)]
 pub struct ProtocolConfig {
     pub basefee_sharing_pctg: u8,
+    #[allow(dead_code)]
     pub proof_verifier: Address,
+    #[allow(dead_code)]
     pub signal_service: Address,
 }
 
@@ -24,6 +26,7 @@ impl ProtocolConfig {
     }
 
     /// Use the EVM blockhash() 256-block limit as the max anchor height offset.
+    #[allow(dead_code)]
     pub fn get_max_anchor_height_offset(&self) -> u64 {
         256
     }

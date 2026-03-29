@@ -45,6 +45,7 @@ pub struct ExecutionLayer {
     pub transaction_monitor: TransactionMonitor,
     contract_addresses: ContractAddresses,
     realtime_inbox: RealTimeInboxInstance<DynProvider>,
+    #[allow(dead_code)]
     raiko_client: RaikoClient,
     proof_type: crate::l1::bindings::ProofType,
 }
@@ -119,8 +120,6 @@ impl ELTrait for ExecutionLayer {
     }
 }
 
-use common::config::ConfigTrait;
-
 impl PreconferProvider for ExecutionLayer {
     async fn get_preconfer_wallet_eth(&self) -> Result<alloy::primitives::U256, Error> {
         self.common()
@@ -176,6 +175,7 @@ impl PreconfOperator for ExecutionLayer {
 }
 
 impl ExecutionLayer {
+    #[allow(dead_code)]
     pub fn get_raiko_client(&self) -> &RaikoClient {
         &self.raiko_client
     }

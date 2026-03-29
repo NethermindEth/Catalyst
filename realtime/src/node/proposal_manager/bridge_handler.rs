@@ -84,6 +84,7 @@ pub struct L2Call {
 
 /// Result of routing a UserOp: either it targets L1 (and triggers an L2 bridge call)
 /// or it targets L2 (for direct execution on L2, e.g. bridge-out).
+#[allow(clippy::large_enum_variant)]
 pub enum UserOpRouting {
     /// L1 UserOp that triggers a bridge deposit (L1→L2).
     L1ToL2 { user_op: UserOp, l2_call: L2Call },

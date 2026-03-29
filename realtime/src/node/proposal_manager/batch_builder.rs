@@ -20,6 +20,7 @@ pub struct BatchBuilder {
     proposals_to_send: VecDeque<Proposal>,
     current_proposal: Option<Proposal>,
     slot_clock: Arc<SlotClock>,
+    #[allow(dead_code)]
     metrics: Arc<Metrics>,
 }
 
@@ -120,6 +121,7 @@ impl BatchBuilder {
 
     /// Add a pre-built L2BlockV2 directly to the current proposal.
     /// Used during recovery to bypass the draft/payload flow.
+    #[allow(dead_code)]
     pub fn add_recovered_l2_block(&mut self, l2_block: L2BlockV2) -> Result<(), Error> {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
             current_proposal.total_bytes += l2_block.prebuilt_tx_list.bytes_length;

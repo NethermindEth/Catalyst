@@ -21,6 +21,7 @@ use common::{
 use std::{collections::VecDeque, sync::Arc};
 use tracing::{debug, info, trace, warn};
 
+#[allow(dead_code)]
 pub struct BatchBuilder {
     config: BatchBuilderConfig,
     proposals_to_send: VecDeque<Proposal>,
@@ -29,6 +30,7 @@ pub struct BatchBuilder {
     metrics: Arc<Metrics>,
 }
 
+#[allow(dead_code)]
 impl BatchBuilder {
     pub fn new(
         config: BatchBuilderConfig,

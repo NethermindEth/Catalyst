@@ -107,7 +107,13 @@ impl ProposalTxBuilder {
         // Add user op to multicall
         // Note: Only adding the first call, since more calls are not expected for the POC
         if !batch.user_ops.is_empty() {
-            let user_op_call = self.build_user_op_call(batch.user_ops.first().unwrap().clone());
+            let user_op_call = self.build_user_op_call(
+                batch
+                    .user_ops
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("user_ops is empty despite non-empty check"))?
+                    .clone(),
+            );
             info!("Added user op to Multicall: {:?}", &user_op_call);
             multicalls.push(user_op_call);
         }
@@ -123,7 +129,11 @@ impl ProposalTxBuilder {
         // Add L1 calls initiated by L2 blocks in the proposal
         if !batch.l1_calls.is_empty() {
             let l1_call = self.build_l1_call_call(
-                batch.l1_calls.first().unwrap().clone(),
+                batch
+                    .l1_calls
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("l1_calls is empty despite non-empty check"))?
+                    .clone(),
                 contract_addresses.bridge,
             );
             info!("Added L1 call to Multicall: {:?}", &l1_call);
@@ -153,7 +163,7 @@ impl ProposalTxBuilder {
         let mut signature_bytes = [0_u8; 65];
         signature_bytes[..32].copy_from_slice(signature.r().to_be_bytes::<32>().as_slice());
         signature_bytes[32..64].copy_from_slice(signature.s().to_be_bytes::<32>().as_slice());
-        signature_bytes[64] = (signature.v() as u8) + 27;
+        signature_bytes[64] = u8::from(signature.v()) + 27;
 
         let mut proof_data = Vec::with_capacity(161);
         proof_data.extend_from_slice(&checkpoint_encoded);
@@ -215,7 +225,7 @@ impl ProposalTxBuilder {
                     .context("blobs len try_into")?,
                 offset: U24::ZERO,
             },
-            numForcedInclusions: u16::from(batch.num_forced_inclusion),
+            numForcedInclusions: batch.num_forced_inclusion,
         };
 
         let inbox = SurgeInbox::new(inbox_address, self.provider.clone());
