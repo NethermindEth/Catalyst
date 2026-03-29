@@ -125,7 +125,7 @@ impl RaikoClient {
             let resp = req.send().await?;
             let http_status = resp.status();
             let raw_body = resp.text().await?;
-            warn!(
+            debug!(
                 "Raiko response (attempt {}): HTTP {} | body: {}",
                 attempt + 1,
                 http_status,

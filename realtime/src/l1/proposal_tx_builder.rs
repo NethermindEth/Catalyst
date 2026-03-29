@@ -87,10 +87,8 @@ impl ProposalTxBuilder {
     ) -> Result<TransactionRequest, Error> {
         let mut multicalls: Vec<Multicall::Call> = vec![];
 
-        // Add user op to multicall
-        if !batch.user_ops.is_empty()
-            && let Some(user_op) = batch.user_ops.first()
-        {
+        // Add all user ops to multicall
+        for user_op in &batch.user_ops {
             let user_op_call = self.build_user_op_call(user_op.clone());
             info!("Added user op to Multicall: {:?}", &user_op_call);
             multicalls.push(user_op_call);
@@ -115,13 +113,11 @@ impl ProposalTxBuilder {
         info!("Added proposal to Multicall: {:?}", &propose_call);
         multicalls.push(propose_call.clone());
 
-        // Add L1 calls
-        if !batch.l1_calls.is_empty()
-            && let Some(l1_call) = batch.l1_calls.first()
-        {
+        // Add all L1 calls
+        for l1_call in &batch.l1_calls {
             let l1_call_call = self.build_l1_call_call(l1_call.clone(), contract_addresses.bridge);
             info!("Added L1 call to Multicall: {:?}", &l1_call_call);
-            multicalls.push(l1_call_call.clone());
+            multicalls.push(l1_call_call);
         }
 
         let multicall = Multicall::new(contract_addresses.proposer_multicall, &self.provider);

@@ -99,11 +99,8 @@ impl ELTrait for ExecutionLayer {
             bridge: specific_config.bridge,
         };
 
-        // Read Raiko config from environment
-        let realtime_config = crate::utils::config::RealtimeConfig::read_env_variables()
-            .map_err(|e| anyhow::anyhow!("Failed to read RealtimeConfig for Raiko: {e}"))?;
-        let proof_type = realtime_config.proof_type;
-        let raiko_client = RaikoClient::new(&realtime_config);
+        let proof_type = specific_config.proof_type;
+        let raiko_client = specific_config.raiko_client;
 
         Ok(Self {
             common,

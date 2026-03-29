@@ -107,7 +107,7 @@ pub async fn create_realtime_node(
             config
                 .l1_rpc_urls
                 .first()
-                .expect("L1 RPC URL is required")
+                .ok_or_else(|| anyhow::anyhow!("L1 RPC URL is required"))?
                 .clone(),
             config.taiko_geth_rpc_url.clone(),
             realtime_config.realtime_inbox,
@@ -135,6 +135,7 @@ pub async fn create_realtime_node(
 
     let preconf_only = realtime_config.preconf_only;
     let proof_request_bypass = realtime_config.proof_request_bypass;
+    let bridge_rpc_addr = realtime_config.bridge_rpc_addr.clone();
     let raiko_client = raiko::RaikoClient::new(&realtime_config);
 
     let l1_chain_id = {
@@ -157,6 +158,7 @@ pub async fn create_realtime_node(
         protocol_config.basefee_sharing_pctg,
         preconf_only,
         proof_request_bypass,
+        bridge_rpc_addr,
         l1_chain_id,
         l2_chain_id,
     )

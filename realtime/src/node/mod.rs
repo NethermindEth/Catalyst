@@ -56,6 +56,7 @@ impl Node {
         basefee_sharing_pctg: u8,
         preconf_only: bool,
         proof_request_bypass: bool,
+        bridge_rpc_addr: String,
         l1_chain_id: u64,
         l2_chain_id: u64,
     ) -> Result<Self, Error> {
@@ -87,6 +88,7 @@ impl Node {
             raiko_client,
             basefee_sharing_pctg,
             proof_request_bypass,
+            bridge_rpc_addr,
             l1_chain_id,
             l2_chain_id,
         )

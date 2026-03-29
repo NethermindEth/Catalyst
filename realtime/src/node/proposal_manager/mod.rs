@@ -60,6 +60,7 @@ impl BatchManager {
         raiko_client: RaikoClient,
         basefee_sharing_pctg: u8,
         proof_request_bypass: bool,
+        bridge_rpc_addr: String,
         l1_chain_id: u64,
         l2_chain_id: u64,
     ) -> Result<Self, Error> {
@@ -77,7 +78,13 @@ impl BatchManager {
             config.max_anchor_height_offset,
         );
 
-        let bridge_addr: SocketAddr = "0.0.0.0:4545".parse()?;
+        let bridge_addr: SocketAddr = bridge_rpc_addr.parse().map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to parse BRIDGE_RPC_ADDR '{}': {}",
+                bridge_rpc_addr,
+                e
+            )
+        })?;
         let bridge_handler = Arc::new(Mutex::new(
             BridgeHandler::new(
                 bridge_addr,
