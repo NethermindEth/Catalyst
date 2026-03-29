@@ -234,6 +234,67 @@ impl L2ExecutionLayer {
     }
 }
 
+// Surge: L2 UserOp execution
+
+use crate::node::proposal_manager::bridge_handler::UserOp;
+
+impl L2ExecutionLayer {
+    /// Construct a signed L2 transaction that executes a UserOp on L2
+    /// by forwarding the calldata to the submitter smart wallet.
+    pub async fn construct_l2_user_op_tx(&self, user_op: &UserOp) -> Result<Transaction, Error> {
+        use alloy::signers::local::PrivateKeySigner;
+        use std::str::FromStr;
+
+        debug!("Constructing L2 UserOp execution tx for submitter={}", user_op.submitter);
+
+        let signer_address = self.l2_call_signer.get_address();
+
+        let nonce = self
+            .provider
+            .get_transaction_count(signer_address)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get nonce for L2 UserOp tx: {}", e))?;
+
+        let typed_tx = alloy::consensus::TxEip1559 {
+            chain_id: self.chain_id,
+            nonce,
+            gas_limit: 1_000_000,
+            max_fee_per_gas: 1_000_000_000,
+            max_priority_fee_per_gas: 0,
+            to: alloy::primitives::TxKind::Call(user_op.submitter),
+            value: alloy::primitives::U256::ZERO,
+            input: user_op.calldata.clone(),
+            access_list: Default::default(),
+        };
+
+        let signature = match self.l2_call_signer.as_ref() {
+            Signer::Web3signer(web3signer, address) => {
+                let signature_bytes = web3signer.sign_transaction(&typed_tx, *address).await?;
+                Signature::try_from(signature_bytes.as_slice())
+                    .map_err(|e| anyhow::anyhow!("Failed to parse signature: {}", e))?
+            }
+            Signer::PrivateKey(private_key, _) => {
+                let signer = PrivateKeySigner::from_str(private_key.as_str())?;
+                AlloySigner::sign_hash(&signer, &typed_tx.signature_hash()).await?
+            }
+        };
+
+        let sig_tx = typed_tx.into_signed(signature);
+        let tx_envelope = TxEnvelope::from(sig_tx);
+
+        debug!("L2 UserOp execution tx hash: {}", tx_envelope.tx_hash());
+
+        let tx = Transaction {
+            inner: Recovered::new_unchecked(tx_envelope, signer_address),
+            block_hash: None,
+            block_number: None,
+            transaction_index: None,
+            effective_gas_price: None,
+        };
+        Ok(tx)
+    }
+}
+
 // Surge: L2 EL ops for Bridge Handler
 
 pub trait L2BridgeHandlerOps {

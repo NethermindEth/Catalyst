@@ -83,6 +83,7 @@ pub struct L2Call {
 #[derive(Clone)]
 struct BridgeRpcContext {
     tx: mpsc::Sender<UserOp>,
+    l2_tx: mpsc::Sender<UserOp>,
     status_store: UserOpStatusStore,
     next_id: Arc<AtomicU64>,
 }
@@ -91,6 +92,7 @@ pub struct BridgeHandler {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     taiko: Arc<Taiko>,
     rx: Receiver<UserOp>,
+    l2_rx: Receiver<UserOp>,
     status_store: UserOpStatusStore,
 }
 
@@ -102,10 +104,12 @@ impl BridgeHandler {
         cancellation_token: CancellationToken,
     ) -> Result<Self, anyhow::Error> {
         let (tx, rx) = mpsc::channel::<UserOp>(1024);
+        let (l2_tx, l2_rx) = mpsc::channel::<UserOp>(1024);
         let status_store = UserOpStatusStore::open("data/user_op_status")?;
 
         let rpc_context = BridgeRpcContext {
             tx,
+            l2_tx,
             status_store: status_store.clone(),
             next_id: Arc::new(AtomicU64::new(1)),
         };
@@ -165,6 +169,33 @@ impl BridgeHandler {
             }
         })?;
 
+        module.register_async_method("surge_sendL2UserOp", |params, ctx, _| async move {
+            let mut user_op: UserOp = params.parse()?;
+            let id = ctx.next_id.fetch_add(1, Ordering::Relaxed);
+            user_op.id = id;
+
+            info!(
+                "Received L2 UserOp: id={}, submitter={:?}, calldata_len={}",
+                id,
+                user_op.submitter,
+                user_op.calldata.len()
+            );
+
+            ctx.status_store.set(id, &UserOpStatus::Pending);
+
+            ctx.l2_tx.send(user_op).await.map_err(|e| {
+                error!("Failed to send L2 UserOp to queue: {}", e);
+                ctx.status_store.remove(id);
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32000,
+                    "Failed to queue L2 user operation",
+                    Some(format!("{}", e)),
+                )
+            })?;
+
+            Ok::<u64, jsonrpsee::types::ErrorObjectOwned>(id)
+        })?;
+
         info!("Bridge handler RPC server starting on {}", addr);
         let handle = server.start(module);
 
@@ -178,6 +209,7 @@ impl BridgeHandler {
             ethereum_l1,
             taiko,
             rx,
+            l2_rx,
             status_store,
         })
     }
@@ -245,5 +277,14 @@ impl BridgeHandler {
 
     pub fn has_pending_user_ops(&self) -> bool {
         !self.rx.is_empty()
+    }
+
+    /// Dequeue the next L2 UserOp (for bridge-out / L2 execution).
+    pub fn next_l2_user_op(&mut self) -> Option<UserOp> {
+        self.l2_rx.try_recv().ok()
+    }
+
+    pub fn has_pending_l2_user_ops(&self) -> bool {
+        !self.l2_rx.is_empty()
     }
 }

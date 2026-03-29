@@ -260,7 +260,8 @@ impl BatchManager {
     }
 
     pub async fn has_pending_user_ops(&self) -> bool {
-        self.bridge_handler.lock().await.has_pending_user_ops()
+        let handler = self.bridge_handler.lock().await;
+        handler.has_pending_user_ops() || handler.has_pending_l2_user_ops()
     }
 
     async fn add_pending_l2_call_to_draft_block(
@@ -298,6 +299,59 @@ impl BatchManager {
         Ok(None)
     }
 
+    /// Check for pending L2 UserOps (bridge-out) and insert their execution
+    /// transactions into the draft block's tx list.
+    async fn add_pending_l2_user_ops_to_draft_block(
+        &mut self,
+        l2_draft_block: &mut L2BlockV2Draft,
+    ) -> Result<(), anyhow::Error> {
+        // Collect all pending L2 UserOps while holding the lock, then release it
+        let (l2_user_ops, status_store) = {
+            let mut handler = self.bridge_handler.lock().await;
+            let mut ops = vec![];
+            while let Some(op) = handler.next_l2_user_op() {
+                ops.push(op);
+            }
+            (ops, handler.status_store())
+        };
+
+        for l2_user_op in l2_user_ops {
+            info!(
+                "Processing L2 UserOp id={} submitter={}",
+                l2_user_op.id, l2_user_op.submitter
+            );
+
+            match self
+                .taiko
+                .l2_execution_layer()
+                .construct_l2_user_op_tx(&l2_user_op)
+                .await
+            {
+                Ok(tx) => {
+                    info!("Inserting L2 UserOp execution tx into block tx list");
+                    l2_draft_block.prebuilt_tx_list.tx_list.push(tx);
+                    status_store.set(
+                        l2_user_op.id,
+                        &bridge_handler::UserOpStatus::Processing {
+                            tx_hash: FixedBytes::default(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    error!("Failed to construct L2 UserOp tx: {}", e);
+                    status_store.set(
+                        l2_user_op.id,
+                        &bridge_handler::UserOpStatus::Rejected {
+                            reason: format!("Failed to construct L2 tx: {}", e),
+                        },
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     async fn add_draft_block_to_proposal(
         &mut self,
         mut l2_draft_block: L2BlockV2Draft,
@@ -306,7 +360,8 @@ impl BatchManager {
     ) -> Result<BuildPreconfBlockResponse, Error> {
         let mut anchor_signal_slots: Vec<FixedBytes<32>> = vec![];
 
-        debug!("Checking for pending L2 calls");
+        // 1. L1→L2 deposits: check for pending L1 UserOps that trigger bridge messages
+        debug!("Checking for pending L2 calls (L1→L2 deposits)");
         if let Some((user_op_data, signal_slot)) = self
             .add_pending_l2_call_to_draft_block(&mut l2_draft_block)
             .await?
@@ -315,8 +370,14 @@ impl BatchManager {
             self.batch_builder.add_signal_slot(signal_slot)?;
             anchor_signal_slots.push(signal_slot);
         } else {
-            debug!("No pending L2 calls");
+            debug!("No pending L1→L2 deposits");
         }
+
+        // 2. L2→L1 withdrawals: check for pending L2 UserOps (bridge-out)
+        debug!("Checking for pending L2 UserOps (L2→L1 withdrawals)");
+        self.add_pending_l2_user_ops_to_draft_block(&mut l2_draft_block)
+            .await?;
+
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
 
         match self

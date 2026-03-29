@@ -32,12 +32,6 @@ pub async fn create_realtime_node(
 ) -> Result<(), Error> {
     info!("Creating RealTime node");
 
-    if !config.disable_bridging {
-        return Err(anyhow::anyhow!(
-            "Bridging is not implemented. Exiting RealTime node creation."
-        ));
-    }
-
     let realtime_config = RealtimeConfig::read_env_variables()
         .map_err(|e| anyhow::anyhow!("Failed to read RealTime configuration: {}", e))?;
     info!("RealTime config: {}", realtime_config);
