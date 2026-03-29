@@ -34,7 +34,7 @@ pub struct Proposal {
     pub user_ops: Vec<UserOp>,
     // Surge: Signal slots to set via anchor with the proposal
     pub signal_slots: Vec<FixedBytes<32>>,
-    // Surge: L1 calls intitiated by any L2 contracts
+    // Surge: L1 calls initiated by any L2 contracts
     pub l1_calls: Vec<L1Call>,
 }
 
