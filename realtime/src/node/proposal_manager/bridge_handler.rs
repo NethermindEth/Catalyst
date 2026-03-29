@@ -80,10 +80,121 @@ pub struct L2Call {
     pub signal_slot_on_l2: FixedBytes<32>,
 }
 
+/// Result of routing a UserOp: either it targets L1 (and triggers an L2 bridge call)
+/// or it targets L2 (for direct execution on L2, e.g. bridge-out).
+pub enum UserOpRouting {
+    /// L1 UserOp that triggers a bridge deposit (L1→L2).
+    L1ToL2 { user_op: UserOp, l2_call: L2Call },
+    /// L2 UserOp for direct execution on L2 (e.g. bridge-out L2→L1).
+    L2Direct { user_op: UserOp },
+}
+
+/// Determine the target chain of a UserOp by checking the EIP-712 signature.
+///
+/// The UserOpsSubmitter uses EIP-712 with domain `(name="UserOpsSubmitter", version="1",
+/// chainId, verifyingContract=submitter)`. We decode the `executeBatch(ops[], signature)`
+/// calldata, compute the EIP-712 digest for both L1 and L2 chain IDs, and ecrecover.
+/// The chain ID that produces a valid recovery (non-zero address) is the target chain.
+fn detect_target_chain(user_op: &UserOp, l1_chain_id: u64, l2_chain_id: u64) -> Option<u64> {
+    use alloy::sol;
+    use alloy::sol_types::{SolCall, SolValue};
+
+    // ABI definition matching UserOpsSubmitter.executeBatch
+    sol! {
+        struct UserOpSol {
+            address target;
+            uint256 value;
+            bytes data;
+        }
+
+        function executeBatch(UserOpSol[] calldata _ops, bytes calldata _signature) external;
+    }
+
+    // Decode the calldata
+    let decoded = executeBatchCall::abi_decode(&user_op.calldata).ok()?;
+    let ops = &decoded._ops;
+    let signature = &decoded._signature;
+
+    if signature.len() != 65 {
+        warn!("UserOp id={}: signature length {} != 65", user_op.id, signature.len());
+        return None;
+    }
+
+    // EIP-712 type hashes
+    let userop_typehash = alloy::primitives::keccak256(
+        b"UserOp(address target,uint256 value,bytes data)",
+    );
+    let executebatch_typehash = alloy::primitives::keccak256(
+        b"ExecuteBatch(UserOp[] ops)UserOp(address target,uint256 value,bytes data)",
+    );
+
+    // Hash each op: keccak256(abi.encode(typehash, target, value, keccak256(data)))
+    let mut op_hashes = Vec::with_capacity(ops.len());
+    for op in ops {
+        let data_hash = alloy::primitives::keccak256(&op.data);
+        let encoded = (userop_typehash, op.target, op.value, data_hash).abi_encode();
+        op_hashes.push(alloy::primitives::keccak256(&encoded));
+    }
+
+    // keccak256(abi.encodePacked(opHashes))
+    let mut packed = Vec::with_capacity(op_hashes.len() * 32);
+    for h in &op_hashes {
+        packed.extend_from_slice(h.as_slice());
+    }
+    let ops_array_hash = alloy::primitives::keccak256(&packed);
+
+    // struct hash = keccak256(abi.encode(EXECUTEBATCH_TYPEHASH, ops_array_hash))
+    let struct_hash = alloy::primitives::keccak256(
+        &(executebatch_typehash, ops_array_hash).abi_encode(),
+    );
+
+    // Parse the 65-byte signature
+    let sig = alloy::signers::Signature::try_from(signature.as_ref()).ok()?;
+
+    // Try both chain IDs
+    for chain_id in [l1_chain_id, l2_chain_id] {
+        let domain_separator = compute_domain_separator(chain_id, user_op.submitter);
+
+        // EIP-712 digest: keccak256("\x19\x01" || domainSeparator || structHash)
+        let mut digest_input = Vec::with_capacity(2 + 32 + 32);
+        digest_input.extend_from_slice(&[0x19, 0x01]);
+        digest_input.extend_from_slice(domain_separator.as_slice());
+        digest_input.extend_from_slice(struct_hash.as_slice());
+        let digest = alloy::primitives::keccak256(&digest_input);
+
+        if let Ok(recovered) = sig.recover_address_from_prehash(&digest) {
+            if recovered != Address::ZERO {
+                info!(
+                    "UserOp id={}: signature valid for chain_id={} (recovered={})",
+                    user_op.id, chain_id, recovered
+                );
+                return Some(chain_id);
+            }
+        }
+    }
+
+    warn!("UserOp id={}: could not determine target chain", user_op.id);
+    None
+}
+
+/// Compute EIP-712 domain separator for UserOpsSubmitter(name="UserOpsSubmitter", version="1")
+fn compute_domain_separator(chain_id: u64, verifying_contract: Address) -> B256 {
+    use alloy::sol_types::SolValue;
+
+    let type_hash = alloy::primitives::keccak256(
+        b"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)",
+    );
+    let name_hash = alloy::primitives::keccak256(b"UserOpsSubmitter");
+    let version_hash = alloy::primitives::keccak256(b"1");
+
+    alloy::primitives::keccak256(
+        &(type_hash, name_hash, version_hash, alloy::primitives::U256::from(chain_id), verifying_contract).abi_encode(),
+    )
+}
+
 #[derive(Clone)]
 struct BridgeRpcContext {
     tx: mpsc::Sender<UserOp>,
-    l2_tx: mpsc::Sender<UserOp>,
     status_store: UserOpStatusStore,
     next_id: Arc<AtomicU64>,
 }
@@ -92,8 +203,9 @@ pub struct BridgeHandler {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     taiko: Arc<Taiko>,
     rx: Receiver<UserOp>,
-    l2_rx: Receiver<UserOp>,
     status_store: UserOpStatusStore,
+    l1_chain_id: u64,
+    l2_chain_id: u64,
 }
 
 impl BridgeHandler {
@@ -102,14 +214,14 @@ impl BridgeHandler {
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
         cancellation_token: CancellationToken,
+        l1_chain_id: u64,
+        l2_chain_id: u64,
     ) -> Result<Self, anyhow::Error> {
         let (tx, rx) = mpsc::channel::<UserOp>(1024);
-        let (l2_tx, l2_rx) = mpsc::channel::<UserOp>(1024);
         let status_store = UserOpStatusStore::open("data/user_op_status")?;
 
         let rpc_context = BridgeRpcContext {
             tx,
-            l2_tx,
             status_store: status_store.clone(),
             next_id: Arc::new(AtomicU64::new(1)),
         };
@@ -169,33 +281,6 @@ impl BridgeHandler {
             }
         })?;
 
-        module.register_async_method("surge_sendL2UserOp", |params, ctx, _| async move {
-            let mut user_op: UserOp = params.parse()?;
-            let id = ctx.next_id.fetch_add(1, Ordering::Relaxed);
-            user_op.id = id;
-
-            info!(
-                "Received L2 UserOp: id={}, submitter={:?}, calldata_len={}",
-                id,
-                user_op.submitter,
-                user_op.calldata.len()
-            );
-
-            ctx.status_store.set(id, &UserOpStatus::Pending);
-
-            ctx.l2_tx.send(user_op).await.map_err(|e| {
-                error!("Failed to send L2 UserOp to queue: {}", e);
-                ctx.status_store.remove(id);
-                jsonrpsee::types::ErrorObjectOwned::owned(
-                    -32000,
-                    "Failed to queue L2 user operation",
-                    Some(format!("{}", e)),
-                )
-            })?;
-
-            Ok::<u64, jsonrpsee::types::ErrorObjectOwned>(id)
-        })?;
-
         info!("Bridge handler RPC server starting on {}", addr);
         let handle = server.start(module);
 
@@ -209,8 +294,9 @@ impl BridgeHandler {
             ethereum_l1,
             taiko,
             rx,
-            l2_rx,
             status_store,
+            l1_chain_id,
+            l2_chain_id,
         })
     }
 
@@ -218,38 +304,74 @@ impl BridgeHandler {
         self.status_store.clone()
     }
 
-    pub async fn next_user_op_and_l2_call(
+    /// Dequeue the next UserOp and route it to the correct chain.
+    ///
+    /// Parses the EIP-712 signature in the `executeBatch` calldata to determine
+    /// which chain the UserOp targets. If signed for L1, simulates on L1 to
+    /// extract the bridge message. If signed for L2, returns it for direct
+    /// L2 block inclusion.
+    pub async fn next_user_op_routed(
         &mut self,
-    ) -> Result<Option<(UserOp, L2Call)>, anyhow::Error> {
-        if let Ok(user_op) = self.rx.try_recv() {
-            if let Some((message_from_l1, signal_slot_on_l2)) = self
-                .ethereum_l1
-                .execution_layer
-                .find_message_and_signal_slot(user_op.clone())
-                .await?
-            {
-                return Ok(Some((
-                    user_op,
-                    L2Call {
-                        message_from_l1,
-                        signal_slot_on_l2,
+    ) -> Result<Option<UserOpRouting>, anyhow::Error> {
+        let Ok(user_op) = self.rx.try_recv() else {
+            return Ok(None);
+        };
+
+        let target_chain = detect_target_chain(&user_op, self.l1_chain_id, self.l2_chain_id);
+
+        match target_chain {
+            Some(chain_id) if chain_id == self.l1_chain_id => {
+                // L1 UserOp — simulate on L1 to extract bridge message
+                if let Some((message_from_l1, signal_slot_on_l2)) = self
+                    .ethereum_l1
+                    .execution_layer
+                    .find_message_and_signal_slot(user_op.clone())
+                    .await?
+                {
+                    return Ok(Some(UserOpRouting::L1ToL2 {
+                        user_op,
+                        l2_call: L2Call {
+                            message_from_l1,
+                            signal_slot_on_l2,
+                        },
+                    }));
+                }
+
+                // L1 simulation found no bridge message — still an L1 UserOp (non-bridge)
+                warn!(
+                    "UserOp id={} targets L1 but no bridge message found, treating as L1 UserOp without bridge",
+                    user_op.id
+                );
+                self.status_store.set(
+                    user_op.id,
+                    &UserOpStatus::Rejected {
+                        reason: "L1 UserOp with no bridge message".to_string(),
                     },
-                )));
+                );
+                Ok(None)
             }
-
-            warn!(
-                "UserOp id={} rejected: no L2 call found in user op",
-                user_op.id
-            );
-            self.status_store.set(
-                user_op.id,
-                &UserOpStatus::Rejected {
-                    reason: "No L2 call found in user op".to_string(),
-                },
-            );
+            Some(chain_id) if chain_id == self.l2_chain_id => {
+                // L2 UserOp — execute directly on L2
+                info!(
+                    "UserOp id={} targets L2 (chain_id={}), queueing for L2 execution",
+                    user_op.id, chain_id
+                );
+                Ok(Some(UserOpRouting::L2Direct { user_op }))
+            }
+            _ => {
+                warn!(
+                    "UserOp id={} rejected: could not determine target chain from signature",
+                    user_op.id
+                );
+                self.status_store.set(
+                    user_op.id,
+                    &UserOpStatus::Rejected {
+                        reason: "Could not determine target chain from signature".to_string(),
+                    },
+                );
+                Ok(None)
+            }
         }
-
-        Ok(None)
     }
 
     pub async fn find_l1_call(
@@ -277,14 +399,5 @@ impl BridgeHandler {
 
     pub fn has_pending_user_ops(&self) -> bool {
         !self.rx.is_empty()
-    }
-
-    /// Dequeue the next L2 UserOp (for bridge-out / L2 execution).
-    pub fn next_l2_user_op(&mut self) -> Option<UserOp> {
-        self.l2_rx.try_recv().ok()
-    }
-
-    pub fn has_pending_l2_user_ops(&self) -> bool {
-        !self.l2_rx.is_empty()
     }
 }

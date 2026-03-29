@@ -56,6 +56,8 @@ impl Node {
         basefee_sharing_pctg: u8,
         preconf_only: bool,
         proof_request_bypass: bool,
+        l1_chain_id: u64,
+        l2_chain_id: u64,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -85,6 +87,8 @@ impl Node {
             raiko_client,
             basefee_sharing_pctg,
             proof_request_bypass,
+            l1_chain_id,
+            l2_chain_id,
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;

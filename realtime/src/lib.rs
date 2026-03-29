@@ -131,6 +131,12 @@ pub async fn create_realtime_node(
     let proof_request_bypass = realtime_config.proof_request_bypass;
     let raiko_client = raiko::RaikoClient::new(&realtime_config);
 
+    let l1_chain_id = {
+        use common::l1::traits::ELTrait;
+        ethereum_l1.execution_layer.common().chain_id()
+    };
+    let l2_chain_id = taiko.l2_execution_layer().chain_id;
+
     let node = Node::new(
         node_config,
         cancel_token.clone(),
@@ -145,6 +151,8 @@ pub async fn create_realtime_node(
         protocol_config.basefee_sharing_pctg,
         preconf_only,
         proof_request_bypass,
+        l1_chain_id,
+        l2_chain_id,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
