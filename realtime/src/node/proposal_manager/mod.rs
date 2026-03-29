@@ -320,6 +320,8 @@ impl BatchManager {
                     Ok(tx) => {
                         info!("Inserting L2 UserOp execution tx into block");
                         l2_draft_block.prebuilt_tx_list.tx_list.push(tx);
+                        // Track L2 UserOp ID for status updates after submission
+                        let _ = self.batch_builder.add_l2_user_op_id(user_op.id);
                         status_store.set(
                             user_op.id,
                             &bridge_handler::UserOpStatus::Processing {

@@ -238,6 +238,15 @@ async fn submission_task(
                     },
                 );
             }
+            // Also track L2 direct UserOps
+            for id in &proposal.l2_user_op_ids {
+                store.set(
+                    *id,
+                    &UserOpStatus::ProvingBlock {
+                        block_id: proposal.checkpoint.blockNumber.to::<u64>(),
+                    },
+                );
+            }
         }
 
         let proof = raiko_client.get_proof(&request).await?;
@@ -245,7 +254,8 @@ async fn submission_task(
     }
 
     // Step 2: Send L1 transaction
-    let user_op_ids: Vec<u64> = proposal.user_ops.iter().map(|op| op.id).collect();
+    let mut user_op_ids: Vec<u64> = proposal.user_ops.iter().map(|op| op.id).collect();
+    user_op_ids.extend(&proposal.l2_user_op_ids);
     let has_user_ops = !user_op_ids.is_empty() && status_store.is_some();
 
     let (tx_hash_sender, tx_hash_receiver) = if has_user_ops {
@@ -338,6 +348,16 @@ async fn submission_task(
                     }
                 }
             }
+
+            // Clean up status entries after 60s (client should have polled by then)
+            let cleanup_store = store.clone();
+            let cleanup_ids = user_op_ids.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+                for id in &cleanup_ids {
+                    cleanup_store.remove(*id);
+                }
+            });
         });
     }
 

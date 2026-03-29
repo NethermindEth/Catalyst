@@ -29,6 +29,7 @@ pub struct Proposal {
 
     // Surge POC fields (carried over)
     pub user_ops: Vec<UserOp>,
+    pub l2_user_op_ids: Vec<u64>,
     pub signal_slots: Vec<FixedBytes<32>>,
     pub l1_calls: Vec<L1Call>,
 
