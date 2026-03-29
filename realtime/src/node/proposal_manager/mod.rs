@@ -369,7 +369,7 @@ impl BatchManager {
             self.batch_builder.add_signal_slot(signal_slot)?;
             anchor_signal_slots.push(signal_slot);
         } else {
-            debug!("No pending UserOps");
+            debug!("No L1→L2 UserOps (L2 direct ops, if any, were handled inline)");
         }
 
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
