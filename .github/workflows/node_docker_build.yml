@@ -2,6 +2,11 @@ name: "Catalyst Node - Docker build and push"
 
 on:
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Optional image tag to promote to Docker Hub production"
+        required: false
+        type: string
   push:
     branches: [master]
     tags:
@@ -100,12 +105,16 @@ jobs:
         id: tags
         run: |
           REF="${{ github.ref }}"
+          INPUT_IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           IS_MASTER=false
           IS_TAG=false
           VERSION_TAG=""
           PROMOTE_TAGS=""
 
-          if [[ "$REF" == refs/tags/* ]]; then
+          if [[ -n "$INPUT_IMAGE_TAG" ]]; then
+            PROMOTE_TAGS="$INPUT_IMAGE_TAG"
+            echo "tag_list=type=sha,value=${{ github.sha }}" >> $GITHUB_OUTPUT
+          elif [[ "$REF" == refs/tags/* ]]; then
             IS_TAG=true
             VERSION_TAG=${REF#refs/tags/}
             PROMOTE_TAGS="$VERSION_TAG ${{ steps.sha.outputs.tag }}"
