@@ -228,6 +228,11 @@ impl Taiko {
             parent_gas_limit
         };
 
+        let parent_gas_limit_without_anchor = parent_gas_limit_without_anchor.clamp(
+            taiko_protocol::shasta::constants::MIN_BLOCK_GAS_LIMIT,
+            taiko_protocol::shasta::constants::MAX_BLOCK_GAS_LIMIT,
+        );
+
         let base_fee: u64 = self.get_base_fee(parent_block).await?;
 
         trace!(
