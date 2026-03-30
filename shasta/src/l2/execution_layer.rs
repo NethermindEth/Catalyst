@@ -8,7 +8,6 @@ use alloy::{
     providers::{DynProvider, Provider},
     rpc::types::Transaction,
     signers::Signature,
-    sol,
 };
 use anyhow::Error;
 use common::crypto::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATE_KEY};
@@ -27,32 +26,6 @@ pub struct L2ExecutionLayer {
     shasta_anchor: Anchor::AnchorInstance<DynProvider>,
     pub config: TaikoConfig,
 }
-
-sol!(
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    contract PacayaTaikoAnchor {
-        /// @dev Struct that represents L2 basefee configurations
-        struct BaseFeeConfig {
-            // This is the base fee change denominator per 12 second window.
-            uint8 adjustmentQuotient;
-            uint8 sharingPctg;
-            uint32 gasIssuancePerSecond;
-            uint64 minGasExcess;
-            uint32 maxGasIssuancePerBlock;
-        }
-
-        /// @notice Anchors the latest L1 block details to L2 for cross-layer
-        /// message verification.
-        function anchorV3(
-            uint64 _anchorBlockId,
-            bytes32 _anchorStateRoot,
-            uint32 _parentGasUsed,
-            BaseFeeConfig calldata _baseFeeConfig,
-            bytes32[] calldata _signalSlots
-        ) external;
-    }
-);
 
 impl L2ExecutionLayer {
     pub async fn new(taiko_config: TaikoConfig) -> Result<Self, Error> {
@@ -232,7 +205,7 @@ impl L2ExecutionLayer {
         match <Anchor::anchorV4Call as alloy::sol_types::SolCall>::abi_decode_validate(data) {
             Ok(tx_data) => Ok(tx_data._checkpoint.blockNumber.to::<u64>()),
             Err(v4_error) => {
-                let tx_data = <PacayaTaikoAnchor::anchorV3Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+                let tx_data = <pacaya::l2::bindings::TaikoAnchor::anchorV3Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
                     .map_err(|v3_error| anyhow::anyhow!(
                         "Failed to decode anchor id from tx data as anchorV4 ({}) or anchorV3 ({}).",
                         v4_error,
