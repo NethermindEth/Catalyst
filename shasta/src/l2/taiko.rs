@@ -214,11 +214,6 @@ impl Taiko {
         let parent_gas_limit = parent_block.header.gas_limit();
         let parent_timestamp = parent_block.header.timestamp();
 
-        let parent_gas_limit = parent_gas_limit.clamp(
-            taiko_protocol::shasta::constants::MIN_BLOCK_GAS_LIMIT,
-            taiko_protocol::shasta::constants::MAX_BLOCK_GAS_LIMIT,
-        );
-
         let parent_gas_limit_without_anchor = if parent_id != 0 {
             parent_gas_limit
                 .checked_sub(ANCHOR_V3_V4_GAS_LIMIT)
@@ -232,6 +227,11 @@ impl Taiko {
         } else {
             parent_gas_limit
         };
+
+        let parent_gas_limit_without_anchor = parent_gas_limit_without_anchor.clamp(
+            taiko_protocol::shasta::constants::MIN_BLOCK_GAS_LIMIT,
+            taiko_protocol::shasta::constants::MAX_BLOCK_GAS_LIMIT,
+        );
 
         let base_fee: u64 = self.get_base_fee(parent_block).await?;
 
