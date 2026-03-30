@@ -2,11 +2,6 @@ name: "Catalyst Node - Docker build and push"
 
 on:
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Optional image tag to promote to Docker Hub production"
-        required: false
-        type: string
   push:
     branches: [master]
     tags:
@@ -105,34 +100,30 @@ jobs:
         id: tags
         run: |
           REF="${{ github.ref }}"
-          INPUT_IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+          REALTIME_TAG="realtime-${{ steps.sha.outputs.short }}"
+          SOURCE_PROMOTE_TAG="${{ steps.sha.outputs.tag }}"
           IS_MASTER=false
           IS_TAG=false
           VERSION_TAG=""
-          PROMOTE_TAGS=""
+          PROMOTE_TAGS="$REALTIME_TAG"
 
-          if [[ -n "$INPUT_IMAGE_TAG" ]]; then
-            PROMOTE_TAGS="$INPUT_IMAGE_TAG"
-            echo "tag_list=type=sha,value=${{ github.sha }}" >> $GITHUB_OUTPUT
-          elif [[ "$REF" == refs/tags/* ]]; then
+          if [[ "$REF" == refs/tags/* ]]; then
             IS_TAG=true
             VERSION_TAG=${REF#refs/tags/}
-            PROMOTE_TAGS="$VERSION_TAG ${{ steps.sha.outputs.tag }}"
             echo "tag_list=type=raw,value=$VERSION_TAG" >> $GITHUB_OUTPUT
           elif [[ "$REF" == ${{ env.MASTER_BRANCH }} ]]; then
             IS_MASTER=true
-            PROMOTE_TAGS="latest ${{ steps.sha.outputs.tag }}"
             echo "tag_list=type=raw,value=latest" >> $GITHUB_OUTPUT
           else
-            PROMOTE_TAGS="${{ steps.sha.outputs.tag }}"
             echo "tag_list=type=sha,value=${{ github.sha }}" >> $GITHUB_OUTPUT
           fi
 
           echo "is_master=$IS_MASTER" >> $GITHUB_OUTPUT
           echo "is_tag=$IS_TAG" >> $GITHUB_OUTPUT
           echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+          echo "source_promote_tag=$SOURCE_PROMOTE_TAG" >> $GITHUB_OUTPUT
           echo "promote_tags=$PROMOTE_TAGS" >> $GITHUB_OUTPUT
-          echo "promote_tags=$PROMOTE_TAGS" >> $GITHUB_ENV
+          echo "PROMOTE_TAGS=$PROMOTE_TAGS" >> $GITHUB_ENV
 
       - name: Generate Docker metadata
         id: meta
@@ -182,9 +173,10 @@ jobs:
       - name: Promote to Docker Hub Production
         run: |
           set -e
+          SOURCE_TAG="${{ steps.tags.outputs.source_promote_tag }}"
           echo "Tags to promote: $PROMOTE_TAGS"
           for tag in $PROMOTE_TAGS; do
-            source_image="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}:${tag}"
+            source_image="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}:${SOURCE_TAG}"
             prod_image="${{ env.DOCKER_PUBLIC_REGISTRY }}/${{ env.DOCKER_PUBLIC_REPOSITORY }}:${tag}"
             echo ""
             echo "=== Promoting tag: ${tag} ==="
