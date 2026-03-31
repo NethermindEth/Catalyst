@@ -251,7 +251,7 @@ impl Config {
             .map_err(|e| address_parse_error(BRIDGE_ADDRESS, e, &taiko_bridge_address_str))?;
 
         let blobs_per_batch = std::env::var("BLOBS_PER_BATCH")
-            .unwrap_or("3".to_string())
+            .unwrap_or("5".to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("BLOBS_PER_BATCH must be a number: {}", e))?;
 
