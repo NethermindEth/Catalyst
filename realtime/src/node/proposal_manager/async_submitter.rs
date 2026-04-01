@@ -255,7 +255,31 @@ async fn submission_task(
             }
         }
 
-        let proof = raiko_client.get_proof(&request).await?;
+        let proof = match raiko_client.get_proof(&request).await {
+            Ok(proof) => proof,
+            Err(e) => {
+                if let Some(ref store) = status_store {
+                    let reason = format!("Proof generation failed: {}", e);
+                    for op in &proposal.user_ops {
+                        store.set(
+                            op.id,
+                            &UserOpStatus::Rejected {
+                                reason: reason.clone(),
+                            },
+                        );
+                    }
+                    for id in &proposal.l2_user_op_ids {
+                        store.set(
+                            *id,
+                            &UserOpStatus::Rejected {
+                                reason: reason.clone(),
+                            },
+                        );
+                    }
+                }
+                return Err(e);
+            }
+        };
         proposal.zk_proof = Some(proof);
     }
 
