@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc::{self, Receiver};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "status")]
@@ -92,11 +92,21 @@ pub enum UserOpRouting {
     L2Direct { user_op: UserOp },
 }
 
+#[derive(Debug, Deserialize)]
+struct TxStatusRequest {
+    #[serde(default, rename = "userOpId")]
+    user_op_id: Option<u64>,
+    #[serde(default, rename = "txHash")]
+    tx_hash: Option<B256>,
+}
+
 #[derive(Clone)]
 struct BridgeRpcContext {
     tx: mpsc::Sender<UserOp>,
     status_store: UserOpStatusStore,
     next_id: Arc<AtomicU64>,
+    taiko: Arc<Taiko>,
+    last_finalized_block_number: Arc<AtomicU64>,
 }
 
 pub struct BridgeHandler {
@@ -116,6 +126,7 @@ impl BridgeHandler {
         cancellation_token: CancellationToken,
         l1_chain_id: u64,
         l2_chain_id: u64,
+        last_finalized_block_number: Arc<AtomicU64>,
     ) -> Result<Self, anyhow::Error> {
         let (tx, rx) = mpsc::channel::<UserOp>(1024);
         let status_store = UserOpStatusStore::open("data/user_op_status")?;
@@ -124,6 +135,8 @@ impl BridgeHandler {
             tx,
             status_store: status_store.clone(),
             next_id: Arc::new(AtomicU64::new(1)),
+            taiko: taiko.clone(),
+            last_finalized_block_number,
         };
 
         let server = ServerBuilder::default()
@@ -177,6 +190,74 @@ impl BridgeHandler {
                     -32001,
                     "UserOp not found",
                     Some(format!("No user operation with id {}", id)),
+                )),
+            }
+        })?;
+
+        module.register_async_method("surge_txStatus", |params, ctx, _| async move {
+            let request: TxStatusRequest = params.parse()?;
+
+            match (request.user_op_id, request.tx_hash) {
+                (Some(id), None) => {
+                    // Existing userOpId lookup via status store
+                    match ctx.status_store.get(id) {
+                        Some(status) => serde_json::to_value(status).map_err(|e| {
+                            jsonrpsee::types::ErrorObjectOwned::owned(
+                                -32603,
+                                "Serialization error",
+                                Some(format!("{}", e)),
+                            )
+                        }),
+                        None => Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32001,
+                            "UserOp not found",
+                            Some(format!("No user operation with id {}", id)),
+                        )),
+                    }
+                }
+                (None, Some(hash)) => {
+                    // Look up L2 transaction by hash
+                    let tx = ctx.taiko.get_transaction_by_hash(hash).await.map_err(|e| {
+                        debug!("Transaction {} not found on L2: {}", hash, e);
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32001,
+                            "Transaction not found",
+                            Some(format!("L2 transaction {} not found: {}", hash, e)),
+                        )
+                    })?;
+
+                    let block_number = tx.block_number.ok_or_else(|| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32001,
+                            "Transaction pending",
+                            Some("Transaction has not been included in a block yet".to_string()),
+                        )
+                    })?;
+
+                    let finalized = ctx.last_finalized_block_number.load(Ordering::Relaxed);
+
+                    let status = if block_number <= finalized {
+                        UserOpStatus::Executed
+                    } else {
+                        UserOpStatus::ProvingBlock {
+                            block_id: block_number,
+                        }
+                    };
+
+                    serde_json::to_value(status).map_err(|e| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32603,
+                            "Serialization error",
+                            Some(format!("{}", e)),
+                        )
+                    })
+                }
+                _ => Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32602,
+                    "Invalid params",
+                    Some(
+                        "Provide exactly one of 'userOpId' or 'txHash'".to_string(),
+                    ),
                 )),
             }
         })?;
