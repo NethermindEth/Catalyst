@@ -255,9 +255,7 @@ impl BridgeHandler {
                 _ => Err(jsonrpsee::types::ErrorObjectOwned::owned(
                     -32602,
                     "Invalid params",
-                    Some(
-                        "Provide exactly one of 'userOpId' or 'txHash'".to_string(),
-                    ),
+                    Some("Provide exactly one of 'userOpId' or 'txHash'".to_string()),
                 )),
             }
         })?;

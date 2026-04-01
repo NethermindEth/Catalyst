@@ -178,7 +178,10 @@ impl Node {
                             )
                             .await?;
                         } else {
-                            warn!("Async submission failed: {}. Reorging preconfirmed L2 blocks.", e);
+                            warn!(
+                                "Async submission failed: {}. Reorging preconfirmed L2 blocks.",
+                                e
+                            );
                             self.recover_from_failed_submission().await?;
                         }
                         // Return early — l2_slot_info is stale after reorg recovery.
@@ -421,7 +424,6 @@ impl Node {
         }
         Ok(())
     }
-
 
     fn print_current_slots_info(
         &self,

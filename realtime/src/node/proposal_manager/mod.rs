@@ -136,8 +136,7 @@ impl BatchManager {
             Some(Ok(result)) => {
                 info!(
                     "Submission completed. New last finalized block: number={}, hash={}",
-                    result.new_last_finalized_block_number,
-                    result.new_last_finalized_block_hash,
+                    result.new_last_finalized_block_number, result.new_last_finalized_block_hash,
                 );
                 self.last_finalized_block_hash = result.new_last_finalized_block_hash;
                 self.last_finalized_block_number
