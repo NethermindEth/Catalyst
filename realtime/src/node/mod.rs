@@ -223,10 +223,9 @@ impl Node {
                 .await
             {
                 self.head_verifier.log_error().await;
-                self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!(
-                    "Unexpected L2 head detected. Restarting node..."
-                ));
+                warn!("Unexpected L2 head detected. Attempting recovery via reorg.");
+                self.recover_from_failed_submission().await?;
+                return Ok(());
             }
 
             let l2_slot_context = L2SlotContext {
