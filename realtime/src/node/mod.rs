@@ -178,9 +178,8 @@ impl Node {
                             )
                             .await?;
                         } else {
-                            error!("Async submission failed: {}. Restarting node.", e);
-                            self.cancel_token.cancel_on_critical_error();
-                            return Err(anyhow::anyhow!("Async submission failed: {}", e));
+                            warn!("Async submission failed: {}. Reorging preconfirmed L2 blocks.", e);
+                            self.recover_from_failed_submission().await?;
                         }
                     }
                 }
@@ -269,6 +268,19 @@ impl Node {
         Ok(())
     }
 
+    async fn recover_from_failed_submission(&mut self) -> Result<(), Error> {
+        self.proposal_manager.reorg_unproposed_blocks().await?;
+        self.proposal_manager.reset_builder().await?;
+
+        let l2_slot_info = self.taiko.get_l2_slot_info().await?;
+        self.head_verifier
+            .set(l2_slot_info.parent_id(), *l2_slot_info.parent_hash())
+            .await;
+
+        info!("Recovery complete. Resuming preconfirmation loop.");
+        Ok(())
+    }
+
     async fn handle_transaction_error(
         &mut self,
         error: &TransactionError,
@@ -308,12 +320,12 @@ impl Node {
                 ))
             }
             TransactionError::EstimationFailed => {
-                self.cancel_token.cancel_on_critical_error();
-                Err(anyhow::anyhow!("Transaction estimation failed, exiting"))
+                warn!("L1 transaction estimation failed. Reorging preconfirmed L2 blocks.");
+                self.recover_from_failed_submission().await
             }
             TransactionError::TransactionReverted => {
-                self.cancel_token.cancel_on_critical_error();
-                Err(anyhow::anyhow!("Transaction reverted, exiting"))
+                warn!("L1 transaction reverted. Reorging preconfirmed L2 blocks.");
+                self.recover_from_failed_submission().await
             }
             TransactionError::OldestForcedInclusionDue => {
                 // No forced inclusions in RealTime, but handle gracefully
