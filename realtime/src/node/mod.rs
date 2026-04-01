@@ -181,12 +181,29 @@ impl Node {
                             warn!("Async submission failed: {}. Reorging preconfirmed L2 blocks.", e);
                             self.recover_from_failed_submission().await?;
                         }
+                        // Return early — l2_slot_info is stale after reorg recovery.
+                        // The next heartbeat will pick up fresh state.
+                        return Ok(());
                     }
                 }
             }
 
-            self.check_transaction_error_channel(&current_status, &l2_slot_info)
-                .await?;
+            // Check for transaction errors (reverts detected after mining)
+            match self.transaction_error_channel.try_recv() {
+                Ok(error) => {
+                    self.handle_transaction_error(&error, &current_status, &l2_slot_info)
+                        .await?;
+                    // Return early — l2_slot_info is stale after reorg recovery.
+                    return Ok(());
+                }
+                Err(err) => match err {
+                    TryRecvError::Empty => {}
+                    TryRecvError::Disconnected => {
+                        self.cancel_token.cancel_on_critical_error();
+                        return Err(anyhow::anyhow!("Transaction error channel disconnected"));
+                    }
+                },
+            }
         }
 
         if current_status.is_preconfirmation_start_slot() {
@@ -406,25 +423,6 @@ impl Node {
         Ok(())
     }
 
-    async fn check_transaction_error_channel(
-        &mut self,
-        current_status: &OperatorStatus,
-        l2_slot_info: &L2SlotInfoV2,
-    ) -> Result<(), Error> {
-        match self.transaction_error_channel.try_recv() {
-            Ok(error) => {
-                self.handle_transaction_error(&error, current_status, l2_slot_info)
-                    .await
-            }
-            Err(err) => match err {
-                TryRecvError::Empty => Ok(()),
-                TryRecvError::Disconnected => {
-                    self.cancel_token.cancel_on_critical_error();
-                    Err(anyhow::anyhow!("Transaction error channel disconnected"))
-                }
-            },
-        }
-    }
 
     fn print_current_slots_info(
         &self,
