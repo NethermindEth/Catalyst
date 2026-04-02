@@ -542,7 +542,7 @@ impl BatchManager {
         self.last_finalized_block_hash = last_finalized_hash;
         Ok(())
     }
-    
+
     /// Wait for the L2 execution engine to sync to the `lastFinalizedBlockHash` stored
     /// in the RealTimeInbox contract. Called during warmup to ensure the driver has
     /// replayed all L1-verified blocks before Catalyst starts sequencing new ones.
@@ -561,7 +561,11 @@ impl BatchManager {
         }
 
         loop {
-            match self.taiko.find_l2_block_number_by_hash(last_finalized_hash).await {
+            match self
+                .taiko
+                .find_l2_block_number_by_hash(last_finalized_hash)
+                .await
+            {
                 Ok(block_number) => {
                     info!(
                         "L2 synced to lastFinalizedBlockHash {} at block {}",
