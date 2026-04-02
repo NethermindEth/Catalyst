@@ -561,25 +561,28 @@ impl BatchManager {
         }
 
         loop {
-            match self
-                .taiko
-                .find_l2_block_number_by_hash(last_finalized_hash)
-                .await
-            {
-                Ok(block_number) => {
-                    info!(
-                        "L2 synced to lastFinalizedBlockHash {} at block {}",
-                        last_finalized_hash, block_number
-                    );
-                    return Ok(());
+            tokio::select! {
+                _ = self.cancel_token.cancelled() => {
+                    return Err(anyhow::anyhow!("Cancelled while waiting for L2 to sync to lastFinalizedBlockHash"));
                 }
-                Err(e) => {
-                    debug!("find_l2_block_number_by_hash error: {e}");
-                    info!(
-                        "Waiting for L2 driver to sync to lastFinalizedBlockHash {} ...",
-                        last_finalized_hash
-                    );
-                    sleep(Duration::from_secs(2)).await;
+                result = self.taiko.find_l2_block_number_by_hash(last_finalized_hash) => {
+                    match result {
+                        Ok(block_number) => {
+                            info!(
+                                "L2 synced to lastFinalizedBlockHash {} at block {}",
+                                last_finalized_hash, block_number
+                            );
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            debug!("find_l2_block_number_by_hash error: {e}");
+                            info!(
+                                "Waiting for L2 driver to sync to lastFinalizedBlockHash {} ...",
+                                last_finalized_hash
+                            );
+                            sleep(Duration::from_secs(2)).await;
+                        }
+                    }
                 }
             }
         }
