@@ -32,6 +32,7 @@ use common::{
 };
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
+use tokio::time::{Duration, sleep};
 use tracing::{debug, error, info, warn};
 
 use crate::node::L2SlotInfoV2;
@@ -435,11 +436,11 @@ impl BatchManager {
         {
             Ok(n) => n,
             Err(_) => {
-                info!(
-                    "lastFinalizedBlockHash {} not found on L2 — treating as no blocks proposed yet",
+                warn!(
+                    "lastFinalizedBlockHash {} not found on L2 — L2 has not yet synced to the finalized block, skipping reorg",
                     last_finalized_hash
                 );
-                0
+                return Ok(());
             }
         };
 
@@ -475,6 +476,43 @@ impl BatchManager {
         Ok(())
     }
 
+
+    /// Wait for the L2 execution engine to sync to the `lastFinalizedBlockHash` stored
+    /// in the RealTimeInbox contract. Called during warmup to ensure the driver has
+    /// replayed all L1-verified blocks before Catalyst starts sequencing new ones.
+    /// Without this, after a clean L2 DB restart, Catalyst would build on genesis while
+    /// the RealTimeInbox still references the previous session's finalized block, causing
+    /// ZISK_INVALID_PROOF on the first proposal.
+    pub async fn wait_for_l2_finalized_block(&self) -> Result<(), Error> {
+        let last_finalized_hash = self
+            .ethereum_l1
+            .execution_layer
+            .get_last_finalized_block_hash()
+            .await?;
+
+        if last_finalized_hash == B256::ZERO {
+            return Ok(());
+        }
+
+        loop {
+            match self.taiko.find_l2_block_number_by_hash(last_finalized_hash).await {
+                Ok(block_number) => {
+                    info!(
+                        "L2 synced to lastFinalizedBlockHash {} at block {}",
+                        last_finalized_hash, block_number
+                    );
+                    return Ok(());
+                }
+                Err(_) => {
+                    info!(
+                        "Waiting for L2 driver to sync to lastFinalizedBlockHash {} ...",
+                        last_finalized_hash
+                    );
+                    sleep(Duration::from_secs(2)).await;
+                }
+            }
+        }
+    }
 
     pub async fn reanchor_block(
         &mut self,
