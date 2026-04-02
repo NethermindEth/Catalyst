@@ -569,7 +569,8 @@ impl BatchManager {
                     );
                     return Ok(());
                 }
-                Err(_) => {
+                Err(e) => {
+                    debug!("find_l2_block_number_by_hash error: {e}");
                     info!(
                         "Waiting for L2 driver to sync to lastFinalizedBlockHash {} ...",
                         last_finalized_hash
