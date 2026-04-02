@@ -27,6 +27,7 @@ pub struct Metrics {
     reorgs: Counter,
     reorg_depth: Gauge,
     operator_whitelisted: Gauge,
+    is_geth_and_driver_synced: Gauge,
     registry: Registry,
 }
 
@@ -260,6 +261,19 @@ impl Metrics {
             error!("Error: Failed to register operator_whitelisted: {}", err);
         }
 
+        let is_geth_and_driver_synced = Gauge::new(
+            "is_geth_and_driver_synced",
+            "Whether Taiko Geth and the driver are synced (1.0 = true, 0.0 = false)",
+        )
+        .expect("Failed to create is_geth_and_driver_synced gauge");
+
+        if let Err(err) = registry.register(Box::new(is_geth_and_driver_synced.clone())) {
+            error!(
+                "Error: Failed to register is_geth_and_driver_synced: {}",
+                err
+            );
+        }
+
         Self {
             preconfer_eth_balance,
             preconfer_taiko_balance,
@@ -281,6 +295,7 @@ impl Metrics {
             reorgs,
             reorg_depth,
             operator_whitelisted,
+            is_geth_and_driver_synced,
             registry,
         }
     }
@@ -397,6 +412,11 @@ impl Metrics {
             .set(if whitelisted { 1.0 } else { 0.0 });
     }
 
+    pub fn set_is_geth_and_driver_synced(&self, synced: bool) {
+        self.is_geth_and_driver_synced
+            .set(if synced { 1.0 } else { 0.0 });
+    }
+
     fn u256_to_f64(balance: alloy::primitives::U256) -> f64 {
         let balance_str = balance.to_string();
         let len = balance_str.len();
@@ -461,6 +481,7 @@ mod tests {
         metrics.inc_skipped_l2_slots_by_low_txs_count();
         metrics.inc_critical_errors();
         metrics.observe_reorg(2);
+        metrics.set_is_geth_and_driver_synced(true);
 
         let output = metrics.gather();
         println!("{output}");
@@ -482,6 +503,7 @@ mod tests {
         assert!(output.contains("critical_errors 1"));
         assert!(output.contains("reorgs 1"));
         assert!(output.contains("reorg_depth 2"));
+        assert!(output.contains("is_geth_and_driver_synced 1"));
     }
 
     #[test]
