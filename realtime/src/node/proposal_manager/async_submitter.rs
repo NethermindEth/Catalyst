@@ -17,6 +17,7 @@ use tracing::info;
 
 pub struct SubmissionResult {
     pub new_last_finalized_block_hash: B256,
+    pub new_last_finalized_block_number: u64,
 }
 
 struct InFlightSubmission {
@@ -229,6 +230,7 @@ async fn submission_task(
 
             return Ok(SubmissionResult {
                 new_last_finalized_block_hash: proposal.checkpoint.blockHash,
+                new_last_finalized_block_number: proposal.checkpoint.blockNumber.to::<u64>(),
             });
         }
 
@@ -253,7 +255,31 @@ async fn submission_task(
             }
         }
 
-        let proof = raiko_client.get_proof(&request).await?;
+        let proof = match raiko_client.get_proof(&request).await {
+            Ok(proof) => proof,
+            Err(e) => {
+                if let Some(ref store) = status_store {
+                    let reason = format!("Proof generation failed: {}", e);
+                    for op in &proposal.user_ops {
+                        store.set(
+                            op.id,
+                            &UserOpStatus::Rejected {
+                                reason: reason.clone(),
+                            },
+                        );
+                    }
+                    for id in &proposal.l2_user_op_ids {
+                        store.set(
+                            *id,
+                            &UserOpStatus::Rejected {
+                                reason: reason.clone(),
+                            },
+                        );
+                    }
+                }
+                return Err(e);
+            }
+        };
         proposal.zk_proof = Some(proof);
     }
 
@@ -305,6 +331,7 @@ async fn submission_task(
 
     // Step 3: After successful submission, the new lastFinalizedBlockHash is the checkpoint's blockHash
     let new_last_finalized_block_hash = proposal.checkpoint.blockHash;
+    let new_last_finalized_block_number = proposal.checkpoint.blockNumber.to::<u64>();
 
     // Step 4: Spawn user-op status tracker
     if let (Some(hash_rx), Some(result_rx), Some(store)) =
@@ -375,5 +402,6 @@ async fn submission_task(
 
     Ok(SubmissionResult {
         new_last_finalized_block_hash,
+        new_last_finalized_block_number,
     })
 }

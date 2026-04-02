@@ -26,6 +26,7 @@ use common::{
     },
     utils::cancellation_token::CancellationToken,
 };
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
@@ -46,6 +47,7 @@ pub struct BatchManager {
     #[allow(dead_code)]
     cancel_token: CancellationToken,
     last_finalized_block_hash: B256,
+    last_finalized_block_number: Arc<AtomicU64>,
 }
 
 impl BatchManager {
@@ -86,6 +88,9 @@ impl BatchManager {
                 e
             )
         })?;
+
+        let last_finalized_block_number = Arc::new(AtomicU64::new(0));
+
         let bridge_handler = Arc::new(Mutex::new(
             BridgeHandler::new(
                 bridge_addr,
@@ -94,6 +99,7 @@ impl BatchManager {
                 cancel_token.clone(),
                 l1_chain_id,
                 l2_chain_id,
+                last_finalized_block_number.clone(),
             )
             .await?,
         ));
@@ -119,6 +125,7 @@ impl BatchManager {
             metrics,
             cancel_token,
             last_finalized_block_hash,
+            last_finalized_block_number,
         })
     }
 
@@ -128,10 +135,12 @@ impl BatchManager {
         match self.async_submitter.try_recv_result() {
             Some(Ok(result)) => {
                 info!(
-                    "Submission completed. New last finalized block hash: {}",
-                    result.new_last_finalized_block_hash
+                    "Submission completed. New last finalized block: number={}, hash={}",
+                    result.new_last_finalized_block_number, result.new_last_finalized_block_hash,
                 );
                 self.last_finalized_block_hash = result.new_last_finalized_block_hash;
+                self.last_finalized_block_number
+                    .store(result.new_last_finalized_block_number, Ordering::Relaxed);
                 Some(Ok(()))
             }
             Some(Err(e)) => Some(Err(e)),
@@ -511,6 +520,10 @@ impl BatchManager {
         };
 
         let l2_head = self.taiko.get_latest_l2_block_id().await?;
+
+        // Always update the shared finalized block number for RPC status queries
+        self.last_finalized_block_number
+            .store(last_proposed_block_number, Ordering::Relaxed);
 
         if l2_head <= last_proposed_block_number {
             info!(

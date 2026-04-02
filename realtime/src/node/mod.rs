@@ -178,16 +178,35 @@ impl Node {
                             )
                             .await?;
                         } else {
-                            error!("Async submission failed: {}. Restarting node.", e);
-                            self.cancel_token.cancel_on_critical_error();
-                            return Err(anyhow::anyhow!("Async submission failed: {}", e));
+                            warn!(
+                                "Async submission failed: {}. Reorging preconfirmed L2 blocks.",
+                                e
+                            );
+                            self.recover_from_failed_submission().await?;
                         }
+                        // Return early — l2_slot_info is stale after reorg recovery.
+                        // The next heartbeat will pick up fresh state.
+                        return Ok(());
                     }
                 }
             }
 
-            self.check_transaction_error_channel(&current_status, &l2_slot_info)
-                .await?;
+            // Check for transaction errors (reverts detected after mining)
+            match self.transaction_error_channel.try_recv() {
+                Ok(error) => {
+                    self.handle_transaction_error(&error, &current_status, &l2_slot_info)
+                        .await?;
+                    // Return early — l2_slot_info is stale after reorg recovery.
+                    return Ok(());
+                }
+                Err(err) => match err {
+                    TryRecvError::Empty => {}
+                    TryRecvError::Disconnected => {
+                        self.cancel_token.cancel_on_critical_error();
+                        return Err(anyhow::anyhow!("Transaction error channel disconnected"));
+                    }
+                },
+            }
         }
 
         if current_status.is_preconfirmation_start_slot() {
@@ -207,10 +226,9 @@ impl Node {
                 .await
             {
                 self.head_verifier.log_error().await;
-                self.cancel_token.cancel_on_critical_error();
-                return Err(anyhow::anyhow!(
-                    "Unexpected L2 head detected. Restarting node..."
-                ));
+                warn!("Unexpected L2 head detected. Attempting recovery via reorg.");
+                self.recover_from_failed_submission().await?;
+                return Ok(());
             }
 
             let l2_slot_context = L2SlotContext {
@@ -269,6 +287,19 @@ impl Node {
         Ok(())
     }
 
+    async fn recover_from_failed_submission(&mut self) -> Result<(), Error> {
+        self.proposal_manager.reorg_unproposed_blocks().await?;
+        self.proposal_manager.reset_builder().await?;
+
+        let l2_slot_info = self.taiko.get_l2_slot_info().await?;
+        self.head_verifier
+            .set(l2_slot_info.parent_id(), *l2_slot_info.parent_hash())
+            .await;
+
+        info!("Recovery complete. Resuming preconfirmation loop.");
+        Ok(())
+    }
+
     async fn handle_transaction_error(
         &mut self,
         error: &TransactionError,
@@ -308,12 +339,12 @@ impl Node {
                 ))
             }
             TransactionError::EstimationFailed => {
-                self.cancel_token.cancel_on_critical_error();
-                Err(anyhow::anyhow!("Transaction estimation failed, exiting"))
+                warn!("L1 transaction estimation failed. Reorging preconfirmed L2 blocks.");
+                self.recover_from_failed_submission().await
             }
             TransactionError::TransactionReverted => {
-                self.cancel_token.cancel_on_critical_error();
-                Err(anyhow::anyhow!("Transaction reverted, exiting"))
+                warn!("L1 transaction reverted. Reorging preconfirmed L2 blocks.");
+                self.recover_from_failed_submission().await
             }
             TransactionError::OldestForcedInclusionDue => {
                 // No forced inclusions in RealTime, but handle gracefully
@@ -392,26 +423,6 @@ impl Node {
             ));
         }
         Ok(())
-    }
-
-    async fn check_transaction_error_channel(
-        &mut self,
-        current_status: &OperatorStatus,
-        l2_slot_info: &L2SlotInfoV2,
-    ) -> Result<(), Error> {
-        match self.transaction_error_channel.try_recv() {
-            Ok(error) => {
-                self.handle_transaction_error(&error, current_status, l2_slot_info)
-                    .await
-            }
-            Err(err) => match err {
-                TryRecvError::Empty => Ok(()),
-                TryRecvError::Disconnected => {
-                    self.cancel_token.cancel_on_critical_error();
-                    Err(anyhow::anyhow!("Transaction error channel disconnected"))
-                }
-            },
-        }
     }
 
     fn print_current_slots_info(
