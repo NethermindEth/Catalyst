@@ -234,10 +234,18 @@ impl L2ExecutionLayer {
     }
 
     pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
-        let tx_data =
-            <Anchor::anchorV4WithSignalSlotsCall as alloy::sol_types::SolCall>::abi_decode_validate(data)
-                .map_err(|e| anyhow::anyhow!("Failed to decode anchor id from tx data: {}", e))?;
-        Ok(tx_data._checkpoint.blockNumber.to::<u64>())
+        match <Anchor::anchorV4WithSignalSlotsCall as alloy::sol_types::SolCall>::abi_decode_validate(data) {
+            Ok(tx_data) => Ok(tx_data._checkpoint.blockNumber.to::<u64>()),
+            Err(v4_error) => {
+                let tx_data = <pacaya::l2::bindings::TaikoAnchor::anchorV3Call as alloy::sol_types::SolCall>::abi_decode_validate(data)
+                    .map_err(|v3_error| anyhow::anyhow!(
+                        "Failed to decode anchor id from tx data as anchorV4WithSignalSlots ({}) or anchorV3 ({}).",
+                        v4_error,
+                        v3_error
+                    ))?;
+                Ok(tx_data._anchorBlockId)
+            }
+        }
     }
 
     pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4WithSignalSlotsCall, Error> {

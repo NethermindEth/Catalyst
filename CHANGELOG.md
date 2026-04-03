@@ -2,6 +2,14 @@
 
 All notable changes to Catalyst are documented here, organized by release version.
 
+## [v1.35.1] — 2026-03-31
+
+### Features
+- Fall back to anchorV3 decoding when anchorV4 decode fails (#925)
+- Clamp parent gas limit (minus anchor overhead) to protocol min/max bounds, preventing invalid block proposals when parent block values are out of range (#926)
+
+---
+
 ## [v1.34.12] — 2026-03-27
 
 ### Features
