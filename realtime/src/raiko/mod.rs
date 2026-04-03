@@ -185,7 +185,7 @@ impl RaikoClient {
                 let msg = body.message.unwrap_or_default();
                 // "proof not found" means the proof expired from cache (Redis TTL) or was
                 // never submitted. Re-submit the full request with sources+blobs.
-                if msg.contains("proof not found") {
+                if msg.to_lowercase().contains("proof not found") {
                     warn!(
                         "Raiko: proof not found (expired or never submitted), re-submitting... (attempt {})",
                         attempt + 1
