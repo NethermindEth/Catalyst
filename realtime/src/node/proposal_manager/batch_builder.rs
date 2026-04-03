@@ -97,6 +97,7 @@ impl BatchBuilder {
             l2_user_op_ids: vec![],
             signal_slots: vec![],
             l1_calls: vec![],
+            l2_block_hashes: vec![],
             zk_proof: None,
         });
     }
@@ -173,6 +174,9 @@ impl BatchBuilder {
 
     pub fn set_proposal_checkpoint(&mut self, checkpoint: Checkpoint) -> Result<&Proposal, Error> {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
+            current_proposal
+                .l2_block_hashes
+                .push(checkpoint.blockHash);
             current_proposal.checkpoint = checkpoint.clone();
             debug!("Update proposal checkpoint: {:?}", checkpoint);
             Ok(current_proposal)

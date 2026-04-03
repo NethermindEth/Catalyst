@@ -34,6 +34,9 @@ pub struct Proposal {
     pub signal_slots: Vec<FixedBytes<32>>,
     pub l1_calls: Vec<L1Call>,
 
+    // L2 block hashes (accumulated as blocks are preconfirmed, used for Raiko cache key)
+    pub l2_block_hashes: Vec<B256>,
+
     // ZK proof (populated after Raiko call)
     pub zk_proof: Option<Vec<u8>>,
 }
