@@ -1,4 +1,5 @@
 use anyhow::Error;
+use axum::Router;
 use common::{
     fork_info::{Fork, ForkInfo},
     metrics::{self, Metrics},
@@ -81,7 +82,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
         info!("Cancellation token triggered, initiating shutdown...");
     }));
 
-    match fork_info.fork {
+    let extra_router: Option<Router> = match fork_info.fork {
         Fork::Pacaya => {
             // TODO pacaya::utils::config::Config
             let next_fork_timestamp = fork_info.config.fork_switch_timestamps.get(1);
@@ -96,16 +97,18 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
                 fork_info,
             )
             .await?;
+            None
         }
         Fork::Shasta => {
             info!("Current fork: SHASTA 🌋");
-            shasta::create_shasta_node(
+            let status_router = shasta::create_shasta_node(
                 config.clone(),
                 metrics.clone(),
                 cancel_token.clone(),
                 fork_info,
             )
             .await?;
+            Some(status_router)
         }
         Fork::Permissionless => {
             info!("Current fork: PERMISSIONLESS 🌋");
@@ -116,10 +119,11 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
                 fork_info,
             )
             .await?;
+            None
         }
-    }
+    };
 
-    metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());
+    metrics::server::serve_metrics(metrics.clone(), cancel_token.clone(), extra_router);
 
     Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
 }

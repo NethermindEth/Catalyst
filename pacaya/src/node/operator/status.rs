@@ -14,6 +14,7 @@ pub struct StatusCheckDurations {
 }
 
 #[cfg_attr(test, derive(Debug))]
+#[derive(serde::Serialize)]
 pub struct Status {
     preconfer: bool,
     submitter: bool,
@@ -21,6 +22,7 @@ pub struct Status {
     end_of_sequencing: bool,
     is_driver_synced: bool,
     #[cfg(feature = "get_status_duration")]
+    #[serde(skip)]
     durations: Option<StatusCheckDurations>,
 }
 

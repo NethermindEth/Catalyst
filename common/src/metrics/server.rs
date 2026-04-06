@@ -18,11 +18,19 @@ async fn metrics_handler(State(metrics): State<Arc<Metrics>>) -> impl IntoRespon
     )
 }
 
-pub fn serve_metrics(metrics: Arc<Metrics>, cancel_token: CancellationToken) {
+pub fn serve_metrics(
+    metrics: Arc<Metrics>,
+    cancel_token: CancellationToken,
+    extra_router: Option<Router>,
+) {
     tokio::spawn(async move {
-        let app = Router::new()
+        let mut app = Router::new()
             .route("/metrics", get(metrics_handler))
             .with_state(metrics);
+
+        if let Some(extra) = extra_router {
+            app = app.merge(extra);
+        }
 
         let addr: SocketAddr = ([0, 0, 0, 0], 9898).into();
         info!("Metrics server listening on {}", addr);

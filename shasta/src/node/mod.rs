@@ -3,6 +3,14 @@ pub mod config;
 mod last_safe_l2_block_finder;
 pub mod proposal_manager;
 use anyhow::Error;
+use axum::{
+    Router,
+    extract::State,
+    http::header,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::get,
+};
 use common::{
     fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
@@ -13,6 +21,7 @@ use common::{
 use config::NodeConfig;
 use pacaya::node::operator::{Operator, Status as OperatorStatus};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::metrics::Metrics;
@@ -34,6 +43,15 @@ use verifier::{VerificationResult, Verifier};
 use crate::chain_monitor::ShastaChainMonitor;
 pub use last_safe_l2_block_finder::LastSafeL2BlockFinder;
 
+type SharedOperator =
+    Arc<Mutex<Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>>>;
+
+#[derive(Clone)]
+struct StatusState {
+    taiko: Arc<Taiko>,
+    operator: SharedOperator,
+}
+
 pub struct Node {
     config: NodeConfig,
     cancel_token: CancellationToken,
@@ -41,6 +59,7 @@ pub struct Node {
     taiko: Arc<Taiko>,
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
+    status_operator: SharedOperator,
     metrics: Arc<Metrics>,
     proposal_manager: ProposalManager,
     verifier: Option<Verifier>,
@@ -79,6 +98,18 @@ impl Node {
             fork_info.clone(),
         )
         .map_err(|e| anyhow::anyhow!("Failed to create Operator: {}", e))?;
+        let status_operator = Operator::new(
+            ethereum_l1.execution_layer.clone(),
+            ethereum_l1.slot_clock.clone(),
+            taiko.get_driver(),
+            config.handover_window_slots,
+            config.handover_start_buffer_ms,
+            config.simulate_not_submitting_at_the_end_of_epoch,
+            cancel_token.clone(),
+            fork_info,
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to create status Operator: {}", e))?;
+        let status_operator = Arc::new(Mutex::new(status_operator));
         let watchdog = common_utils::watchdog::Watchdog::new(
             cancel_token.clone(),
             config.watchdog_max_counter,
@@ -122,6 +153,7 @@ impl Node {
             taiko,
             watchdog,
             operator,
+            status_operator,
             metrics,
             proposal_manager,
             verifier: None,
@@ -132,9 +164,18 @@ impl Node {
         })
     }
 
+    pub fn status_router(&self) -> Router {
+        let state = StatusState {
+            taiko: self.taiko.clone(),
+            operator: self.status_operator.clone(),
+        };
+        Router::new()
+            .route("/status", get(status_handler))
+            .with_state(state)
+    }
+
     pub async fn entrypoint(mut self) -> Result<(), Error> {
         info!("Starting node");
-
         if let Err(err) = self.warmup().await {
             error!("Failed to warm up node: {}. Shutting down.", err);
             self.cancel_token.cancel_on_critical_error();
@@ -825,5 +866,33 @@ impl Node {
             start_time.elapsed().as_millis()
         );
         Ok(())
+    }
+}
+
+async fn status_handler(State(state): State<StatusState>) -> impl IntoResponse {
+    let l2_slot_info = match state.taiko.get_l2_slot_info().await {
+        Ok(info) => info,
+        Err(err) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get L2 slot info: {err}"),
+            )
+                .into_response();
+        }
+    };
+    match state.operator.lock().await.get_status(&l2_slot_info).await {
+        Ok(status) => match serde_json::to_string(&status) {
+            Ok(body) => ([(header::CONTENT_TYPE, "application/json")], body).into_response(),
+            Err(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to serialize status: {err}"),
+            )
+                .into_response(),
+        },
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to compute status: {err}"),
+        )
+            .into_response(),
     }
 }

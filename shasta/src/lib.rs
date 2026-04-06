@@ -10,6 +10,7 @@ pub use node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 pub use node::proposal_manager::ProposalManager;
 
 use anyhow::Error;
+use axum::Router;
 use common::{
     batch_builder::BatchBuilderConfig,
     config::{Config, ConfigTrait},
@@ -32,7 +33,7 @@ pub async fn create_shasta_node(
     metrics: Arc<metrics::Metrics>,
     cancel_token: CancellationToken,
     fork_info: ForkInfo,
-) -> Result<(), Error> {
+) -> Result<Router, Error> {
     info!("Creating Shasta node");
 
     let shasta_config = ShastaConfig::read_env_variables()
@@ -150,6 +151,8 @@ pub async fn create_shasta_node(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
 
+    let status_router = node.status_router();
+
     node.entrypoint()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start Node: {}", e))?;
@@ -171,5 +174,5 @@ pub async fn create_shasta_node(
     );
     whitelist_monitor.run();
 
-    Ok(())
+    Ok(status_router)
 }
