@@ -151,11 +151,14 @@ pub async fn create_shasta_node(
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;
 
-    let status_router = node.status_router();
-
     node.entrypoint()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start Node: {}", e))?;
+
+    let status_router = node::status_router::status_router(
+        ethereum_l1.execution_layer.clone(),
+        ethereum_l1.slot_clock.clone(),
+    );
 
     let funds_controller = FundsController::new(
         (&config).into(),
