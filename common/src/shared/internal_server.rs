@@ -2,38 +2,49 @@ use crate::utils::cancellation_token::CancellationToken;
 use axum::Router;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
-use tracing::error;
-use tracing::info;
+use tracing::{error, info};
 
-pub fn serve_metrics(cancel_token: CancellationToken, routes: Vec<Router>) {
+pub fn serve(cancel_token: CancellationToken, routes: Vec<Router>) {
     tokio::spawn(async move {
-        let app = routes
-            .into_iter()
-            .fold(Router::new(), |app, router| app.merge(router));
+        let app = build_app(routes);
+        let addr = socket_addr();
 
-        let addr: SocketAddr = ([0, 0, 0, 0], 9898).into();
         info!("Internal server listening on {}", addr);
-        let listener = match tokio::net::TcpListener::bind(addr).await {
+
+        let listener = match TcpListener::bind(addr).await {
             Ok(listener) => listener,
             Err(err) => {
-                error!(
-                    "Failed to bind internal server listener on {}: {}",
-                    addr, err
-                );
+                error!("Failed to bind internal server listener on {}: {}", addr, err);
                 return;
             }
         };
 
-        serve(listener, app, cancel_token).await;
+        run_server(listener, app, cancel_token).await;
     });
 }
 
-async fn serve(listener: TcpListener, app: Router, shutdown_token: CancellationToken) {
+fn build_app(routes: Vec<Router>) -> Router {
+    routes
+        .into_iter()
+        .fold(Router::new(), |app, router| app.merge(router))
+}
+
+fn socket_addr() -> SocketAddr {
+    ([0, 0, 0, 0], 9898).into()
+}
+
+async fn run_server(
+    listener: TcpListener,
+    app: Router,
+    shutdown_token: CancellationToken,
+) {
+    let shutdown = async move {
+        shutdown_token.cancelled().await;
+        info!("Shutdown signal received, stopping internal server...");
+    };
+
     if let Err(err) = axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            shutdown_token.cancelled().await;
-            info!("Shutdown signal received, stopping internal server...");
-        })
+        .with_graceful_shutdown(shutdown)
         .await
     {
         error!("Internal server terminated with error: {}", err);

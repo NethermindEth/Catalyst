@@ -33,7 +33,7 @@ pub async fn create_shasta_node(
     metrics: Arc<metrics::Metrics>,
     cancel_token: CancellationToken,
     fork_info: ForkInfo,
-) -> Result<Router, Error> {
+) -> Result<Vec<Router>, Error> {
     info!("Creating Shasta node");
 
     let shasta_config = ShastaConfig::read_env_variables()
@@ -177,5 +177,5 @@ pub async fn create_shasta_node(
     );
     whitelist_monitor.run();
 
-    Ok(status_router)
+    Ok(vec![status_router])
 }

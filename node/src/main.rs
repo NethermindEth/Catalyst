@@ -102,14 +102,13 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
         }
         Fork::Shasta => {
             info!("Current fork: SHASTA 🌋");
-            let status_router = shasta::create_shasta_node(
+            shasta::create_shasta_node(
                 config.clone(),
                 metrics.clone(),
                 cancel_token.clone(),
                 fork_info,
             )
-            .await?;
-            vec![status_router]
+            .await?
         }
         Fork::Permissionless => {
             info!("Current fork: PERMISSIONLESS 🌋");
@@ -125,7 +124,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
     };
 
     extra_routes.push(metrics_route(metrics.clone()));
-    internal_server::serve_metrics(cancel_token.clone(), extra_routes);
+    internal_server::serve(cancel_token.clone(), extra_routes);
 
     Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
 }
