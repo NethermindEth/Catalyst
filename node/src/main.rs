@@ -124,7 +124,12 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
     };
 
     extra_routes.push(metrics_route(metrics.clone()));
-    internal_server::serve(cancel_token.clone(), extra_routes);
+    internal_server::serve(
+        cancel_token.clone(),
+        extra_routes,
+        config.internal_server_ip,
+        config.internal_server_port,
+    );
 
     Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
 }

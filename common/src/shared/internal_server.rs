@@ -4,17 +4,20 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
-pub fn serve(cancel_token: CancellationToken, routes: Vec<Router>) {
+pub fn serve(cancel_token: CancellationToken, routes: Vec<Router>, ip: [u8; 4], port: u16) {
+    let addr = SocketAddr::from((ip, port));
     tokio::spawn(async move {
         let app = build_app(routes);
-        let addr = socket_addr();
 
         info!("Internal server listening on {}", addr);
 
         let listener = match TcpListener::bind(addr).await {
             Ok(listener) => listener,
             Err(err) => {
-                error!("Failed to bind internal server listener on {}: {}", addr, err);
+                error!(
+                    "Failed to bind internal server listener on {}: {}",
+                    addr, err
+                );
                 return;
             }
         };
@@ -29,15 +32,7 @@ fn build_app(routes: Vec<Router>) -> Router {
         .fold(Router::new(), |app, router| app.merge(router))
 }
 
-fn socket_addr() -> SocketAddr {
-    ([0, 0, 0, 0], 9898).into()
-}
-
-async fn run_server(
-    listener: TcpListener,
-    app: Router,
-    shutdown_token: CancellationToken,
-) {
+async fn run_server(listener: TcpListener, app: Router, shutdown_token: CancellationToken) {
     let shutdown = async move {
         shutdown_token.cancelled().await;
         info!("Shutdown signal received, stopping internal server...");
