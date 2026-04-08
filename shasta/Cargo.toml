@@ -10,6 +10,7 @@ publish = false
 alloy = { workspace = true }
 alloy-json-rpc = { workspace = true }
 anyhow = { workspace = true }
+axum = { workspace = true }
 common = { workspace = true }
 hex = { workspace = true }
 pacaya = { workspace = true }

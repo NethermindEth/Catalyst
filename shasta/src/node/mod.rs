@@ -2,6 +2,7 @@ pub mod block_advancer;
 pub mod config;
 mod last_safe_l2_block_finder;
 pub mod proposal_manager;
+pub mod status_router;
 use anyhow::Error;
 use common::{
     fork_info::ForkInfo,
@@ -134,7 +135,6 @@ impl Node {
 
     pub async fn entrypoint(mut self) -> Result<(), Error> {
         info!("Starting node");
-
         if let Err(err) = self.warmup().await {
             error!("Failed to warm up node: {}. Shutting down.", err);
             self.cancel_token.cancel_on_critical_error();
