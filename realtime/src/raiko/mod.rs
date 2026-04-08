@@ -23,6 +23,8 @@ pub struct RaikoClient {
 #[derive(Serialize)]
 pub struct RaikoProofRequest {
     pub l2_block_numbers: Vec<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l2_block_hashes: Option<Vec<String>>,
     pub proof_type: String,
     pub max_anchor_block_number: u64,
     pub last_finalized_block_hash: String,
@@ -56,7 +58,7 @@ pub struct RaikoBlobSlice {
     pub timestamp: u64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RaikoCheckpoint {
     pub block_number: u64,
     pub block_hash: String,
@@ -112,14 +114,46 @@ impl RaikoClient {
         }
     }
 
-    /// Request a proof and poll until ready.
-    /// Returns the raw proof bytes.
+    /// Submit a proof request and poll until ready.
+    ///
+    /// Flow:
+    /// 1. First request sends full sources+blobs to trigger proving.
+    /// 2. Subsequent polls send empty sources+blobs (the cache key fields —
+    ///    `l2_block_numbers`, `l2_block_hashes`, etc. — are still included).
+    /// 3. If a poll returns "proof not found" (expired from cache), we
+    ///    re-submit the full request with sources+blobs.
     pub async fn get_proof(&self, request: &RaikoProofRequest) -> Result<Vec<u8>, Error> {
         let url = format!("{}/v3/proof/batch/realtime", self.base_url);
 
-        for attempt in 0..self.max_retries {
-            let mut req = self.client.post(&url).json(request);
+        // Build the polling variant: same cache-key fields, empty sources+blobs.
+        let poll_request = RaikoProofRequest {
+            l2_block_numbers: request.l2_block_numbers.clone(),
+            l2_block_hashes: request.l2_block_hashes.clone(),
+            proof_type: request.proof_type.clone(),
+            max_anchor_block_number: request.max_anchor_block_number,
+            last_finalized_block_hash: request.last_finalized_block_hash.clone(),
+            basefee_sharing_pctg: request.basefee_sharing_pctg,
+            network: request.network.clone(),
+            l1_network: request.l1_network.clone(),
+            prover: request.prover.clone(),
+            signal_slots: request.signal_slots.clone(),
+            sources: vec![],
+            blobs: vec![],
+            checkpoint: request.checkpoint.clone(),
+            blob_proof_type: request.blob_proof_type.clone(),
+        };
 
+        // First attempt always sends the full request to trigger proving.
+        let mut use_full_request = true;
+
+        for attempt in 0..self.max_retries {
+            let body_to_send = if use_full_request {
+                request
+            } else {
+                &poll_request
+            };
+
+            let mut req = self.client.post(&url).json(body_to_send);
             if let Some(ref key) = self.api_key {
                 req = req.header("X-API-KEY", key);
             }
@@ -128,11 +162,16 @@ impl RaikoClient {
             let http_status = resp.status();
             let raw_body = resp.text().await?;
             debug!(
-                "Raiko response (attempt {}): HTTP {} | body: {}",
+                "Raiko response (attempt {}, full={}): HTTP {} | body: {}",
                 attempt + 1,
+                use_full_request,
                 http_status,
                 raw_body
             );
+
+            // After the first submission, switch to polling (empty sources+blobs).
+            use_full_request = false;
+
             let body: RaikoResponse = serde_json::from_str(&raw_body).map_err(|e| {
                 anyhow::anyhow!(
                     "Failed to parse Raiko response (HTTP {}): {} | body: {}",
@@ -143,10 +182,19 @@ impl RaikoClient {
             })?;
 
             if body.status == "error" {
-                return Err(anyhow::anyhow!(
-                    "Raiko proof failed: {}",
-                    body.message.unwrap_or_default()
-                ));
+                let msg = body.message.unwrap_or_default();
+                // "proof not found" means the proof expired from cache (Redis TTL) or was
+                // never submitted. Re-submit the full request with sources+blobs.
+                if msg.to_lowercase().contains("proof not found") {
+                    warn!(
+                        "Raiko: proof not found (expired or never submitted), re-submitting... (attempt {})",
+                        attempt + 1
+                    );
+                    use_full_request = true;
+                    tokio::time::sleep(self.poll_interval).await;
+                    continue;
+                }
+                return Err(anyhow::anyhow!("Raiko proof failed: {}", msg));
             }
 
             match body.data {

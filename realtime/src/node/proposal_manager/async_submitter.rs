@@ -169,8 +169,15 @@ async fn submission_task(
             },
         }];
 
+        let l2_block_hashes: Vec<String> = proposal
+            .l2_block_hashes
+            .iter()
+            .map(|h| format!("0x{}", hex::encode(h)))
+            .collect();
+
         let request = RaikoProofRequest {
             l2_block_numbers,
+            l2_block_hashes: Some(l2_block_hashes),
             proof_type: raiko_client.proof_type.raiko_proof_type().to_string(),
             max_anchor_block_number: proposal.max_anchor_block_number,
             last_finalized_block_hash: format!(

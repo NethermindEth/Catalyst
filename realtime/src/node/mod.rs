@@ -488,6 +488,15 @@ impl Node {
             sleep(Duration::from_secs(12)).await;
         }
 
+        // Wait for the L2 driver to replay L1-verified blocks before sequencing.
+        // After a clean L2 DB restart the driver must sync the chain back to
+        // lastFinalizedBlockHash; starting sequencing before that point causes
+        // ZISK_INVALID_PROOF because the ZK circuit expects the new block's parent
+        // to be lastFinalizedBlockHash, not genesis.
+        if !self.preconf_only {
+            self.proposal_manager.wait_for_l2_finalized_block().await?;
+        }
+
         // Wait for the last sent transaction to be executed
         self.wait_for_sent_transactions().await?;
 
