@@ -4,6 +4,12 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tracing::{error, info};
 
+/// Spawns an internal HTTP server that merges the provided routes and listens on the given IP and
+/// port. The server shuts down gracefully when the `cancel_token` is cancelled.
+///
+/// Known routes (registered by callers):
+/// - `GET /metrics` — Prometheus metrics (all protocol variants)
+/// - `GET /status`  — Node status (Shasta only)
 pub fn serve(cancel_token: CancellationToken, routes: Vec<Router>, ip: [u8; 4], port: u16) {
     let addr = SocketAddr::from((ip, port));
     tokio::spawn(async move {
