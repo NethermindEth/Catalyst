@@ -253,7 +253,7 @@ impl ExecutionLayer {
             .context("get_preconfer_nonce_pending (send_batch_to_l1)")?;
         // Spawn a monitor for this transaction
         self.transaction_monitor
-            .monitor_new_transaction(tx, pending_nonce)
+            .monitor_new_transaction(tx, pending_nonce, None, None)
             .await
             .map_err(|e| Error::msg(format!("Sending batch to L1 failed: {e}")))?;
 

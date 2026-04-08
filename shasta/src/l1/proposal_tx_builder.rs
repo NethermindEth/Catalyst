@@ -1,105 +1,64 @@
+use crate::l1::{
+    bindings::{IInbox::ProposeInput, LibBlobs::BlobReference, Multicall, SurgeInbox},
+    config::ContractAddresses,
+};
+use crate::l2::bindings::ICheckpointStore::Checkpoint;
+use crate::node::proposal_manager::{
+    bridge_handler::{L1Call, UserOp},
+    proposal::Proposal,
+};
+use crate::shared_abi::bindings::Bridge;
 use alloy::{
     consensus::SidecarBuilder,
-    eips::eip7594::BlobTransactionSidecarEip7594,
-    network::{TransactionBuilder, TransactionBuilder7594},
+    eips::eip4844::BlobTransactionSidecar,
+    network::TransactionBuilder4844,
     primitives::{
-        Address, Bytes,
+        Address, Bytes, U256,
         aliases::{U24, U48},
     },
     providers::{DynProvider, Provider},
     rpc::types::TransactionRequest,
+    signers::Signer,
+    sol_types::SolValue,
 };
 use alloy_json_rpc::RpcError;
 use anyhow::{Context, Error};
 use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
-use common::shared::l2_block_v2::L2BlockV2;
-use common::shared::transaction_monitor::TransactionRequestBuilder;
-use taiko_bindings::inbox::{IInbox::ProposeInput, Inbox, LibBlobs::BlobReference};
 use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},
 };
 use tracing::{info, warn};
 
-/// Build the EIP-7594 blob sidecar from L2 blocks. This is a CPU-intensive operation
-/// (KZG commitment + cell proof computation).
-fn build_sidecar_from_l2_blocks(
-    l2_blocks: &[L2BlockV2],
-) -> Result<BlobTransactionSidecarEip7594, Error> {
-    let start = std::time::Instant::now();
-
-    let mut block_manifests = Vec::with_capacity(l2_blocks.len());
-    for l2_block in l2_blocks {
-        block_manifests.push(BlockManifest {
-            timestamp: l2_block.timestamp_sec,
-            coinbase: l2_block.coinbase,
-            anchor_block_number: l2_block.anchor_block_number,
-            gas_limit: l2_block.gas_limit_without_anchor,
-            transactions: l2_block
-                .prebuilt_tx_list
-                .tx_list
-                .iter()
-                .map(|tx| tx.clone().into())
-                .collect(),
-        });
-    }
-
-    let manifest = DerivationSourceManifest {
-        blocks: block_manifests,
-    };
-
-    let manifest_data = manifest
-        .encode_and_compress()
-        .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
-
-    let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
-    let sidecar = sidecar_builder
-        .build_7594()
-        .map_err(|e| Error::msg(format!("sidecar builder build_7594 failed: {e}")))?;
-
-    info!(
-        "⏱️ build_sidecar_from_l2_blocks ({} blocks, {} bytes compressed) took {:?}",
-        l2_blocks.len(),
-        manifest_data.len(),
-        start.elapsed()
-    );
-
-    Ok(sidecar)
-}
-
 pub struct ProposalTxBuilder {
     provider: DynProvider,
     extra_gas_percentage: u64,
-    l2_blocks: Vec<L2BlockV2>,
-    from: Address,
-    to: Address,
-    num_forced_inclusion: u16,
+    checkpoint_signer: alloy::signers::local::PrivateKeySigner,
 }
 
 impl ProposalTxBuilder {
     pub fn new(
         provider: DynProvider,
         extra_gas_percentage: u64,
-        l2_blocks: Vec<L2BlockV2>,
-        from: Address,
-        to: Address,
-        num_forced_inclusion: u16,
+        checkpoint_signer: alloy::signers::local::PrivateKeySigner,
     ) -> Self {
         Self {
             provider,
             extra_gas_percentage,
-            l2_blocks,
-            from,
-            to,
-            num_forced_inclusion,
+            checkpoint_signer,
         }
     }
 
-    async fn build_propose_tx(&self) -> Result<TransactionRequest, Error> {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn build_propose_tx(
+        &self,
+        batch: Proposal,
+        from: Address,
+        contract_addresses: ContractAddresses,
+    ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
-            .build_propose_blob()
-            .await
-            .map_err(|e| Error::msg(format!("build_propose_blob failed: {e}")))?;
+            .build_propose_blob(batch, from, contract_addresses)
+            .await?;
         let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
             Ok(gas) => gas,
             Err(e) => {
@@ -136,8 +95,123 @@ impl ProposalTxBuilder {
         Ok(tx_blob)
     }
 
-    async fn build_propose_blob(&self) -> Result<TransactionRequest, Error> {
-        let sidecar = build_sidecar_from_l2_blocks(&self.l2_blocks)?;
+    #[allow(clippy::too_many_arguments)]
+    pub async fn build_propose_blob(
+        &self,
+        batch: Proposal,
+        from: Address,
+        contract_addresses: ContractAddresses,
+    ) -> Result<TransactionRequest, Error> {
+        let mut multicalls: Vec<Multicall::Call> = vec![];
+
+        // Add user op to multicall
+        // Note: Only adding the first call, since more calls are not expected for the POC
+        if !batch.user_ops.is_empty() {
+            let user_op_call = self.build_user_op_call(
+                batch
+                    .user_ops
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("user_ops is empty despite non-empty check"))?
+                    .clone(),
+            );
+            info!("Added user op to Multicall: {:?}", &user_op_call);
+            multicalls.push(user_op_call);
+        }
+
+        // Add the proposal to the multicall
+        // This must always follow the user ops
+        let (propose_call, blob_sidecar) = self
+            .build_propose_call(&batch, contract_addresses.shasta_inbox)
+            .await?;
+        info!("Added proposal to Multicall: {:?}", &propose_call);
+        multicalls.push(propose_call.clone());
+
+        // Add L1 calls initiated by L2 blocks in the proposal
+        if !batch.l1_calls.is_empty() {
+            let l1_call = self.build_l1_call_call(
+                batch
+                    .l1_calls
+                    .first()
+                    .ok_or_else(|| anyhow::anyhow!("l1_calls is empty despite non-empty check"))?
+                    .clone(),
+                contract_addresses.bridge,
+            );
+            info!("Added L1 call to Multicall: {:?}", &l1_call);
+            multicalls.push(l1_call.clone());
+        }
+
+        // Build the multicall transaction request
+        let multicall = Multicall::new(contract_addresses.proposer_multicall, &self.provider);
+        let call = multicall.multicall(multicalls);
+
+        let tx = TransactionRequest::default()
+            .to(contract_addresses.proposer_multicall)
+            .from(from)
+            .input(call.calldata().clone().into())
+            .with_blob_sidecar(blob_sidecar);
+
+        Ok(tx)
+    }
+
+    // Surge: builds the 161-byte proof data
+    // [0..96: ABI-encoded checkpoint][96..161: signed checkpoint digest]
+    async fn build_proof_data(&self, checkpoint: &Checkpoint) -> Result<Bytes, Error> {
+        let checkpoint_encoded = checkpoint.abi_encode();
+        let checkpoint_digest = alloy::primitives::keccak256(&checkpoint_encoded);
+        let signature = self.checkpoint_signer.sign_hash(&checkpoint_digest).await?;
+
+        let mut signature_bytes = [0_u8; 65];
+        signature_bytes[..32].copy_from_slice(signature.r().to_be_bytes::<32>().as_slice());
+        signature_bytes[32..64].copy_from_slice(signature.s().to_be_bytes::<32>().as_slice());
+        signature_bytes[64] = u8::from(signature.v()) + 27;
+
+        let mut proof_data = Vec::with_capacity(161);
+        proof_data.extend_from_slice(&checkpoint_encoded);
+        proof_data.extend_from_slice(&signature_bytes);
+        Ok(Bytes::from(proof_data))
+    }
+
+    // Surge: Multicall builders
+
+    fn build_user_op_call(&self, user_op_data: UserOp) -> Multicall::Call {
+        Multicall::Call {
+            target: user_op_data.submitter,
+            value: U256::ZERO,
+            data: user_op_data.calldata,
+        }
+    }
+
+    async fn build_propose_call(
+        &self,
+        batch: &Proposal,
+        inbox_address: Address,
+    ) -> Result<(Multicall::Call, BlobTransactionSidecar), anyhow::Error> {
+        let mut block_manifests = <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
+        for l2_block in &batch.l2_blocks {
+            block_manifests.push(BlockManifest {
+                timestamp: l2_block.timestamp_sec,
+                coinbase: l2_block.coinbase,
+                anchor_block_number: l2_block.anchor_block_number,
+                gas_limit: l2_block.gas_limit_without_anchor,
+                transactions: l2_block
+                    .prebuilt_tx_list
+                    .tx_list
+                    .iter()
+                    .map(|tx| tx.clone().into())
+                    .collect(),
+            });
+        }
+
+        let manifest = DerivationSourceManifest {
+            blocks: block_manifests,
+        };
+
+        let manifest_data = manifest
+            .encode_and_compress()
+            .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
+
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
+        let sidecar: BlobTransactionSidecar = sidecar_builder.build()?;
 
         // Build the propose input.
         let input = ProposeInput {
@@ -151,34 +225,46 @@ impl ProposalTxBuilder {
                     .context("blobs len try_into")?,
                 offset: U24::ZERO,
             },
-            numForcedInclusions: self.num_forced_inclusion,
+            numForcedInclusions: batch.num_forced_inclusion,
         };
 
-        let inbox = Inbox::new(self.to, self.provider.clone());
+        let inbox = SurgeInbox::new(inbox_address, self.provider.clone());
         let encoded_proposal_input = inbox
             .encodeProposeInput(input)
             .call()
             .await
             .map_err(|e| Error::msg(format!("inbox encodeProposeInput failed: {e}")))?;
 
-        let tx = TransactionRequest::default()
-            .with_from(self.from)
-            .with_to(self.to)
-            .with_blob_sidecar(sidecar)
-            .with_call(&Inbox::proposeCall {
-                _lookahead: Bytes::new(),
-                _data: encoded_proposal_input,
-            });
+        // Surge: using `proposeWithProof(..)` in Surge Inbox
+        let proof_data = self.build_proof_data(&batch.checkpoint).await?;
+        let call = inbox.proposeWithProof(
+            Bytes::new(),
+            encoded_proposal_input,
+            proof_data,
+            batch.signal_slots.clone(),
+        );
 
-        Ok(tx)
+        Ok((
+            Multicall::Call {
+                target: inbox_address,
+                value: U256::ZERO,
+                data: call.calldata().clone(),
+            },
+            sidecar,
+        ))
+    }
+
+    fn build_l1_call_call(&self, l1_call: L1Call, bridge_address: Address) -> Multicall::Call {
+        let bridge = Bridge::new(bridge_address, &self.provider);
+        let call = bridge.processMessage(l1_call.message_from_l2, l1_call.signal_slot_proof);
+
+        Multicall::Call {
+            target: bridge_address,
+            value: U256::ZERO,
+            data: call.calldata().clone(),
+        }
     }
 }
 
-impl TransactionRequestBuilder for ProposalTxBuilder {
-    async fn build(self) -> Result<TransactionRequest, TransactionError> {
-        self.build_propose_tx().await.map_err(|e| {
-            e.downcast::<TransactionError>()
-                .unwrap_or(TransactionError::BuildFailed)
-        })
-    }
-}
+// Note: The POC uses direct build_propose_tx calls with multicall,
+// so TransactionRequestBuilder is not implemented here.

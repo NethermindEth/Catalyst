@@ -303,12 +303,19 @@ impl Node {
                 .proposal_manager
                 .should_new_block_be_created(&pending_tx_list, &l2_slot_ctx)
             {
-                let preconfed_block = self
-                    .proposal_manager
-                    .preconfirm_block(pending_tx_list, &l2_slot_ctx)
-                    .await?;
+                // Surge: preconfirm only when there are pending transactions or user ops
+                if pending_tx_list
+                    .as_ref()
+                    .is_some_and(|pre_built_list| !pre_built_list.tx_list.is_empty())
+                    || self.proposal_manager.has_pending_user_ops().await
+                {
+                    let preconfed_block = self
+                        .proposal_manager
+                        .preconfirm_block(pending_tx_list, &l2_slot_ctx)
+                        .await?;
 
-                self.verify_preconfed_block(preconfed_block).await?;
+                    self.verify_preconfed_block(preconfed_block).await?;
+                }
             }
         }
 

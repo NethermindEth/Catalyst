@@ -5,6 +5,7 @@ members = [
     "node",
     "pacaya",
     "permissionless",
+    "realtime",
     "shasta",
     "tools/p2p_boot_node",
     "urc",
@@ -88,7 +89,9 @@ reqwest = { version = "0.13", default-features = true, features = ["json"] }
 rustls = { version = "0.23", default-features = true }
 secp256k1 = { version = "0.30", features = ["recovery", "rand"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
+sled = { version = "0.34", default-features = false }
 serde_json = { version = "1.0", default-features = false }
+realtime = { path = "realtime" }
 shasta = { path = "shasta" }
 ssz_rs = { version = "0.9.0" }
 strum = { version = "0.27", features = ["derive"] }

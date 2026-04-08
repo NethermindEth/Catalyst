@@ -1,4 +1,5 @@
 use crate::l1::protocol_config::ProtocolConfig;
+use crate::l2::bindings::ICheckpointStore::Checkpoint;
 use crate::l2::execution_layer::L2ExecutionLayer;
 use crate::node::proposal_manager::block_advancer::BlockAdvancer;
 use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
@@ -13,7 +14,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
-use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 
 pub struct ShastaBlockAdvancer {
     l2_execution_layer: Arc<L2ExecutionLayer>,
@@ -48,11 +48,14 @@ impl BlockAdvancer for ShastaBlockAdvancer {
                 l2_block_payload.tx_list.len()
             );
 
-            let anchor_block_params = Checkpoint {
-                blockNumber: l2_block_payload.anchor_block_id.try_into()?,
-                blockHash: l2_block_payload.anchor_block_hash,
-                stateRoot: l2_block_payload.anchor_state_root,
-            };
+            let anchor_block_params = (
+                Checkpoint {
+                    blockNumber: l2_block_payload.anchor_block_id.try_into()?,
+                    blockHash: l2_block_payload.anchor_block_hash,
+                    stateRoot: l2_block_payload.anchor_state_root,
+                },
+                vec![], // No signal slots for standard block advancement
+            );
 
             let anchor_tx = self
                 .l2_execution_layer

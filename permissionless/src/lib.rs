@@ -7,6 +7,7 @@ mod utils;
 use crate::node::block_advancer::PermissionlessBlockAdvancer;
 use crate::node::config::NodeConfig;
 use crate::utils::config::Config as PermissionlessConfig;
+use alloy::primitives::Address;
 use anyhow::Error;
 use common::{
     batch_builder::BatchBuilderConfig,
@@ -45,6 +46,8 @@ pub async fn create_permissionless_node(
     let (transaction_error_sender, transaction_error_receiver) = mpsc::channel(100);
     let shasta_l1_config = ShastaEthereumL1Config {
         shasta_inbox: permissionless_config.shasta_inbox,
+        proposer_multicall: Address::ZERO,
+        bridge: Address::ZERO,
     };
     let ethereum_l1 = Arc::new(
         EthereumL1::<ShastaExecutionLayer>::new(

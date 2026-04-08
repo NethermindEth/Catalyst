@@ -1,6 +1,7 @@
 use super::execution_layer::L2ExecutionLayer;
 use crate::forced_inclusion::InboxForcedInclusionState;
 use crate::l1::protocol_config::ProtocolConfig;
+use crate::l2::bindings::Anchor;
 use alloy::{
     consensus::BlockHeader,
     eips::BlockNumberOrTag,
@@ -21,7 +22,6 @@ use common::{
 use pacaya::l2::config::TaikoConfig;
 use std::sync::Arc;
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
-use taiko_bindings::anchor::Anchor;
 use taiko_bindings::inbox::IInbox::Config;
 use taiko_protocol::shasta::constants::min_base_fee_for_chain;
 use tracing::{debug, trace};
@@ -295,7 +295,7 @@ impl Taiko {
         L2ExecutionLayer::decode_anchor_id_from_tx_data(data)
     }
 
-    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4Call, Error> {
+    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4WithSignalSlotsCall, Error> {
         L2ExecutionLayer::get_anchor_tx_data(data)
     }
 

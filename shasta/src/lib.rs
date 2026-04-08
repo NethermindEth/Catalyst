@@ -4,6 +4,7 @@ pub mod forced_inclusion;
 pub mod l1;
 pub mod l2;
 mod node;
+mod shared_abi;
 pub use node::proposal_manager::block_advancer::BlockAdvancer;
 pub use node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 

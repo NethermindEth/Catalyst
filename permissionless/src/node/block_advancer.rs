@@ -4,11 +4,11 @@ use anyhow::Error;
 use common::l2::taiko_driver::{OperationType, models::BuildPreconfBlockResponse};
 use common::shared::l2_slot_info_v2::L2SlotContext;
 use secp256k1::SecretKey;
+use shasta::l2::bindings::ICheckpointStore::Checkpoint;
 use shasta::{BlockAdvancer, L2BlockV2Payload, l2::taiko::Taiko};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 use tracing::info;
 
 pub struct PermissionlessBlockAdvancer {
@@ -51,7 +51,7 @@ impl BlockAdvancer for PermissionlessBlockAdvancer {
             let anchor_tx = self
                 .taiko
                 .l2_execution_layer()
-                .construct_anchor_tx(&l2_slot_context.info, anchor_block_params)
+                .construct_anchor_tx(&l2_slot_context.info, (anchor_block_params, vec![]))
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to construct anchor tx: {}", e))?;
 
@@ -79,6 +79,7 @@ impl BlockAdvancer for PermissionlessBlockAdvancer {
             Ok(BuildPreconfBlockResponse {
                 number: l2_slot_context.info.parent_id() + 1,
                 hash: B256::ZERO, // TODO: missing hash from the response, do we need it for permissionless?
+                state_root: B256::ZERO,
                 parent_hash: *l2_slot_context.info.parent_hash(),
                 is_forced_inclusion: l2_block_payload.is_forced_inclusion,
             })

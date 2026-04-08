@@ -5,6 +5,7 @@ use common::{
     utils::cancellation_token::CancellationToken,
 };
 use pacaya::create_pacaya_node;
+use realtime::create_realtime_node;
 use std::sync::Arc;
 use tokio::signal::unix::{SignalKind, signal};
 use tracing::{error, info};
@@ -83,10 +84,9 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
 
     match fork_info.fork {
         Fork::Pacaya => {
-            // TODO pacaya::utils::config::Config
             let next_fork_timestamp = fork_info.config.fork_switch_timestamps.get(1);
             info!(
-                "Current fork: PACAYA 🌋, next fork timestamp: {:?}",
+                "Current fork: PACAYA, next fork timestamp: {:?}",
                 next_fork_timestamp
             );
             create_pacaya_node(
@@ -98,7 +98,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
             .await?;
         }
         Fork::Shasta => {
-            info!("Current fork: SHASTA 🌋");
+            info!("Current fork: SHASTA");
             shasta::create_shasta_node(
                 config.clone(),
                 metrics.clone(),
@@ -108,8 +108,18 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
             .await?;
         }
         Fork::Permissionless => {
-            info!("Current fork: PERMISSIONLESS 🌋");
+            info!("Current fork: PERMISSIONLESS");
             permissionless::create_permissionless_node(
+                config.clone(),
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info,
+            )
+            .await?;
+        }
+        Fork::Realtime => {
+            info!("Current fork: REALTIME");
+            create_realtime_node(
                 config.clone(),
                 metrics.clone(),
                 cancel_token.clone(),
