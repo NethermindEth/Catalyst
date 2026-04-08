@@ -94,8 +94,19 @@ pub async fn create_shasta_node(
         watchdog_max_counter: config.watchdog_max_counter,
     };
 
-    let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
-        taiko_protocol::shasta::constants::DERIVATION_SOURCE_MAX_BLOCKS.try_into()?
+    let protocol_limit: u16 =
+        taiko_protocol::shasta::constants::DERIVATION_SOURCE_MAX_BLOCKS.try_into()?;
+    let max_blocks_per_batch = if config.max_blocks_per_batch == 0
+        || config.max_blocks_per_batch > protocol_limit
+    {
+        if config.max_blocks_per_batch > protocol_limit {
+            tracing::warn!(
+                "Configured max_blocks_per_batch ({}) exceeds the protocol limit ({}), using the protocol limit",
+                config.max_blocks_per_batch,
+                protocol_limit
+            );
+        }
+        protocol_limit
     } else {
         config.max_blocks_per_batch
     };
