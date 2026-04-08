@@ -279,6 +279,9 @@ impl Node {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
 
+        self.metrics
+            .set_is_geth_and_driver_synced(current_status.is_driver_synced());
+
         if self
             .recreate_node_when_next_fork_became_active(l2_slot_info.slot_timestamp())
             .await
