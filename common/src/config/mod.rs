@@ -77,6 +77,9 @@ pub struct Config {
     pub whitelist_monitor_interval_sec: u64,
     // Watchdog
     pub watchdog_max_counter: u64,
+    // Internal server
+    pub internal_server_ip: [u8; 4],
+    pub internal_server_port: u16,
 }
 
 /// Creates a formatted error message for address parsing failures.
@@ -447,6 +450,17 @@ impl Config {
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("WATCHDOG_MAX_COUNTER must be a number: {}", e))?;
 
+        let internal_server_ip = std::env::var("INTERNAL_SERVER_IP")
+            .unwrap_or_else(|_| "0.0.0.0".to_string())
+            .parse::<std::net::Ipv4Addr>()
+            .map_err(|e| anyhow::anyhow!("INTERNAL_SERVER_IP must be a valid IPv4 address: {}", e))
+            .map(|ip| ip.octets())?;
+
+        let internal_server_port = std::env::var("INTERNAL_SERVER_PORT")
+            .unwrap_or("9898".to_string())
+            .parse::<u16>()
+            .map_err(|e| anyhow::anyhow!("INTERNAL_SERVER_PORT must be a number: {}", e))?;
+
         let config = Self {
             preconfer_address,
             taiko_geth_rpc_url: std::env::var("TAIKO_GETH_RPC_URL")
@@ -507,6 +521,8 @@ impl Config {
             permissionless_timestamp_sec,
             whitelist_monitor_interval_sec,
             watchdog_max_counter,
+            internal_server_ip,
+            internal_server_port,
         };
 
         info!(
@@ -560,6 +576,8 @@ shasta timestamp: {}s
 permissionless timestamp: {}s
 whitelist monitor interval: {}s
 watchdog max counter: {}
+internal server IP: {}
+internal server port: {}
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -621,6 +639,8 @@ watchdog max counter: {}
             config.permissionless_timestamp_sec,
             config.whitelist_monitor_interval_sec,
             config.watchdog_max_counter,
+            std::net::Ipv4Addr::from(config.internal_server_ip),
+            config.internal_server_port,
         );
 
         Ok(config)

@@ -1,10 +1,28 @@
+use axum::Router;
+use axum::extract::State;
+use axum::http::header;
+use axum::response::IntoResponse;
+use axum::routing::get;
 use prometheus::{
     Counter, CounterVec, Encoder, Gauge, Histogram, HistogramOpts, HistogramVec, Opts, Registry,
     TextEncoder,
 };
+use std::sync::Arc;
 use tracing::error;
 
-pub mod server;
+async fn metrics_handler(State(metrics): State<Arc<Metrics>>) -> impl IntoResponse {
+    let output = metrics.gather();
+    (
+        [(header::CONTENT_TYPE, "text/plain; version=0.0.4")],
+        output,
+    )
+}
+
+pub fn metrics_route(metrics: Arc<Metrics>) -> Router {
+    Router::new()
+        .route("/metrics", get(metrics_handler))
+        .with_state(metrics)
+}
 
 pub struct Metrics {
     preconfer_eth_balance: Gauge,
