@@ -85,14 +85,14 @@ permissionless = { path = "permissionless" }
 prometheus = { version = "0.14", default-features = false }
 rand = { version = "0.9", default-features = false }
 rand_core = { version = "0.9", default-features = false }
+realtime = { path = "realtime" }
 reqwest = { version = "0.13", default-features = true, features = ["json"] }
 rustls = { version = "0.23", default-features = true }
 secp256k1 = { version = "0.30", features = ["recovery", "rand"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
-sled = { version = "0.34", default-features = false }
 serde_json = { version = "1.0", default-features = false }
-realtime = { path = "realtime" }
 shasta = { path = "shasta" }
+sled = { version = "0.34", default-features = false }
 ssz_rs = { version = "0.9.0" }
 strum = { version = "0.27", features = ["derive"] }
 
