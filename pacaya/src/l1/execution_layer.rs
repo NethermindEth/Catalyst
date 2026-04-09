@@ -1,21 +1,10 @@
 use super::{
-    OperatorError,
-    bindings::{
-        PreconfWhitelist,
-        forced_inclusion_store::{IForcedInclusionStore, IForcedInclusionStore::ForcedInclusion},
-        preconf_router::IPreconfRouter,
-        taiko_inbox, taiko_wrapper,
-    },
+    bindings::{PreconfWhitelist, taiko_inbox},
     config::EthereumL1Config,
-    operators_cache::OperatorsCache,
     protocol_config::ProtocolConfig,
-    traits::{PreconfOperator, WhitelistProvider},
+    traits::WhitelistProvider,
 };
-use alloy::{
-    eips::BlockNumberOrTag,
-    primitives::{Address, U256},
-    providers::DynProvider,
-};
+use alloy::{eips::BlockNumberOrTag, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Error, anyhow};
 use common::{
     l1::{
@@ -37,9 +26,7 @@ pub struct ExecutionLayer {
     common: ExecutionLayerCommon,
     provider: DynProvider,
     config: EthereumL1Config,
-    taiko_wrapper_contract: taiko_wrapper::TaikoWrapper::TaikoWrapperInstance<DynProvider>,
     pub transaction_monitor: TransactionMonitor,
-    operators_cache: OperatorsCache,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -64,11 +51,6 @@ impl ELTrait for ExecutionLayer {
                 .await
                 .context("ExecutionLayerCommon::new")?;
 
-        let taiko_wrapper_contract = taiko_wrapper::TaikoWrapper::new(
-            specific_config.contract_addresses.taiko_wrapper,
-            provider.clone(),
-        );
-
         let transaction_monitor = TransactionMonitor::new(
             provider.clone(),
             &common_config,
@@ -79,18 +61,11 @@ impl ELTrait for ExecutionLayer {
         .await
         .map_err(|e| Error::msg(format!("Failed to create TransactionMonitor: {e}")))?;
 
-        let operators_cache = OperatorsCache::new(
-            provider.clone(),
-            specific_config.contract_addresses.preconf_whitelist,
-        );
-
         Ok(Self {
             common,
             provider,
             config: specific_config,
-            taiko_wrapper_contract,
             transaction_monitor,
-            operators_cache,
         })
     }
 
@@ -248,58 +223,6 @@ impl ExecutionLayer {
         Ok(balance.min(allowance))
     }
 
-    pub async fn get_forced_inclusion_head(&self) -> Result<u64, Error> {
-        let contract = IForcedInclusionStore::new(
-            self.config.contract_addresses.forced_inclusion_store,
-            self.provider.clone(),
-        );
-        contract
-            .head()
-            .call()
-            .await
-            .map_err(|e| anyhow!("Failed to get forced inclusion head: {}", e))
-    }
-
-    pub async fn get_forced_inclusion_tail(&self) -> Result<u64, Error> {
-        let contract = IForcedInclusionStore::new(
-            self.config.contract_addresses.forced_inclusion_store,
-            self.provider.clone(),
-        );
-        contract
-            .tail()
-            .call()
-            .await
-            .map_err(|e| anyhow!("Failed to get forced inclusion tail: {}", e))
-    }
-
-    pub async fn get_forced_inclusion(&self, index: u64) -> Result<ForcedInclusion, Error> {
-        let contract = IForcedInclusionStore::new(
-            self.config.contract_addresses.forced_inclusion_store,
-            self.provider.clone(),
-        );
-        contract
-            .getForcedInclusion(U256::from(index))
-            .call()
-            .await
-            .map_err(|e| {
-                Error::msg(format!(
-                    "Failed to get forced inclusion at index {index}: {e}"
-                ))
-            })
-    }
-
-    pub async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {
-        let contract = IPreconfRouter::new(
-            self.config.contract_addresses.preconf_router,
-            self.provider.clone(),
-        );
-        contract
-            .getConfig()
-            .call()
-            .await
-            .map_err(|e| Error::msg(format!("Failed to get preconf router config: {e}")))
-    }
-
     pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {
         self.transaction_monitor
             .is_transaction_in_progress()
@@ -325,50 +248,5 @@ impl WhitelistProvider for ExecutionLayer {
                 ))
             })?;
         Ok(operators.activeSince > 0)
-    }
-}
-
-impl PreconfOperator for ExecutionLayer {
-    fn get_preconfer_address(&self) -> Address {
-        self.common().preconfer_address()
-    }
-
-    async fn get_operators_for_current_and_next_epoch(
-        &self,
-        current_epoch_timestamp: u64,
-        current_slot_timestamp: u64,
-    ) -> Result<(Address, Address), OperatorError> {
-        self.operators_cache
-            .get_operators_for_current_and_next_epoch(
-                current_epoch_timestamp,
-                current_slot_timestamp,
-            )
-            .await
-    }
-
-    async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-        let preconf_router = self
-            .taiko_wrapper_contract
-            .preconfRouter()
-            .call()
-            .await
-            .map_err(|e| Error::msg(format!("Failed to get preconf router: {e}")))?;
-        Ok(preconf_router != Address::ZERO)
-    }
-
-    async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
-        self.get_l2_height_from_taiko_inbox().await
-    }
-
-    async fn get_handover_window_slots(&self) -> Result<u64, Error> {
-        match self.get_preconf_router_config().await {
-            Ok(router_config) => router_config.handOverSlots.try_into().map_err(|_| {
-                anyhow::anyhow!("Failed to convert handOverSlots from preconf router config")
-            }),
-            Err(e) => Err(anyhow::anyhow!(
-                "Failed to get preconf router config: {}",
-                e
-            )),
-        }
     }
 }
