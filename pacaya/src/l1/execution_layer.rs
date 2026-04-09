@@ -12,7 +12,6 @@ use super::{
     protocol_config::ProtocolConfig,
     traits::{PreconfOperator, WhitelistProvider},
 };
-use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, U256},
@@ -393,22 +392,6 @@ impl ExecutionLayer {
                     "Failed to get forced inclusion at index {index}: {e}"
                 ))
             })
-    }
-
-    pub fn build_forced_inclusion_batch(
-        &self,
-        coinbase: Address,
-        last_anchor_origin_height: u64,
-        last_l2_block_timestamp: u64,
-        info: &ForcedInclusionInfo,
-    ) -> BatchParams {
-        ProposeBatchBuilder::build_forced_inclusion_batch(
-            self.common().preconfer_address(),
-            coinbase,
-            last_anchor_origin_height,
-            last_l2_block_timestamp,
-            info,
-        )
     }
 
     pub async fn get_preconf_router_config(&self) -> Result<IPreconfRouter::Config, Error> {

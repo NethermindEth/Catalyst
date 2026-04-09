@@ -1,5 +1,4 @@
 use super::bindings::*;
-use crate::forced_inclusion::ForcedInclusionInfo;
 use alloy::{
     consensus::{SidecarBuilder, transaction::RlpEcdsaEncodableTx},
     network::{TransactionBuilder, TransactionBuilder7594},
@@ -334,35 +333,5 @@ impl ProposeBatchBuilder {
             });
 
         Ok(tx)
-    }
-
-    pub fn build_forced_inclusion_batch(
-        proposer: Address,
-        coinbase: Address,
-        last_anchor_origin_height: u64,
-        last_l2_block_timestamp: u64,
-        info: &ForcedInclusionInfo,
-    ) -> BatchParams {
-        BatchParams {
-            proposer,
-            coinbase,
-            parentMetaHash: FixedBytes::from(&[0u8; 32]),
-            anchorBlockId: last_anchor_origin_height,
-            lastBlockTimestamp: last_l2_block_timestamp,
-            revertIfNotFirstProposal: false,
-            blobParams: BlobParams {
-                blobHashes: vec![info.blob_hash],
-                firstBlobIndex: 0,
-                numBlobs: 0,
-                byteOffset: info.blob_byte_offset,
-                byteSize: info.blob_byte_size,
-                createdIn: info.created_in,
-            },
-            blocks: vec![BlockParams {
-                numTransactions: 4096, // TaikoWrapper.MIN_TXS_PER_FORCED_INCLUSION
-                timeShift: 0,
-                signalSlots: vec![],
-            }],
-        }
     }
 }

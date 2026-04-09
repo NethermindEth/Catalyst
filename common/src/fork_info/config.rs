@@ -13,7 +13,7 @@ impl Default for ForkInfoConfig {
     fn default() -> Self {
         Self {
             fork_switch_timestamps: vec![
-                Duration::from_secs(0), // Shasta
+                Duration::from_secs(0),           // Shasta
                 Duration::from_secs(99999999999), // Permissionless
             ],
             fork_switch_transition_period: Duration::from_secs(15),
