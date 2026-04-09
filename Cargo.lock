@@ -7187,7 +7187,7 @@ dependencies = [
 
 [[package]]
 name = "realtime"
-version = "1.35.2"
+version = "1.35.5"
 dependencies = [
  "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=637f7a150f72fe8d6cc5949a41aebb638a5305cf)",
  "alloy",
@@ -7218,7 +7218,6 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber 0.3.23",
- "warp",
 ]
 
 [[package]]
@@ -10232,7 +10231,6 @@ dependencies = [
  "bindings",
  "common",
  "hex",
- "jsonrpsee",
  "mockito",
  "pacaya",
  "protocol",
@@ -10241,7 +10239,6 @@ dependencies = [
  "rpc",
  "serde",
  "serde_json",
- "sled",
  "tokio",
  "tokio-util",
  "tracing",
