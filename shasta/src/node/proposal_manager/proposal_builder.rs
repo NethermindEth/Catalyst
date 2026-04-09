@@ -2,17 +2,13 @@ use std::{collections::VecDeque, sync::Arc};
 
 use super::proposal::Proposals;
 use super::proposal_queue::ProposalQueue;
-use crate::l2::bindings::ICheckpointStore::Checkpoint;
-use crate::node::proposal_manager::bridge_handler::{L1Call, UserOp};
 use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 use crate::{
     l1::execution_layer::ExecutionLayer, metrics::Metrics,
-    node::proposal_manager::proposal::Proposal,
+    node::proposal_manager::proposal::Proposal, shared::l2_tx_lists::PreBuiltTxList,
 };
 use alloy::primitives::Address;
-use alloy::primitives::FixedBytes;
 use anyhow::Error;
-use common::shared::l2_tx_lists::PreBuiltTxList;
 use common::{
     batch_builder::BatchBuilderConfig,
     shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft},
@@ -21,7 +17,8 @@ use common::{
     l1::{ethereum_l1::EthereumL1, slot_clock::SlotClock},
     shared::anchor_block_info::AnchorBlockInfo,
 };
-use tracing::{debug, info, trace, warn};
+use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
+use tracing::{debug, trace, warn};
 
 pub struct ProposalBuilder {
     config: BatchBuilderConfig,
@@ -111,10 +108,6 @@ impl ProposalBuilder {
             num_forced_inclusion: 0,
             created_at_sec: timestamp,
             pending_confirmation: false,
-            checkpoint: Checkpoint::default(),
-            user_ops: vec![],
-            signal_slots: vec![],
-            l1_calls: vec![],
         });
     }
 
@@ -224,11 +217,6 @@ impl ProposalBuilder {
                 num_forced_inclusion: 0,
                 created_at_sec: l2_block_timestamp_sec,
                 pending_confirmation: false,
-                checkpoint: Checkpoint::default(),
-                // Surge: This is NOT OK for recovery, but fine for the POC.
-                user_ops: vec![],
-                signal_slots: vec![],
-                l1_calls: vec![],
             });
         }
 
@@ -251,7 +239,7 @@ impl ProposalBuilder {
                 proposal.anchor_state_root = anchor_info.state_root();
             }
 
-            let bytes_length = common::shared::l2_tx_lists::rlp_encode(&tx_list).len() as u64;
+            let bytes_length = crate::shared::l2_tx_lists::rlp_encode(&tx_list).len() as u64;
 
             let l2_draft_block = L2BlockV2Draft {
                 prebuilt_tx_list: PreBuiltTxList {
@@ -272,7 +260,7 @@ impl ProposalBuilder {
             }
 
             let l2_block = L2BlockV2::new_from(
-                common::shared::l2_tx_lists::PreBuiltTxList {
+                crate::shared::l2_tx_lists::PreBuiltTxList {
                     tx_list,
                     estimated_gas_used: 0,
                     bytes_length,
@@ -362,10 +350,11 @@ impl ProposalBuilder {
                 "Submitting proposal"
             );
 
-            // Send the full proposal (with user ops, signal slots, L1 calls) to L1
+            // Dispatches tx building + monitoring to a background task (returns immediately).
+            // Build errors (EstimationFailed, etc.) are reported via error_notification_channel.
             ethereum_l1
                 .execution_layer
-                .send_proposal_to_l1(proposal.clone(), None, None)
+                .send_proposal_to_l1(proposal.l2_blocks.clone(), proposal.num_forced_inclusion)
                 .await?;
 
             // Mark the proposal as dispatched — it will be removed once the monitor confirms.
@@ -506,50 +495,6 @@ impl ProposalBuilder {
         self.current_proposal
             .as_ref()
             .is_some_and(|p| p.has_forced_inclusion())
-    }
-
-    // Surge: adds user ops that initiate L2 calls
-    pub fn add_user_op(&mut self, user_op_data: UserOp) -> Result<&Proposal, Error> {
-        if let Some(current_proposal) = self.current_proposal.as_mut() {
-            current_proposal.user_ops.push(user_op_data.clone());
-            info!("Added user op: {:?}", user_op_data);
-            Ok(current_proposal)
-        } else {
-            Err(anyhow::anyhow!("No current proposal"))
-        }
-    }
-
-    // Surge: adds signal slots to make same slot L2 call valid
-    pub fn add_signal_slot(&mut self, signal_slot: FixedBytes<32>) -> Result<&Proposal, Error> {
-        if let Some(current_proposal) = self.current_proposal.as_mut() {
-            current_proposal.signal_slots.push(signal_slot);
-            info!("Added signal slot: {:?}", signal_slot);
-            Ok(current_proposal)
-        } else {
-            Err(anyhow::anyhow!("No current proposal"))
-        }
-    }
-
-    // Surge: adds L1 calls initiated by L2 contracts
-    pub fn add_l1_call(&mut self, l1_call: L1Call) -> Result<&Proposal, Error> {
-        if let Some(current_proposal) = self.current_proposal.as_mut() {
-            current_proposal.l1_calls.push(l1_call.clone());
-            info!("Added L1 call: {:?}", l1_call);
-            Ok(current_proposal)
-        } else {
-            Err(anyhow::anyhow!("No current proposal"))
-        }
-    }
-
-    // Surge: Sets the proposal checkpoint
-    pub fn set_proposal_checkpoint(&mut self, checkpoint: Checkpoint) -> Result<&Proposal, Error> {
-        if let Some(current_proposal) = self.current_proposal.as_mut() {
-            current_proposal.checkpoint = checkpoint.clone();
-            debug!("Update proposal checkpoint: {:?}", checkpoint);
-            Ok(current_proposal)
-        } else {
-            Err(anyhow::anyhow!("No current proposal"))
-        }
     }
 }
 

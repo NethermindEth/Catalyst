@@ -6,8 +6,6 @@ use std::str::FromStr;
 #[derive(Debug, Clone)]
 pub struct ShastaConfig {
     pub shasta_inbox: Address,
-    pub proposer_multicall: Address,
-    pub bridge: Address,
     pub handover_window_slots: u64,
     pub handover_start_buffer_ms: u64,
     pub l1_height_lag: u64,
@@ -26,8 +24,6 @@ impl ConfigTrait for ShastaConfig {
         };
 
         let shasta_inbox = read_contract_address("SHASTA_INBOX_ADDRESS")?;
-        let proposer_multicall = read_contract_address("PROPOSER_MULTICALL_ADDRESS")?;
-        let bridge = read_contract_address("L1_BRIDGE_ADDRESS")?;
 
         let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")
             .unwrap_or("8".to_string())
@@ -67,8 +63,6 @@ impl ConfigTrait for ShastaConfig {
 
         Ok(ShastaConfig {
             shasta_inbox,
-            proposer_multicall,
-            bridge,
             handover_window_slots,
             handover_start_buffer_ms,
             l1_height_lag,

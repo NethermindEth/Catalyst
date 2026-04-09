@@ -1,27 +1,17 @@
-mod batch_builder;
 pub mod block_advancer;
-pub mod bridge_handler;
 pub mod l2_block_payload;
 pub mod proposal;
 mod proposal_builder;
 mod proposal_queue;
 
-use crate::l2::bindings::ICheckpointStore::Checkpoint;
-use crate::l2::execution_layer::L2BridgeHandlerOps;
-use crate::node::proposal_manager::bridge_handler::UserOp;
 use crate::{
     l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
     metrics::Metrics,
     shared::{l2_block_v2::L2BlockV2Draft, l2_tx_lists::PreBuiltTxList},
 };
-use alloy::primitives::FixedBytes;
-use alloy::{
-    consensus::{BlockHeader, Transaction as TransactionTrait},
-    primitives::aliases::U48,
-};
+use alloy::{consensus::BlockHeader, consensus::Transaction};
 use anyhow::Error;
-use bridge_handler::BridgeHandler;
 use common::{batch_builder::BatchBuilderConfig, shared::l2_slot_info_v2::L2SlotContext};
 use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
@@ -30,8 +20,7 @@ use common::{
     utils::cancellation_token::CancellationToken,
 };
 use proposal_builder::ProposalBuilder;
-use std::{net::SocketAddr, sync::Arc};
-use tokio::sync::Mutex;
+use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 use crate::forced_inclusion::ForcedInclusion;
@@ -41,7 +30,6 @@ use proposal::Proposals;
 
 pub struct ProposalManager {
     proposal_builder: ProposalBuilder,
-    bridge_handler: Arc<Mutex<BridgeHandler>>,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
     block_advancer: Arc<dyn BlockAdvancer>,
@@ -86,25 +74,12 @@ impl ProposalManager {
 
         let forced_inclusion = ForcedInclusion::new(ethereum_l1.clone()).await?;
 
-        // Initialize bridge handler listening on port 4545
-        let bridge_addr: SocketAddr = "127.0.0.1:4545".parse()?;
-        let bridge_handler = Arc::new(Mutex::new(
-            BridgeHandler::new(
-                bridge_addr,
-                ethereum_l1.clone(),
-                taiko.clone(),
-                cancel_token.clone(),
-            )
-            .await?,
-        ));
-
         Ok(Self {
             proposal_builder: ProposalBuilder::new(
                 config,
                 ethereum_l1.slot_clock.clone(),
                 metrics.clone(),
             ),
-            bridge_handler,
             ethereum_l1,
             taiko,
             block_advancer,
@@ -137,7 +112,6 @@ impl ProposalManager {
         submit_only_full_proposals: bool,
         l2_slot_timestamp: u64,
     ) -> Result<(), Error> {
-        let _status_store = self.bridge_handler.lock().await.status_store();
         self.proposal_builder
             .try_submit_oldest_proposal(
                 self.ethereum_l1.clone(),
@@ -219,7 +193,6 @@ impl ProposalManager {
             let payload = self
                 .proposal_builder
                 .add_fi_block(fi_block, anchor_params)?;
-            // Surge: Signal slots are not expected in forced inclusions
             match self
                 .block_advancer
                 .advance_head_to_new_l2_block(payload, l2_slot_context, operation_type)
@@ -310,76 +283,12 @@ impl ProposalManager {
         Ok(preconfed_block)
     }
 
-    // Surge: checks if the bridge handler has pending user ops
-    pub async fn has_pending_user_ops(&self) -> bool {
-        return self.bridge_handler.lock().await.has_pending_user_ops();
-    }
-
-    // Surge: Adds any pending L2 calls initiated via User Ops on the bridge handler
-    // to the transaction list in the draft block.
-    //
-    // For the POC, only a single L2 call is added per block
-    //
-    // Returns the signal slot to be set on L2
-    async fn add_pending_l2_call_to_draft_block(
-        &mut self,
-        l2_draft_block: &mut L2BlockV2Draft,
-    ) -> Result<Option<(UserOp, FixedBytes<32>)>, anyhow::Error> {
-        // Check for pending L2 calls from the bridge handler
-        if let Some((user_op_data, l2_call)) = self
-            .bridge_handler
-            .lock()
-            .await
-            .next_user_op_and_l2_call()
-            .await?
-        {
-            info!("Processing pending L2 call: {:?}", l2_call);
-
-            // Construct the bridge call transaction via the L2 execution layer
-            let l2_call_bridge_tx = self
-                .taiko
-                .l2_execution_layer()
-                .construct_l2_call_tx(l2_call.message_from_l1)
-                .await?;
-
-            info!(
-                "Inserting L2 call bridge transaction into tx list: {:?}",
-                l2_call_bridge_tx
-            );
-
-            // Insert the bridge transaction into the list
-            l2_draft_block
-                .prebuilt_tx_list
-                .tx_list
-                .push(l2_call_bridge_tx);
-
-            return Ok(Some((user_op_data, l2_call.signal_slot_on_l2)));
-        }
-
-        Ok(None)
-    }
-
     async fn add_draft_block_to_proposal(
         &mut self,
-        mut l2_draft_block: L2BlockV2Draft,
+        l2_draft_block: L2BlockV2Draft,
         l2_slot_context: &L2SlotContext,
         operation_type: OperationType,
     ) -> Result<BuildPreconfBlockResponse, Error> {
-        let mut anchor_signal_slots: Vec<FixedBytes<32>> = vec![];
-
-        // Surge: Add any pending L2 call from the bridge handler RPC and
-        // record associated signal slot for the proposal
-        debug!("Checking for pending L2 calls");
-        if let Some((user_op_data, signal_slot)) = self
-            .add_pending_l2_call_to_draft_block(&mut l2_draft_block)
-            .await?
-        {
-            self.proposal_builder.add_user_op(user_op_data)?;
-            self.proposal_builder.add_signal_slot(signal_slot)?;
-            anchor_signal_slots.push(signal_slot);
-        } else {
-            debug!("No pending L2 calls");
-        }
         let payload = self.proposal_builder.add_l2_draft_block(l2_draft_block)?;
 
         match self
@@ -387,34 +296,7 @@ impl ProposalManager {
             .advance_head_to_new_l2_block(payload, l2_slot_context, operation_type)
             .await
         {
-            Ok(preconfed_block) => {
-                // Surge: record the state of the preconfed block as a potential checkpoint
-                self.proposal_builder.set_proposal_checkpoint(Checkpoint {
-                    blockNumber: U48::from(preconfed_block.number),
-                    stateRoot: preconfed_block.state_root,
-                    blockHash: preconfed_block.hash,
-                })?;
-
-                // Surge: Record any L1 call initiated in the L2 block
-                // Note: This currently includes ALL L1 calls and not just the ones initiated
-                // by the user op txn.
-                // In production, tx hashes of user op calls need to recorded and only L1 calls
-                // initiated in same transaction need to be considered
-                debug!("Checking for initiated L1 calls");
-                if let Some(l1_call) = self
-                    .bridge_handler
-                    .lock()
-                    .await
-                    .find_l1_call(preconfed_block.number)
-                    .await?
-                {
-                    self.proposal_builder.add_l1_call(l1_call)?;
-                } else {
-                    debug!("No L1 calls initiated");
-                }
-
-                Ok(preconfed_block)
-            }
+            Ok(preconfed_block) => Ok(preconfed_block),
             Err(err) => {
                 error!("Failed to advance head to new L2 block: {}", err);
                 self.remove_last_l2_block();
@@ -666,10 +548,6 @@ impl ProposalManager {
 
         let txs = txs.to_vec();
 
-        // Store block data for checkpoint before block is moved
-        let block_hash = block.header.hash_slow();
-        let block_state_root = block.header.state_root();
-
         // TODO validate block params
         self.proposal_builder
             .recover_from(
@@ -682,15 +560,6 @@ impl ProposalManager {
                 is_forced_inclusion,
             )
             .await?;
-
-        // Surge: Set the checkpoint for the recovered block
-        // This is the L2 block state that should be used as checkpoint for the proposal
-        self.proposal_builder.set_proposal_checkpoint(Checkpoint {
-            blockNumber: U48::from(block_height),
-            stateRoot: block_state_root,
-            blockHash: block_hash,
-        })?;
-
         Ok(block.header.timestamp())
     }
 
@@ -700,6 +569,9 @@ impl ProposalManager {
         block_timestamp: u64,
         parent_timestamp: u64,
     ) -> Result<(), Error> {
+        // Validate against derivation rules:
+        // block.timestamp must be in [lower_bound, proposal_timestamp]
+        // We use current time as an approximation for proposal_timestamp (upper bound).
         let now_duration = std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .map_err(|e| {
@@ -723,7 +595,6 @@ impl ProposalManager {
     pub fn clone_without_proposals(&self, fi_head: u64) -> Self {
         Self {
             proposal_builder: self.proposal_builder.clone_without_proposals(),
-            bridge_handler: self.bridge_handler.clone(),
             ethereum_l1: self.ethereum_l1.clone(),
             taiko: self.taiko.clone(),
             block_advancer: self.block_advancer.clone(),
