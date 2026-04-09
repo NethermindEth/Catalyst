@@ -2,7 +2,6 @@
 [workspace]
 members = [
     "common",
-    "node",
     "pacaya",
     "permissionless",
     "shasta",
@@ -10,7 +9,6 @@ members = [
     "urc",
 ]
 resolver = "2"
-default-members = ["node"]
 
 [workspace.package]
 version = "1.35.5"
