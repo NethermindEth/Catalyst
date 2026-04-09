@@ -5653,6 +5653,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "node"
+version = "1.35.5"
+dependencies = [
+ "alloy",
+ "alloy-json-rpc",
+ "anyhow",
+ "axum",
+ "chrono",
+ "clap",
+ "common",
+ "pacaya",
+ "permissionless",
+ "rustls",
+ "serde_json",
+ "shasta",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
