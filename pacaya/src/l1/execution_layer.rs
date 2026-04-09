@@ -1,9 +1,4 @@
-use super::{
-    bindings::{PreconfWhitelist, taiko_inbox},
-    config::EthereumL1Config,
-    protocol_config::ProtocolConfig,
-    traits::WhitelistProvider,
-};
+use super::{bindings::taiko_inbox, config::EthereumL1Config, protocol_config::ProtocolConfig};
 use alloy::{eips::BlockNumberOrTag, primitives::Address, providers::DynProvider};
 use anyhow::{Context, Error, anyhow};
 use common::{
@@ -228,25 +223,5 @@ impl ExecutionLayer {
             .is_transaction_in_progress()
             .await
             .context("is_transaction_in_progress")
-    }
-}
-
-impl WhitelistProvider for ExecutionLayer {
-    async fn is_operator_whitelisted(&self) -> Result<bool, Error> {
-        let contract = PreconfWhitelist::new(
-            self.config.contract_addresses.preconf_whitelist,
-            &self.provider,
-        );
-        let operators = contract
-            .operators(self.common().preconfer_address())
-            .call()
-            .await
-            .map_err(|e| {
-                Error::msg(format!(
-                    "Failed to get operators: {}, contract: {:?}",
-                    e, self.config.contract_addresses.preconf_whitelist
-                ))
-            })?;
-        Ok(operators.activeSince > 0)
     }
 }
