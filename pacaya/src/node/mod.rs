@@ -68,6 +68,7 @@ impl Node {
             config.simulate_not_submitting_at_the_end_of_epoch,
             cancel_token.clone(),
             fork_info.clone(),
+            4, // TODO remove pacaya code
         )
         .map_err(|e| anyhow::anyhow!("Failed to create Operator: {}", e))?;
         let batch_manager = BatchManager::new(

@@ -840,6 +840,41 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_get_status_in_grace_period_after_ejection() {
+        const TIMESTAMP: u64 = 2 * 12;
+        const GRACE_PERIOD_SEC: u64 = 4;
+        let mut operator = create_operator_with_ejection_timestamp(
+            TIMESTAMP,
+            Some(TIMESTAMP - GRACE_PERIOD_SEC),
+            GRACE_PERIOD_SEC,
+        );
+        let l2_slot_info = L2SlotInfo::new(0, TIMESTAMP, 0, get_test_hash(), 0, 0);
+        let err = operator
+            .get_status(&l2_slot_info)
+            .await
+            .expect_err("expected grace-period error after operator ejection");
+        assert_eq!(err.to_string(), "Grace period after ejection");
+
+        let mut operator = create_operator_with_ejection_timestamp(
+            TIMESTAMP,
+            Some(TIMESTAMP - GRACE_PERIOD_SEC - 1),
+            GRACE_PERIOD_SEC,
+        );
+        assert_eq!(
+            operator.get_status(&l2_slot_info).await.unwrap(),
+            Status::new(
+                true,
+                true,
+                true,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
+        );
+    }
+
     fn create_operator(
         timestamp: u64,
         current_operator: bool,
@@ -874,6 +909,8 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
+            last_ejection_timestamp: None,
+            ejection_grace_period_sec: 4,
         }
     }
 
@@ -925,6 +962,8 @@ mod tests {
             was_synced_preconfer: false,
             cancel_counter: 0,
             current_operator_address: Address::ZERO,
+            last_ejection_timestamp: None,
+            ejection_grace_period_sec: 4,
         }
     }
 
@@ -962,6 +1001,8 @@ mod tests {
             was_synced_preconfer: false,
             cancel_counter: 0,
             current_operator_address: Address::ZERO,
+            last_ejection_timestamp: None,
+            ejection_grace_period_sec: 4,
         }
     }
 
@@ -992,6 +1033,8 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
+            last_ejection_timestamp: None,
+            ejection_grace_period_sec: 4,
         }
     }
 
@@ -1023,6 +1066,8 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
+            last_ejection_timestamp: None,
+            ejection_grace_period_sec: 4,
         }
     }
 
@@ -1048,6 +1093,8 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
+            last_ejection_timestamp: None,
+            ejection_grace_period_sec: 4,
         }
     }
 
@@ -1092,6 +1139,44 @@ mod tests {
             simulate_not_submitting_at_the_end_of_epoch: false,
             was_synced_preconfer: false,
             current_operator_address: Address::ZERO,
+            last_ejection_timestamp: None,
+            ejection_grace_period_sec: 4,
+        }
+    }
+
+    fn create_operator_with_ejection_timestamp(
+        timestamp: u64,
+        last_ejection_timestamp: Option<u64>,
+        ejection_grace_period_sec: u64,
+    ) -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
+        let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
+        slot_clock.clock.timestamp = timestamp;
+        Operator {
+            fork_info: ForkInfo::default(),
+            cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
+            last_config_reload_epoch: 0,
+            cancel_counter: 0,
+            taiko: Arc::new(TaikoMock {
+                end_of_sequencing_block_hash: B256::ZERO,
+            }),
+            execution_layer: Arc::new(ExecutionLayerMock {
+                current_operator_address: PRECONFER_ADDRESS,
+                next_operator_address: PRECONFER_ADDRESS,
+                is_preconf_router_specified: true,
+                taiko_inbox_height: 0,
+                handover_window_slots: HANDOVER_WINDOW_SLOTS,
+            }),
+            slot_clock: Arc::new(slot_clock),
+            handover_window_slots: HANDOVER_WINDOW_SLOTS,
+            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
+            handover_start_buffer_ms: 1000,
+            next_operator: false,
+            continuing_role: false,
+            simulate_not_submitting_at_the_end_of_epoch: false,
+            was_synced_preconfer: false,
+            current_operator_address: Address::ZERO,
+            last_ejection_timestamp,
+            ejection_grace_period_sec,
         }
     }
 

@@ -31,6 +31,8 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     last_config_reload_epoch: u64,
     fork_info: ForkInfo,
     current_operator_address: Address,
+    last_ejection_timestamp: Option<u64>,
+    ejection_grace_period_sec: u64,
 }
 
 impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
@@ -44,6 +46,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         simulate_not_submitting_at_the_end_of_epoch: bool,
         cancel_token: CancellationToken,
         fork_info: ForkInfo,
+        ejection_grace_period_sec: u64,
     ) -> Result<Self, Error> {
         Ok(Self {
             execution_layer,
@@ -61,6 +64,8 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             last_config_reload_epoch: 0,
             fork_info,
             current_operator_address: Address::ZERO,
+            last_ejection_timestamp: None,
+            ejection_grace_period_sec,
         })
     }
 
@@ -169,11 +174,12 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
     }
 
     async fn is_current_operator(&mut self, epoch: u64) -> Result<bool, Error> {
+        let current_slot_timestamp = self.slot_clock.get_current_slot_begin_timestamp()?;
         match self
             .execution_layer
             .get_operators_for_current_and_next_epoch(
                 self.slot_clock.get_epoch_begin_timestamp(epoch)?,
-                self.slot_clock.get_current_slot_begin_timestamp()?,
+                current_slot_timestamp,
             )
             .await
         {
@@ -185,6 +191,18 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
                         current_operator_address,
                         next_operator_address
                     );
+                    // Check whether our operator is on active duty after previous operator ejection
+                    if !self.was_synced_preconfer
+                        && current_operator_address == self.execution_layer.get_preconfer_address()
+                        && self.current_operator_address != Address::ZERO
+                    {
+                        info!(
+                            "Ejection detected for operator {} at {}",
+                            self.current_operator_address, current_slot_timestamp
+                        );
+                        self.last_ejection_timestamp = Some(current_slot_timestamp);
+                    }
+
                     self.current_operator_address = current_operator_address;
                 }
                 let current_operator =
@@ -192,6 +210,17 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
                 self.next_operator =
                     next_operator_address == self.execution_layer.get_preconfer_address();
                 self.continuing_role = current_operator && self.next_operator;
+                if let Some(last_ejection_timestamp) = self.last_ejection_timestamp {
+                    if current_slot_timestamp
+                        <= last_ejection_timestamp + self.ejection_grace_period_sec
+                    {
+                        info!("Within ejection grace period, treating as not current operator");
+                        return Err(anyhow::anyhow!("Grace period after ejection"));
+                    } else {
+                        info!("Ejection grace period has passed, treating as current operator",);
+                        self.last_ejection_timestamp = None;
+                    }
+                }
                 Ok(current_operator)
             }
             Err(OperatorError::OperatorCheckTooEarly) => {
