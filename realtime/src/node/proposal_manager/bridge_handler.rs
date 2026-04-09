@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::mpsc::{self, Receiver};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "status")]
@@ -54,7 +54,15 @@ impl UserOpStatusStore {
     }
 
     pub fn remove(&self, id: u64) {
-        let _ = self.db.remove(id.to_be_bytes());
+        match self.db.remove(id.to_be_bytes()) {
+            Ok(None) => {
+                warn!("Failed to remove user op status: key {id} not found");
+            }
+            Err(e) => error!("Failed to remove user op status: {e}"),
+            Ok(Some(_)) => {
+                trace!("Removed user op status: {id}")
+            }
+        }
     }
 }
 
@@ -266,7 +274,9 @@ impl BridgeHandler {
         tokio::spawn(async move {
             cancellation_token.cancelled().await;
             info!("Cancellation token triggered, stopping bridge handler RPC server");
-            handle.stop().ok();
+            if let Err(e) = handle.stop() {
+                error!("Failed to stop bridge handler RPC server: {e}");
+            }
         });
 
         Ok(Self {

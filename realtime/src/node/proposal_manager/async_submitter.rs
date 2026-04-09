@@ -13,7 +13,7 @@ use taiko_protocol::shasta::BlobCoder;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
-use tracing::info;
+use tracing::{error, info};
 
 pub struct SubmissionResult {
     pub new_last_finalized_block_hash: B256,
@@ -352,7 +352,8 @@ async fn submission_task(
                     }
                     Some(tx_hash)
                 }
-                Err(_) => {
+                Err(e) => {
+                    error!("Failed to receive transaction hash for: {e}");
                     for id in &user_op_ids {
                         store.set(
                             *id,
