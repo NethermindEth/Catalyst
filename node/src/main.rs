@@ -1,7 +1,9 @@
 use anyhow::Error;
+use axum::Router;
 use common::{
     fork_info::{Fork, ForkInfo},
-    metrics::{self, Metrics},
+    metrics::{Metrics, metrics_route},
+    shared::internal_server,
     utils::cancellation_token::CancellationToken,
 };
 use pacaya::create_pacaya_node;
@@ -82,7 +84,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
         info!("Cancellation token triggered, initiating shutdown...");
     }));
 
-    match fork_info.fork {
+    let mut extra_routes: Vec<Router> = match fork_info.fork {
         Fork::Pacaya => {
             let next_fork_timestamp = fork_info.config.fork_switch_timestamps.get(1);
             info!(
@@ -96,6 +98,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
                 fork_info,
             )
             .await?;
+            Vec::new()
         }
         Fork::Shasta => {
             info!("Current fork: SHASTA");
@@ -105,7 +108,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
                 cancel_token.clone(),
                 fork_info,
             )
-            .await?;
+            .await?
         }
         Fork::Permissionless => {
             info!("Current fork: PERMISSIONLESS");
@@ -116,6 +119,7 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
                 fork_info,
             )
             .await?;
+            Vec::new()
         }
         Fork::Realtime => {
             info!("Current fork: REALTIME");
@@ -126,10 +130,17 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
                 fork_info,
             )
             .await?;
+            Vec::new()
         }
-    }
+    };
 
-    metrics::server::serve_metrics(metrics.clone(), cancel_token.clone());
+    extra_routes.push(metrics_route(metrics.clone()));
+    internal_server::serve(
+        cancel_token.clone(),
+        extra_routes,
+        config.internal_server_ip,
+        config.internal_server_port,
+    );
 
     Ok(wait_for_the_termination(cancel_token, config.l1_slot_duration_sec).await)
 }

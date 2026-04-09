@@ -1664,6 +1664,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "axum"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b52af3cb4058c895d37317bb27508dccc8e5f2d39454016b297bf4a400597b8"
+dependencies = [
+ "axum-core",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "itoa",
+ "matchit",
+ "memchr",
+ "mime",
+ "percent-encoding",
+ "pin-project-lite",
+ "serde_core",
+ "sync_wrapper",
+ "tokio",
+ "tower",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "axum-core"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c78f31d7b1291f7ee735c1c6780ccde7785daae9a9206026862dab7d8792d1"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "http",
+ "http-body",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "sync_wrapper",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
 name = "backon"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2137,13 +2183,14 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.35.2"
+version = "1.35.5"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
  "alloy-rlp",
  "anyhow",
  "async-trait",
+ "axum",
  "chrono",
  "dotenvy",
  "ecdsa",
@@ -2167,7 +2214,6 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber 0.3.23",
- "warp",
 ]
 
 [[package]]
@@ -3644,30 +3690,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7382cf6263419f2d8df38c55d7da83da5c18aef87fc7a7fc1fb1e344edfe14c1"
 dependencies = [
  "hashbrown 0.15.5",
-]
-
-[[package]]
-name = "headers"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3314d5adb5d94bcdf56771f2e50dbbc80bb4bdf88967526706205ac9eff24eb"
-dependencies = [
- "base64",
- "bytes",
- "headers-core",
- "http",
- "httpdate",
- "mime",
- "sha1",
-]
-
-[[package]]
-name = "headers-core"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54b4a22553d4242c49fddb9ba998a99962b5cc6f22cb5a3482bec22522403ce4"
-dependencies = [
- "http",
 ]
 
 [[package]]
@@ -5313,6 +5335,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchit"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
+
+[[package]]
 name = "md-5"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5408,16 +5436,6 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
-
-[[package]]
-name = "mime_guess"
-version = "2.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
-dependencies = [
- "mime",
- "unicase",
-]
 
 [[package]]
 name = "minimal-lexical"
@@ -5664,11 +5682,12 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.35.2"
+version = "1.35.5"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
  "anyhow",
+ "axum",
  "chrono",
  "clap",
  "common",
@@ -6262,7 +6281,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.35.2"
+version = "1.35.5"
 dependencies = [
  "anyhow",
  "discv5 0.10.2",
@@ -6274,7 +6293,7 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.35.2"
+version = "1.35.5"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6420,7 +6439,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.35.2"
+version = "1.35.5"
 dependencies = [
  "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=637f7a150f72fe8d6cc5949a41aebb638a5305cf)",
  "alloy",
@@ -9893,12 +9912,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scoped-tls"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
-
-[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10209,12 +10222,13 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.35.2"
+version = "1.35.5"
 dependencies = [
  "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=637f7a150f72fe8d6cc5949a41aebb638a5305cf)",
  "alloy",
  "alloy-json-rpc",
  "anyhow",
+ "axum",
  "bindings",
  "common",
  "hex",
@@ -11428,12 +11442,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 
 [[package]]
-name = "unicase"
-version = "2.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142"
-
-[[package]]
 name = "unicode-bidi"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11512,7 +11520,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.35.2"
+version = "1.35.5"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -11655,35 +11663,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e"
 dependencies = [
  "try-lock",
-]
-
-[[package]]
-name = "warp"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51d06d9202adc1f15d709c4f4a2069be5428aa912cc025d6f268ac441ab066b0"
-dependencies = [
- "bytes",
- "futures-util",
- "headers",
- "http",
- "http-body",
- "http-body-util",
- "hyper",
- "hyper-util",
- "log",
- "mime",
- "mime_guess",
- "percent-encoding",
- "pin-project",
- "scoped-tls",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "tokio",
- "tokio-util",
- "tower-service",
- "tracing",
 ]
 
 [[package]]
