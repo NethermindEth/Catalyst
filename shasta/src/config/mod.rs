@@ -66,7 +66,8 @@ impl ConfigTrait for ShastaConfig {
             .unwrap_or("4000".to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("EJECTION_GRACE_PERIOD_MS must be a number: {}", e))?;
-        let ejection_grace_period_sec = std::time::Duration::from_millis(ejection_grace_period_ms).as_secs();
+        let ejection_grace_period_sec =
+            std::time::Duration::from_millis(ejection_grace_period_ms).as_secs();
 
         Ok(ShastaConfig {
             shasta_inbox,
