@@ -188,14 +188,7 @@ def wait_for_batch_proposed_event(eth_client, from_block, env_vars):
 
 
 def get_proposed_event_filter(eth_client, from_block, env_vars):
-    if env_vars.is_pacaya():
-        with open("../pacaya/src/l1/abi/ITaikoInbox.json") as f:
-            abi = json.load(f)
-        contract = eth_client.eth.contract(
-            address=env_vars.taiko_inbox_address, abi=abi
-        )
-        return contract.events.BatchProposed.create_filter(from_block=from_block)
-    elif env_vars.is_shasta():
+    if env_vars.is_shasta():
         proposed_event_abi = get_shasta_inbox_abi()
         contract = eth_client.eth.contract(
             address=env_vars.taiko_inbox_address, abi=proposed_event_abi
@@ -221,22 +214,13 @@ def wait_for_forced_inclusion_store_to_be_empty(l1_client, env_vars):
 
 def print_batch_info(l1_client, event, env_vars):
     print("BatchProposed event detected:")
-    if env_vars.is_pacaya():
-        print(f"  Batch ID: {event['args']['meta']['batchId']}")
-        print(f"  Proposer: {event['args']['meta']['proposer']}")
-        print(f"  Proposed At: {event['args']['meta']['proposedAt']}")
-        print(f"  Last Block ID: {event['args']['info']['lastBlockId']}")
-        print(f"  Last Block Timestamp: {event['args']['info']['lastBlockTimestamp']}")
-        print(f"  Transaction Hash: {event['transactionHash'].hex()}")
-        print(f"  Block Number: {event['blockNumber']}")
-    else:
-        print(f"  Proposal ID: {event['args']['id']}")
-        print(f"  Proposer: {event['args']['proposer']}")
-        print(
-            f"  End of submission window timestamp: {event['args']['endOfSubmissionWindowTimestamp']}"
-        )
-        print(f"  Transaction Hash: {event['transactionHash'].hex()}")
-        print(f"  Block number: {event['blockNumber']}")
+    print(f"  Proposal ID: {event['args']['id']}")
+    print(f"  Proposer: {event['args']['proposer']}")
+    print(
+        f"  End of submission window timestamp: {event['args']['endOfSubmissionWindowTimestamp']}"
+    )
+    print(f"  Transaction Hash: {event['transactionHash'].hex()}")
+    print(f"  Block number: {event['blockNumber']}")
     print("---")
 
 
@@ -529,35 +513,21 @@ def read_json_abi_from_rust_bindings(url):
 
 
 def get_forced_inclusion_store_head(l1_client, env_vars):
-    if env_vars.is_pacaya():
-        contract = l1_client.eth.contract(
-            address=env_vars.forced_inclusion_store_address, abi=pacaya_fi_abi
-        )
-        head = contract.functions.head().call()
-        return int(head)
-    else:
-        shasta_abi = get_shasta_inbox_abi()
-        contract = l1_client.eth.contract(
-            address=env_vars.forced_inclusion_store_address, abi=shasta_abi
-        )
-        head, tail = contract.functions.getForcedInclusionState().call()
-        return int(head)
+    shasta_abi = get_shasta_inbox_abi()
+    contract = l1_client.eth.contract(
+        address=env_vars.forced_inclusion_store_address, abi=shasta_abi
+    )
+    head, tail = contract.functions.getForcedInclusionState().call()
+    return int(head)
 
 
 def forced_inclusion_store_is_empty(l1_client, env_vars):
-    if env_vars.is_pacaya():
-        contract = l1_client.eth.contract(
-            address=env_vars.forced_inclusion_store_address, abi=pacaya_fi_abi
-        )
-        head = contract.functions.head().call()
-        tail = contract.functions.tail().call()
-    else:
-        shasta_abi = get_shasta_inbox_abi()
-        contract = l1_client.eth.contract(
-            address=env_vars.forced_inclusion_store_address, abi=shasta_abi
-        )
-        head, tail = contract.functions.getForcedInclusionState().call()
-        print("Forced Inclusion head:", head, "tail: ", tail)
+    shasta_abi = get_shasta_inbox_abi()
+    contract = l1_client.eth.contract(
+        address=env_vars.forced_inclusion_store_address, abi=shasta_abi
+    )
+    head, tail = contract.functions.getForcedInclusionState().call()
+    print("Forced Inclusion head:", head, "tail: ", tail)
     return head == tail
 
 
