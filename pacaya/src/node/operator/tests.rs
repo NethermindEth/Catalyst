@@ -850,11 +850,18 @@ mod tests {
             GRACE_PERIOD_SEC,
         );
         let l2_slot_info = L2SlotInfo::new(0, TIMESTAMP, 0, get_test_hash(), 0, 0);
-        let err = operator
-            .get_status(&l2_slot_info)
-            .await
-            .expect_err("expected grace-period error after operator ejection");
-        assert_eq!(err.to_string(), "Grace period after ejection");
+        assert_eq!(
+            operator.get_status(&l2_slot_info).await.unwrap(),
+            Status::new(
+                false,
+                false,
+                false,
+                false,
+                true,
+                #[cfg(feature = "get_status_duration")]
+                None,
+            )
+        );
 
         let mut operator = create_operator_with_ejection_timestamp(
             TIMESTAMP,

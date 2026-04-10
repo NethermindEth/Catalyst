@@ -173,64 +173,90 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         ))
     }
 
+    fn is_within_ejection_grace(&mut self, current_timestamp: u64) -> bool {
+        match self.last_ejection_timestamp {
+            Some(last_ts) if current_timestamp <= last_ts + self.ejection_grace_period_sec => {
+                info!("Within ejection grace period, treating as not current operator");
+                self.next_operator = false;
+                self.continuing_role = false;
+                true
+            }
+            Some(_) => {
+                info!("Ejection grace period has passed, treating as current operator");
+                self.last_ejection_timestamp = None;
+                false
+            }
+            None => false,
+        }
+    }
+
+    fn handle_operator_change(
+        &mut self,
+        current_op: Address,
+        next_op: Address,
+        current_timestamp: u64,
+        my_address: Address,
+    ) {
+        if current_op == self.current_operator_address {
+            return;
+        }
+
+        info!(
+            "Operator changed from {} to {}. Next operator: {}",
+            self.current_operator_address, current_op, next_op
+        );
+
+        // Previous operator ejection is detected if we were not the operator in the previous slot, but now we are, and there was a valid operator before (not zero address).
+        let was_ejected = !self.was_synced_preconfer
+            && current_op == my_address
+            && self.current_operator_address != Address::ZERO;
+
+        if was_ejected {
+            info!(
+                "Ejection detected for operator {} at {}",
+                self.current_operator_address, current_timestamp
+            );
+            self.last_ejection_timestamp = Some(current_timestamp);
+        }
+
+        self.current_operator_address = current_op;
+    }
+
     async fn is_current_operator(&mut self, epoch: u64) -> Result<bool, Error> {
         let current_slot_timestamp = self.slot_clock.get_current_slot_begin_timestamp()?;
-        match self
+        let epoch_timestamp = self.slot_clock.get_epoch_begin_timestamp(epoch)?;
+        let my_address = self.execution_layer.get_preconfer_address();
+
+        let (current_op, next_op) = match self
             .execution_layer
-            .get_operators_for_current_and_next_epoch(
-                self.slot_clock.get_epoch_begin_timestamp(epoch)?,
-                current_slot_timestamp,
-            )
+            .get_operators_for_current_and_next_epoch(epoch_timestamp, current_slot_timestamp)
             .await
         {
-            Ok((current_operator_address, next_operator_address)) => {
-                if current_operator_address != self.current_operator_address {
-                    info!(
-                        "Operator has changed from {} to {}. Next operator: {}",
-                        self.current_operator_address,
-                        current_operator_address,
-                        next_operator_address
-                    );
-                    // Check whether our operator is on active duty after previous operator ejection
-                    if !self.was_synced_preconfer
-                        && current_operator_address == self.execution_layer.get_preconfer_address()
-                        && self.current_operator_address != Address::ZERO
-                    {
-                        info!(
-                            "Ejection detected for operator {} at {}",
-                            self.current_operator_address, current_slot_timestamp
-                        );
-                        self.last_ejection_timestamp = Some(current_slot_timestamp);
-                    }
-
-                    self.current_operator_address = current_operator_address;
-                }
-                let current_operator =
-                    current_operator_address == self.execution_layer.get_preconfer_address();
-                self.next_operator =
-                    next_operator_address == self.execution_layer.get_preconfer_address();
-                self.continuing_role = current_operator && self.next_operator;
-                if let Some(last_ejection_timestamp) = self.last_ejection_timestamp {
-                    if current_slot_timestamp
-                        <= last_ejection_timestamp + self.ejection_grace_period_sec
-                    {
-                        info!("Within ejection grace period, treating as not current operator");
-                        return Err(anyhow::anyhow!("Grace period after ejection"));
-                    } else {
-                        info!("Ejection grace period has passed, treating as current operator",);
-                        self.last_ejection_timestamp = None;
-                    }
-                }
-                Ok(current_operator)
-            }
+            Ok(ops) => ops,
             Err(OperatorError::OperatorCheckTooEarly) => {
-                debug!("Operator check too early, using next operator");
-                Ok(self.next_operator)
+                debug!("Operator check too early, using cached next operator");
+                return Ok(self.next_operator);
             }
-            Err(OperatorError::Any(e)) => Err(Error::msg(format!(
-                "Failed to check current epoch operator: {e}"
-            ))),
+            Err(OperatorError::Any(e)) => {
+                return Err(Error::msg(format!(
+                    "Failed to check current epoch operator: {e}"
+                )));
+            }
+        };
+
+        self.handle_operator_change(current_op, next_op, current_slot_timestamp, my_address);
+
+        if self.is_within_ejection_grace(current_slot_timestamp) {
+            return Ok(false);
         }
+
+        let is_current = current_op == my_address;
+        let is_next = next_op == my_address;
+
+        self.next_operator = is_next;
+        self.continuing_role = is_current && is_next;
+
+        Ok(is_current)
     }
 
     pub fn reset(&mut self) {
