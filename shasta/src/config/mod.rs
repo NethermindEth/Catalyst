@@ -62,10 +62,11 @@ impl ConfigTrait for ShastaConfig {
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("MAX_BLOCKS_TO_REANCHOR must be a number: {}", e))?;
 
-        let ejection_grace_period_sec = std::env::var("EJECTION_GRACE_PERIOD_SEC")
-            .unwrap_or("4".to_string())
+        let ejection_grace_period_ms = std::env::var("EJECTION_GRACE_PERIOD_MS")
+            .unwrap_or("4000".to_string())
             .parse::<u64>()
-            .map_err(|e| anyhow::anyhow!("EJECTION_GRACE_PERIOD_SEC must be a number: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("EJECTION_GRACE_PERIOD_MS must be a number: {}", e))?;
+        let ejection_grace_period_sec = std::time::Duration::from_millis(ejection_grace_period_ms).as_secs();
 
         Ok(ShastaConfig {
             shasta_inbox,
