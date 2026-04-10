@@ -173,20 +173,22 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         ))
     }
 
-    fn is_within_ejection_grace(&mut self, current_timestamp: u64) -> bool {
+    fn is_within_ejection_grace(&mut self) -> Result<bool, Error> {
         match self.last_ejection_timestamp {
-            Some(last_ts) if current_timestamp <= last_ts + self.ejection_grace_period_sec => {
-                info!("Within ejection grace period, treating as not current operator");
-                self.next_operator = false;
-                self.continuing_role = false;
-                true
+            Some(last_ts) => {
+                let current_timestamp = self.slot_clock.get_l2_slot_begin_timestamp()?;
+                if current_timestamp <= last_ts + self.ejection_grace_period_sec {
+                    info!("Within ejection grace period, treating as not current operator");
+                    self.next_operator = false;
+                    self.continuing_role = false;
+                    Ok(true)
+                } else {
+                    info!("Ejection grace period has passed, treating as current operator");
+                    self.last_ejection_timestamp = None;
+                    Ok(false)
+                }
             }
-            Some(_) => {
-                info!("Ejection grace period has passed, treating as current operator");
-                self.last_ejection_timestamp = None;
-                false
-            }
-            None => false,
+            None => Ok(false),
         }
     }
 
@@ -246,7 +248,7 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
 
         self.handle_operator_change(current_op, next_op, current_slot_timestamp, my_address);
 
-        if self.is_within_ejection_grace(current_slot_timestamp) {
+        if self.is_within_ejection_grace()? {
             return Ok(false);
         }
 
