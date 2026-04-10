@@ -10,10 +10,7 @@ from taiko_inbox import get_last_block_id
 
 
 def send_forced_inclusion(nonce_delta, env_vars):
-    if env_vars.is_pacaya():
-        image = "nethswitchboard/taiko-forced-inclusion-toolbox"
-    else:
-        image = "nethswitchboard/taiko-forced-inclusion-toolbox:shasta"
+    image = "nethswitchboard/taiko-forced-inclusion-toolbox:shasta"
     cmd = [
         "docker", "run", "--network", "host", "--env-file", ".env", "--rm",
         image, "send",

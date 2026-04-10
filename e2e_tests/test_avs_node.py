@@ -109,19 +109,11 @@ def test_propose_batch_to_l1_after_reaching_max_blocks_per_batch(
 
     event = wait_for_batch_proposed_event(l1_client, current_block + 1, env_vars)
 
-    if env_vars.is_pacaya():
-        proposer = event["args"]["meta"]["proposer"]
-        proposed_at = event["args"]["meta"]["proposedAt"]
-        assert proposed_at > current_block_timestamp, (
-            "Proposed at timestamp should be larger than current block timestamp"
-        )
-
-    else:
-        proposer = event["args"]["proposer"]
-        block_number = event["blockNumber"]
-        assert block_number > current_block, (
-            "Block number should be greater than current block"
-        )
+    proposer = event["args"]["proposer"]
+    block_number = event["blockNumber"]
+    assert block_number > current_block, (
+        "Block number should be greater than current block"
+    )
 
     assert proposer in [
         l1_client.eth.account.from_key(env_vars.l2_prefunded_priv_key).address,
