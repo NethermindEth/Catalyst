@@ -15,7 +15,7 @@ pub struct ForkInfo {
 impl Default for ForkInfo {
     fn default() -> Self {
         Self {
-            fork: Fork::Pacaya,
+            fork: Fork::Shasta,
             config: ForkInfoConfig::default(),
         }
     }
@@ -76,14 +76,14 @@ mod tests {
     fn test_is_fork_switch_transition_period() {
         let config = ForkInfoConfig {
             fork_switch_timestamps: vec![
-                Duration::from_secs(0),  // Pacaya
-                Duration::from_secs(10), // Shasta
+                Duration::from_secs(0),  // Shasta
+                Duration::from_secs(10), // Permissionless
             ],
             fork_switch_transition_period: Duration::from_secs(5),
         };
         let mut fork_info = ForkInfo::from_config(config).unwrap();
-        // Set fork to Pacaya to test transition to Shasta
-        fork_info.fork = Fork::Pacaya;
+        // Set fork to Shasta to test transition to Permissionless
+        fork_info.fork = Fork::Shasta;
         assert!(fork_info.is_fork_switch_transition_period(Duration::from_secs(10)));
         assert!(fork_info.is_fork_switch_transition_period(Duration::from_secs(5)));
         assert!(!fork_info.is_fork_switch_transition_period(Duration::from_secs(11)));

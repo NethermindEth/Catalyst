@@ -1115,11 +1115,11 @@ mod tests {
         slot_clock.clock.timestamp = current_timestamp;
         Operator {
             fork_info: ForkInfo {
-                fork: Fork::Pacaya,
+                fork: Fork::Shasta,
                 config: ForkInfoConfig {
                     fork_switch_timestamps: vec![
-                        Duration::from_secs(0),   // Pacaya
-                        Duration::from_secs(100), // Shasta
+                        Duration::from_secs(0),   // Shasta
+                        Duration::from_secs(100), // Permissionless
                     ],
                     fork_switch_transition_period: Duration::from_secs(15),
                 },

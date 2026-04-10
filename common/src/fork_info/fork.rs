@@ -3,7 +3,6 @@ use strum::{EnumIter, IntoEnumIterator};
 
 #[derive(Clone, Debug, PartialEq, Eq, EnumIter)]
 pub enum Fork {
-    Pacaya,
     Shasta,
     Permissionless,
 }
