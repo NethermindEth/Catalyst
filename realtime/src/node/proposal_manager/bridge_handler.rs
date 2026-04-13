@@ -73,6 +73,12 @@ pub struct UserOp {
 pub struct L1Call {
     pub message_from_l2: Message,
     pub signal_slot_proof: Bytes,
+    /// Optional: if the L1 callback triggered by `processMessage` produces an
+    /// L1→L2 return signal that the same L2 block consumes as a fast signal,
+    /// this is that signal slot. When present, the inbox must defer finalization
+    /// of the proposal until this slot is populated on L1 — triggering the
+    /// tentativePropose + finalizePropose multicall shape.
+    pub required_return_signal: Option<FixedBytes<32>>,
 }
 
 // Data required to build the L2 call transaction initiated by an L1 contract via the bridge
@@ -362,6 +368,7 @@ impl BridgeHandler {
             return Ok(Some(L1Call {
                 message_from_l2,
                 signal_slot_proof,
+                required_return_signal: None,
             }));
         }
 

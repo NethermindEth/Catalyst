@@ -34,6 +34,16 @@ sol! {
         uint48 maxAnchorBlockNumber;
     }
 
+    /// Input for `tentativePropose` — splits signals into existing (verified
+    /// immediately) and requiredReturn (verified at finalizePropose after the
+    /// L1 callback in the same multicall produces them).
+    struct ProposeInputV2 {
+        BlobReference blobReference;
+        bytes32[] existingSignals;
+        bytes32[] requiredReturnSignals;
+        uint48 maxAnchorBlockNumber;
+    }
+
     // SurgeVerifier SubProof encoding
     struct SubProof {
         uint8 proofBitFlag;
