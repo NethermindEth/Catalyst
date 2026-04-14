@@ -3,6 +3,7 @@ pub struct NodeConfig {
     pub preconf_heartbeat_ms: u64,
     pub handover_window_slots: u64,
     pub handover_start_buffer_ms: u64,
+    pub ejection_grace_period_sec: u64,
     pub l1_height_lag: u64,
     pub min_anchor_offset: u64,
     pub propose_forced_inclusion: bool,

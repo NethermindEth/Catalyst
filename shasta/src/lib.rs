@@ -4,13 +4,13 @@ pub mod forced_inclusion;
 pub mod l1;
 pub mod l2;
 mod node;
-mod shared_abi;
 pub use node::proposal_manager::block_advancer::BlockAdvancer;
 pub use node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 
 pub use node::proposal_manager::ProposalManager;
 
 use anyhow::Error;
+use axum::Router;
 use common::{
     batch_builder::BatchBuilderConfig,
     config::{Config, ConfigTrait},
@@ -33,7 +33,7 @@ pub async fn create_shasta_node(
     metrics: Arc<metrics::Metrics>,
     cancel_token: CancellationToken,
     fork_info: ForkInfo,
-) -> Result<(), Error> {
+) -> Result<Vec<Router>, Error> {
     info!("Creating Shasta node");
 
     let shasta_config = ShastaConfig::read_env_variables()
@@ -86,6 +86,7 @@ pub async fn create_shasta_node(
         preconf_heartbeat_ms: config.preconf_heartbeat_ms,
         handover_window_slots: shasta_config.handover_window_slots,
         handover_start_buffer_ms: shasta_config.handover_start_buffer_ms,
+        ejection_grace_period_sec: shasta_config.ejection_grace_period_sec,
         l1_height_lag: shasta_config.l1_height_lag,
         min_anchor_offset: config.min_anchor_offset,
         propose_forced_inclusion: shasta_config.propose_forced_inclusion,
@@ -95,8 +96,19 @@ pub async fn create_shasta_node(
         watchdog_max_counter: config.watchdog_max_counter,
     };
 
-    let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
-        taiko_protocol::shasta::constants::DERIVATION_SOURCE_MAX_BLOCKS.try_into()?
+    let protocol_limit: u16 =
+        taiko_protocol::shasta::constants::DERIVATION_SOURCE_MAX_BLOCKS.try_into()?;
+    let max_blocks_per_batch = if config.max_blocks_per_batch == 0
+        || config.max_blocks_per_batch > protocol_limit
+    {
+        if config.max_blocks_per_batch > protocol_limit {
+            tracing::warn!(
+                "Configured max_blocks_per_batch ({}) exceeds the protocol limit ({}), using the protocol limit",
+                config.max_blocks_per_batch,
+                protocol_limit
+            );
+        }
+        protocol_limit
     } else {
         config.max_blocks_per_batch
     };
@@ -155,6 +167,11 @@ pub async fn create_shasta_node(
         .await
         .map_err(|e| anyhow::anyhow!("Failed to start Node: {}", e))?;
 
+    let status_router = node::status_router::status_router(
+        ethereum_l1.execution_layer.clone(),
+        ethereum_l1.slot_clock.clone(),
+    );
+
     let funds_controller = FundsController::new(
         (&config).into(),
         ethereum_l1.execution_layer.clone(),
@@ -172,5 +189,5 @@ pub async fn create_shasta_node(
     );
     whitelist_monitor.run();
 
-    Ok(())
+    Ok(vec![status_router])
 }

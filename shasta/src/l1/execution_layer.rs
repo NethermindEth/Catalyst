@@ -1,25 +1,14 @@
 use super::config::EthereumL1Config;
 use super::proposal_tx_builder::ProposalTxBuilder;
 use crate::forced_inclusion::InboxForcedInclusionState;
-use crate::node::proposal_manager::proposal::Proposal;
-use crate::shared_abi::bindings::{Bridge::MessageSent, IBridge::Message, SignalSent};
-use crate::{l1::config::ContractAddresses, node::proposal_manager::bridge_handler::UserOp};
+use crate::l1::config::ContractAddresses;
 use alloy::{
-    eips::{BlockId, BlockNumberOrTag},
+    eips::BlockNumberOrTag,
     hex::ToHexExt,
-    primitives::{Address, FixedBytes, U256, aliases::U48},
-    providers::{DynProvider, Provider, ext::DebugApi},
-    rpc::{
-        client::BatchRequest,
-        types::{
-            TransactionRequest,
-            trace::geth::{
-                GethDebugBuiltInTracerType, GethDebugTracerType, GethDebugTracingCallOptions,
-                GethDebugTracingOptions,
-            },
-        },
-    },
-    sol_types::{SolCall, SolEvent},
+    primitives::{Address, U256, aliases::U48},
+    providers::{DynProvider, Provider},
+    rpc::client::BatchRequest,
+    sol_types::SolCall,
 };
 use anyhow::{Context, Error, anyhow};
 use common::{
@@ -30,7 +19,7 @@ use common::{
     metrics::Metrics,
     shared::{
         alloy_tools, execution_layer::ExecutionLayer as ExecutionLayerCommon,
-        transaction_monitor::TransactionMonitor,
+        l2_block_v2::L2BlockV2, transaction_monitor::TransactionMonitor,
     },
 };
 use pacaya::l1::{
@@ -56,8 +45,6 @@ pub struct ExecutionLayer {
     inbox_instance: InboxInstance<DynProvider>,
     operators_cache: OperatorsCache,
     extra_gas_percentage: u64,
-    // Surge: For signing the state checkpoints sent as proof with proposal
-    checkpoint_signer: alloy::signers::local::PrivateKeySigner,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -104,8 +91,6 @@ impl ELTrait for ExecutionLayer {
         let contract_addresses = ContractAddresses {
             shasta_inbox: specific_config.shasta_inbox,
             proposer_checker: shasta_config.proposerChecker,
-            proposer_multicall: specific_config.proposer_multicall,
-            bridge: specific_config.bridge,
         };
 
         let operators_cache =
@@ -119,12 +104,6 @@ impl ELTrait for ExecutionLayer {
             inbox_instance,
             operators_cache,
             extra_gas_percentage: common_config.extra_gas_percentage,
-            // Surge: Hard coding the private key for the POC
-            // (This is the first private key from foundry anvil)
-            checkpoint_signer: alloy::signers::local::PrivateKeySigner::from_bytes(
-                &"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-                    .parse::<alloy::primitives::FixedBytes<32>>()?,
-            )?,
         })
     }
 
@@ -201,17 +180,13 @@ impl PreconfOperator for ExecutionLayer {
 impl ExecutionLayer {
     pub async fn send_proposal_to_l1(
         &self,
-        batch: Proposal,
-        tx_hash_notifier: Option<tokio::sync::oneshot::Sender<alloy::primitives::B256>>,
-        tx_result_notifier: Option<tokio::sync::oneshot::Sender<bool>>,
+        l2_blocks: Vec<L2BlockV2>,
+        num_forced_inclusion: u16,
     ) -> Result<(), Error> {
         info!(
-            "📦 Proposing with {} blocks | num_forced_inclusion: {} | user_ops: {:?} | signal_slots: {:?} | l1_calls: {:?}",
-            batch.l2_blocks.len(),
-            batch.num_forced_inclusion,
-            batch.user_ops,
-            batch.signal_slots,
-            batch.l1_calls
+            "📦 Proposing with {} blocks | num_forced_inclusion: {}",
+            l2_blocks.len(),
+            num_forced_inclusion,
         );
 
         let pending_nonce = self.get_preconfer_nonce_pending().await.map_err(|e| {
@@ -220,24 +195,19 @@ impl ExecutionLayer {
             ))
         })?;
 
-        // Build propose transaction
-        let builder = ProposalTxBuilder::new(
+        // Build the transaction asynchronously inside the monitor's spawned task.
+        // This moves the ~650ms KZG sidecar computation off the hot path.
+        let tx_builder = ProposalTxBuilder::new(
             self.provider.clone(),
             self.extra_gas_percentage,
-            self.checkpoint_signer.clone(),
+            l2_blocks,
+            self.common().preconfer_address(),
+            self.contract_addresses.shasta_inbox,
+            num_forced_inclusion,
         );
 
-        // Surge: This is now a multicall containing user ops and L1 calls
-        let tx = builder
-            .build_propose_tx(
-                batch,
-                self.common().preconfer_address(),
-                self.contract_addresses.clone(),
-            )
-            .await?;
-
         self.transaction_monitor
-            .monitor_new_transaction(tx, pending_nonce, tx_hash_notifier, tx_result_notifier)
+            .monitor_new_transaction_with_builder(tx_builder, pending_nonce)
             .await
             .map_err(|e| Error::msg(format!("Sending proposal to L1 failed: {e}")))?;
 
@@ -480,125 +450,5 @@ impl common::l1::traits::PreconferBondProvider for ExecutionLayer {
             })?;
 
         Ok(U256::from(bond.balance))
-    }
-}
-
-// Surge: L1 EL ops for Bridge Handler
-
-use alloy::rpc::types::trace::geth::{CallFrame, CallLogFrame};
-
-/// Recursively collects all logs from a call frame and its nested subcalls.
-/// Logs emitted by nested contract calls are stored within their respective CallFrame objects,
-/// not at the top level, so we need to traverse the entire call tree.
-fn collect_logs_recursive(frame: &CallFrame) -> Vec<CallLogFrame> {
-    let mut logs = frame.logs.clone();
-
-    for subcall in &frame.calls {
-        logs.extend(collect_logs_recursive(subcall));
-    }
-
-    logs
-}
-
-#[allow(async_fn_in_trait)]
-pub trait L1BridgeHandlerOps {
-    // Surge: This can be made to retrieve multiple signal slots
-    async fn find_message_and_signal_slot(
-        &self,
-        user_op: UserOp,
-    ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error>;
-}
-
-// Surge: Please beward of these limitations
-// - Target contracts are not verified in log checks
-impl L1BridgeHandlerOps for ExecutionLayer {
-    async fn find_message_and_signal_slot(
-        &self,
-        user_op_data: UserOp,
-    ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error> {
-        // Create transaction request for simulation, sending calldata directly to the submitter
-        let tx_request = TransactionRequest::default()
-            .from(self.common().preconfer_address())
-            .to(user_op_data.submitter)
-            .input(user_op_data.calldata.into());
-
-        // Configure call tracer with logs and nested calls enabled
-        let mut tracer_config = serde_json::Map::new();
-        tracer_config.insert("withLog".to_string(), serde_json::Value::Bool(true));
-        tracer_config.insert("onlyTopCall".to_string(), serde_json::Value::Bool(false));
-
-        let tracing_options = GethDebugTracingOptions {
-            tracer: Some(GethDebugTracerType::BuiltInTracer(
-                GethDebugBuiltInTracerType::CallTracer,
-            )),
-            tracer_config: serde_json::Value::Object(tracer_config).into(),
-            ..Default::default()
-        };
-
-        let call_options = GethDebugTracingCallOptions {
-            tracing_options,
-            ..Default::default()
-        };
-
-        // Execute the trace call simulation
-        let trace_result = self
-            .provider
-            .debug_trace_call(
-                tx_request,
-                BlockId::Number(BlockNumberOrTag::Latest),
-                call_options,
-            )
-            .await
-            .map_err(|e| anyhow!("Failed to simulate executeBatch on L1: {e}"))?;
-
-        tracing::debug!("Received trace result: {:?}", trace_result);
-
-        let mut message: Option<Message> = None;
-        let mut slot: Option<FixedBytes<32>> = None;
-
-        // Look for logs in the trace result and decode MessageSent and SignalSent events
-        // Note: Logs from nested calls (subcalls) are stored within those nested CallFrame objects,
-        // so we need to recursively collect all logs from the entire call tree
-        if let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result {
-            let all_logs = collect_logs_recursive(&call_frame);
-            tracing::debug!("Collected {} logs from call trace", all_logs.len());
-
-            for log in all_logs {
-                // Check if this is a MessageSent or SignalSent event by matching the topic
-                if let Some(topics) = &log.topics
-                    && !topics.is_empty()
-                {
-                    if topics[0] == MessageSent::SIGNATURE_HASH {
-                        // Decode the MessageSent event
-                        let log_data = alloy::primitives::LogData::new_unchecked(
-                            topics.clone(),
-                            log.data.clone().unwrap_or_default(),
-                        );
-                        let decoded = MessageSent::decode_log_data(&log_data)
-                            .map_err(|e| anyhow!("Failed to decode MessageSent event L1: {e}"))?;
-
-                        message = Some(decoded.message);
-                    } else if topics[0] == SignalSent::SIGNATURE_HASH {
-                        // Decode the SignalSent event
-                        let log_data = alloy::primitives::LogData::new_unchecked(
-                            topics.clone(),
-                            log.data.clone().unwrap_or_default(),
-                        );
-                        let decoded = SignalSent::decode_log_data(&log_data)
-                            .map_err(|e| anyhow!("Failed to decode SignalSent event L1: {e}"))?;
-
-                        slot = Some(decoded.slot);
-                    }
-                }
-            }
-        }
-
-        tracing::debug!("{:?} {:?}", message, slot);
-
-        if let (Some(message), Some(slot)) = (message, slot) {
-            return Ok(Some((message, slot)));
-        }
-
-        Ok(None)
     }
 }

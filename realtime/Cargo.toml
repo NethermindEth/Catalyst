@@ -35,7 +35,6 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-warp = { workspace = true }
 
 [dev-dependencies]
 mockito = { workspace = true }

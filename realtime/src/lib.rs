@@ -73,6 +73,7 @@ pub async fn create_realtime_node(
         preconf_heartbeat_ms: config.preconf_heartbeat_ms,
         handover_window_slots: 8,
         handover_start_buffer_ms: 500,
+        ejection_grace_period_sec: 4, // TODO fix: use config from shasta crate and remove config from pacaya
         l1_height_lag: 8,
         propose_forced_inclusion: false,
         simulate_not_submitting_at_the_end_of_epoch: false,

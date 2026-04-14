@@ -2,6 +2,7 @@ pub mod block_advancer;
 pub mod config;
 mod last_safe_l2_block_finder;
 pub mod proposal_manager;
+pub mod status_router;
 use anyhow::Error;
 use common::{
     fork_info::ForkInfo,
@@ -77,6 +78,7 @@ impl Node {
             config.simulate_not_submitting_at_the_end_of_epoch,
             cancel_token.clone(),
             fork_info.clone(),
+            config.ejection_grace_period_sec,
         )
         .map_err(|e| anyhow::anyhow!("Failed to create Operator: {}", e))?;
         let watchdog = common_utils::watchdog::Watchdog::new(
@@ -134,7 +136,6 @@ impl Node {
 
     pub async fn entrypoint(mut self) -> Result<(), Error> {
         info!("Starting node");
-
         if let Err(err) = self.warmup().await {
             error!("Failed to warm up node: {}. Shutting down.", err);
             self.cancel_token.cancel_on_critical_error();
@@ -179,6 +180,9 @@ impl Node {
     async fn main_block_preconfirmation_step(&mut self) -> Result<(), Error> {
         let (l2_slot_info, current_status, pending_tx_list) =
             self.get_slot_info_and_status().await?;
+
+        self.metrics
+            .set_is_geth_and_driver_synced(current_status.is_driver_synced());
 
         let l2_slot_ctx = L2SlotContext {
             info: l2_slot_info,
@@ -303,19 +307,12 @@ impl Node {
                 .proposal_manager
                 .should_new_block_be_created(&pending_tx_list, &l2_slot_ctx)
             {
-                // Surge: preconfirm only when there are pending transactions or user ops
-                if pending_tx_list
-                    .as_ref()
-                    .is_some_and(|pre_built_list| !pre_built_list.tx_list.is_empty())
-                    || self.proposal_manager.has_pending_user_ops().await
-                {
-                    let preconfed_block = self
-                        .proposal_manager
-                        .preconfirm_block(pending_tx_list, &l2_slot_ctx)
-                        .await?;
+                let preconfed_block = self
+                    .proposal_manager
+                    .preconfirm_block(pending_tx_list, &l2_slot_ctx)
+                    .await?;
 
-                    self.verify_preconfed_block(preconfed_block).await?;
-                }
+                self.verify_preconfed_block(preconfed_block).await?;
             }
         }
 

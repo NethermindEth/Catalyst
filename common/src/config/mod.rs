@@ -70,13 +70,15 @@ pub struct Config {
     pub proposal_max_time_sec: u64,
     // fork info
     pub fork_switch_transition_period_sec: u64,
-    pub pacaya_timestamp_sec: u64,
     pub shasta_timestamp_sec: u64,
     pub permissionless_timestamp_sec: u64,
     // Whitelist monitor
     pub whitelist_monitor_interval_sec: u64,
     // Watchdog
     pub watchdog_max_counter: u64,
+    // Internal server
+    pub internal_server_ip: [u8; 4],
+    pub internal_server_port: u16,
 }
 
 /// Creates a formatted error message for address parsing failures.
@@ -422,12 +424,8 @@ impl Config {
                     anyhow::anyhow!("FORK_SWITCH_TRANSITION_PERIOD_SEC must be a number: {}", e)
                 })?,
             };
-        let pacaya_timestamp_sec = std::env::var("PACAYA_TIMESTAMP_SEC")
-            .unwrap_or("0".to_string())
-            .parse::<u64>()
-            .map_err(|e| anyhow::anyhow!("PACAYA_TIMESTAMP_SEC must be a number: {}", e))?;
         let shasta_timestamp_sec = std::env::var("SHASTA_TIMESTAMP_SEC")
-            .unwrap_or("99999999999".to_string())
+            .unwrap_or("0".to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("SHASTA_TIMESTAMP_SEC must be a number: {}", e))?;
         let permissionless_timestamp_sec = std::env::var("PERMISSIONLESS_TIMESTAMP_SEC")
@@ -446,6 +444,17 @@ impl Config {
             .unwrap_or("96".to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("WATCHDOG_MAX_COUNTER must be a number: {}", e))?;
+
+        let internal_server_ip = std::env::var("INTERNAL_SERVER_IP")
+            .unwrap_or_else(|_| "0.0.0.0".to_string())
+            .parse::<std::net::Ipv4Addr>()
+            .map_err(|e| anyhow::anyhow!("INTERNAL_SERVER_IP must be a valid IPv4 address: {}", e))
+            .map(|ip| ip.octets())?;
+
+        let internal_server_port = std::env::var("INTERNAL_SERVER_PORT")
+            .unwrap_or("9898".to_string())
+            .parse::<u16>()
+            .map_err(|e| anyhow::anyhow!("INTERNAL_SERVER_PORT must be a number: {}", e))?;
 
         let config = Self {
             preconfer_address,
@@ -502,11 +511,12 @@ impl Config {
             bridge_relayer_fee,
             bridge_transaction_fee,
             fork_switch_transition_period_sec,
-            pacaya_timestamp_sec,
             shasta_timestamp_sec,
             permissionless_timestamp_sec,
             whitelist_monitor_interval_sec,
             watchdog_max_counter,
+            internal_server_ip,
+            internal_server_port,
         };
 
         info!(
@@ -555,11 +565,12 @@ max time before submit: {}s
 bridge relayer fee: {}wei
 bridge transaction fee: {}wei
 fork switch transition time: {}s
-pacaya timestamp: {}s
 shasta timestamp: {}s
 permissionless timestamp: {}s
 whitelist monitor interval: {}s
 watchdog max counter: {}
+internal server IP: {}
+internal server port: {}
 "#,
             if let Some(preconfer_address) = &config.preconfer_address {
                 format!("\npreconfer address: {preconfer_address}")
@@ -616,11 +627,12 @@ watchdog max counter: {}
             config.bridge_relayer_fee,
             config.bridge_transaction_fee,
             config.fork_switch_transition_period_sec,
-            config.pacaya_timestamp_sec,
             config.shasta_timestamp_sec,
             config.permissionless_timestamp_sec,
             config.whitelist_monitor_interval_sec,
             config.watchdog_max_counter,
+            std::net::Ipv4Addr::from(config.internal_server_ip),
+            config.internal_server_port,
         );
 
         Ok(config)

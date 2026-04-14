@@ -6,14 +6,13 @@ use std::str::FromStr;
 #[derive(Debug, Clone)]
 pub struct ShastaConfig {
     pub shasta_inbox: Address,
-    pub proposer_multicall: Address,
-    pub bridge: Address,
     pub handover_window_slots: u64,
     pub handover_start_buffer_ms: u64,
     pub l1_height_lag: u64,
     pub propose_forced_inclusion: bool,
     pub simulate_not_submitting_at_the_end_of_epoch: bool,
     pub max_blocks_to_reanchor: u64,
+    pub ejection_grace_period_sec: u64,
 }
 
 impl ConfigTrait for ShastaConfig {
@@ -26,8 +25,6 @@ impl ConfigTrait for ShastaConfig {
         };
 
         let shasta_inbox = read_contract_address("SHASTA_INBOX_ADDRESS")?;
-        let proposer_multicall = read_contract_address("PROPOSER_MULTICALL_ADDRESS")?;
-        let bridge = read_contract_address("L1_BRIDGE_ADDRESS")?;
 
         let handover_window_slots = std::env::var("HANDOVER_WINDOW_SLOTS")
             .unwrap_or("8".to_string())
@@ -65,16 +62,22 @@ impl ConfigTrait for ShastaConfig {
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("MAX_BLOCKS_TO_REANCHOR must be a number: {}", e))?;
 
+        let ejection_grace_period_ms = std::env::var("EJECTION_GRACE_PERIOD_MS")
+            .unwrap_or("4000".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("EJECTION_GRACE_PERIOD_MS must be a number: {}", e))?;
+        let ejection_grace_period_sec =
+            std::time::Duration::from_millis(ejection_grace_period_ms).as_secs();
+
         Ok(ShastaConfig {
             shasta_inbox,
-            proposer_multicall,
-            bridge,
             handover_window_slots,
             handover_start_buffer_ms,
             l1_height_lag,
             propose_forced_inclusion,
             simulate_not_submitting_at_the_end_of_epoch,
             max_blocks_to_reanchor,
+            ejection_grace_period_sec,
         })
     }
 }
@@ -99,6 +102,11 @@ impl fmt::Display for ShastaConfig {
             f,
             "simulate not submitting at the end of epoch: {}",
             self.simulate_not_submitting_at_the_end_of_epoch
+        )?;
+        writeln!(
+            f,
+            "ejection grace period: {}s",
+            self.ejection_grace_period_sec
         )?;
         Ok(())
     }

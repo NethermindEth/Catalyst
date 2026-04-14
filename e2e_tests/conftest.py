@@ -106,9 +106,6 @@ class EnvVars:
     def is_shasta(self):
         return self.protocol == "shasta"
 
-    def is_pacaya(self):
-        return self.protocol == "pacaya"
-
 
 @pytest.fixture(scope="session")
 def env_vars():

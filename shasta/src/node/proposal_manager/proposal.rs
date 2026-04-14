@@ -1,12 +1,9 @@
-use crate::l2::bindings::ICheckpointStore::Checkpoint;
-use crate::node::proposal_manager::{
-    bridge_handler::{L1Call, UserOp},
-    l2_block_payload::L2BlockV2Payload,
-};
-use alloy::primitives::{Address, B256, FixedBytes};
+use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
+use alloy::primitives::{Address, B256};
 use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
 use std::collections::VecDeque;
 use std::time::Instant;
+use taiko_bindings::anchor::ICheckpointStore::Checkpoint;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
 
@@ -27,15 +24,6 @@ pub struct Proposal {
     /// Set to true when this proposal has been dispatched to the transaction monitor
     /// and is awaiting on-chain confirmation.
     pub pending_confirmation: bool,
-    // Surge: the state sync checkpoint that is signed and sent as a proof
-    // along with the proposal to Surge inbox
-    pub checkpoint: Checkpoint,
-    // Surge: User ops that initiate L2 calls
-    pub user_ops: Vec<UserOp>,
-    // Surge: Signal slots to set via anchor with the proposal
-    pub signal_slots: Vec<FixedBytes<32>>,
-    // Surge: L1 calls initiated by any L2 contracts
-    pub l1_calls: Vec<L1Call>,
 }
 
 impl Proposal {
@@ -226,10 +214,6 @@ mod test {
             num_forced_inclusion: 0,
             created_at_sec: 0,
             pending_confirmation: false,
-            checkpoint: Checkpoint::default(),
-            user_ops: vec![],
-            signal_slots: vec![],
-            l1_calls: vec![],
         };
 
         proposal.compress();
