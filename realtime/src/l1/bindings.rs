@@ -84,18 +84,20 @@ alloy::sol! {
 /// Proof types supported by the SurgeVerifier.
 /// Each variant maps to a bit flag used in `SubProof.proofBitFlag`.
 /// Must match the constants in `SurgeVerifier.sol`.
+///
+/// Note: MOCK_ECDSA (0b00000001) is not a variant here — it is selected
+/// at runtime via the `MOCK_MODE` env flag, which overrides the bit flag
+/// to 1 regardless of the proof type.
 #[derive(Debug, Clone, Copy)]
 pub enum ProofType {
-    MockEcdsa, // 0b00000001
-    Risc0,     // 0b00000010
-    Sp1,       // 0b00000100
-    Zisk,      // 0b00001000
+    Risc0, // 0b00000010
+    Sp1,   // 0b00000100
+    Zisk,  // 0b00001000
 }
 
 impl ProofType {
     pub fn proof_bit_flag(&self) -> u8 {
         match self {
-            ProofType::MockEcdsa => 1,
             ProofType::Risc0 => 1 << 1,
             ProofType::Sp1 => 1 << 2,
             ProofType::Zisk => 1 << 3,
@@ -105,7 +107,6 @@ impl ProofType {
     /// Returns the proof type string expected by Raiko.
     pub fn raiko_proof_type(&self) -> &'static str {
         match self {
-            ProofType::MockEcdsa => "mock_ecdsa",
             ProofType::Risc0 => "risc0",
             ProofType::Sp1 => "sp1",
             ProofType::Zisk => "zisk",
@@ -113,17 +114,19 @@ impl ProofType {
     }
 }
 
+/// SurgeVerifier MOCK_ECDSA bit flag — used when `MOCK_MODE=true`.
+pub const MOCK_ECDSA_BIT_FLAG: u8 = 1;
+
 impl std::str::FromStr for ProofType {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "mock_ecdsa" => Ok(ProofType::MockEcdsa),
             "risc0" => Ok(ProofType::Risc0),
             "sp1" => Ok(ProofType::Sp1),
             "zisk" => Ok(ProofType::Zisk),
             _ => Err(anyhow::anyhow!(
-                "Invalid PROOF_TYPE '{}'. Must be one of: mock_ecdsa, sp1, risc0, zisk",
+                "Invalid PROOF_TYPE '{}'. Must be one of: sp1, risc0, zisk",
                 s
             )),
         }

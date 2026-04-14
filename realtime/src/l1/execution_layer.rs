@@ -48,6 +48,7 @@ pub struct ExecutionLayer {
     #[allow(dead_code)]
     raiko_client: RaikoClient,
     proof_type: crate::l1::bindings::ProofType,
+    mock_mode: bool,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -102,6 +103,7 @@ impl ELTrait for ExecutionLayer {
         };
 
         let proof_type = specific_config.proof_type;
+        let mock_mode = specific_config.mock_mode;
         let raiko_client = specific_config.raiko_client;
 
         Ok(Self {
@@ -113,6 +115,7 @@ impl ELTrait for ExecutionLayer {
             realtime_inbox,
             raiko_client,
             proof_type,
+            mock_mode,
         })
     }
 
@@ -203,7 +206,8 @@ impl ExecutionLayer {
             batch.zk_proof.is_some(),
         );
 
-        let builder = ProposalTxBuilder::new(self.provider.clone(), 10, self.proof_type);
+        let builder =
+            ProposalTxBuilder::new(self.provider.clone(), 10, self.proof_type, self.mock_mode);
 
         let tx = builder
             .build_propose_tx(

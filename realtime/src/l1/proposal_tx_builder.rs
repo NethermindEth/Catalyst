@@ -1,6 +1,7 @@
 use crate::l1::{
     bindings::{
         BlobReference, Multicall, ProofType, ProposeInput, ProposeInputV2, RealTimeInbox, SubProof,
+        MOCK_ECDSA_BIT_FLAG,
     },
     config::ContractAddresses,
 };
@@ -33,14 +34,21 @@ pub struct ProposalTxBuilder {
     provider: DynProvider,
     extra_gas_percentage: u64,
     proof_type: ProofType,
+    mock_mode: bool,
 }
 
 impl ProposalTxBuilder {
-    pub fn new(provider: DynProvider, extra_gas_percentage: u64, proof_type: ProofType) -> Self {
+    pub fn new(
+        provider: DynProvider,
+        extra_gas_percentage: u64,
+        proof_type: ProofType,
+        mock_mode: bool,
+    ) -> Self {
         Self {
             provider,
             extra_gas_percentage,
             proof_type,
+            mock_mode,
         }
     }
 
@@ -250,8 +258,13 @@ impl ProposalTxBuilder {
             .ok_or_else(|| anyhow::anyhow!("ZK proof not set on proposal"))?
             .clone();
 
+        let bit_flag = if self.mock_mode {
+            MOCK_ECDSA_BIT_FLAG
+        } else {
+            self.proof_type.proof_bit_flag()
+        };
         let sub_proofs = vec![SubProof {
-            proofBitFlag: self.proof_type.proof_bit_flag(),
+            proofBitFlag: bit_flag,
             data: Bytes::from(raw_proof),
         }];
         let proof = Bytes::from(sub_proofs.abi_encode());

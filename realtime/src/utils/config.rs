@@ -24,6 +24,10 @@ pub struct RealtimeConfig {
     pub bridge_rpc_addr: String,
     pub preconf_only: bool,
     pub proof_request_bypass: bool,
+    /// When true, overrides the SubProof bit flag to MOCK_ECDSA (0b00000001)
+    /// regardless of `proof_type`. Allows using a real Raiko proof type string
+    /// while routing on-chain to the DummyProofVerifier.
+    pub mock_mode: bool,
 }
 
 impl ConfigTrait for RealtimeConfig {
@@ -73,6 +77,10 @@ impl ConfigTrait for RealtimeConfig {
             .map(|v| v.to_lowercase() != "false" && v != "0")
             .unwrap_or(false);
 
+        let mock_mode = std::env::var("MOCK_MODE")
+            .map(|v| v.to_lowercase() != "false" && v != "0")
+            .unwrap_or(false);
+
         Ok(RealtimeConfig {
             realtime_inbox,
             proposer_multicall,
@@ -89,6 +97,7 @@ impl ConfigTrait for RealtimeConfig {
             bridge_rpc_addr,
             preconf_only,
             proof_request_bypass,
+            mock_mode,
         })
     }
 }

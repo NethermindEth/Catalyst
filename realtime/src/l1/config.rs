@@ -17,6 +17,7 @@ pub struct EthereumL1Config {
     pub bridge: Address,
     pub signal_service: Address,
     pub proof_type: ProofType,
+    pub mock_mode: bool,
     pub raiko_client: RaikoClient,
 }
 
@@ -31,6 +32,7 @@ impl TryFrom<RealtimeConfig> for EthereumL1Config {
             bridge: config.bridge,
             signal_service: config.signal_service,
             proof_type: config.proof_type,
+            mock_mode: config.mock_mode,
             raiko_client,
         })
     }
