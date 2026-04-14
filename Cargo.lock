@@ -583,7 +583,7 @@ dependencies = [
  "paste",
  "proptest",
  "proptest-derive",
- "rand 0.9.2",
+ "rand 0.9.4",
  "rapidhash",
  "ruint",
  "rustc-hash",
@@ -2588,7 +2588,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3722,7 +3722,7 @@ dependencies = [
  "idna",
  "ipnet",
  "once_cell",
- "rand 0.9.2",
+ "rand 0.9.4",
  "ring",
  "serde",
  "socket2 0.5.10",
@@ -3746,7 +3746,7 @@ dependencies = [
  "moka",
  "once_cell",
  "parking_lot",
- "rand 0.9.2",
+ "rand 0.9.4",
  "resolv-conf",
  "serde",
  "smallvec",
@@ -4142,7 +4142,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "log",
- "rand 0.9.2",
+ "rand 0.9.4",
  "tokio",
  "url",
  "xmltree",
@@ -4387,7 +4387,7 @@ dependencies = [
  "jsonrpsee-types",
  "parking_lot",
  "pin-project",
- "rand 0.9.2",
+ "rand 0.9.4",
  "rustc-hash",
  "serde",
  "serde_json",
@@ -4536,7 +4536,7 @@ dependencies = [
  "kona-macros",
  "kona-peers",
  "libp2p",
- "rand 0.9.2",
+ "rand 0.9.4",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -5453,7 +5453,7 @@ dependencies = [
  "hyper-util",
  "log",
  "pin-project-lite",
- "rand 0.9.2",
+ "rand 0.9.4",
  "regex",
  "serde_json",
  "serde_urlencoded",
@@ -6228,7 +6228,7 @@ dependencies = [
  "futures-util",
  "opentelemetry",
  "percent-encoding",
- "rand 0.9.2",
+ "rand 0.9.4",
  "thiserror 2.0.18",
 ]
 
@@ -6809,7 +6809,7 @@ dependencies = [
  "bit-vec",
  "bitflags 2.11.0",
  "num-traits",
- "rand 0.9.2",
+ "rand 0.9.4",
  "rand_chacha 0.9.0",
  "rand_xorshift",
  "regex-syntax",
@@ -6961,7 +6961,7 @@ dependencies = [
  "bytes",
  "getrandom 0.3.4",
  "lru-slab",
- "rand 0.9.2",
+ "rand 0.9.4",
  "ring",
  "rustc-hash",
  "rustls",
@@ -7022,9 +7022,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.2"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db2770f06117d490610c7488547d543617b21bfa07796d7a12f6f1bd53850d1"
+checksum = "44c5af06bb1b7d3216d91932aed5265164bf384dc89cd6ba05cf59a35f5f76ea"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.5",
@@ -7085,7 +7085,7 @@ version = "4.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e48930979c155e2f33aa36ab3119b5ee81332beb6482199a8ecd6029b80b59"
 dependencies = [
- "rand 0.9.2",
+ "rand 0.9.4",
  "rustversion",
 ]
 
@@ -7351,7 +7351,7 @@ dependencies = [
  "metrics 0.24.3",
  "parking_lot",
  "pin-project",
- "rand 0.9.2",
+ "rand 0.9.4",
  "reth-chainspec 1.11.3",
  "reth-errors",
  "reth-ethereum-primitives",
@@ -7597,7 +7597,7 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "metrics 0.24.3",
- "rand 0.9.2",
+ "rand 0.9.4",
  "reth-chainspec 1.9.3",
  "reth-ethereum-forks 1.9.3",
  "reth-metrics 1.9.3",
@@ -7621,7 +7621,7 @@ dependencies = [
  "futures",
  "itertools 0.14.0",
  "metrics 0.24.3",
- "rand 0.9.2",
+ "rand 0.9.4",
  "reth-chainspec 1.11.3",
  "reth-ethereum-forks 1.11.3",
  "reth-metrics 1.11.3",
@@ -8070,7 +8070,7 @@ dependencies = [
  "parking_lot",
  "pin-project",
  "rand 0.8.5",
- "rand 0.9.2",
+ "rand 0.9.4",
  "rayon",
  "reth-chainspec 1.11.3",
  "reth-consensus",
@@ -8265,7 +8265,7 @@ dependencies = [
  "futures",
  "humantime",
  "ipnet",
- "rand 0.9.2",
+ "rand 0.9.4",
  "reth-chainspec 1.11.3",
  "reth-cli-util",
  "reth-config",
@@ -8550,7 +8550,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "metrics 0.24.3",
- "rand 0.9.2",
+ "rand 0.9.4",
  "reqwest 0.12.28",
  "reth-chain-state",
  "reth-chainspec 1.11.3",
@@ -8749,7 +8749,7 @@ dependencies = [
  "metrics 0.24.3",
  "parking_lot",
  "pin-project",
- "rand 0.9.2",
+ "rand 0.9.4",
  "reth-chain-state",
  "reth-chainspec 1.11.3",
  "reth-eth-wire-types",
@@ -9557,7 +9557,7 @@ dependencies = [
  "primitive-types",
  "proptest",
  "rand 0.8.5",
- "rand 0.9.2",
+ "rand 0.9.4",
  "rlp",
  "ruint-macro",
  "serde_core",
@@ -9852,7 +9852,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c3c81b43dc2d8877c216a3fccf76677ee1ebccd429566d3e67447290d0c42b2"
 dependencies = [
  "bitcoin_hashes",
- "rand 0.9.2",
+ "rand 0.9.4",
  "secp256k1-sys 0.11.0",
 ]
 
@@ -10136,7 +10136,7 @@ dependencies = [
  "mockito",
  "pacaya",
  "protocol",
- "rand 0.9.2",
+ "rand 0.9.4",
  "reqwest 0.13.2",
  "rpc",
  "serde",
@@ -11274,7 +11274,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.9.2",
+ "rand 0.9.4",
  "rustls",
  "rustls-pki-types",
  "sha1",
@@ -12459,7 +12459,7 @@ dependencies = [
  "nohash-hasher",
  "parking_lot",
  "pin-project",
- "rand 0.9.2",
+ "rand 0.9.4",
  "static_assertions",
  "web-time",
 ]
