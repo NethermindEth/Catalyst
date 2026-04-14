@@ -10,10 +10,6 @@ publish = false
 name = "catalyst_node"
 path = "src/main.rs"
 
-[[bin]]
-name = "test_gas"
-path = "src/test_gas.rs"
-
 [dependencies]
 alloy = { workspace = true }
 alloy-json-rpc = { workspace = true }

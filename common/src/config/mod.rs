@@ -70,7 +70,6 @@ pub struct Config {
     pub proposal_max_time_sec: u64,
     // fork info
     pub fork_switch_transition_period_sec: u64,
-    pub pacaya_timestamp_sec: u64,
     pub shasta_timestamp_sec: u64,
     pub permissionless_timestamp_sec: u64,
     // Whitelist monitor
@@ -425,12 +424,8 @@ impl Config {
                     anyhow::anyhow!("FORK_SWITCH_TRANSITION_PERIOD_SEC must be a number: {}", e)
                 })?,
             };
-        let pacaya_timestamp_sec = std::env::var("PACAYA_TIMESTAMP_SEC")
-            .unwrap_or("0".to_string())
-            .parse::<u64>()
-            .map_err(|e| anyhow::anyhow!("PACAYA_TIMESTAMP_SEC must be a number: {}", e))?;
         let shasta_timestamp_sec = std::env::var("SHASTA_TIMESTAMP_SEC")
-            .unwrap_or("99999999999".to_string())
+            .unwrap_or("0".to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("SHASTA_TIMESTAMP_SEC must be a number: {}", e))?;
         let permissionless_timestamp_sec = std::env::var("PERMISSIONLESS_TIMESTAMP_SEC")
@@ -516,7 +511,6 @@ impl Config {
             bridge_relayer_fee,
             bridge_transaction_fee,
             fork_switch_transition_period_sec,
-            pacaya_timestamp_sec,
             shasta_timestamp_sec,
             permissionless_timestamp_sec,
             whitelist_monitor_interval_sec,
@@ -571,7 +565,6 @@ max time before submit: {}s
 bridge relayer fee: {}wei
 bridge transaction fee: {}wei
 fork switch transition time: {}s
-pacaya timestamp: {}s
 shasta timestamp: {}s
 permissionless timestamp: {}s
 whitelist monitor interval: {}s
@@ -634,7 +627,6 @@ internal server port: {}
             config.bridge_relayer_fee,
             config.bridge_transaction_fee,
             config.fork_switch_transition_period_sec,
-            config.pacaya_timestamp_sec,
             config.shasta_timestamp_sec,
             config.permissionless_timestamp_sec,
             config.whitelist_monitor_interval_sec,

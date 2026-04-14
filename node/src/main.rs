@@ -6,7 +6,6 @@ use common::{
     shared::internal_server,
     utils::cancellation_token::CancellationToken,
 };
-use pacaya::create_pacaya_node;
 use realtime::create_realtime_node;
 use std::sync::Arc;
 use tokio::signal::unix::{SignalKind, signal};
@@ -85,21 +84,6 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
     }));
 
     let mut extra_routes: Vec<Router> = match fork_info.fork {
-        Fork::Pacaya => {
-            let next_fork_timestamp = fork_info.config.fork_switch_timestamps.get(1);
-            info!(
-                "Current fork: PACAYA, next fork timestamp: {:?}",
-                next_fork_timestamp
-            );
-            create_pacaya_node(
-                config.clone(),
-                metrics.clone(),
-                cancel_token.clone(),
-                fork_info,
-            )
-            .await?;
-            Vec::new()
-        }
         Fork::Shasta => {
             info!("Current fork: SHASTA");
             shasta::create_shasta_node(

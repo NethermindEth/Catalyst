@@ -78,6 +78,7 @@ impl Node {
             config.simulate_not_submitting_at_the_end_of_epoch,
             cancel_token.clone(),
             fork_info.clone(),
+            config.ejection_grace_period_sec,
         )
         .map_err(|e| anyhow::anyhow!("Failed to create Operator: {}", e))?;
         let watchdog = common_utils::watchdog::Watchdog::new(

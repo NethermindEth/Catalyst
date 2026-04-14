@@ -86,6 +86,7 @@ pub async fn create_shasta_node(
         preconf_heartbeat_ms: config.preconf_heartbeat_ms,
         handover_window_slots: shasta_config.handover_window_slots,
         handover_start_buffer_ms: shasta_config.handover_start_buffer_ms,
+        ejection_grace_period_sec: shasta_config.ejection_grace_period_sec,
         l1_height_lag: shasta_config.l1_height_lag,
         min_anchor_offset: config.min_anchor_offset,
         propose_forced_inclusion: shasta_config.propose_forced_inclusion,
