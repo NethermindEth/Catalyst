@@ -129,16 +129,22 @@ impl ProposalTxBuilder {
         let mut multicalls: Vec<Multicall::Call> = vec![];
 
         if use_deferred {
-            // 1. tentativePropose (inbox_calls[0])
-            info!("Added tentativePropose to Multicall: {:?}", &inbox_calls[0]);
-            multicalls.push(inbox_calls[0].clone());
+            // Deferred flow: [user_ops..., tentativePropose, l1_calls..., finalizePropose]
+            //
+            // User ops must run before tentativePropose because L1 UserOps are what
+            // emit the existingSignals that tentativePropose verifies. Ordering them
+            // after would leave those signals unsent and tentativePropose would revert.
 
-            // 2. user ops
+            // 1. User ops (emit existingSignals on L1)
             for user_op in &batch.user_ops {
                 let user_op_call = self.build_user_op_call(user_op.clone());
                 info!("Added user op to Multicall: {:?}", &user_op_call);
                 multicalls.push(user_op_call);
             }
+
+            // 2. tentativePropose (inbox_calls[0]) — verifies existingSignals now present
+            info!("Added tentativePropose to Multicall: {:?}", &inbox_calls[0]);
+            multicalls.push(inbox_calls[0].clone());
 
             // 3. L1 calls (processMessage for L2→L1 signals — each triggers its
             //    target's L1 callback which produces an L1→L2 return signal)
@@ -149,7 +155,7 @@ impl ProposalTxBuilder {
                 multicalls.push(l1_call_call);
             }
 
-            // 4. finalizePropose (inbox_calls[1])
+            // 4. finalizePropose (inbox_calls[1]) — verifies requiredReturnSignals
             info!("Added finalizePropose to Multicall: {:?}", &inbox_calls[1]);
             multicalls.push(inbox_calls[1].clone());
         } else {

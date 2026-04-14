@@ -365,10 +365,51 @@ impl BridgeHandler {
                 .get_hop_proof(signal_slot, block_id, state_root)
                 .await?;
 
+            // Simulate the L1 callback (Bridge.processMessage) to detect any
+            // L1→L2 return signal the callback will produce. If found, it
+            // must be pre-injected into the L2 block's anchor fast signals
+            // and committed as a requiredReturnSignal in the inbox proposal.
+            //
+            // The simulator uses state_override on L1 SignalService so the
+            // signal-verification step passes even before the real checkpoint
+            // is committed. A None result means the callback does not produce
+            // an outbound — classic L1→L2→L1 flow, no deferred-finalize needed.
+            let l1_el = &self.ethereum_l1.execution_layer;
+            let contracts = l1_el.contract_addresses();
+            // L2 bridge address is auto-derived from L2 chain id on the L2
+            // side — pull it from there rather than duplicating in config.
+            let l2_bridge_address = *l2_el.bridge.address();
+            let required_return_signal = match l1_el
+                .simulate_l1_callback_return_signal(
+                    message_from_l2.clone(),
+                    signal_slot_proof.clone(),
+                    contracts.bridge,
+                    l2_bridge_address,
+                )
+                .await
+            {
+                Ok(Some((_return_msg, slot))) => {
+                    info!(
+                        "L1 callback simulation found return signal slot={} — will use deferred finalize",
+                        slot
+                    );
+                    Some(slot)
+                }
+                Ok(None) => None,
+                Err(e) => {
+                    // Simulation failure is not fatal: fall back to classic flow.
+                    warn!(
+                        "L1 callback simulation failed ({}) — falling back to classic propose",
+                        e
+                    );
+                    None
+                }
+            };
+
             return Ok(Some(L1Call {
                 message_from_l2,
                 signal_slot_proof,
-                required_return_signal: None,
+                required_return_signal,
             }));
         }
 

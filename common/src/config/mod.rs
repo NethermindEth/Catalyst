@@ -239,7 +239,7 @@ impl Config {
         let taiko_anchor_address = Address::from_str(&taiko_anchor_address_str)
             .map_err(|e| address_parse_error(TAIKO_ANCHOR_ADDRESS, e, &taiko_anchor_address_str))?;
 
-        const BRIDGE_ADDRESS: &str = "TAIKO_BRIDGE_L2_ADDRESS";
+        const BRIDGE_ADDRESS: &str = "L2_BRIDGE_ADDRESS";
         let taiko_bridge_address_str = std::env::var(BRIDGE_ADDRESS).unwrap_or_else(|_| {
             warn!(
                 "No Bridge contract address found in {} env var, using default",

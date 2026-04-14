@@ -65,6 +65,8 @@ pub async fn create_realtime_node(
         metrics.clone(),
         taiko_config,
         l2_engine,
+        config.taiko_bridge_address,
+        realtime_config.l2_signal_service,
     )
     .await?;
     let taiko = Arc::new(taiko);

@@ -9,6 +9,11 @@ pub struct RealtimeConfig {
     pub realtime_inbox: Address,
     pub proposer_multicall: Address,
     pub bridge: Address,
+    /// L1 SignalService — needed for L1 callback simulation
+    /// (state_override on `_receivedSignals` to pass fast-signal check).
+    pub signal_service: Address,
+    /// L2 SignalService address — used on the L2 side for signal operations.
+    pub l2_signal_service: Address,
     pub raiko_url: String,
     pub raiko_api_key: Option<String>,
     pub proof_type: ProofType,
@@ -33,6 +38,8 @@ impl ConfigTrait for RealtimeConfig {
         let realtime_inbox = read_contract_address("REALTIME_INBOX_ADDRESS")?;
         let proposer_multicall = read_contract_address("PROPOSER_MULTICALL_ADDRESS")?;
         let bridge = read_contract_address("L1_BRIDGE_ADDRESS")?;
+        let signal_service = read_contract_address("L1_SIGNAL_SERVICE_ADDRESS")?;
+        let l2_signal_service = read_contract_address("L2_SIGNAL_SERVICE_ADDRESS")?;
 
         let raiko_url =
             std::env::var("RAIKO_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
@@ -70,6 +77,8 @@ impl ConfigTrait for RealtimeConfig {
             realtime_inbox,
             proposer_multicall,
             bridge,
+            signal_service,
+            l2_signal_service,
             raiko_url,
             raiko_api_key,
             proof_type,

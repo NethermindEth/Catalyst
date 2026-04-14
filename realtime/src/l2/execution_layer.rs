@@ -9,9 +9,16 @@ use alloy::{
     consensus::{
         SignableTransaction, Transaction as AnchorTransaction, TxEnvelope, transaction::Recovered,
     },
+    eips::{BlockId, BlockNumberOrTag},
     primitives::{Address, B256, Bytes, FixedBytes},
-    providers::{DynProvider, Provider},
-    rpc::types::Transaction,
+    providers::{DynProvider, Provider, ext::DebugApi},
+    rpc::types::{
+        Transaction, TransactionRequest,
+        trace::geth::{
+            CallFrame, GethDebugBuiltInTracerType, GethDebugTracerType,
+            GethDebugTracingCallOptions, GethDebugTracingOptions,
+        },
+    },
     signers::{Signature, Signer as AlloySigner},
     sol_types::SolEvent,
 };
@@ -41,7 +48,11 @@ pub struct L2ExecutionLayer {
 }
 
 impl L2ExecutionLayer {
-    pub async fn new(taiko_config: TaikoConfig) -> Result<Self, Error> {
+    pub async fn new(
+        taiko_config: TaikoConfig,
+        bridge_address: Address,
+        signal_service: Address,
+    ) -> Result<Self, Error> {
         let provider =
             alloy_tools::create_alloy_provider_without_wallet(&taiko_config.taiko_geth_url).await?;
 
@@ -52,15 +63,7 @@ impl L2ExecutionLayer {
         info!("L2 Chain ID: {}", chain_id);
 
         let anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
-
-        let chain_id_string = format!("{}", chain_id);
-        let zeros_needed = 38usize.saturating_sub(chain_id_string.len());
-        let bridge_address: Address =
-            format!("0x{}{}01", chain_id_string, "0".repeat(zeros_needed)).parse()?;
         let bridge = Bridge::new(bridge_address, provider.clone());
-
-        let signal_service: Address =
-            format!("0x{}{}05", chain_id_string, "0".repeat(zeros_needed)).parse()?;
 
         let common =
             ExecutionLayerCommon::new(provider.clone(), taiko_config.signer.get_address()).await?;
@@ -318,6 +321,19 @@ pub trait L2BridgeHandlerOps {
         block_id: u64,
         state_root: B256,
     ) -> Result<Bytes, anyhow::Error>;
+
+    /// Dry-run a UserOp on the L2 node to discover any L2→L1 bridge message it
+    /// emits via `Bridge.sendMessage`. The trace is captured even when the
+    /// overall tx reverts — e.g. because the UserOp later calls
+    /// `Bridge.processMessage(returnMsg, "")` which requires a fast signal
+    /// that hasn't been injected yet.
+    ///
+    /// Returns the first `MessageSent` payload observed (Message struct),
+    /// or `None` if the UserOp never calls `Bridge.sendMessage`.
+    async fn trace_user_op_for_outbound_message(
+        &self,
+        user_op: &UserOp,
+    ) -> Result<Option<Message>, anyhow::Error>;
 }
 
 impl L2BridgeHandlerOps for L2ExecutionLayer {
@@ -484,4 +500,97 @@ impl L2BridgeHandlerOps for L2ExecutionLayer {
 
         Ok(Bytes::from(vec![hop_proof].abi_encode_params()))
     }
+
+    async fn trace_user_op_for_outbound_message(
+        &self,
+        user_op: &UserOp,
+    ) -> Result<Option<Message>, anyhow::Error> {
+        let tx_request = TransactionRequest::default()
+            .from(user_op.submitter)
+            .to(user_op.submitter)
+            .input(user_op.calldata.clone().into());
+
+        let mut tracer_config = serde_json::Map::new();
+        tracer_config.insert("withLog".to_string(), serde_json::Value::Bool(true));
+        tracer_config.insert("onlyTopCall".to_string(), serde_json::Value::Bool(false));
+
+        let tracing_options = GethDebugTracingOptions {
+            tracer: Some(GethDebugTracerType::BuiltInTracer(
+                GethDebugBuiltInTracerType::CallTracer,
+            )),
+            tracer_config: serde_json::Value::Object(tracer_config).into(),
+            ..Default::default()
+        };
+
+        let call_options = GethDebugTracingCallOptions {
+            tracing_options,
+            ..Default::default()
+        };
+
+        let trace_result = match self
+            .provider
+            .debug_trace_call(
+                tx_request,
+                BlockId::Number(BlockNumberOrTag::Latest),
+                call_options,
+            )
+            .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                // For the "simulate a reverting tx" case, some L2 nodes still
+                // return the trace even when the tx fails. RPC-level errors are
+                // distinct from reverts and we surface them.
+                return Err(anyhow::anyhow!(
+                    "L2 user-op simulation RPC failed: {e}"
+                ));
+            }
+        };
+
+        let mut message: Option<Message> = None;
+
+        if let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result {
+            // Walk the entire call tree. The MessageSent event may be emitted
+            // by a nested Bridge.sendMessage call long before any later revert.
+            let all_logs = collect_logs_from_frame(&call_frame);
+            for log in all_logs {
+                if let Some(topics) = &log.topics
+                    && !topics.is_empty()
+                    && topics[0] == MessageSent::SIGNATURE_HASH
+                {
+                    let log_data = alloy::primitives::LogData::new_unchecked(
+                        topics.clone(),
+                        log.data.clone().unwrap_or_default(),
+                    );
+                    let decoded = MessageSent::decode_log_data(&log_data).map_err(|e| {
+                        anyhow::anyhow!("Failed to decode MessageSent from L2 sim: {e}")
+                    })?;
+                    message = Some(decoded.message);
+                    break; // first MessageSent wins for the POC
+                }
+            }
+        }
+
+        if let Some(m) = &message {
+            debug!(
+                "L2 pre-sim found outbound sendMessage: destChainId={}, to={}",
+                m.destChainId, m.to
+            );
+        } else {
+            debug!("L2 pre-sim found no outbound sendMessage in UserOp trace");
+        }
+
+        Ok(message)
+    }
+}
+
+/// Recursively collect all logs emitted during a traced call (including from
+/// sub-calls). Mirrors the L1-side helper in `crate::l1::execution_layer`.
+fn collect_logs_from_frame(frame: &CallFrame) -> Vec<alloy::rpc::types::trace::geth::CallLogFrame> {
+    let mut logs = Vec::new();
+    logs.extend(frame.logs.iter().cloned());
+    for sub_frame in &frame.calls {
+        logs.extend(collect_logs_from_frame(sub_frame));
+    }
+    logs
 }

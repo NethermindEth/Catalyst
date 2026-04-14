@@ -5,12 +5,12 @@ use crate::l1::bindings::RealTimeInbox::{self, RealTimeInboxInstance};
 use crate::node::proposal_manager::proposal::Proposal;
 use crate::raiko::RaikoClient;
 use crate::shared_abi::bindings::{
-    Bridge::MessageSent, IBridge::Message, SignalService::SignalSent,
+    Bridge, Bridge::MessageSent, IBridge::Message, SignalService::SignalSent,
 };
 use crate::{l1::config::ContractAddresses, node::proposal_manager::bridge_handler::UserOp};
 use alloy::{
     eips::{BlockId, BlockNumberOrTag},
-    primitives::{Address, B256, FixedBytes},
+    primitives::{Address, B256, Bytes, FixedBytes},
     providers::{DynProvider, ext::DebugApi},
     rpc::types::{
         TransactionRequest,
@@ -19,7 +19,7 @@ use alloy::{
             GethDebugTracingOptions,
         },
     },
-    sol_types::SolEvent,
+    sol_types::{SolCall, SolEvent},
 };
 use anyhow::{Error, anyhow};
 use common::{
@@ -98,6 +98,7 @@ impl ELTrait for ExecutionLayer {
             realtime_inbox: specific_config.realtime_inbox,
             proposer_multicall: specific_config.proposer_multicall,
             bridge: specific_config.bridge,
+            signal_service: specific_config.signal_service,
         };
 
         let proof_type = specific_config.proof_type;
@@ -178,6 +179,13 @@ impl ExecutionLayer {
     #[allow(dead_code)]
     pub fn get_raiko_client(&self) -> &RaikoClient {
         &self.raiko_client
+    }
+
+    /// Returns a clone of the configured contract addresses (L1 inbox,
+    /// bridge, signal service, proposer multicall). Useful for callers that
+    /// need to reference these during block building.
+    pub fn contract_addresses(&self) -> ContractAddresses {
+        self.contract_addresses.clone()
     }
 
     pub async fn send_batch_to_l1(
@@ -265,6 +273,23 @@ pub trait L1BridgeHandlerOps {
         &self,
         user_op: UserOp,
     ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error>;
+
+    /// Simulate `Bridge.processMessage(msg, proof)` on L1 and inspect the trace
+    /// for any `MessageSent` event the invoked L1 callback emits. If it does,
+    /// the return message is an L1→L2 bridge message that the originating L2
+    /// block expects to consume as a fast signal — the slot of that return
+    /// signal is what the inbox's `requiredReturnSignals` list must include.
+    ///
+    /// Returns `Some((return_message, return_signal_slot))` if a return is
+    /// produced, `None` otherwise. Returns an error only for RPC failures; a
+    /// callback that reverts during simulation yields `None` (no signal).
+    async fn simulate_l1_callback_return_signal(
+        &self,
+        message_from_l2: Message,
+        signal_slot_proof: Bytes,
+        bridge_address: Address,
+        l2_bridge_address: Address,
+    ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error>;
 }
 
 impl L1BridgeHandlerOps for ExecutionLayer {
@@ -347,5 +372,167 @@ impl L1BridgeHandlerOps for ExecutionLayer {
         }
 
         Ok(None)
+    }
+
+    async fn simulate_l1_callback_return_signal(
+        &self,
+        message_from_l2: Message,
+        _signal_slot_proof: Bytes,
+        bridge_address: Address,
+        l2_bridge_address: Address,
+    ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error> {
+        use alloy::primitives::{B256, U256, keccak256};
+        use alloy::rpc::types::state::{AccountOverride, StateOverride};
+
+        // Compute the L2→L1 signal slot that the bridge will check during
+        // proveSignalReceived. On L1 SignalService:
+        //   slot = keccak256(abi.encodePacked("SIGNAL", srcChainId, app, msgHash))
+        // where app = the L2 bridge that emitted the signal.
+        //
+        // hashMessage = keccak256(abi.encode("TAIKO_MESSAGE", message))
+        // Compute it on-chain via Bridge.hashMessage to avoid replicating the
+        // exact Solidity abi.encode of a (string, struct) tuple in Rust.
+
+        let bridge = Bridge::new(bridge_address, self.provider.clone());
+        let msg_hash: B256 = bridge
+            .hashMessage(message_from_l2.clone())
+            .call()
+            .await
+            .map_err(|e| anyhow!("Failed to call Bridge.hashMessage for sim: {e}"))?;
+
+        // Bridge.processMessage on L1 passes `app = resolve(srcChainId,
+        // B_BRIDGE) = L2 bridge address` to SignalService.proveSignalReceived.
+        // That's what the signal slot was derived from on L2 (msg.sender of
+        // SignalService.sendSignal was the L2 bridge). Caller passes in the
+        // L2 bridge address (auto-derived from L2 chain id on the L2 side).
+        let app = l2_bridge_address;
+        let src_chain_id = message_from_l2.srcChainId;
+
+        // Mirror SignalService.getSignalSlot: keccak256(abi.encodePacked(
+        //   "SIGNAL", uint64 chainId, address app, bytes32 signal))
+        let mut preimage = Vec::with_capacity(6 + 8 + 20 + 32);
+        preimage.extend_from_slice(b"SIGNAL");
+        preimage.extend_from_slice(&src_chain_id.to_be_bytes());
+        preimage.extend_from_slice(app.as_slice());
+        preimage.extend_from_slice(msg_hash.as_slice());
+        let signal_slot_key: B256 = keccak256(&preimage);
+
+        // Storage slot of `_receivedSignals[signal_slot_key]` on L1 SignalService
+        // `_receivedSignals` is at storage slot 253 (see SignalService_Layout.sol).
+        let received_signals_base_slot = U256::from(253u64);
+        let mut key_preimage = Vec::with_capacity(64);
+        key_preimage.extend_from_slice(signal_slot_key.as_slice());
+        key_preimage.extend_from_slice(&B256::from(received_signals_base_slot).0);
+        let received_signals_storage_slot: B256 = keccak256(&key_preimage);
+
+        // Build calldata for `Bridge.processMessage(message_from_l2, "")` with
+        // empty proof. With `_receivedSignals[slot] = true` state-overridden,
+        // the fast-signal path in proveSignalReceived succeeds, so the bridge
+        // proceeds to invoke the target's onMessageInvocation, whose trace we
+        // then scan for the L1→L2 return.
+        let calldata = Bridge::processMessageCall {
+            _message: message_from_l2,
+            _proof: Bytes::new(),
+        }
+        .abi_encode();
+
+        let tx_request = TransactionRequest::default()
+            .from(self.preconfer_address)
+            .to(bridge_address)
+            .input(calldata.into());
+
+        // State-override: mark the signal as received on the L1 SignalService.
+        let signal_service_address = self.contract_addresses.signal_service;
+        let account_override = AccountOverride::default().with_state_diff(
+            std::iter::once((
+                received_signals_storage_slot,
+                B256::from(U256::from(1)),
+            )),
+        );
+        let mut state_overrides = StateOverride::default();
+        state_overrides.insert(signal_service_address, account_override);
+
+        let mut tracer_config = serde_json::Map::new();
+        tracer_config.insert("withLog".to_string(), serde_json::Value::Bool(true));
+        tracer_config.insert("onlyTopCall".to_string(), serde_json::Value::Bool(false));
+
+        let tracing_options = GethDebugTracingOptions {
+            tracer: Some(GethDebugTracerType::BuiltInTracer(
+                GethDebugBuiltInTracerType::CallTracer,
+            )),
+            tracer_config: serde_json::Value::Object(tracer_config).into(),
+            ..Default::default()
+        };
+
+        let call_options = GethDebugTracingCallOptions {
+            tracing_options,
+            state_overrides: Some(state_overrides),
+            ..Default::default()
+        };
+
+        let trace_result = match self
+            .provider
+            .debug_trace_call(
+                tx_request,
+                BlockId::Number(BlockNumberOrTag::Latest),
+                call_options,
+            )
+            .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                // RPC-level failure (not a revert inside the trace). Surface as error.
+                return Err(anyhow!("L1 callback simulation RPC failed: {e}"));
+            }
+        };
+
+        let mut message: Option<Message> = None;
+        let mut slot: Option<FixedBytes<32>> = None;
+
+        if let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result {
+            // Collect logs regardless of whether the simulation reverted — the
+            // MessageSent event is emitted during processMessage's invoked
+            // callback, which may succeed even if a later sub-call reverts.
+            let all_logs = collect_logs_recursive(&call_frame);
+            for log in all_logs {
+                if let Some(topics) = &log.topics
+                    && !topics.is_empty()
+                {
+                    if topics[0] == MessageSent::SIGNATURE_HASH {
+                        let log_data = alloy::primitives::LogData::new_unchecked(
+                            topics.clone(),
+                            log.data.clone().unwrap_or_default(),
+                        );
+                        let decoded = MessageSent::decode_log_data(&log_data).map_err(|e| {
+                            anyhow!("Failed to decode MessageSent from L1 callback sim: {e}")
+                        })?;
+                        message = Some(decoded.message);
+                    } else if topics[0] == SignalSent::SIGNATURE_HASH {
+                        let log_data = alloy::primitives::LogData::new_unchecked(
+                            topics.clone(),
+                            log.data.clone().unwrap_or_default(),
+                        );
+                        let decoded = SignalSent::decode_log_data(&log_data).map_err(|e| {
+                            anyhow!("Failed to decode SignalSent from L1 callback sim: {e}")
+                        })?;
+                        slot = Some(decoded.slot);
+                    }
+                }
+            }
+        }
+
+        if let (Some(m), Some(s)) = (message, slot) {
+            tracing::info!(
+                "L1 callback simulation found return signal: slot={}, destChainId={}",
+                s,
+                m.destChainId
+            );
+            Ok(Some((m, s)))
+        } else {
+            tracing::debug!(
+                "L1 callback simulation produced no MessageSent/SignalSent pair"
+            );
+            Ok(None)
+        }
     }
 }

@@ -4,10 +4,14 @@ pub mod bridge_handler;
 pub mod l2_block_payload;
 pub mod proposal;
 
-use crate::l1::bindings::ICheckpointStore::Checkpoint;
+use crate::l1::bindings::{
+    FlashLoanReturnMessage, ICheckpointStore::Checkpoint, executeCall,
+};
+use crate::l1::execution_layer::L1BridgeHandlerOps;
 use crate::l2::execution_layer::L2BridgeHandlerOps;
 use crate::node::proposal_manager::bridge_handler::UserOp;
 use crate::raiko::RaikoClient;
+use crate::shared_abi::bindings::IBridge::Message as BridgeMessage;
 use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
 use alloy::primitives::aliases::U48;
 use alloy::primitives::{B256, FixedBytes};
@@ -48,6 +52,11 @@ pub struct BatchManager {
     cancel_token: CancellationToken,
     last_finalized_block_hash: B256,
     last_finalized_block_number: Arc<AtomicU64>,
+    /// L1→L2 return signal slot discovered during Pass 2 (L2Direct pre-sim).
+    /// Pushed into the L2 block's anchor fast signals before real execution
+    /// so that `bridge.processMessage(returnMsg, "")` in the UserOp succeeds.
+    /// Cleared after each block build.
+    pending_return_signal: Option<FixedBytes<32>>,
 }
 
 impl BatchManager {
@@ -126,6 +135,7 @@ impl BatchManager {
             cancel_token,
             last_finalized_block_hash,
             last_finalized_block_number,
+            pending_return_signal: None,
         })
     }
 
@@ -332,10 +342,45 @@ impl BatchManager {
                     user_op.id, user_op.submitter
                 );
 
+                // --- Pass 2: pre-simulate L2→L1 outbound + L1 callback return ---
+                //
+                // Dry-run the UserOp to extract any `bridge.sendMessage` it emits
+                // (even if the tx reverts on a later `bridge.processMessage`
+                // fast-signal check). If found, simulate the L1 callback to
+                // discover the L1→L2 return signal. If present, the UserOp's
+                // placeholder `returnMessage` is patched with the simulated one.
+                let patched_user_op = match self
+                    .prepare_l2_direct_user_op(user_op.clone())
+                    .await
+                {
+                    Ok((patched, Some((_return_msg, slot)))) => {
+                        info!(
+                            "L2Direct pre-sim extracted L1→L2 return slot={} for UserOp id={}",
+                            slot, user_op.id
+                        );
+                        self.pending_return_signal = Some(slot);
+                        patched
+                    }
+                    Ok((patched, None)) => {
+                        debug!(
+                            "L2Direct pre-sim found no return signal for UserOp id={}",
+                            user_op.id
+                        );
+                        patched
+                    }
+                    Err(e) => {
+                        warn!(
+                            "L2Direct pre-sim failed for UserOp id={}: {}. Proceeding with original calldata.",
+                            user_op.id, e
+                        );
+                        user_op.clone()
+                    }
+                };
+
                 match self
                     .taiko
                     .l2_execution_layer()
-                    .construct_l2_user_op_tx(&user_op)
+                    .construct_l2_user_op_tx(&patched_user_op)
                     .await
                 {
                     Ok(tx) => {
@@ -367,10 +412,61 @@ impl BatchManager {
                         );
                     }
                 }
-                // No L1 UserOp or signal slot for L2-direct ops
+                // No L1 UserOp or signal slot returned here for L2-direct ops;
+                // `pending_return_signal` on `self` carries any return slot.
                 Ok(None)
             }
         }
+    }
+
+    /// Pre-simulate an L2Direct UserOp to detect its L2→L1 outbound and the
+    /// L1→L2 return produced by the L1 callback. If a return is found and the
+    /// UserOp targets `FlashLoanExecutorL2.execute(uint256,address,IBridge.Message)`,
+    /// the placeholder returnMessage in its calldata is substituted with the
+    /// simulated Message before the real L2 block execution.
+    async fn prepare_l2_direct_user_op(
+        &self,
+        user_op: UserOp,
+    ) -> Result<(UserOp, Option<(BridgeMessage, FixedBytes<32>)>), Error> {
+        use alloy::primitives::Bytes;
+
+        let l2_el = self.taiko.l2_execution_layer();
+        let Some(outbound) = l2_el
+            .trace_user_op_for_outbound_message(&user_op)
+            .await?
+        else {
+            return Ok((user_op, None));
+        };
+
+        let l1_el = &self.ethereum_l1.execution_layer;
+        let bridge_addr = l1_el.contract_addresses().bridge;
+        let l2_bridge_addr = *l2_el.bridge.address();
+        let Some((return_msg, return_slot)) = l1_el
+            .simulate_l1_callback_return_signal(
+                outbound,
+                Bytes::new(),
+                bridge_addr,
+                l2_bridge_addr,
+            )
+            .await?
+        else {
+            return Ok((user_op, None));
+        };
+
+        // Attempt calldata patching.
+        let patched_user_op = match maybe_patch_flash_loan_execute_calldata(&user_op, &return_msg) {
+            Ok(patched) => patched,
+            Err(e) => {
+                warn!(
+                    "FlashLoanExecutor calldata patch failed ({e}); using original calldata. \
+                     The L2 block may revert at processMessage if the placeholder return \
+                     Message's hash doesn't match the simulated one."
+                );
+                user_op.clone()
+            }
+        };
+
+        Ok((patched_user_op, Some((return_msg, return_slot))))
     }
 
     async fn add_draft_block_to_proposal(
@@ -391,6 +487,21 @@ impl BatchManager {
             anchor_signal_slots.push(signal_slot);
         } else {
             debug!("No L1→L2 UserOps (L2 direct ops, if any, were handled inline)");
+        }
+
+        // If Pass 2 (L2Direct pre-sim) discovered an L1→L2 return signal,
+        // inject it into the anchor's fast signals so `bridge.processMessage`
+        // inside the UserOp's onFlashLoan / equivalent callback succeeds when
+        // the real L2 block executes. The same slot is also recorded in
+        // batch_builder.signal_slots so `ProposeInputV2` can split it out as
+        // `requiredReturnSignals` when the multicall is built.
+        if let Some(return_slot) = self.pending_return_signal.take() {
+            info!(
+                "Injecting pre-simulated L1→L2 return signal into anchor fast signals: slot={}",
+                return_slot
+            );
+            self.batch_builder.add_signal_slot(return_slot)?;
+            anchor_signal_slots.push(return_slot);
         }
 
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
@@ -572,4 +683,71 @@ impl BatchManager {
 
         Ok(block)
     }
+}
+
+/// If `user_op.calldata` matches the FlashLoanExecutorL2.execute ABI
+/// `execute(uint256 amount, address beneficiary, IBridge.Message returnMessage)`,
+/// decode it, substitute `returnMessage` with the simulated `return_msg`, and
+/// return a new UserOp with the patched calldata. Otherwise return an error
+/// (the caller falls back to the original calldata with a warning).
+fn maybe_patch_flash_loan_execute_calldata(
+    user_op: &UserOp,
+    return_msg: &BridgeMessage,
+) -> Result<UserOp, Error> {
+    use alloy::primitives::Bytes;
+    use alloy::sol_types::SolCall;
+
+    let calldata_bytes = user_op.calldata.as_ref();
+    if calldata_bytes.len() < 4 {
+        return Err(anyhow::anyhow!("calldata too short for selector"));
+    }
+
+    let selector: [u8; 4] = calldata_bytes[0..4]
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("selector parse failed"))?;
+
+    if selector != executeCall::SELECTOR {
+        return Err(anyhow::anyhow!(
+            "selector 0x{} does not match FlashLoanExecutor.execute",
+            hex_encode(&selector)
+        ));
+    }
+
+    let decoded = executeCall::abi_decode_raw(&calldata_bytes[4..]).map_err(|e| {
+        anyhow::anyhow!("failed to decode execute(uint256,address,(...)) calldata: {e}")
+    })?;
+
+    // Build the patched FlashLoanReturnMessage from the simulated BridgeMessage.
+    let patched_return = FlashLoanReturnMessage {
+        id: return_msg.id,
+        fee: return_msg.fee,
+        gasLimit: return_msg.gasLimit,
+        from: return_msg.from,
+        srcChainId: return_msg.srcChainId,
+        srcOwner: return_msg.srcOwner,
+        destChainId: return_msg.destChainId,
+        destOwner: return_msg.destOwner,
+        to: return_msg.to,
+        value: return_msg.value,
+        data: return_msg.data.clone(),
+    };
+
+    let patched_call = executeCall {
+        amount: decoded.amount,
+        beneficiary: decoded.beneficiary,
+        returnMessage: patched_return,
+    };
+
+    let patched_calldata = Bytes::from(patched_call.abi_encode());
+    let mut patched_user_op = user_op.clone();
+    patched_user_op.calldata = patched_calldata;
+    Ok(patched_user_op)
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{:02x}", b));
+    }
+    s
 }

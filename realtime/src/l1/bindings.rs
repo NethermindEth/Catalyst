@@ -51,6 +51,36 @@ sol! {
     }
 }
 
+// Binding for the L2 flash loan executor's `execute` entry point. Used by the
+// proposal manager to detect UserOps that target this ABI and patch their
+// placeholder `returnMessage` with the simulated L1→L2 return.
+//
+// NOTE: this mirrors `IBridge.Message` struct layout. The field types must
+// match exactly or abi_decode/abi_encode_sequence will fail.
+alloy::sol! {
+    #[allow(missing_docs)]
+    struct FlashLoanReturnMessage {
+        uint64 id;
+        uint64 fee;
+        uint32 gasLimit;
+        address from;
+        uint64 srcChainId;
+        address srcOwner;
+        uint64 destChainId;
+        address destOwner;
+        address to;
+        uint256 value;
+        bytes data;
+    }
+
+    #[allow(missing_docs)]
+    function execute(
+        uint256 amount,
+        address beneficiary,
+        FlashLoanReturnMessage returnMessage
+    ) external;
+}
+
 /// Proof types supported by the SurgeVerifier.
 /// Each variant maps to a bit flag used in `SubProof.proofBitFlag`.
 #[derive(Debug, Clone, Copy)]
