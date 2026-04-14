@@ -14,7 +14,6 @@ impl FromStr for Fork {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "pacaya" => Ok(Fork::Pacaya),
             "shasta" => Ok(Fork::Shasta),
             "permissionless" => Ok(Fork::Permissionless),
             "realtime" => Ok(Fork::Realtime),

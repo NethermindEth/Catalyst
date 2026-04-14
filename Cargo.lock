@@ -3764,7 +3764,7 @@ dependencies = [
  "ipconfig",
  "moka",
  "once_cell",
- "parking_lot",
+ "parking_lot 0.12.5",
  "rand 0.9.4",
  "resolv-conf",
  "serde",
@@ -7187,7 +7187,7 @@ dependencies = [
 
 [[package]]
 name = "realtime"
-version = "1.35.5"
+version = "1.37.1"
 dependencies = [
  "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=637f7a150f72fe8d6cc5949a41aebb638a5305cf)",
  "alloy",
