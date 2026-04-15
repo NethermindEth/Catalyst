@@ -59,7 +59,6 @@ impl Node {
         proof_request_bypass: bool,
         bridge_rpc_addr: String,
         l1_chain_id: u64,
-        l2_chain_id: u64,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -91,7 +90,6 @@ impl Node {
             proof_request_bypass,
             bridge_rpc_addr,
             l1_chain_id,
-            l2_chain_id,
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;

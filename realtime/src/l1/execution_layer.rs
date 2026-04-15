@@ -383,19 +383,18 @@ impl L1BridgeHandlerOps for ExecutionLayer {
         message_from_l2: Message,
         _signal_slot_proof: Bytes,
         bridge_address: Address,
-        l2_bridge_address: Address,
+        _l2_bridge_address: Address,
     ) -> Result<Option<(Message, FixedBytes<32>)>, anyhow::Error> {
         use alloy::primitives::{B256, U256, keccak256};
         use alloy::rpc::types::state::{AccountOverride, StateOverride};
 
-        // Compute the L2→L1 signal slot that the bridge will check during
-        // proveSignalReceived. On L1 SignalService:
-        //   slot = keccak256(abi.encodePacked("SIGNAL", srcChainId, app, msgHash))
-        // where app = the L2 bridge that emitted the signal.
-        //
-        // hashMessage = keccak256(abi.encode("TAIKO_MESSAGE", message))
-        // Compute it on-chain via Bridge.hashMessage to avoid replicating the
-        // exact Solidity abi.encode of a (string, struct) tuple in Rust.
+        // Instead of simulating Bridge.processMessage (which requires L1
+        // signal verification we can't bypass), we call the L1 callback's
+        // onMessageInvocation(data) directly with from=bridge. To make
+        // bridge.context() return the correct values, we state-override the
+        // bridge's __ctx storage (slots 253-254, see Bridge_Layout.sol):
+        //   slot 253: msgHash (bytes32)
+        //   slot 254: from (address, 20 bytes) | srcChainId (uint64, 8 bytes)
 
         let bridge = Bridge::new(bridge_address, self.provider.clone());
         let msg_hash: B256 = bridge
@@ -404,67 +403,39 @@ impl L1BridgeHandlerOps for ExecutionLayer {
             .await
             .map_err(|e| anyhow!("Failed to call Bridge.hashMessage for sim: {e}"))?;
 
-        // Bridge.processMessage on L1 passes `app = resolve(srcChainId,
-        // B_BRIDGE) = L2 bridge address` to SignalService.proveSignalReceived.
-        // That's what the signal slot was derived from on L2 (msg.sender of
-        // SignalService.sendSignal was the L2 bridge). Caller passes in the
-        // L2 bridge address (auto-derived from L2 chain id on the L2 side).
-        let app = l2_bridge_address;
-        let src_chain_id = message_from_l2.srcChainId;
+        // Pack slot 254: address `from` (low 20 bytes) + uint64 srcChainId (next 8 bytes)
+        // Solidity packs struct members right-aligned in the same slot:
+        //   from occupies bytes [0..20), srcChainId occupies bytes [20..28)
+        let mut slot_254 = [0u8; 32];
+        slot_254[12..32].copy_from_slice(message_from_l2.from.as_slice());
+        slot_254[4..12].copy_from_slice(&message_from_l2.srcChainId.to_be_bytes());
+        let slot_254_value = B256::from(slot_254);
 
-        // Mirror SignalService.getSignalSlot: keccak256(abi.encodePacked(
-        //   "SIGNAL", uint64 chainId, address app, bytes32 signal))
-        let mut preimage = Vec::with_capacity(6 + 8 + 20 + 32);
-        preimage.extend_from_slice(b"SIGNAL");
-        preimage.extend_from_slice(&src_chain_id.to_be_bytes());
-        preimage.extend_from_slice(app.as_slice());
-        preimage.extend_from_slice(msg_hash.as_slice());
-        let signal_slot_key: B256 = keccak256(&preimage);
-
-        // Storage slot of `_receivedSignals[signal_slot_key]` on L1 SignalService
-        // `_receivedSignals` is at storage slot 253 (see SignalService_Layout.sol).
-        let received_signals_base_slot = U256::from(253u64);
-        let mut key_preimage = Vec::with_capacity(64);
-        key_preimage.extend_from_slice(signal_slot_key.as_slice());
-        key_preimage.extend_from_slice(&B256::from(received_signals_base_slot).0);
-        let received_signals_storage_slot: B256 = keccak256(&key_preimage);
-
-        // Build calldata for `Bridge.processMessage(message_from_l2, "")` with
-        // empty proof. With `_receivedSignals[slot] = true` state-overridden,
-        // the fast-signal path in proveSignalReceived succeeds, so the bridge
-        // proceeds to invoke the target's onMessageInvocation, whose trace we
-        // then scan for the L1→L2 return.
-        let calldata = Bridge::processMessageCall {
-            _message: message_from_l2,
-            _proof: Bytes::new(),
-        }
-        .abi_encode();
-
+        // message_from_l2.data is already the full ABI-encoded calldata for
+        // onMessageInvocation(bytes) — exactly what Bridge.processMessage
+        // would pass to the target. Use it directly.
+        let callback_address = message_from_l2.to;
         let tx_request = TransactionRequest::default()
-            .from(self.preconfer_address)
-            .to(bridge_address)
-            .input(calldata.into());
+            .from(bridge_address) // msg.sender = bridge (passes ONLY_BRIDGE check)
+            .to(callback_address)
+            .input(message_from_l2.data.clone().into());
 
-        // State-override: mark the signal as received on the L1 SignalService.
-        let signal_service_address = self.contract_addresses.signal_service;
-        let account_override = AccountOverride::default().with_state_diff(
-            std::iter::once((
-                received_signals_storage_slot,
-                B256::from(U256::from(1)),
-            )),
-        );
+        // State-override the bridge's __ctx storage so context() returns
+        // the correct msgHash, from, and srcChainId.
+        let bridge_ctx_override = AccountOverride::default().with_state_diff([
+            (B256::from(U256::from(253u64)), msg_hash),       // __ctx.msgHash
+            (B256::from(U256::from(254u64)), slot_254_value), // __ctx.from + srcChainId
+        ]);
         let mut state_overrides = StateOverride::default();
-        state_overrides.insert(signal_service_address, account_override);
+        state_overrides.insert(bridge_address, bridge_ctx_override);
 
-        let mut tracer_config = serde_json::Map::new();
-        tracer_config.insert("withLog".to_string(), serde_json::Value::Bool(true));
-        tracer_config.insert("onlyTopCall".to_string(), serde_json::Value::Bool(false));
+        let tracer_config = serde_json::json!({"onlyTopCall": false});
 
         let tracing_options = GethDebugTracingOptions {
             tracer: Some(GethDebugTracerType::BuiltInTracer(
                 GethDebugBuiltInTracerType::CallTracer,
             )),
-            tracer_config: serde_json::Value::Object(tracer_config).into(),
+            tracer_config: tracer_config.into(),
             ..Default::default()
         };
 
@@ -485,58 +456,90 @@ impl L1BridgeHandlerOps for ExecutionLayer {
         {
             Ok(t) => t,
             Err(e) => {
-                // RPC-level failure (not a revert inside the trace). Surface as error.
                 return Err(anyhow!("L1 callback simulation RPC failed: {e}"));
             }
         };
 
-        let mut message: Option<Message> = None;
-        let mut slot: Option<FixedBytes<32>> = None;
+        // Scan the trace for a sendMessage call to the L1 bridge.
+        let mut return_msg: Option<Message> = None;
 
         if let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result {
-            // Collect logs regardless of whether the simulation reverted — the
-            // MessageSent event is emitted during processMessage's invoked
-            // callback, which may succeed even if a later sub-call reverts.
-            let all_logs = collect_logs_recursive(&call_frame);
-            for log in all_logs {
-                if let Some(topics) = &log.topics
-                    && !topics.is_empty()
-                {
-                    if topics[0] == MessageSent::SIGNATURE_HASH {
-                        let log_data = alloy::primitives::LogData::new_unchecked(
-                            topics.clone(),
-                            log.data.clone().unwrap_or_default(),
-                        );
-                        let decoded = MessageSent::decode_log_data(&log_data).map_err(|e| {
-                            anyhow!("Failed to decode MessageSent from L1 callback sim: {e}")
-                        })?;
-                        message = Some(decoded.message);
-                    } else if topics[0] == SignalSent::SIGNATURE_HASH {
-                        let log_data = alloy::primitives::LogData::new_unchecked(
-                            topics.clone(),
-                            log.data.clone().unwrap_or_default(),
-                        );
-                        let decoded = SignalSent::decode_log_data(&log_data).map_err(|e| {
-                            anyhow!("Failed to decode SignalSent from L1 callback sim: {e}")
-                        })?;
-                        slot = Some(decoded.slot);
-                    }
+            if let Some((mut msg, caller)) =
+                find_send_message_in_call_tree(&call_frame, bridge_address)
+            {
+                // Patch bridge-assigned fields (from, srcChainId, id)
+                msg.from = caller;
+                msg.srcChainId = self.common.chain_id();
+                // Query nextMessageId for the id the bridge would assign
+                let bridge_contract = Bridge::new(bridge_address, self.provider.clone());
+                if let Ok(next_id) = bridge_contract.nextMessageId().call().await {
+                    msg.id = next_id;
                 }
+                return_msg = Some(msg);
             }
         }
 
-        if let (Some(m), Some(s)) = (message, slot) {
+        if let Some(m) = return_msg {
+            // Compute the signal slot: keccak256("SIGNAL", L1_chain_id, L1_bridge, msgHash)
+            let return_msg_hash: B256 = bridge
+                .hashMessage(m.clone())
+                .call()
+                .await
+                .map_err(|e| anyhow!("Failed to call Bridge.hashMessage for return msg: {e}"))?;
+
+            let l1_chain_id = self.common.chain_id();
+            let mut slot_preimage = Vec::with_capacity(6 + 8 + 20 + 32);
+            slot_preimage.extend_from_slice(b"SIGNAL");
+            slot_preimage.extend_from_slice(&l1_chain_id.to_be_bytes());
+            slot_preimage.extend_from_slice(bridge_address.as_slice());
+            slot_preimage.extend_from_slice(return_msg_hash.as_slice());
+            let signal_slot: FixedBytes<32> = keccak256(&slot_preimage);
+
             tracing::info!(
                 "L1 callback simulation found return signal: slot={}, destChainId={}",
-                s,
+                signal_slot,
                 m.destChainId
             );
-            Ok(Some((m, s)))
+            Ok(Some((m, signal_slot)))
         } else {
             tracing::debug!(
-                "L1 callback simulation produced no MessageSent/SignalSent pair"
+                "L1 callback simulation found no sendMessage call in trace"
             );
             Ok(None)
         }
     }
+}
+
+/// `Bridge.sendMessage(Message)` selector.
+const SEND_MESSAGE_SELECTOR: [u8; 4] = [0x1b, 0xdb, 0x00, 0x37];
+
+/// Recursively search call frames for a CALL to `bridge_address` with the
+/// `sendMessage` function selector. Returns the decoded `IBridge.Message`
+/// and the caller address (msg.sender of the sendMessage call).
+fn find_send_message_in_call_tree(
+    frame: &CallFrame,
+    bridge_address: Address,
+) -> Option<(Message, Address)> {
+    use alloy::sol_types::SolCall;
+
+    if let Some(to_addr) = frame.to {
+        if to_addr == bridge_address {
+            let input = frame.input.as_ref();
+            if input.len() >= 4 && input[0..4] == SEND_MESSAGE_SELECTOR {
+                if let Ok(decoded) =
+                    Bridge::sendMessageCall::abi_decode_raw(&input[4..])
+                {
+                    return Some((decoded._message, frame.from));
+                }
+            }
+        }
+    }
+
+    for sub in &frame.calls {
+        if let Some(result) = find_send_message_in_call_tree(sub, bridge_address) {
+            return Some(result);
+        }
+    }
+
+    None
 }
