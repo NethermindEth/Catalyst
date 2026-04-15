@@ -9,6 +9,11 @@ pub struct RealtimeConfig {
     pub realtime_inbox: Address,
     pub proposer_multicall: Address,
     pub bridge: Address,
+    /// L1 SignalService — needed for L1 callback simulation
+    /// (state_override on `_receivedSignals` to pass fast-signal check).
+    pub signal_service: Address,
+    /// L2 SignalService address — used on the L2 side for signal operations.
+    pub l2_signal_service: Address,
     pub raiko_url: String,
     pub raiko_api_key: Option<String>,
     pub proof_type: ProofType,
@@ -19,6 +24,10 @@ pub struct RealtimeConfig {
     pub bridge_rpc_addr: String,
     pub preconf_only: bool,
     pub proof_request_bypass: bool,
+    /// When true, overrides the SubProof bit flag to MOCK_ECDSA (0b00000001)
+    /// regardless of `proof_type`. Allows using a real Raiko proof type string
+    /// while routing on-chain to the DummyProofVerifier.
+    pub mock_mode: bool,
 }
 
 impl ConfigTrait for RealtimeConfig {
@@ -33,6 +42,8 @@ impl ConfigTrait for RealtimeConfig {
         let realtime_inbox = read_contract_address("REALTIME_INBOX_ADDRESS")?;
         let proposer_multicall = read_contract_address("PROPOSER_MULTICALL_ADDRESS")?;
         let bridge = read_contract_address("L1_BRIDGE_ADDRESS")?;
+        let signal_service = read_contract_address("L1_SIGNAL_SERVICE_ADDRESS")?;
+        let l2_signal_service = read_contract_address("L2_SIGNAL_SERVICE_ADDRESS")?;
 
         let raiko_url =
             std::env::var("RAIKO_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
@@ -66,10 +77,16 @@ impl ConfigTrait for RealtimeConfig {
             .map(|v| v.to_lowercase() != "false" && v != "0")
             .unwrap_or(false);
 
+        let mock_mode = std::env::var("MOCK_MODE")
+            .map(|v| v.to_lowercase() != "false" && v != "0")
+            .unwrap_or(false);
+
         Ok(RealtimeConfig {
             realtime_inbox,
             proposer_multicall,
             bridge,
+            signal_service,
+            l2_signal_service,
             raiko_url,
             raiko_api_key,
             proof_type,
@@ -80,6 +97,7 @@ impl ConfigTrait for RealtimeConfig {
             bridge_rpc_addr,
             preconf_only,
             proof_request_bypass,
+            mock_mode,
         })
     }
 }

@@ -9,9 +9,16 @@ use alloy::{
     consensus::{
         SignableTransaction, Transaction as AnchorTransaction, TxEnvelope, transaction::Recovered,
     },
+    eips::{BlockId, BlockNumberOrTag},
     primitives::{Address, B256, Bytes, FixedBytes},
-    providers::{DynProvider, Provider},
-    rpc::types::Transaction,
+    providers::{DynProvider, Provider, ext::DebugApi},
+    rpc::types::{
+        Transaction, TransactionRequest,
+        trace::geth::{
+            CallFrame, GethDebugBuiltInTracerType, GethDebugTracerType,
+            GethDebugTracingCallOptions, GethDebugTracingOptions,
+        },
+    },
     signers::{Signature, Signer as AlloySigner},
     sol_types::SolEvent,
 };
@@ -41,7 +48,11 @@ pub struct L2ExecutionLayer {
 }
 
 impl L2ExecutionLayer {
-    pub async fn new(taiko_config: TaikoConfig) -> Result<Self, Error> {
+    pub async fn new(
+        taiko_config: TaikoConfig,
+        bridge_address: Address,
+        signal_service: Address,
+    ) -> Result<Self, Error> {
         let provider =
             alloy_tools::create_alloy_provider_without_wallet(&taiko_config.taiko_geth_url).await?;
 
@@ -52,15 +63,7 @@ impl L2ExecutionLayer {
         info!("L2 Chain ID: {}", chain_id);
 
         let anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
-
-        let chain_id_string = format!("{}", chain_id);
-        let zeros_needed = 38usize.saturating_sub(chain_id_string.len());
-        let bridge_address: Address =
-            format!("0x{}{}01", chain_id_string, "0".repeat(zeros_needed)).parse()?;
         let bridge = Bridge::new(bridge_address, provider.clone());
-
-        let signal_service: Address =
-            format!("0x{}{}05", chain_id_string, "0".repeat(zeros_needed)).parse()?;
 
         let common =
             ExecutionLayerCommon::new(provider.clone(), taiko_config.signer.get_address()).await?;
@@ -235,72 +238,6 @@ impl L2ExecutionLayer {
             )
             .map_err(|e| anyhow::anyhow!("Failed to decode block params from tx data: {}", e))?;
         Ok(tx_data._checkpoint)
-    }
-}
-
-// Surge: L2 UserOp execution
-
-use crate::node::proposal_manager::bridge_handler::UserOp;
-
-impl L2ExecutionLayer {
-    /// Construct a signed L2 transaction that executes a UserOp on L2
-    /// by forwarding the calldata to the submitter smart wallet.
-    pub async fn construct_l2_user_op_tx(&self, user_op: &UserOp) -> Result<Transaction, Error> {
-        use alloy::signers::local::PrivateKeySigner;
-        use std::str::FromStr;
-
-        debug!(
-            "Constructing L2 UserOp execution tx for submitter={}",
-            user_op.submitter
-        );
-
-        let signer_address = self.l2_call_signer.get_address();
-
-        let nonce = self
-            .provider
-            .get_transaction_count(signer_address)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get nonce for L2 UserOp tx: {}", e))?;
-
-        let typed_tx = alloy::consensus::TxEip1559 {
-            chain_id: self.chain_id,
-            nonce,
-            gas_limit: 3_000_000,
-            max_fee_per_gas: 1_000_000_000,
-            max_priority_fee_per_gas: 0,
-            to: alloy::primitives::TxKind::Call(user_op.submitter),
-            value: alloy::primitives::U256::ZERO,
-            input: user_op.calldata.clone(),
-            access_list: Default::default(),
-        };
-
-        let signature = match self.l2_call_signer.as_ref() {
-            Signer::Web3signer(web3signer, address) => {
-                let signature_bytes = web3signer.sign_transaction(&typed_tx, *address).await?;
-                Signature::try_from(signature_bytes.as_slice())
-                    .map_err(|e| anyhow::anyhow!("Failed to parse signature: {}", e))?
-            }
-            Signer::PrivateKey(private_key, _) => {
-                let signer = PrivateKeySigner::from_str(private_key.as_str())?;
-                AlloySigner::sign_hash(&signer, &typed_tx.signature_hash()).await?
-            }
-        };
-
-        let sig_tx = typed_tx.into_signed(signature);
-        let tx_envelope = TxEnvelope::from(sig_tx);
-
-        debug!("L2 UserOp execution tx hash: {}", tx_envelope.tx_hash());
-
-        // SAFETY: `new_unchecked` is safe here because we just signed `tx_envelope` with
-        // `l2_call_signer` and `signer_address` is derived from the same key.
-        let tx = Transaction {
-            inner: Recovered::new_unchecked(tx_envelope, signer_address),
-            block_hash: None,
-            block_number: None,
-            transaction_index: None,
-            effective_gas_price: None,
-        };
-        Ok(tx)
     }
 }
 
@@ -484,4 +421,133 @@ impl L2BridgeHandlerOps for L2ExecutionLayer {
 
         Ok(Bytes::from(vec![hop_proof].abi_encode_params()))
     }
+
+}
+
+// Surge: L2 mempool tx scanning and simulation
+
+/// `Bridge.sendMessage(Message)` selector — used for call-based detection
+/// in the trace tree because the L2 bridge is behind a DELEGATECALL proxy
+/// and the Nethermind callTracer doesn't surface event logs from proxied calls.
+const SEND_MESSAGE_SELECTOR: [u8; 4] = [0x1b, 0xdb, 0x00, 0x37];
+
+impl L2ExecutionLayer {
+    /// Trace a transaction to detect any `Bridge.sendMessage` call it makes.
+    /// Instead of relying on `MessageSent` event logs (which the L2 Nethermind
+    /// callTracer doesn't emit through DELEGATECALL proxies), we scan the call
+    /// tree for CALL frames targeting the L2 bridge with the `sendMessage`
+    /// selector, and decode the Message from the call input.
+    pub async fn trace_tx_for_outbound_message(
+        &self,
+        from: Address,
+        to: Address,
+        input: &[u8],
+    ) -> Result<Option<Message>, anyhow::Error> {
+        let tx_request = TransactionRequest::default()
+            .from(from)
+            .to(to)
+            .input(input.to_vec().into());
+
+        let tracer_config = serde_json::json!({
+            "onlyTopCall": false
+        });
+
+        let tracing_options = GethDebugTracingOptions {
+            tracer: Some(GethDebugTracerType::BuiltInTracer(
+                GethDebugBuiltInTracerType::CallTracer,
+            )),
+            tracer_config: tracer_config.into(),
+            ..Default::default()
+        };
+
+        let call_options = GethDebugTracingCallOptions {
+            tracing_options,
+            ..Default::default()
+        };
+
+        let trace_result = match self
+            .provider
+            .debug_trace_call(
+                tx_request,
+                BlockId::Number(BlockNumberOrTag::Latest),
+                call_options,
+            )
+            .await
+        {
+            Ok(t) => t,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "L2 tx trace RPC failed: {e}"
+                ));
+            }
+        };
+
+        let bridge_address = *self.bridge.address();
+        let mut message: Option<Message> = None;
+        let mut send_message_caller: Option<Address> = None;
+
+        if let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result {
+            // Walk the call tree looking for CALL frames to the bridge with
+            // the sendMessage selector. The Message struct is ABI-encoded as
+            // the first (and only) parameter after the 4-byte selector.
+            if let Some((msg, caller)) = find_send_message_in_calls(&call_frame, bridge_address) {
+                message = Some(msg);
+                send_message_caller = Some(caller);
+            }
+        }
+
+        if let Some(ref mut m) = message {
+            // The bridge fills `from`, `srcChainId`, and `id` during sendMessage
+            // execution, but the call-based detection reads the INPUT before
+            // those are set. Patch them with what the bridge would assign.
+            m.from = send_message_caller.unwrap_or(from);
+            m.srcChainId = self.chain_id;
+            // For `id`, query the bridge's nextMessageId (this is what it would assign)
+            if let Ok(next_id) = self.bridge.nextMessageId().call().await {
+                m.id = next_id;
+            }
+
+            debug!(
+                "L2 trace found outbound sendMessage: destChainId={}, to={}, from={}",
+                m.destChainId, m.to, m.from
+            );
+        } else {
+            debug!("L2 trace found no outbound sendMessage");
+        }
+
+        Ok(message)
+    }
+}
+
+/// Recursively search call frames for a CALL to `bridge_address` with the
+/// `sendMessage` function selector. Returns the decoded Message and the
+/// caller address (msg.sender of the sendMessage call).
+fn find_send_message_in_calls(
+    frame: &CallFrame,
+    bridge_address: Address,
+) -> Option<(Message, Address)> {
+    use alloy::sol_types::SolCall;
+    use crate::shared_abi::bindings::Bridge;
+
+    // Check this frame: is it a CALL to the bridge with sendMessage selector?
+    if let Some(to_addr) = frame.to {
+        if to_addr == bridge_address {
+            let input = frame.input.as_ref();
+            if input.len() >= 4 && input[0..4] == SEND_MESSAGE_SELECTOR {
+                if let Ok(decoded) = Bridge::sendMessageCall::abi_decode_raw(&input[4..]) {
+                    // `frame.from` is the msg.sender of this call
+                    let caller = frame.from;
+                    return Some((decoded._message, caller));
+                }
+            }
+        }
+    }
+
+    for sub in &frame.calls {
+        if let Some(result) = find_send_message_in_calls(sub, bridge_address) {
+            return Some(result);
+        }
+    }
+
+    None
 }

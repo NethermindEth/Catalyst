@@ -5,10 +5,12 @@ pub mod l2_block_payload;
 pub mod proposal;
 
 use crate::l1::bindings::ICheckpointStore::Checkpoint;
+use crate::l1::execution_layer::L1BridgeHandlerOps;
 use crate::l2::execution_layer::L2BridgeHandlerOps;
 use crate::node::proposal_manager::bridge_handler::UserOp;
 use crate::raiko::RaikoClient;
 use crate::{l1::execution_layer::ExecutionLayer, l2::taiko::Taiko};
+use alloy::consensus::Transaction as _;
 use alloy::primitives::aliases::U48;
 use alloy::primitives::{B256, FixedBytes};
 use anyhow::Error;
@@ -49,6 +51,11 @@ pub struct BatchManager {
     cancel_token: CancellationToken,
     last_finalized_block_hash: B256,
     last_finalized_block_number: Arc<AtomicU64>,
+    /// L1→L2 return signal slot discovered during Pass 2 (L2Direct pre-sim).
+    /// Pushed into the L2 block's anchor fast signals before real execution
+    /// so that `bridge.processMessage(returnMsg, "")` in the UserOp succeeds.
+    /// Cleared after each block build.
+    pending_return_signal: Option<FixedBytes<32>>,
 }
 
 impl BatchManager {
@@ -66,7 +73,6 @@ impl BatchManager {
         proof_request_bypass: bool,
         bridge_rpc_addr: String,
         l1_chain_id: u64,
-        l2_chain_id: u64,
     ) -> Result<Self, Error> {
         info!(
             "Batch builder config:\n\
@@ -99,7 +105,6 @@ impl BatchManager {
                 taiko.clone(),
                 cancel_token.clone(),
                 l1_chain_id,
-                l2_chain_id,
                 last_finalized_block_number.clone(),
             )
             .await?,
@@ -127,6 +132,7 @@ impl BatchManager {
             cancel_token,
             last_finalized_block_hash,
             last_finalized_block_number,
+            pending_return_signal: None,
         })
     }
 
@@ -289,87 +295,107 @@ impl BatchManager {
         self.bridge_handler.lock().await.has_pending_user_ops()
     }
 
-    /// Process all pending UserOps: route each to L1 or L2 based on its chainId field.
-    ///
-    /// - L1→L2 deposits: UserOp added to proposal (for L1 multicall), processMessage tx added to L2 block
-    /// - L2 direct (bridge-out): UserOp execution tx added to L2 block, L2→L1 relay handled post-execution
+    /// Process pending L1 UserOps: simulate on L1 to extract bridge message,
+    /// then insert processMessage tx into the L2 block.
     async fn add_pending_user_ops_to_draft_block(
         &mut self,
         l2_draft_block: &mut L2BlockV2Draft,
     ) -> Result<Option<(UserOp, FixedBytes<32>)>, anyhow::Error> {
-        use bridge_handler::UserOpRouting;
-
-        let (routing, status_store) = {
+        let routed = {
             let mut handler = self.bridge_handler.lock().await;
-            let routing = handler.next_user_op_routed().await?;
-            (routing, handler.status_store())
+            handler.next_user_op().await?
         };
 
-        let Some(routing) = routing else {
+        let Some(routed) = routed else {
             return Ok(None);
         };
 
-        match routing {
-            UserOpRouting::L1ToL2 { user_op, l2_call } => {
-                info!("Processing L1→L2 deposit: UserOp id={}", user_op.id);
+        info!(
+            "Processing L1→L2 deposit: UserOp id={}",
+            routed.user_op.id
+        );
 
-                let l2_call_bridge_tx = self
-                    .taiko
-                    .l2_execution_layer()
-                    .construct_l2_call_tx(l2_call.message_from_l1)
-                    .await?;
+        let l2_call_bridge_tx = self
+            .taiko
+            .l2_execution_layer()
+            .construct_l2_call_tx(routed.l2_call.message_from_l1)
+            .await?;
 
-                info!("Inserting processMessage tx into L2 block");
-                l2_draft_block
-                    .prebuilt_tx_list
-                    .tx_list
-                    .push(l2_call_bridge_tx);
+        info!("Inserting processMessage tx into L2 block");
+        l2_draft_block
+            .prebuilt_tx_list
+            .tx_list
+            .push(l2_call_bridge_tx);
 
-                Ok(Some((user_op, l2_call.signal_slot_on_l2)))
-            }
-            UserOpRouting::L2Direct { user_op } => {
-                info!(
-                    "Processing L2 UserOp (bridge-out): id={} submitter={}",
-                    user_op.id, user_op.submitter
-                );
+        Ok(Some((routed.user_op, routed.l2_call.signal_slot_on_l2)))
+    }
 
-                match self
-                    .taiko
-                    .l2_execution_layer()
-                    .construct_l2_user_op_tx(&user_op)
-                    .await
-                {
-                    Ok(tx) => {
-                        // Track L2 UserOp ID first — only insert tx if tracking succeeds,
-                        // otherwise we'd execute on L2 but show Rejected in the status store.
-                        if let Err(e) = self.batch_builder.add_l2_user_op_id(user_op.id) {
-                            error!(
-                                "Failed to track L2 UserOp id={}: {}. Dropping tx.",
-                                user_op.id, e
-                            );
-                            status_store.set(
-                                user_op.id,
-                                &bridge_handler::UserOpStatus::Rejected {
-                                    reason: format!("Failed to track UserOp: {}", e),
-                                },
-                            );
-                        } else {
-                            info!("Inserting L2 UserOp execution tx into block");
-                            l2_draft_block.prebuilt_tx_list.tx_list.push(tx);
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to construct L2 UserOp tx: {}", e);
-                        status_store.set(
-                            user_op.id,
-                            &bridge_handler::UserOpStatus::Rejected {
-                                reason: format!("Failed to construct L2 tx: {}", e),
-                            },
-                        );
-                    }
+    /// Scan mempool transactions for any that emit `Bridge.sendMessage` (L2→L1
+    /// outbound). For each such tx, simulate the L1 callback to discover an
+    /// L1→L2 return signal. If found, inject the return signal into the anchor's
+    /// fast signals so the tx's `bridge.processMessage(returnMsg)` call succeeds
+    /// on L2, and record the slot for the deferred-finalize multicall.
+    async fn scan_mempool_for_outbound_signals(
+        &mut self,
+        pending_tx_list: &mut common::shared::l2_tx_lists::PreBuiltTxList,
+    ) {
+        use alloy::primitives::Bytes;
+
+        let l2_el = self.taiko.l2_execution_layer();
+        let l1_el = &self.ethereum_l1.execution_layer;
+
+        for tx in &pending_tx_list.tx_list {
+            let from = tx.inner.signer();
+            let Some(to) = tx.inner.to() else {
+                continue; // skip contract creation txs
+            };
+            let input = tx.inner.input();
+
+            // Trace the tx to check for outbound bridge.sendMessage
+            let outbound = match l2_el
+                .trace_tx_for_outbound_message(from, to, input)
+                .await
+            {
+                Ok(Some(msg)) => msg,
+                Ok(None) => continue,
+                Err(e) => {
+                    debug!("Mempool tx trace failed: {e}");
+                    continue;
                 }
-                // No L1 UserOp or signal slot for L2-direct ops
-                Ok(None)
+            };
+
+            info!(
+                "Mempool tx from={} emits L2→L1 outbound to destChainId={}",
+                from, outbound.destChainId
+            );
+
+            // Simulate the L1 callback to find the return signal
+            let bridge_addr = l1_el.contract_addresses().bridge;
+            let l2_bridge_addr = *l2_el.bridge.address();
+            match l1_el
+                .simulate_l1_callback_return_signal(
+                    outbound,
+                    Bytes::new(),
+                    bridge_addr,
+                    l2_bridge_addr,
+                )
+                .await
+            {
+                Ok(Some((_return_msg, return_slot))) => {
+                    info!(
+                        "L1 callback simulation found return signal slot={} — injecting into anchor",
+                        return_slot
+                    );
+                    self.pending_return_signal = Some(return_slot);
+                    // Only handle one L2→L1→L2 tx per block for now
+                    break;
+                }
+                Ok(None) => {
+                    debug!("L1 callback produced no return signal");
+                }
+                Err(e) => {
+                    warn!("L1 callback simulation failed: {e}");
+                }
             }
         }
     }
@@ -382,7 +408,8 @@ impl BatchManager {
     ) -> Result<BuildPreconfBlockResponse, Error> {
         let mut anchor_signal_slots: Vec<FixedBytes<32>> = vec![];
 
-        debug!("Checking for pending UserOps (L1→L2 deposits and L2 direct)");
+        // Process L1→L2 UserOps (via surge_sendUserOp RPC)
+        debug!("Checking for pending UserOps (L1→L2 deposits)");
         if let Some((user_op_data, signal_slot)) = self
             .add_pending_user_ops_to_draft_block(&mut l2_draft_block)
             .await?
@@ -391,7 +418,22 @@ impl BatchManager {
             self.batch_builder.add_signal_slot(signal_slot)?;
             anchor_signal_slots.push(signal_slot);
         } else {
-            debug!("No L1→L2 UserOps (L2 direct ops, if any, were handled inline)");
+            debug!("No L1→L2 UserOps pending");
+        }
+
+        // Scan mempool txs for L2→L1→L2 outbound signals (e.g. flash loans).
+        // If found, the L1 callback is simulated and the return signal is
+        // injected into the anchor so the tx succeeds on L2.
+        self.scan_mempool_for_outbound_signals(&mut l2_draft_block.prebuilt_tx_list)
+            .await;
+
+        if let Some(return_slot) = self.pending_return_signal.take() {
+            info!(
+                "Injecting L2→L1→L2 return signal into anchor fast signals: slot={}",
+                return_slot
+            );
+            self.batch_builder.add_signal_slot(return_slot)?;
+            anchor_signal_slots.push(return_slot);
         }
 
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
@@ -619,3 +661,4 @@ impl BatchManager {
         Ok(block)
     }
 }
+

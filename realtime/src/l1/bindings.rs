@@ -34,6 +34,16 @@ sol! {
         uint48 maxAnchorBlockNumber;
     }
 
+    /// Input for `tentativePropose` — splits signals into existing (verified
+    /// immediately) and requiredReturn (verified at finalizePropose after the
+    /// L1 callback in the same multicall produces them).
+    struct ProposeInputV2 {
+        BlobReference blobReference;
+        bytes32[] existingSignals;
+        bytes32[] requiredReturnSignals;
+        uint48 maxAnchorBlockNumber;
+    }
+
     // SurgeVerifier SubProof encoding
     struct SubProof {
         uint8 proofBitFlag;
@@ -41,21 +51,27 @@ sol! {
     }
 }
 
+
 /// Proof types supported by the SurgeVerifier.
 /// Each variant maps to a bit flag used in `SubProof.proofBitFlag`.
+/// Must match the constants in `SurgeVerifier.sol`.
+///
+/// Note: MOCK_ECDSA (0b00000001) is not a variant here — it is selected
+/// at runtime via the `MOCK_MODE` env flag, which overrides the bit flag
+/// to 1 regardless of the proof type.
 #[derive(Debug, Clone, Copy)]
 pub enum ProofType {
-    Risc0, // 0b00000001
-    Sp1,   // 0b00000010
-    Zisk,  // 0b00000100
+    Risc0, // 0b00000010
+    Sp1,   // 0b00000100
+    Zisk,  // 0b00001000
 }
 
 impl ProofType {
     pub fn proof_bit_flag(&self) -> u8 {
         match self {
-            ProofType::Risc0 => 1,
-            ProofType::Sp1 => 1 << 1,
-            ProofType::Zisk => 1 << 2,
+            ProofType::Risc0 => 1 << 1,
+            ProofType::Sp1 => 1 << 2,
+            ProofType::Zisk => 1 << 3,
         }
     }
 
@@ -68,6 +84,9 @@ impl ProofType {
         }
     }
 }
+
+/// SurgeVerifier MOCK_ECDSA bit flag — used when `MOCK_MODE=true`.
+pub const MOCK_ECDSA_BIT_FLAG: u8 = 1;
 
 impl std::str::FromStr for ProofType {
     type Err = anyhow::Error;

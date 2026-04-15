@@ -72,8 +72,6 @@ pub struct UserOp {
     pub id: u64,
     pub submitter: Address,
     pub calldata: Bytes,
-    #[serde(default, rename = "chainId")]
-    pub chain_id: u64,
 }
 
 // Data required to build the L1 call transaction initiated by an L2 contract via the bridge
@@ -81,6 +79,12 @@ pub struct UserOp {
 pub struct L1Call {
     pub message_from_l2: Message,
     pub signal_slot_proof: Bytes,
+    /// Optional: if the L1 callback triggered by `processMessage` produces an
+    /// L1→L2 return signal that the same L2 block consumes as a fast signal,
+    /// this is that signal slot. When present, the inbox must defer finalization
+    /// of the proposal until this slot is populated on L1 — triggering the
+    /// tentativePropose + finalizePropose multicall shape.
+    pub required_return_signal: Option<FixedBytes<32>>,
 }
 
 // Data required to build the L2 call transaction initiated by an L1 contract via the bridge
@@ -90,14 +94,10 @@ pub struct L2Call {
     pub signal_slot_on_l2: FixedBytes<32>,
 }
 
-/// Result of routing a UserOp: either it targets L1 (and triggers an L2 bridge call)
-/// or it targets L2 (for direct execution on L2, e.g. bridge-out).
-#[allow(clippy::large_enum_variant)]
-pub enum UserOpRouting {
-    /// L1 UserOp that triggers a bridge deposit (L1→L2).
-    L1ToL2 { user_op: UserOp, l2_call: L2Call },
-    /// L2 UserOp for direct execution on L2 (e.g. bridge-out L2→L1).
-    L2Direct { user_op: UserOp },
+/// Routed L1→L2 UserOp: triggers an L2 bridge call via processMessage.
+pub struct RoutedUserOp {
+    pub user_op: UserOp,
+    pub l2_call: L2Call,
 }
 
 #[derive(Debug, Deserialize)]
@@ -113,6 +113,7 @@ struct BridgeRpcContext {
     tx: mpsc::Sender<UserOp>,
     status_store: UserOpStatusStore,
     next_id: Arc<AtomicU64>,
+    ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     taiko: Arc<Taiko>,
     last_finalized_block_number: Arc<AtomicU64>,
 }
@@ -123,7 +124,6 @@ pub struct BridgeHandler {
     rx: Receiver<UserOp>,
     status_store: UserOpStatusStore,
     l1_chain_id: u64,
-    l2_chain_id: u64,
 }
 
 impl BridgeHandler {
@@ -133,7 +133,6 @@ impl BridgeHandler {
         taiko: Arc<Taiko>,
         cancellation_token: CancellationToken,
         l1_chain_id: u64,
-        l2_chain_id: u64,
         last_finalized_block_number: Arc<AtomicU64>,
     ) -> Result<Self, anyhow::Error> {
         let (tx, rx) = mpsc::channel::<UserOp>(1024);
@@ -143,6 +142,7 @@ impl BridgeHandler {
             tx,
             status_store: status_store.clone(),
             next_id: Arc::new(AtomicU64::new(1)),
+            ethereum_l1: ethereum_l1.clone(),
             taiko: taiko.clone(),
             last_finalized_block_number,
         };
@@ -268,6 +268,100 @@ impl BridgeHandler {
             }
         })?;
 
+        // surge_simulateReturnMessage: given a raw L2 tx (from, to, data),
+        // trace it for an L2→L1 outbound, simulate the L1 callback, and return
+        // the IBridge.Message that the L1 callback would produce. Users call this
+        // before submitting to the L2 mempool so they can embed the correct
+        // returnMessage in their calldata.
+        module.register_async_method(
+            "surge_simulateReturnMessage",
+            |params, ctx, _| async move {
+                use crate::l1::execution_layer::L1BridgeHandlerOps;
+
+                #[derive(serde::Deserialize)]
+                struct SimRequest {
+                    from: Address,
+                    to: Address,
+                    data: Bytes,
+                }
+
+                let req: SimRequest = params.one()?;
+                info!(
+                    "surge_simulateReturnMessage: from={}, to={}, data_len={}",
+                    req.from,
+                    req.to,
+                    req.data.len()
+                );
+
+                let l2_el = ctx.taiko.l2_execution_layer();
+
+                // Step 1: trace the L2 tx for outbound Bridge.sendMessage
+                let outbound = l2_el
+                    .trace_tx_for_outbound_message(req.from, req.to, &req.data)
+                    .await
+                    .map_err(|e| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32000,
+                            "L2 trace failed",
+                            Some(format!("{e}")),
+                        )
+                    })?
+                    .ok_or_else(|| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32001,
+                            "No outbound Bridge.sendMessage found in trace",
+                            None::<String>,
+                        )
+                    })?;
+
+                // Step 2: simulate the L1 callback
+                let l1_el = &ctx.ethereum_l1.execution_layer;
+                let bridge_addr = l1_el.contract_addresses().bridge;
+                let l2_bridge_addr = *l2_el.bridge.address();
+
+                let (return_msg, return_slot) = l1_el
+                    .simulate_l1_callback_return_signal(
+                        outbound,
+                        Bytes::new(),
+                        bridge_addr,
+                        l2_bridge_addr,
+                    )
+                    .await
+                    .map_err(|e| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32000,
+                            "L1 callback simulation failed",
+                            Some(format!("{e}")),
+                        )
+                    })?
+                    .ok_or_else(|| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32002,
+                            "L1 callback produced no return message",
+                            None::<String>,
+                        )
+                    })?;
+
+                // Return the Message struct fields + signal slot as JSON
+                Ok::<serde_json::Value, jsonrpsee::types::ErrorObjectOwned>(serde_json::json!({
+                    "message": {
+                        "id": return_msg.id,
+                        "fee": return_msg.fee,
+                        "gasLimit": return_msg.gasLimit,
+                        "from": format!("{}", return_msg.from),
+                        "srcChainId": return_msg.srcChainId,
+                        "srcOwner": format!("{}", return_msg.srcOwner),
+                        "destChainId": return_msg.destChainId,
+                        "destOwner": format!("{}", return_msg.destOwner),
+                        "to": format!("{}", return_msg.to),
+                        "value": format!("{}", return_msg.value),
+                        "data": format!("0x{}", hex::encode(&return_msg.data)),
+                    },
+                    "signalSlot": format!("{}", return_slot),
+                }))
+            },
+        )?;
+
         info!("Bridge handler RPC server starting on {}", addr);
         let handle = server.start(module);
 
@@ -285,7 +379,6 @@ impl BridgeHandler {
             rx,
             status_store,
             l1_chain_id,
-            l2_chain_id,
         })
     }
 
@@ -293,38 +386,12 @@ impl BridgeHandler {
         self.status_store.clone()
     }
 
-    /// Dequeue the next UserOp and route it based on the `chainId` param.
-    ///
-    /// If `chainId` matches L1, simulates on L1 to extract bridge message (L1→L2 deposit).
-    /// If `chainId` matches L2, returns it for direct L2 block inclusion (bridge-out).
-    /// If `chainId` is 0 or missing, defaults to L1 (backwards compatible).
-    pub async fn next_user_op_routed(&mut self) -> Result<Option<UserOpRouting>, anyhow::Error> {
+    /// Dequeue the next UserOp, simulate on L1 to extract the bridge message
+    /// (L1→L2 deposit). UserOps always target L1.
+    pub async fn next_user_op(&mut self) -> Result<Option<RoutedUserOp>, anyhow::Error> {
         let Ok(user_op) = self.rx.try_recv() else {
             return Ok(None);
         };
-
-        if user_op.chain_id == self.l2_chain_id {
-            info!(
-                "UserOp id={} targets L2 (chainId={}), queueing for L2 execution",
-                user_op.id, user_op.chain_id
-            );
-            return Ok(Some(UserOpRouting::L2Direct { user_op }));
-        }
-
-        // Reject unknown chain IDs (0 is allowed as default-to-L1)
-        if user_op.chain_id != 0 && user_op.chain_id != self.l1_chain_id {
-            warn!(
-                "UserOp id={} has unknown chainId={}, rejecting",
-                user_op.id, user_op.chain_id
-            );
-            self.status_store.set(
-                user_op.id,
-                &UserOpStatus::Rejected {
-                    reason: format!("Unknown chainId: {}", user_op.chain_id),
-                },
-            );
-            return Ok(None);
-        }
 
         // L1 UserOp — simulate on L1 to extract bridge message
         if let Some((message_from_l1, signal_slot_on_l2)) = self
@@ -333,7 +400,7 @@ impl BridgeHandler {
             .find_message_and_signal_slot(user_op.clone())
             .await?
         {
-            return Ok(Some(UserOpRouting::L1ToL2 {
+            return Ok(Some(RoutedUserOp {
                 user_op,
                 l2_call: L2Call {
                     message_from_l1,
@@ -369,9 +436,51 @@ impl BridgeHandler {
                 .get_hop_proof(signal_slot, block_id, state_root)
                 .await?;
 
+            // Simulate the L1 callback (Bridge.processMessage) to detect any
+            // L1→L2 return signal the callback will produce. If found, it
+            // must be pre-injected into the L2 block's anchor fast signals
+            // and committed as a requiredReturnSignal in the inbox proposal.
+            //
+            // The simulator uses state_override on L1 SignalService so the
+            // signal-verification step passes even before the real checkpoint
+            // is committed. A None result means the callback does not produce
+            // an outbound — classic L1→L2→L1 flow, no deferred-finalize needed.
+            let l1_el = &self.ethereum_l1.execution_layer;
+            let contracts = l1_el.contract_addresses();
+            // L2 bridge address is auto-derived from L2 chain id on the L2
+            // side — pull it from there rather than duplicating in config.
+            let l2_bridge_address = *l2_el.bridge.address();
+            let required_return_signal = match l1_el
+                .simulate_l1_callback_return_signal(
+                    message_from_l2.clone(),
+                    signal_slot_proof.clone(),
+                    contracts.bridge,
+                    l2_bridge_address,
+                )
+                .await
+            {
+                Ok(Some((_return_msg, slot))) => {
+                    info!(
+                        "L1 callback simulation found return signal slot={} — will use deferred finalize",
+                        slot
+                    );
+                    Some(slot)
+                }
+                Ok(None) => None,
+                Err(e) => {
+                    // Simulation failure is not fatal: fall back to classic flow.
+                    warn!(
+                        "L1 callback simulation failed ({}) — falling back to classic propose",
+                        e
+                    );
+                    None
+                }
+            };
+
             return Ok(Some(L1Call {
                 message_from_l2,
                 signal_slot_proof,
+                required_return_signal,
             }));
         }
 

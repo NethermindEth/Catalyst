@@ -50,6 +50,8 @@ impl Taiko {
         metrics: Arc<Metrics>,
         taiko_config: TaikoConfig,
         l2_engine: L2Engine,
+        l2_bridge_address: Address,
+        l2_signal_service_address: Address,
     ) -> Result<Self, Error> {
         let driver_config: TaikoDriverConfig = TaikoDriverConfig {
             driver_url: taiko_config.driver_url.clone(),
@@ -61,9 +63,13 @@ impl Taiko {
         Ok(Self {
             protocol_config,
             l2_execution_layer: Arc::new(
-                L2ExecutionLayer::new(taiko_config.clone())
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
+                L2ExecutionLayer::new(
+                    taiko_config.clone(),
+                    l2_bridge_address,
+                    l2_signal_service_address,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create L2ExecutionLayer: {}", e))?,
             ),
             driver: Arc::new(TaikoDriver::new(&driver_config, metrics).await?),
             slot_clock,
