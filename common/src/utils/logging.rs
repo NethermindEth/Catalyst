@@ -43,6 +43,16 @@ pub fn init_logging() {
                     .parse()
                     .expect("assert: can parse env filter directive"),
             )
+            .add_directive(
+                "alloy_pubsub=info"
+                    .parse()
+                    .expect("assert: can parse env filter directive"),
+            )
+            .add_directive(
+                "alloy_provider=info"
+                    .parse()
+                    .expect("assert: can parse env filter directive"),
+            )
     });
 
     // Create a custom formatter for heartbeat logs

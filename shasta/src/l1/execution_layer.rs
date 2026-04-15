@@ -209,9 +209,8 @@ impl ExecutionLayer {
         self.transaction_monitor
             .monitor_new_transaction_with_builder(tx_builder, pending_nonce)
             .await
-            .map_err(|e| Error::msg(format!("Sending proposal to L1 failed: {e}")))?;
-
-        Ok(())
+            .map(|_| ()) // ignore transaction result handlers, not needed for shasta
+            .map_err(|e| Error::msg(format!("Sending proposal to L1 failed: {e}")))
     }
 
     pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {

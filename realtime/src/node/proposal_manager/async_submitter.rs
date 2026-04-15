@@ -334,69 +334,57 @@ async fn submission_task(
     // Step 2: Send L1 transaction
     let mut user_op_ids: Vec<u64> = proposal.user_ops.iter().map(|op| op.id).collect();
     user_op_ids.extend(&proposal.l2_user_op_ids);
+
     let l2_mempool_tx_hashes: Vec<B256> = proposal.l2_mempool_tx_hashes.clone();
-    let has_tracked_entries =
-        (!user_op_ids.is_empty() || !l2_mempool_tx_hashes.is_empty()) && status_store.is_some();
 
-    let (tx_hash_sender, tx_hash_receiver) = if has_tracked_entries {
-        let (s, r) = tokio::sync::oneshot::channel();
-        (Some(s), Some(r))
-    } else {
-        (None, None)
-    };
-    let (tx_result_sender, tx_result_receiver) = if has_tracked_entries {
-        let (s, r) = tokio::sync::oneshot::channel();
-        (Some(s), Some(r))
-    } else {
-        (None, None)
-    };
-
-    if let Err(err) = ethereum_l1
+    let handles = match ethereum_l1
         .execution_layer
-        .send_batch_to_l1(proposal.clone(), tx_hash_sender, tx_result_sender)
+        .send_batch_to_l1(proposal.clone())
         .await
     {
-        // Mark all tracked entries (L1/L2 UserOps and mempool-picked L2 txs) as rejected
-        if let Some(ref store) = status_store {
-            let reason = format!("L1 multicall failed: {}", err);
-            for op in &proposal.user_ops {
-                store.set(
-                    op.id,
-                    &UserOpStatus::Rejected {
-                        reason: reason.clone(),
-                    },
-                );
+        Ok(handles) => handles,
+        Err(err) => {
+            if let Some(ref store) = status_store {
+                let reason = format!("L1 multicall failed: {}", err);
+                for op in &proposal.user_ops {
+                    store.set(
+                        op.id,
+                        &UserOpStatus::Rejected {
+                            reason: reason.clone(),
+                        },
+                    );
+                }
+                for id in &proposal.l2_user_op_ids {
+                    store.set(
+                        *id,
+                        &UserOpStatus::Rejected {
+                            reason: reason.clone(),
+                        },
+                    );
+                }
+                for tx_hash in &l2_mempool_tx_hashes {
+                    store.set_by_hash(
+                        *tx_hash,
+                        &UserOpStatus::Rejected {
+                            reason: reason.clone(),
+                        },
+                    );
+                }
             }
-            for id in &proposal.l2_user_op_ids {
-                store.set(
-                    *id,
-                    &UserOpStatus::Rejected {
-                        reason: reason.clone(),
-                    },
-                );
-            }
-            for tx_hash in &proposal.l2_mempool_tx_hashes {
-                store.set_by_hash(
-                    *tx_hash,
-                    &UserOpStatus::Rejected {
-                        reason: reason.clone(),
-                    },
-                );
-            }
+            return Err(err);
         }
-        return Err(err);
-    }
+    };
 
     // Step 3: After successful submission, the new lastFinalizedBlockHash is the checkpoint's blockHash
     let new_last_finalized_block_hash = proposal.checkpoint.blockHash;
     let new_last_finalized_block_number = proposal.checkpoint.blockNumber.to::<u64>();
 
     // Step 4: Spawn user-op status tracker
-    if let (Some(hash_rx), Some(result_rx), Some(store)) =
-        (tx_hash_receiver, tx_result_receiver, status_store)
+    if let Some(store) = status_store
+        && (!user_op_ids.is_empty() || !l2_mempool_tx_hashes.is_empty())
     {
         tokio::spawn(async move {
-            let tx_hash = match hash_rx.await {
+            let tx_hash = match handles.tx_hash_receiver.await {
                 Ok(tx_hash) => {
                     for id in &user_op_ids {
                         store.set(*id, &UserOpStatus::Processing { tx_hash });
@@ -428,7 +416,7 @@ async fn submission_task(
             };
 
             if tx_hash.is_some() {
-                match result_rx.await {
+                match handles.tx_result_receiver.await {
                     Ok(true) => {
                         for id in &user_op_ids {
                             store.set(*id, &UserOpStatus::Executed);
