@@ -202,9 +202,7 @@ impl ExecutionLayer {
     pub async fn send_proposal_to_l1(
         &self,
         batch: Proposal,
-        tx_hash_notifier: Option<tokio::sync::oneshot::Sender<alloy::primitives::B256>>,
-        tx_result_notifier: Option<tokio::sync::oneshot::Sender<bool>>,
-    ) -> Result<(), Error> {
+    ) -> Result<common::shared::transaction_monitor::TxMonitorHandles, Error> {
         info!(
             "📦 Proposing with {} blocks | num_forced_inclusion: {} | user_ops: {:?} | signal_slots: {:?} | l1_calls: {:?}",
             batch.l2_blocks.len(),
@@ -237,11 +235,9 @@ impl ExecutionLayer {
             .await?;
 
         self.transaction_monitor
-            .monitor_new_transaction(tx, pending_nonce, tx_hash_notifier, tx_result_notifier)
+            .monitor_new_transaction(tx, pending_nonce)
             .await
-            .map_err(|e| Error::msg(format!("Sending proposal to L1 failed: {e}")))?;
-
-        Ok(())
+            .map_err(|e| Error::msg(format!("Sending proposal to L1 failed: {e}")))
     }
 
     pub async fn is_transaction_in_progress(&self) -> Result<bool, Error> {

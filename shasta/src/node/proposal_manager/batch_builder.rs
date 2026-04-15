@@ -398,109 +398,44 @@ impl BatchBuilder {
 
             // Collect user op IDs from the batch being submitted
             let user_op_ids: Vec<u64> = batch.user_ops.iter().map(|op| op.id).collect();
-            let has_user_ops = !user_op_ids.is_empty() && status_store.is_some();
 
-            // Create notification channels if there are user ops to track
-            let (tx_hash_sender, tx_hash_receiver) = if has_user_ops {
-                let (s, r) = tokio::sync::oneshot::channel();
-                (Some(s), Some(r))
-            } else {
-                (None, None)
-            };
-            let (tx_result_sender, tx_result_receiver) = if has_user_ops {
-                let (s, r) = tokio::sync::oneshot::channel();
-                (Some(s), Some(r))
-            } else {
-                (None, None)
-            };
-
-            if let Err(err) = ethereum_l1
+            let handles = match ethereum_l1
                 .execution_layer
                 // TODO send a Proosal to function
-                .send_proposal_to_l1(batch.clone(), tx_hash_sender, tx_result_sender)
+                .send_proposal_to_l1(batch.clone())
                 .await
             {
-                // Reject all user ops in failed batches
-                if let Some(ref store) = status_store {
-                    let reason = format!("L1 multicall failed: {}", err);
-                    for batch in &self.proposals_to_send {
-                        for op in &batch.user_ops {
-                            store.set(
-                                op.id,
-                                &UserOpStatus::Rejected {
-                                    reason: reason.clone(),
-                                },
-                            );
-                        }
-                    }
-                }
-
-                if let Some(transaction_error) = err.downcast_ref::<TransactionError>()
-                    && !matches!(transaction_error, TransactionError::EstimationTooEarly)
-                {
-                    debug!("BatchBuilder: Transaction error, removing all batches");
-                    self.proposals_to_send.clear();
-                }
-                return Err(err);
-            }
-
-            // Spawn background task to track user op status through Processing → Executed/Rejected
-            if let (Some(hash_rx), Some(result_rx), Some(store)) =
-                (tx_hash_receiver, tx_result_receiver, status_store)
-            {
-                tokio::spawn(async move {
-                    // Wait for tx hash → set Processing
-                    let tx_hash = match hash_rx.await {
-                        Ok(tx_hash) => {
-                            for id in &user_op_ids {
-                                store.set(*id, &UserOpStatus::Processing { tx_hash });
-                            }
-                            Some(tx_hash)
-                        }
-                        Err(_) => {
-                            for id in &user_op_ids {
+                Ok(handles) => handles,
+                Err(err) => {
+                    // Reject all user ops in failed batches
+                    if let Some(ref store) = status_store {
+                        let reason = format!("L1 multicall failed: {}", err);
+                        for batch in &self.proposals_to_send {
+                            for op in &batch.user_ops {
                                 store.set(
-                                    *id,
+                                    op.id,
                                     &UserOpStatus::Rejected {
-                                        reason: "Transaction failed to send".to_string(),
+                                        reason: reason.clone(),
                                     },
                                 );
                             }
-                            None
-                        }
-                    };
-
-                    // Wait for confirmation result → set Executed or Rejected
-                    if tx_hash.is_some() {
-                        match result_rx.await {
-                            Ok(true) => {
-                                for id in &user_op_ids {
-                                    store.set(*id, &UserOpStatus::Executed);
-                                }
-                            }
-                            Ok(false) => {
-                                for id in &user_op_ids {
-                                    store.set(
-                                        *id,
-                                        &UserOpStatus::Rejected {
-                                            reason: "L1 multicall reverted".to_string(),
-                                        },
-                                    );
-                                }
-                            }
-                            Err(_) => {
-                                for id in &user_op_ids {
-                                    store.set(
-                                        *id,
-                                        &UserOpStatus::Rejected {
-                                            reason: "Transaction monitor dropped".to_string(),
-                                        },
-                                    );
-                                }
-                            }
                         }
                     }
-                });
+
+                    if let Some(transaction_error) = err.downcast_ref::<TransactionError>()
+                        && !matches!(transaction_error, TransactionError::EstimationTooEarly)
+                    {
+                        debug!("BatchBuilder: Transaction error, removing all batches");
+                        self.proposals_to_send.clear();
+                    }
+                    return Err(err);
+                }
+            };
+
+            if let Some(store) = status_store
+                && !user_op_ids.is_empty()
+            {
+                spawn_user_op_status_tracker(handles, user_op_ids, store);
             }
 
             self.proposals_to_send.pop_front();
@@ -656,4 +591,62 @@ impl BatchBuilder {
             .map(|proposal| proposal.num_forced_inclusion += 1)
             .ok_or_else(|| anyhow::anyhow!("No current proposal to add forced inclusion to"))
     }
+}
+
+fn spawn_user_op_status_tracker(
+    handles: common::shared::transaction_monitor::TxMonitorHandles,
+    user_op_ids: Vec<u64>,
+    store: UserOpStatusStore,
+) {
+    tokio::spawn(async move {
+        let tx_hash = match handles.tx_hash_receiver.await {
+            Ok(tx_hash) => {
+                for id in &user_op_ids {
+                    store.set(*id, &UserOpStatus::Processing { tx_hash });
+                }
+                Some(tx_hash)
+            }
+            Err(_) => {
+                for id in &user_op_ids {
+                    store.set(
+                        *id,
+                        &UserOpStatus::Rejected {
+                            reason: "Transaction failed to send".to_string(),
+                        },
+                    );
+                }
+                None
+            }
+        };
+
+        if tx_hash.is_some() {
+            match handles.tx_result_receiver.await {
+                Ok(true) => {
+                    for id in &user_op_ids {
+                        store.set(*id, &UserOpStatus::Executed);
+                    }
+                }
+                Ok(false) => {
+                    for id in &user_op_ids {
+                        store.set(
+                            *id,
+                            &UserOpStatus::Rejected {
+                                reason: "L1 multicall reverted".to_string(),
+                            },
+                        );
+                    }
+                }
+                Err(_) => {
+                    for id in &user_op_ids {
+                        store.set(
+                            *id,
+                            &UserOpStatus::Rejected {
+                                reason: "Transaction monitor dropped".to_string(),
+                            },
+                        );
+                    }
+                }
+            }
+        }
+    });
 }

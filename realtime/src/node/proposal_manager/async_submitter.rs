@@ -293,123 +293,119 @@ async fn submission_task(
     // Step 2: Send L1 transaction
     let mut user_op_ids: Vec<u64> = proposal.user_ops.iter().map(|op| op.id).collect();
     user_op_ids.extend(&proposal.l2_user_op_ids);
-    let has_user_ops = !user_op_ids.is_empty() && status_store.is_some();
 
-    let (tx_hash_sender, tx_hash_receiver) = if has_user_ops {
-        let (s, r) = tokio::sync::oneshot::channel();
-        (Some(s), Some(r))
-    } else {
-        (None, None)
-    };
-    let (tx_result_sender, tx_result_receiver) = if has_user_ops {
-        let (s, r) = tokio::sync::oneshot::channel();
-        (Some(s), Some(r))
-    } else {
-        (None, None)
-    };
-
-    if let Err(err) = ethereum_l1
+    let handles = match ethereum_l1
         .execution_layer
-        .send_batch_to_l1(proposal.clone(), tx_hash_sender, tx_result_sender)
+        .send_batch_to_l1(proposal.clone())
         .await
     {
-        // Mark all user ops (L1 and L2) as rejected on failure
-        if let Some(ref store) = status_store {
-            let reason = format!("L1 multicall failed: {}", err);
-            for op in &proposal.user_ops {
-                store.set(
-                    op.id,
-                    &UserOpStatus::Rejected {
-                        reason: reason.clone(),
-                    },
-                );
+        Ok(handles) => handles,
+        Err(err) => {
+            // Mark all user ops (L1 and L2) as rejected on failure
+            if let Some(ref store) = status_store {
+                let reason = format!("L1 multicall failed: {}", err);
+                for op in &proposal.user_ops {
+                    store.set(
+                        op.id,
+                        &UserOpStatus::Rejected {
+                            reason: reason.clone(),
+                        },
+                    );
+                }
+                for id in &proposal.l2_user_op_ids {
+                    store.set(
+                        *id,
+                        &UserOpStatus::Rejected {
+                            reason: reason.clone(),
+                        },
+                    );
+                }
             }
-            for id in &proposal.l2_user_op_ids {
-                store.set(
-                    *id,
-                    &UserOpStatus::Rejected {
-                        reason: reason.clone(),
-                    },
-                );
-            }
+            return Err(err);
         }
-        return Err(err);
-    }
+    };
 
     // Step 3: After successful submission, the new lastFinalizedBlockHash is the checkpoint's blockHash
     let new_last_finalized_block_hash = proposal.checkpoint.blockHash;
     let new_last_finalized_block_number = proposal.checkpoint.blockNumber.to::<u64>();
 
     // Step 4: Spawn user-op status tracker
-    if let (Some(hash_rx), Some(result_rx), Some(store)) =
-        (tx_hash_receiver, tx_result_receiver, status_store)
+    if let Some(store) = status_store
+        && !user_op_ids.is_empty()
     {
-        tokio::spawn(async move {
-            let tx_hash = match hash_rx.await {
-                Ok(tx_hash) => {
-                    for id in &user_op_ids {
-                        store.set(*id, &UserOpStatus::Processing { tx_hash });
-                    }
-                    Some(tx_hash)
-                }
-                Err(e) => {
-                    error!("Failed to receive transaction hash for: {e}");
-                    for id in &user_op_ids {
-                        store.set(
-                            *id,
-                            &UserOpStatus::Rejected {
-                                reason: "Transaction failed to send".to_string(),
-                            },
-                        );
-                    }
-                    None
-                }
-            };
-
-            if tx_hash.is_some() {
-                match result_rx.await {
-                    Ok(true) => {
-                        for id in &user_op_ids {
-                            store.set(*id, &UserOpStatus::Executed);
-                        }
-                    }
-                    Ok(false) => {
-                        for id in &user_op_ids {
-                            store.set(
-                                *id,
-                                &UserOpStatus::Rejected {
-                                    reason: "L1 multicall reverted".to_string(),
-                                },
-                            );
-                        }
-                    }
-                    Err(_) => {
-                        for id in &user_op_ids {
-                            store.set(
-                                *id,
-                                &UserOpStatus::Rejected {
-                                    reason: "Transaction monitor dropped".to_string(),
-                                },
-                            );
-                        }
-                    }
-                }
-            }
-
-            // Clean up status entries after 60s (client should have polled by then)
-            let cleanup_store = store.clone();
-            let cleanup_ids = user_op_ids.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
-                for id in &cleanup_ids {
-                    cleanup_store.remove(*id);
-                }
-            });
-        });
+        spawn_user_op_status_tracker(handles, user_op_ids, store);
     }
 
     Ok(SubmissionResult {
         new_last_finalized_block_hash,
         new_last_finalized_block_number,
     })
+}
+
+fn spawn_user_op_status_tracker(
+    handles: common::shared::transaction_monitor::TxMonitorHandles,
+    user_op_ids: Vec<u64>,
+    store: UserOpStatusStore,
+) {
+    tokio::spawn(async move {
+        let tx_hash = match handles.tx_hash_receiver.await {
+            Ok(tx_hash) => {
+                for id in &user_op_ids {
+                    store.set(*id, &UserOpStatus::Processing { tx_hash });
+                }
+                Some(tx_hash)
+            }
+            Err(e) => {
+                error!("Failed to receive transaction hash for: {e}");
+                for id in &user_op_ids {
+                    store.set(
+                        *id,
+                        &UserOpStatus::Rejected {
+                            reason: "Transaction failed to send".to_string(),
+                        },
+                    );
+                }
+                None
+            }
+        };
+
+        if tx_hash.is_some() {
+            match handles.tx_result_receiver.await {
+                Ok(true) => {
+                    for id in &user_op_ids {
+                        store.set(*id, &UserOpStatus::Executed);
+                    }
+                }
+                Ok(false) => {
+                    for id in &user_op_ids {
+                        store.set(
+                            *id,
+                            &UserOpStatus::Rejected {
+                                reason: "L1 multicall reverted".to_string(),
+                            },
+                        );
+                    }
+                }
+                Err(_) => {
+                    for id in &user_op_ids {
+                        store.set(
+                            *id,
+                            &UserOpStatus::Rejected {
+                                reason: "Transaction monitor dropped".to_string(),
+                            },
+                        );
+                    }
+                }
+            }
+        }
+
+        // Clean up status entries after 60s (client should have polled by then)
+        let cleanup_ids = user_op_ids.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            for id in &cleanup_ids {
+                store.remove(*id);
+            }
+        });
+    });
 }

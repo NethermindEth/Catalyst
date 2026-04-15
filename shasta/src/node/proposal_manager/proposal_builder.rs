@@ -363,9 +363,9 @@ impl ProposalBuilder {
             );
 
             // Send the full proposal (with user ops, signal slots, L1 calls) to L1
-            ethereum_l1
+            let _handles = ethereum_l1
                 .execution_layer
-                .send_proposal_to_l1(proposal.clone(), None, None)
+                .send_proposal_to_l1(proposal.clone())
                 .await?;
 
             // Mark the proposal as dispatched — it will be removed once the monitor confirms.
