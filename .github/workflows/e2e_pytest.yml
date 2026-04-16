@@ -183,6 +183,7 @@ jobs:
 
       - name: Cleanup
         if: always()
+        working-directory: simple-taiko-node-nethermind
         run: |
           ./remove-taiko-full.sh --force
           
