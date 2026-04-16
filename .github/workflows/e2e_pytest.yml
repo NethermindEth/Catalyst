@@ -44,7 +44,7 @@ jobs:
         with:
           repository: NethermindEth/simple-taiko-node-nethermind
           path: simple-taiko-node-nethermind
-          ref: catalyst_pacaya_shasta
+          ref: main
           submodules: true
 
       - name: Set up Docker Buildx
@@ -77,12 +77,12 @@ jobs:
           yq eval '.services.catalyst-node-1.pull_policy = "never"' -i docker-compose.yml
           yq eval '.services.catalyst-node-2.pull_policy = "never"' -i docker-compose.yml
           
-      - name: Deploy Ethereum package (L1 setup)
+      - name: Run deployment script
         working-directory: simple-taiko-node-nethermind
         run: |
           cp .env.example .env
           chmod +x deploy-etheruem-package.sh
-          ./deploy-etheruem-package.sh --environment local --mode silence
+          ./deploy-taiko-full.sh --client nethermind --environment local --l1-blockscout false --l2-blockscout false --l2-spammer false --mode silence
         env:
           SECONDS_PER_SLOT: 12
 
@@ -123,16 +123,6 @@ jobs:
           if [ $elapsed -ge $timeout ]; then
             echo "Timeout waiting for Beacon Node"
             exit 1
-          fi
-
-      - name: Deploy L2 Contract (Shasta catalyst stack)
-        working-directory: simple-taiko-node-nethermind
-        run: |
-          if [ -f "run-catalyst-stack.sh" ]; then
-            echo "Deploying L2 contract"
-            ./run-catalyst-stack.sh 60
-          else
-            echo "No L2 startup script found, assuming deploy script handles everything"
           fi
 
       - name: Wait for L2 node to be ready (Shasta)
