@@ -81,7 +81,7 @@ jobs:
         working-directory: simple-taiko-node-nethermind
         run: |
           cp .env.example .env
-          chmod +x deploy-etheruem-package.sh
+          chmod +x deploy-taiko-full.sh
           ./deploy-taiko-full.sh --client nethermind --environment local --l1-blockscout false --l2-blockscout false --l2-spammer false --mode silence
         env:
           SECONDS_PER_SLOT: 12
