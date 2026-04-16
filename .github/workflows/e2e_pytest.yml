@@ -82,8 +82,7 @@ jobs:
         run: |
           cp .env.example .env
           chmod +x deploy-taiko-full.sh
-          ./deploy-taiko-full.sh --client nethermind --environment local --l1-blockscout false --l2-blockscout false --l2-spammer false --mode silence
-        env:
+          ./deploy-taiko-full.sh --force
           SECONDS_PER_SLOT: 12
 
       - name: Wait for L1 services to be ready
@@ -183,6 +182,7 @@ jobs:
 
       - name: Cleanup
         if: always()
+        working-directory: simple-taiko-node-nethermind
         run: |
           ./remove-taiko-full.sh --force
           
