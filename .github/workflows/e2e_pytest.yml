@@ -181,11 +181,11 @@ jobs:
           retention-days: 15
           if-no-files-found: warn
 
-      - name: Cleanup Kurtosis enclave (Shasta)
+      - name: Cleanup
         if: always()
         run: |
-          kurtosis enclave rm surge-devnet --force || true
-
+          ./remove-taiko-full.sh --force
+          
       - name: Summary (Shasta)
         run: |
           echo "## Shasta E2E tests completed :green_circle:" >> $GITHUB_STEP_SUMMARY
