@@ -84,7 +84,7 @@ jobs:
         run: |
           cp .env.example .env
           chmod +x deploy-taiko-full.sh
-          ./deploy-taiko-full.sh --mode debug --client geth --force
+          ./deploy-taiko-full.sh --client geth --force
         env:
           SECONDS_PER_SLOT: 12
 
