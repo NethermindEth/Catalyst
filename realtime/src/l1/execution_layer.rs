@@ -49,6 +49,7 @@ pub struct ExecutionLayer {
     raiko_client: RaikoClient,
     proof_type: crate::l1::bindings::ProofType,
     mock_mode: bool,
+    extra_gas_percentage: u64,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -105,6 +106,7 @@ impl ELTrait for ExecutionLayer {
         let proof_type = specific_config.proof_type;
         let mock_mode = specific_config.mock_mode;
         let raiko_client = specific_config.raiko_client;
+        let extra_gas_percentage = common_config.extra_gas_percentage;
 
         Ok(Self {
             common,
@@ -116,6 +118,7 @@ impl ELTrait for ExecutionLayer {
             raiko_client,
             proof_type,
             mock_mode,
+            extra_gas_percentage,
         })
     }
 
@@ -206,8 +209,12 @@ impl ExecutionLayer {
             batch.zk_proof.is_some(),
         );
 
-        let builder =
-            ProposalTxBuilder::new(self.provider.clone(), 10, self.proof_type, self.mock_mode);
+        let builder = ProposalTxBuilder::new(
+            self.provider.clone(),
+            self.extra_gas_percentage,
+            self.proof_type,
+            self.mock_mode,
+        );
 
         let tx = builder
             .build_propose_tx(
@@ -414,18 +421,24 @@ impl L1BridgeHandlerOps for ExecutionLayer {
         // message_from_l2.data is already the full ABI-encoded calldata for
         // onMessageInvocation(bytes) — exactly what Bridge.processMessage
         // would pass to the target. Use it directly.
+        // Forward message.value as msg.value so payable callbacks receive ETH.
         let callback_address = message_from_l2.to;
         let tx_request = TransactionRequest::default()
             .from(bridge_address) // msg.sender = bridge (passes ONLY_BRIDGE check)
             .to(callback_address)
+            .value(message_from_l2.value)
             .input(message_from_l2.data.clone().into());
 
         // State-override the bridge's __ctx storage so context() returns
-        // the correct msgHash, from, and srcChainId.
-        let bridge_ctx_override = AccountOverride::default().with_state_diff([
-            (B256::from(U256::from(253u64)), msg_hash),       // __ctx.msgHash
-            (B256::from(U256::from(254u64)), slot_254_value), // __ctx.from + srcChainId
-        ]);
+        // the correct msgHash, from, and srcChainId. Also give the bridge
+        // enough ETH balance so the value transfer succeeds in the trace.
+        let bridge_balance = message_from_l2.value.saturating_add(U256::from(10u64).pow(U256::from(18u64)));
+        let bridge_ctx_override = AccountOverride::default()
+            .with_balance(bridge_balance)
+            .with_state_diff([
+                (B256::from(U256::from(253u64)), msg_hash),       // __ctx.msgHash
+                (B256::from(U256::from(254u64)), slot_254_value), // __ctx.from + srcChainId
+            ]);
         let mut state_overrides = StateOverride::default();
         state_overrides.insert(bridge_address, bridge_ctx_override);
 

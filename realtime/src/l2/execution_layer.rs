@@ -442,11 +442,16 @@ impl L2ExecutionLayer {
         from: Address,
         to: Address,
         input: &[u8],
+        value: Option<alloy::primitives::U256>,
     ) -> Result<Option<Message>, anyhow::Error> {
-        let tx_request = TransactionRequest::default()
+        let mut tx_request = TransactionRequest::default()
             .from(from)
             .to(to)
             .input(input.to_vec().into());
+
+        if let Some(v) = value {
+            tx_request = tx_request.value(v);
+        }
 
         let tracer_config = serde_json::json!({
             "onlyTopCall": false

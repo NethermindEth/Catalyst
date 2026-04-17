@@ -52,6 +52,15 @@ impl ProposalTxBuilder {
         }
     }
 
+    /// Gas estimation is skipped for blob transactions because `eth_estimateGas`
+    /// cannot simulate blobs — the `BLOBHASH` opcode returns zero during estimation,
+    /// causing spurious reverts that mask the real outcome. Instead we use a fixed
+    /// gas limit and rely on the `TransactionMonitor`'s receipt check: if the on-chain
+    /// execution reverts, the monitor sends `TransactionError::TransactionReverted`
+    /// through the error channel, and the node's main loop triggers
+    /// `recover_from_failed_submission` (reorg back to last finalized head).
+    const BLOB_TX_GAS_LIMIT: u64 = 3_000_000;
+
     #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_tx(
         &self,
@@ -62,17 +71,9 @@ impl ProposalTxBuilder {
         let tx_blob = self
             .build_propose_blob(batch, from, contract_addresses)
             .await?;
-        let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
-            Ok(gas) => gas,
-            Err(e) => {
-                warn!(
-                    "Build proposeBatch: Failed to estimate gas for blob transaction: {}. Force-sending with 500000 gas.",
-                    e
-                );
-                500_000
-            }
-        };
-        let tx_blob_gas = tx_blob_gas + tx_blob_gas * self.extra_gas_percentage / 100;
+
+        let tx_blob_gas = Self::BLOB_TX_GAS_LIMIT
+            + Self::BLOB_TX_GAS_LIMIT * self.extra_gas_percentage / 100;
 
         let fees_per_gas = match FeesPerGas::get_fees_per_gas(&self.provider).await {
             Ok(fees_per_gas) => fees_per_gas,
@@ -345,11 +346,17 @@ impl ProposalTxBuilder {
 
     fn build_l1_call_call(&self, l1_call: L1Call, bridge_address: Address) -> Multicall::Call {
         let bridge = Bridge::new(bridge_address, &self.provider);
-        let call = bridge.processMessage(l1_call.message_from_l2, l1_call.signal_slot_proof);
+        let call = bridge.processMessage(l1_call.message_from_l2.clone(), l1_call.signal_slot_proof);
+
+        // Forward the message's ETH value so the bridge can deliver it to the
+        // callback. Without this, processMessage reverts when the L1 bridge
+        // balance is insufficient (common on fresh devnets where no L1→L2
+        // deposits have funded the bridge).
+        let value = l1_call.message_from_l2.value;
 
         Multicall::Call {
             target: bridge_address,
-            value: U256::ZERO,
+            value,
             data: call.calldata().clone(),
         }
     }

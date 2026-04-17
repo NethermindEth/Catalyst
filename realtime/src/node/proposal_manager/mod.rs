@@ -350,9 +350,12 @@ impl BatchManager {
             };
             let input = tx.inner.input();
 
-            // Trace the tx to check for outbound bridge.sendMessage
+            // Trace the tx to check for outbound bridge.sendMessage.
+            // Forward the tx value so payable entry points (swapETHForTokenViaL1)
+            // don't revert with ZERO_AMOUNT during the trace.
+            let tx_value = tx.inner.value();
             let outbound = match l2_el
-                .trace_tx_for_outbound_message(from, to, input)
+                .trace_tx_for_outbound_message(from, to, input, Some(tx_value))
                 .await
             {
                 Ok(Some(msg)) => msg,

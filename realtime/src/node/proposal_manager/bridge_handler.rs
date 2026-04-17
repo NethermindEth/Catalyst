@@ -275,21 +275,26 @@ impl BridgeHandler {
                     from: Address,
                     to: Address,
                     data: Bytes,
+                    /// ETH value to attach to the traced tx (required for payable
+                    /// L2 entry points like swapETHForTokenViaL1).
+                    #[serde(default)]
+                    value: Option<alloy::primitives::U256>,
                 }
 
                 let req: SimRequest = params.one()?;
                 info!(
-                    "surge_simulateReturnMessage: from={}, to={}, data_len={}",
+                    "surge_simulateReturnMessage: from={}, to={}, data_len={}, value={:?}",
                     req.from,
                     req.to,
-                    req.data.len()
+                    req.data.len(),
+                    req.value,
                 );
 
                 let l2_el = ctx.taiko.l2_execution_layer();
 
                 // Step 1: trace the L2 tx for outbound Bridge.sendMessage
                 let outbound = l2_el
-                    .trace_tx_for_outbound_message(req.from, req.to, &req.data)
+                    .trace_tx_for_outbound_message(req.from, req.to, &req.data, req.value)
                     .await
                     .map_err(|e| {
                         jsonrpsee::types::ErrorObjectOwned::owned(

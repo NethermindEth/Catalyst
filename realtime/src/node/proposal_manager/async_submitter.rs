@@ -85,6 +85,17 @@ impl AsyncSubmitter {
         let ethereum_l1 = self.ethereum_l1.clone();
         let proof_request_bypass = self.proof_request_bypass;
 
+        // Collect user-op IDs before moving `proposal` so the catch-all below can
+        // mark them as Rejected if `submission_task` returns an error before the
+        // status is updated (e.g. blob encoding / sidecar building failures).
+        let all_user_op_ids: Vec<u64> = proposal
+            .user_ops
+            .iter()
+            .map(|op| op.id)
+            .chain(proposal.l2_user_op_ids.iter().copied())
+            .collect();
+        let fallback_store = status_store.clone();
+
         let handle = tokio::spawn(async move {
             let result = submission_task(
                 proposal,
@@ -95,6 +106,25 @@ impl AsyncSubmitter {
                 proof_request_bypass,
             )
             .await;
+
+            // Catch-all: if submission_task errored, ensure every user op is marked
+            // Rejected.  The task itself handles Raiko and L1-send errors, but
+            // pre-proof failures (manifest encoding, sidecar building) bail via `?`
+            // before any status update — leaving ops stuck at Pending forever.
+            if let Err(ref e) = result
+                && let Some(ref store) = fallback_store
+            {
+                let reason = format!("Submission failed: {}", e);
+                for id in &all_user_op_ids {
+                    store.set(
+                        *id,
+                        &UserOpStatus::Rejected {
+                            reason: reason.clone(),
+                        },
+                    );
+                }
+            }
+
             let _ = result_tx.send(result);
         });
 
