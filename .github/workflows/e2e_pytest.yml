@@ -85,6 +85,7 @@ jobs:
           cp .env.example .env
           chmod +x deploy-taiko-full.sh
           ./deploy-taiko-full.sh --mode debug --force
+        env:
           SECONDS_PER_SLOT: 12
 
       - name: Wait for L1 services to be ready
