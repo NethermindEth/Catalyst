@@ -348,15 +348,9 @@ impl ProposalTxBuilder {
         let bridge = Bridge::new(bridge_address, &self.provider);
         let call = bridge.processMessage(l1_call.message_from_l2.clone(), l1_call.signal_slot_proof);
 
-        // Forward the message's ETH value so the bridge can deliver it to the
-        // callback. Without this, processMessage reverts when the L1 bridge
-        // balance is insufficient (common on fresh devnets where no L1→L2
-        // deposits have funded the bridge).
-        let value = l1_call.message_from_l2.value;
-
         Multicall::Call {
             target: bridge_address,
-            value,
+            value: U256::ZERO,
             data: call.calldata().clone(),
         }
     }
