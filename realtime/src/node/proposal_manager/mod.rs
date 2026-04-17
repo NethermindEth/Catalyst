@@ -55,6 +55,11 @@ pub struct BatchManager {
     /// so that `bridge.processMessage(returnMsg, "")` in the UserOp succeeds.
     /// Cleared after each block build.
     pending_return_signal: Option<FixedBytes<32>>,
+    /// L2 mempool tx hash paired with `pending_return_signal` — the tx that
+    /// triggered the L2→L1→L2 path. Recorded so the UI can poll `surge_txStatus`
+    /// by hash and see the full proposal lifecycle (sequencing → proving →
+    /// proposing → complete). Cleared after each block build.
+    pending_mempool_tx_hash: Option<B256>,
 }
 
 impl BatchManager {
@@ -132,6 +137,7 @@ impl BatchManager {
             last_finalized_block_hash,
             last_finalized_block_number,
             pending_return_signal: None,
+            pending_mempool_tx_hash: None,
         })
     }
 
@@ -384,11 +390,13 @@ impl BatchManager {
                 .await
             {
                 Ok(Some((_return_msg, return_slot))) => {
+                    let tx_hash = *tx.inner.tx_hash();
                     info!(
-                        "L1 callback simulation found return signal slot={} — injecting into anchor",
-                        return_slot
+                        "L1 callback simulation found return signal slot={} for L2 tx {} — injecting into anchor",
+                        return_slot, tx_hash,
                     );
                     self.pending_return_signal = Some(return_slot);
+                    self.pending_mempool_tx_hash = Some(tx_hash);
                     // Only handle one L2→L1→L2 tx per block for now
                     break;
                 }
@@ -436,6 +444,19 @@ impl BatchManager {
             );
             self.batch_builder.add_signal_slot(return_slot)?;
             anchor_signal_slots.push(return_slot);
+        }
+
+        if let Some(tx_hash) = self.pending_mempool_tx_hash.take() {
+            self.batch_builder.add_l2_mempool_tx_hash(tx_hash)?;
+            let status_store = self.bridge_handler.lock().await.status_store();
+            status_store.set_by_hash(
+                tx_hash,
+                &crate::node::proposal_manager::bridge_handler::UserOpStatus::Pending,
+            );
+            info!(
+                "Tracking L2→L1→L2 mempool tx {} under status store (Pending)",
+                tx_hash
+            );
         }
 
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;

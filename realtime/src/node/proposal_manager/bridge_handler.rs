@@ -25,16 +25,24 @@ pub enum UserOpStatus {
 }
 
 /// Disk-backed user op status store using sled.
+///
+/// Two keyspaces live in this store:
+/// - default tree: keyed by `u64` UserOp id (L1→L2→L1 path).
+/// - `by_hash` tree: keyed by L2 tx hash `B256` (L2→L1→L2 mempool-picked txs).
 #[derive(Clone)]
 pub struct UserOpStatusStore {
     db: sled::Db,
+    by_hash: sled::Tree,
 }
 
 impl UserOpStatusStore {
     pub fn open(path: &str) -> Result<Self, anyhow::Error> {
         let db = sled::open(path)
             .map_err(|e| anyhow::anyhow!("Failed to open user op status store: {}", e))?;
-        Ok(Self { db })
+        let by_hash = db
+            .open_tree("by_hash")
+            .map_err(|e| anyhow::anyhow!("Failed to open by_hash tree: {}", e))?;
+        Ok(Self { db, by_hash })
     }
 
     pub fn set(&self, id: u64, status: &UserOpStatus) {
@@ -55,6 +63,26 @@ impl UserOpStatusStore {
 
     pub fn remove(&self, id: u64) {
         let _ = self.db.remove(id.to_be_bytes());
+    }
+
+    pub fn set_by_hash(&self, hash: B256, status: &UserOpStatus) {
+        if let Ok(value) = serde_json::to_vec(status)
+            && let Err(e) = self.by_hash.insert(hash.as_slice(), value)
+        {
+            error!("Failed to write tx status by hash: {}", e);
+        }
+    }
+
+    pub fn get_by_hash(&self, hash: B256) -> Option<UserOpStatus> {
+        self.by_hash
+            .get(hash.as_slice())
+            .ok()
+            .flatten()
+            .and_then(|v| serde_json::from_slice(&v).ok())
+    }
+
+    pub fn remove_by_hash(&self, hash: B256) {
+        let _ = self.by_hash.remove(hash.as_slice());
     }
 }
 
@@ -216,7 +244,21 @@ impl BridgeHandler {
                     }
                 }
                 (None, Some(hash)) => {
-                    // Look up L2 transaction by hash
+                    // Prefer the explicit status store for mempool-picked L2→L1→L2 txs —
+                    // it carries the full `sequencing → proving → proposing → complete`
+                    // lifecycle that async_submitter writes.
+                    if let Some(status) = ctx.status_store.get_by_hash(hash) {
+                        return serde_json::to_value(status).map_err(|e| {
+                            jsonrpsee::types::ErrorObjectOwned::owned(
+                                -32603,
+                                "Serialization error",
+                                Some(format!("{}", e)),
+                            )
+                        });
+                    }
+
+                    // Fallback: derive from on-chain state (used for L1→L2→L1 UserOp
+                    // polling by hash, where no store entry exists).
                     let tx = ctx.taiko.get_transaction_by_hash(hash).await.map_err(|e| {
                         debug!("Transaction {} not found on L2: {}", hash, e);
                         jsonrpsee::types::ErrorObjectOwned::owned(

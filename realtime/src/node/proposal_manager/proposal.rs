@@ -31,6 +31,11 @@ pub struct Proposal {
     // Surge POC fields (carried over)
     pub user_ops: Vec<UserOp>,
     pub l2_user_op_ids: Vec<u64>,
+    /// L2 tx hashes for mempool-picked outbound txs (L2→L1→L2 path). Status
+    /// transitions for these are written to `UserOpStatusStore::set_by_hash`
+    /// so the UI can poll `surge_txStatus` by tx hash and see the same
+    /// sequencing → proving → proposing → complete lifecycle as UserOps.
+    pub l2_mempool_tx_hashes: Vec<B256>,
     pub signal_slots: Vec<FixedBytes<32>>,
     pub l1_calls: Vec<L1Call>,
 

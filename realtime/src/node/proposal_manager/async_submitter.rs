@@ -283,6 +283,15 @@ async fn submission_task(
                     },
                 );
             }
+            // L2→L1→L2 mempool-picked txs tracked by L2 tx hash
+            for tx_hash in &proposal.l2_mempool_tx_hashes {
+                store.set_by_hash(
+                    *tx_hash,
+                    &UserOpStatus::ProvingBlock {
+                        block_id: proposal.checkpoint.blockNumber.to::<u64>(),
+                    },
+                );
+            }
         }
 
         let proof = match raiko_client.get_proof(&request).await {
@@ -306,6 +315,14 @@ async fn submission_task(
                             },
                         );
                     }
+                    for tx_hash in &proposal.l2_mempool_tx_hashes {
+                        store.set_by_hash(
+                            *tx_hash,
+                            &UserOpStatus::Rejected {
+                                reason: reason.clone(),
+                            },
+                        );
+                    }
                 }
                 return Err(e);
             }
@@ -316,15 +333,17 @@ async fn submission_task(
     // Step 2: Send L1 transaction
     let mut user_op_ids: Vec<u64> = proposal.user_ops.iter().map(|op| op.id).collect();
     user_op_ids.extend(&proposal.l2_user_op_ids);
-    let has_user_ops = !user_op_ids.is_empty() && status_store.is_some();
+    let l2_mempool_tx_hashes: Vec<B256> = proposal.l2_mempool_tx_hashes.clone();
+    let has_tracked_entries = (!user_op_ids.is_empty() || !l2_mempool_tx_hashes.is_empty())
+        && status_store.is_some();
 
-    let (tx_hash_sender, tx_hash_receiver) = if has_user_ops {
+    let (tx_hash_sender, tx_hash_receiver) = if has_tracked_entries {
         let (s, r) = tokio::sync::oneshot::channel();
         (Some(s), Some(r))
     } else {
         (None, None)
     };
-    let (tx_result_sender, tx_result_receiver) = if has_user_ops {
+    let (tx_result_sender, tx_result_receiver) = if has_tracked_entries {
         let (s, r) = tokio::sync::oneshot::channel();
         (Some(s), Some(r))
     } else {
@@ -336,7 +355,7 @@ async fn submission_task(
         .send_batch_to_l1(proposal.clone(), tx_hash_sender, tx_result_sender)
         .await
     {
-        // Mark all user ops (L1 and L2) as rejected on failure
+        // Mark all tracked entries (L1/L2 UserOps and mempool-picked L2 txs) as rejected
         if let Some(ref store) = status_store {
             let reason = format!("L1 multicall failed: {}", err);
             for op in &proposal.user_ops {
@@ -350,6 +369,14 @@ async fn submission_task(
             for id in &proposal.l2_user_op_ids {
                 store.set(
                     *id,
+                    &UserOpStatus::Rejected {
+                        reason: reason.clone(),
+                    },
+                );
+            }
+            for tx_hash in &proposal.l2_mempool_tx_hashes {
+                store.set_by_hash(
+                    *tx_hash,
                     &UserOpStatus::Rejected {
                         reason: reason.clone(),
                     },
@@ -373,12 +400,23 @@ async fn submission_task(
                     for id in &user_op_ids {
                         store.set(*id, &UserOpStatus::Processing { tx_hash });
                     }
+                    for l2_tx_hash in &l2_mempool_tx_hashes {
+                        store.set_by_hash(*l2_tx_hash, &UserOpStatus::Processing { tx_hash });
+                    }
                     Some(tx_hash)
                 }
                 Err(_) => {
                     for id in &user_op_ids {
                         store.set(
                             *id,
+                            &UserOpStatus::Rejected {
+                                reason: "Transaction failed to send".to_string(),
+                            },
+                        );
+                    }
+                    for l2_tx_hash in &l2_mempool_tx_hashes {
+                        store.set_by_hash(
+                            *l2_tx_hash,
                             &UserOpStatus::Rejected {
                                 reason: "Transaction failed to send".to_string(),
                             },
@@ -394,11 +432,22 @@ async fn submission_task(
                         for id in &user_op_ids {
                             store.set(*id, &UserOpStatus::Executed);
                         }
+                        for l2_tx_hash in &l2_mempool_tx_hashes {
+                            store.set_by_hash(*l2_tx_hash, &UserOpStatus::Executed);
+                        }
                     }
                     Ok(false) => {
                         for id in &user_op_ids {
                             store.set(
                                 *id,
+                                &UserOpStatus::Rejected {
+                                    reason: "L1 multicall reverted".to_string(),
+                                },
+                            );
+                        }
+                        for l2_tx_hash in &l2_mempool_tx_hashes {
+                            store.set_by_hash(
+                                *l2_tx_hash,
                                 &UserOpStatus::Rejected {
                                     reason: "L1 multicall reverted".to_string(),
                                 },
@@ -414,6 +463,14 @@ async fn submission_task(
                                 },
                             );
                         }
+                        for l2_tx_hash in &l2_mempool_tx_hashes {
+                            store.set_by_hash(
+                                *l2_tx_hash,
+                                &UserOpStatus::Rejected {
+                                    reason: "Transaction monitor dropped".to_string(),
+                                },
+                            );
+                        }
                     }
                 }
             }
@@ -421,10 +478,14 @@ async fn submission_task(
             // Clean up status entries after 60s (client should have polled by then)
             let cleanup_store = store.clone();
             let cleanup_ids = user_op_ids.clone();
+            let cleanup_hashes = l2_mempool_tx_hashes.clone();
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
                 for id in &cleanup_ids {
                     cleanup_store.remove(*id);
+                }
+                for tx_hash in &cleanup_hashes {
+                    cleanup_store.remove_by_hash(*tx_hash);
                 }
             });
         });
