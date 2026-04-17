@@ -76,6 +76,8 @@ jobs:
           sed -i "s|${CATALYST_IMAGE}|${IMAGE_TAG}|g" .env.example
           yq eval '.services.catalyst-node-1.pull_policy = "never"' -i docker-compose.yml
           yq eval '.services.catalyst-node-2.pull_policy = "never"' -i docker-compose.yml
+          yq eval '.services.catalyst-node-1.pull_policy = "never"' -i docker-compose-nethermind.yml
+          yq eval '.services.catalyst-node-2.pull_policy = "never"' -i docker-compose-nethermind.yml
           
       - name: Run deployment script
         working-directory: simple-taiko-node-nethermind
