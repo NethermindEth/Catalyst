@@ -504,7 +504,7 @@ mod tests {
     use alloy::primitives::{B256, Uint};
     use common::l1::slot_clock::SlotClock;
     use common::metrics::Metrics;
-    use rand::Rng;
+    use rand::RngExt;
 
     const COINBASE: Address = Address::ZERO;
 
