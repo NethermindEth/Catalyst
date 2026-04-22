@@ -66,7 +66,13 @@ jobs:
           file: Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
+<<<<<<< Updated upstream
           outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }},push-by-digest=true,name-canonical=true
+=======
+          build-args: |
+            BLST_PORTABLE=1
+          outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }},push-by-digest=true,name-canonical=true
+>>>>>>> Stashed changes
 
       - name: Set digest output
         id: digest

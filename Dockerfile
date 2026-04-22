@@ -10,6 +10,13 @@ RUN apt-get update && apt-get install -y \
 # Set the working directory inside the container
 WORKDIR /app/catalyst_node
 
+# Force blst (and the blst vendored by c-kzg) to compile without ADX/BMI2 asm.
+# Without this, binaries built on modern CI runners SIGILL on older Intel CPUs
+# (e.g. pre-Broadwell Macs, and Intel-Mac Docker Desktop VMs that don't expose
+# those features to the guest).
+ARG BLST_PORTABLE=1
+ENV BLST_PORTABLE=${BLST_PORTABLE}
+
 # Copy only the toolchain file first
 COPY rust-toolchain.toml .
 
