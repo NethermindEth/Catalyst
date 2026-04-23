@@ -2194,7 +2194,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.37.1"
+version = "1.37.2"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -5675,7 +5675,7 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.37.1"
+version = "1.37.2"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6121,9 +6121,9 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "openssl"
-version = "0.10.75"
+version = "0.10.78"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08838db121398ad17ab8531ce9de97b244589089e290a384c900cb9ff7434328"
+checksum = "f38c4372413cdaaf3cc79dd92d29d7d9f5ab09b51b10dded508fb90bb70b9222"
 dependencies = [
  "bitflags 2.11.0",
  "cfg-if",
@@ -6162,9 +6162,9 @@ dependencies = [
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.111"
+version = "0.9.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82cab2d520aa75e3c58898289429321eb788c3106963d0dc886ec7a5f4adc321"
+checksum = "13ce1245cd07fcc4cfdb438f7507b0c7e4f3849a69fd84d52374c66d83741bb6"
 dependencies = [
  "cc",
  "libc",
@@ -6273,7 +6273,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.37.1"
+version = "1.37.2"
 dependencies = [
  "anyhow",
  "discv5 0.10.2",
@@ -6285,7 +6285,7 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.37.1"
+version = "1.37.2"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -6406,7 +6406,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.37.1"
+version = "1.37.2"
 dependencies = [
  "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=637f7a150f72fe8d6cc5949a41aebb638a5305cf)",
  "alloy",
@@ -10161,7 +10161,7 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.37.1"
+version = "1.37.2"
 dependencies = [
  "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=637f7a150f72fe8d6cc5949a41aebb638a5305cf)",
  "alloy",
@@ -11441,7 +11441,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.37.1"
+version = "1.37.2"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
