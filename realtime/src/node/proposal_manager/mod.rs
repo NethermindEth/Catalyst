@@ -437,6 +437,10 @@ impl BatchManager {
         self.scan_mempool_for_outbound_signals(&mut l2_draft_block.prebuilt_tx_list)
             .await;
 
+        // Copy rather than take — the pre-simulated slot is passed as a hint
+        // to `find_l1_call` after preconf so the L1Call's requiredReturnSignal
+        // matches the slot we inject into the anchor. Cleared below.
+        let pending_return_slot_hint = self.pending_return_signal;
         if let Some(return_slot) = self.pending_return_signal.take() {
             info!(
                 "Injecting L2→L1→L2 return signal into anchor fast signals: slot={}",
@@ -483,7 +487,11 @@ impl BatchManager {
                     .bridge_handler
                     .lock()
                     .await
-                    .find_l1_call(preconfed_block.number, preconfed_block.state_root)
+                    .find_l1_call(
+                        preconfed_block.number,
+                        preconfed_block.state_root,
+                        pending_return_slot_hint,
+                    )
                     .await?
                 {
                     self.batch_builder.add_l1_call(l1_call)?;

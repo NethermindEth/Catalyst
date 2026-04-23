@@ -459,60 +459,48 @@ impl BridgeHandler {
         Ok(None)
     }
 
+    /// Build an L1Call for a Bridge.sendMessage emitted in the just-preconfirmed
+    /// L2 block. The mempool scan is the single source of truth for the return
+    /// signal: if it found one, its slot was injected into the L2 anchor's fast
+    /// signals and must be carried here as the inbox's `requiredReturnSignal`.
+    /// We do not re-simulate — any drift between the two simulations would make
+    /// the anchor slot disagree with the inbox's verified slot, which reverts
+    /// `_verifySignalSlots` (classic) or `finalizePropose` (deferred).
     pub async fn find_l1_call(
         &mut self,
         block_id: u64,
         state_root: B256,
+        required_return_signal: Option<FixedBytes<32>>,
     ) -> Result<Option<L1Call>, anyhow::Error> {
         let l2_el = self.taiko.l2_execution_layer();
 
-        if let Some((message_from_l2, signal_slot)) =
-            l2_el.find_message_and_signal_slot(block_id).await?
-        {
+        // Retry briefly: the L2 RPC may lag indexing the just-preconfirmed
+        // block's logs. Without this, `find_message_and_signal_slot` returns
+        // None on the hot path and we skip the L1 call — causing classic
+        // propose to revert with `SignalSlotNotSent` if the mempool scan
+        // already injected a slot into the anchor.
+        let mut attempt = 0u32;
+        let message_and_slot = loop {
+            if let Some(pair) = l2_el.find_message_and_signal_slot(block_id).await? {
+                break Some(pair);
+            }
+            attempt += 1;
+            if attempt >= 5 {
+                break None;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        };
+
+        if let Some((message_from_l2, signal_slot)) = message_and_slot {
             let signal_slot_proof = l2_el
                 .get_hop_proof(signal_slot, block_id, state_root)
                 .await?;
 
-            // Simulate the L1 callback (Bridge.processMessage) to detect any
-            // L1→L2 return signal the callback will produce. If found, it
-            // must be pre-injected into the L2 block's anchor fast signals
-            // and committed as a requiredReturnSignal in the inbox proposal.
-            //
-            // The simulator uses state_override on L1 SignalService so the
-            // signal-verification step passes even before the real checkpoint
-            // is committed. A None result means the callback does not produce
-            // an outbound — classic L1→L2→L1 flow, no deferred-finalize needed.
-            let l1_el = &self.ethereum_l1.execution_layer;
-            let contracts = l1_el.contract_addresses();
-            // L2 bridge address is auto-derived from L2 chain id on the L2
-            // side — pull it from there rather than duplicating in config.
-            let l2_bridge_address = *l2_el.bridge.address();
-            let required_return_signal = match l1_el
-                .simulate_l1_callback_return_signal(
-                    message_from_l2.clone(),
-                    signal_slot_proof.clone(),
-                    contracts.bridge,
-                    l2_bridge_address,
-                )
-                .await
-            {
-                Ok(Some((_return_msg, slot))) => {
-                    info!(
-                        "L1 callback simulation found return signal slot={} — will use deferred finalize",
-                        slot
-                    );
-                    Some(slot)
-                }
-                Ok(None) => None,
-                Err(e) => {
-                    // Simulation failure is not fatal: fall back to classic flow.
-                    warn!(
-                        "L1 callback simulation failed ({}) — falling back to classic propose",
-                        e
-                    );
-                    None
-                }
-            };
+            if required_return_signal.is_some() {
+                info!(
+                    "Adding L1 call with pre-simulated required return signal — will use deferred finalize"
+                );
+            }
 
             return Ok(Some(L1Call {
                 message_from_l2,
