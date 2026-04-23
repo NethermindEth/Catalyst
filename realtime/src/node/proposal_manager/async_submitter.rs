@@ -174,7 +174,8 @@ async fn submission_task(
         };
         let manifest_data = manifest.encode_and_compress()?;
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
-        let sidecar: alloy::eips::eip4844::BlobTransactionSidecar = sidecar_builder.build()?;
+        let sidecar: alloy::eips::eip7594::BlobTransactionSidecarEip7594 =
+            sidecar_builder.build_7594()?;
 
         // Extract versioned blob hashes
         let blob_hashes: Vec<String> = sidecar

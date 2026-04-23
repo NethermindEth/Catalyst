@@ -10,8 +10,8 @@ use crate::node::proposal_manager::{
 use crate::shared_abi::bindings::Bridge;
 use alloy::{
     consensus::SidecarBuilder,
-    eips::eip4844::BlobTransactionSidecar,
-    network::TransactionBuilder4844,
+    eips::eip7594::BlobTransactionSidecarEip7594,
+    network::TransactionBuilder7594,
     primitives::{
         Address, Bytes, U256,
         aliases::{U24, U48},
@@ -185,7 +185,7 @@ impl ProposalTxBuilder {
         &self,
         batch: &Proposal,
         inbox_address: Address,
-    ) -> Result<(Multicall::Call, BlobTransactionSidecar), anyhow::Error> {
+    ) -> Result<(Multicall::Call, BlobTransactionSidecarEip7594), anyhow::Error> {
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
         for l2_block in &batch.l2_blocks {
             block_manifests.push(BlockManifest {
@@ -211,7 +211,7 @@ impl ProposalTxBuilder {
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
-        let sidecar: BlobTransactionSidecar = sidecar_builder.build()?;
+        let sidecar: BlobTransactionSidecarEip7594 = sidecar_builder.build_7594()?;
 
         // Build the propose input.
         let input = ProposeInput {
