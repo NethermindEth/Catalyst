@@ -44,7 +44,7 @@ jobs:
         with:
           repository: NethermindEth/simple-taiko-node-nethermind
           path: simple-taiko-node-nethermind
-          ref: main
+          ref: fix/docker-compose-script 
           submodules: true
 
       - name: Set up Docker Buildx
