@@ -269,11 +269,13 @@ impl ExecutionLayer {
 
 use alloy::rpc::types::trace::geth::{CallFrame, CallLogFrame};
 
-fn collect_logs_recursive(frame: &CallFrame) -> Vec<CallLogFrame> {
-    let mut logs = frame.logs.clone();
+fn collect_all_logs(frame: &CallFrame) -> Vec<CallLogFrame> {
+    let mut logs = Vec::new();
+    let mut stack = vec![frame];
 
-    for subcall in &frame.calls {
-        logs.extend(collect_logs_recursive(subcall));
+    while let Some(f) = stack.pop() {
+        logs.extend(f.logs.iter().cloned());
+        stack.extend(f.calls.iter());
     }
 
     logs
@@ -346,7 +348,7 @@ impl L1BridgeHandlerOps for ExecutionLayer {
         let mut slot: Option<FixedBytes<32>> = None;
 
         if let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result {
-            let all_logs = collect_logs_recursive(&call_frame);
+            let all_logs = collect_all_logs(&call_frame);
             tracing::debug!("Collected {} logs from call trace", all_logs.len());
 
             for log in all_logs {
