@@ -202,7 +202,7 @@ async fn submission_task(
 
         let request = RaikoProofRequest {
             l2_block_numbers,
-            proof_type: raiko_client.proof_type.raiko_proof_type().to_string(),
+            proof_type: raiko_client.proof_type.to_string(),
             max_anchor_block_number: proposal.max_anchor_block_number,
             last_finalized_block_hash: format!(
                 "0x{}",

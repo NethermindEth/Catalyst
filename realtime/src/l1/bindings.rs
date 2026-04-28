@@ -73,15 +73,6 @@ impl ProofType {
             ProofType::Zisk => 1 << 3,
         }
     }
-
-    /// Returns the proof type string expected by Raiko.
-    pub fn raiko_proof_type(&self) -> &'static str {
-        match self {
-            ProofType::Risc0 => "risc0",
-            ProofType::Sp1 => "sp1",
-            ProofType::Zisk => "zisk",
-        }
-    }
 }
 
 /// SurgeVerifier MOCK_ECDSA bit flag — used when `MOCK_MODE=true`.
@@ -105,6 +96,11 @@ impl std::str::FromStr for ProofType {
 
 impl std::fmt::Display for ProofType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.raiko_proof_type())
+        let s = match self {
+            ProofType::Risc0 => "risc0",
+            ProofType::Sp1 => "sp1",
+            ProofType::Zisk => "zisk",
+        };
+        f.write_str(s)
     }
 }
