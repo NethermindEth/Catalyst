@@ -6,7 +6,10 @@ mod status_provider_trait;
 use crate::{metrics::Metrics, utils::rpc_client::HttpRPCClient};
 use anyhow::Error;
 pub use config::TaikoDriverConfig;
-use models::{BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, TaikoStatus};
+use models::{
+    BuildPreconfBlockRequestBody, BuildPreconfBlockResponse, ReorgStaleBlockRequest,
+    ReorgStaleBlockResponse, TaikoStatus,
+};
 pub use operation_type::OperationType;
 use serde_json::Value;
 pub use status_provider_trait::StatusProvider;
@@ -71,6 +74,30 @@ impl TaikoDriver {
                 "Block was preconfirmed, but failed to decode response from driver."
             ))
         }
+    }
+
+    pub async fn reorg_stale_block(
+        &self,
+        new_head_block_number: u64,
+    ) -> Result<ReorgStaleBlockResponse, Error> {
+        const API_ENDPOINT: &str = "reorgStaleBlock";
+
+        let request_body = ReorgStaleBlockRequest {
+            new_head_block_number,
+        };
+
+        let response = self
+            .call_driver(
+                &self.preconf_rpc,
+                http::Method::POST,
+                API_ENDPOINT,
+                &request_body,
+                OperationType::ReorgStaleBlock,
+            )
+            .await?;
+
+        let reorg_response: ReorgStaleBlockResponse = serde_json::from_value(response)?;
+        Ok(reorg_response)
     }
 
     async fn call_driver<T>(

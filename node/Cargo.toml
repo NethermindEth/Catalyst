@@ -20,6 +20,7 @@ clap = { workspace = true }
 common = { workspace = true }
 pacaya = { workspace = true }
 permissionless = { workspace = true }
+realtime = { workspace = true }
 rustls = { workspace = true }
 serde_json = { workspace = true }
 shasta = { workspace = true }

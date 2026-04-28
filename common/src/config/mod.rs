@@ -72,6 +72,7 @@ pub struct Config {
     pub fork_switch_transition_period_sec: u64,
     pub shasta_timestamp_sec: u64,
     pub permissionless_timestamp_sec: u64,
+    pub realtime_timestamp_sec: u64,
     // Whitelist monitor
     pub whitelist_monitor_interval_sec: u64,
     // Watchdog
@@ -432,6 +433,10 @@ impl Config {
             .unwrap_or("99999999999".to_string())
             .parse::<u64>()
             .map_err(|e| anyhow::anyhow!("PERMISSIONLESS_TIMESTAMP_SEC must be a number: {}", e))?;
+        let realtime_timestamp_sec = std::env::var("REALTIME_TIMESTAMP_SEC")
+            .unwrap_or("99999999999".to_string())
+            .parse::<u64>()
+            .map_err(|e| anyhow::anyhow!("REALTIME_TIMESTAMP_SEC must be a number: {}", e))?;
 
         let whitelist_monitor_interval_sec = std::env::var("WHITELIST_MONITOR_INTERVAL_SEC")
             .unwrap_or("60".to_string())
@@ -513,6 +518,7 @@ impl Config {
             fork_switch_transition_period_sec,
             shasta_timestamp_sec,
             permissionless_timestamp_sec,
+            realtime_timestamp_sec,
             whitelist_monitor_interval_sec,
             watchdog_max_counter,
             internal_server_ip,
@@ -567,6 +573,7 @@ bridge transaction fee: {}wei
 fork switch transition time: {}s
 shasta timestamp: {}s
 permissionless timestamp: {}s
+realtime timestamp: {}s
 whitelist monitor interval: {}s
 watchdog max counter: {}
 internal server IP: {}
@@ -629,6 +636,7 @@ internal server port: {}
             config.fork_switch_transition_period_sec,
             config.shasta_timestamp_sec,
             config.permissionless_timestamp_sec,
+            config.realtime_timestamp_sec,
             config.whitelist_monitor_interval_sec,
             config.watchdog_max_counter,
             std::net::Ipv4Addr::from(config.internal_server_ip),
