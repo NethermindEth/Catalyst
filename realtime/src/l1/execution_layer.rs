@@ -380,11 +380,7 @@ impl L1BridgeHandlerOps for ExecutionLayer {
 
         tracing::debug!("{:?} {:?}", message, slot);
 
-        if let (Some(message), Some(slot)) = (message, slot) {
-            return Ok(Some((message, slot)));
-        }
-
-        Ok(None)
+        Ok(message.zip(slot))
     }
 
     async fn simulate_l1_callback_return_signal(
