@@ -104,6 +104,17 @@ async fn run_node(iteration: u64, metrics: Arc<Metrics>) -> Result<ExecutionStop
             .await?;
             Vec::new()
         }
+        Fork::Realtime => {
+            info!("Current fork: REALTIME ⚡");
+            realtime::create_realtime_node(
+                config.clone(),
+                metrics.clone(),
+                cancel_token.clone(),
+                fork_info,
+            )
+            .await?;
+            Vec::new()
+        }
     };
 
     extra_routes.push(metrics_route(metrics.clone()));
