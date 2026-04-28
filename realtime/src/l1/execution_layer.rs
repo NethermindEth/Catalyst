@@ -458,7 +458,7 @@ impl L1BridgeHandlerOps for ExecutionLayer {
             ..Default::default()
         };
 
-        let trace_result = match self
+        let trace_result = self
             .provider
             .debug_trace_call(
                 tx_request,
@@ -466,56 +466,49 @@ impl L1BridgeHandlerOps for ExecutionLayer {
                 call_options,
             )
             .await
-        {
-            Ok(t) => t,
-            Err(e) => {
-                return Err(anyhow!("L1 callback simulation RPC failed: {e}"));
-            }
+            .map_err(|e| anyhow!("L1 callback simulation RPC failed: {e}"))?;
+
+        let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result else {
+            tracing::debug!("L1 callback simulation found no sendMessage call in trace");
+            return Ok(None);
         };
 
-        // Scan the trace for a sendMessage call to the L1 bridge.
-        let mut return_msg: Option<Message> = None;
-
-        if let alloy::rpc::types::trace::geth::GethTrace::CallTracer(call_frame) = trace_result
-            && let Some((mut msg, caller)) =
-                find_send_message_in_call_tree(&call_frame, bridge_address)
-        {
-            // Patch bridge-assigned fields (from, srcChainId, id)
-            msg.from = caller;
-            msg.srcChainId = self.common.chain_id();
-            // Query nextMessageId for the id the bridge would assign
-            let bridge_contract = Bridge::new(bridge_address, self.provider.clone());
-            if let Ok(next_id) = bridge_contract.nextMessageId().call().await {
-                msg.id = next_id;
-            }
-            return_msg = Some(msg);
-        }
-
-        if let Some(m) = return_msg {
-            // Compute the signal slot: keccak256("SIGNAL", L1_chain_id, L1_bridge, msgHash)
-            let return_msg_hash: B256 =
-                bridge.hashMessage(m.clone()).call().await.map_err(|e| {
-                    anyhow!("Failed to call Bridge.hashMessage for return msg: {e}")
-                })?;
-
-            let l1_chain_id = self.common.chain_id();
-            let mut slot_preimage = Vec::with_capacity(6 + 8 + 20 + 32);
-            slot_preimage.extend_from_slice(b"SIGNAL");
-            slot_preimage.extend_from_slice(&l1_chain_id.to_be_bytes());
-            slot_preimage.extend_from_slice(bridge_address.as_slice());
-            slot_preimage.extend_from_slice(return_msg_hash.as_slice());
-            let signal_slot: FixedBytes<32> = keccak256(&slot_preimage);
-
-            tracing::info!(
-                "L1 callback simulation found return signal: slot={}, destChainId={}",
-                signal_slot,
-                m.destChainId
-            );
-            Ok(Some((m, signal_slot)))
-        } else {
+        let Some((mut msg, caller)) = find_send_message_in_call_tree(&call_frame, bridge_address)
+        else {
             tracing::debug!("L1 callback simulation found no sendMessage call in trace");
-            Ok(None)
+            return Ok(None);
+        };
+
+        // Patch bridge-assigned fields (from, srcChainId, id)
+        msg.from = caller;
+        msg.srcChainId = self.common.chain_id();
+        // Query nextMessageId for the id the bridge would assign
+        let bridge_contract = Bridge::new(bridge_address, self.provider.clone());
+        if let Ok(next_id) = bridge_contract.nextMessageId().call().await {
+            msg.id = next_id;
         }
+
+        // Compute the signal slot: keccak256("SIGNAL", L1_chain_id, L1_bridge, msgHash)
+        let return_msg_hash: B256 = bridge
+            .hashMessage(msg.clone())
+            .call()
+            .await
+            .map_err(|e| anyhow!("Failed to call Bridge.hashMessage for return msg: {e}"))?;
+
+        let l1_chain_id = self.common.chain_id();
+        let mut slot_preimage = Vec::with_capacity(6 + 8 + 20 + 32);
+        slot_preimage.extend_from_slice(b"SIGNAL");
+        slot_preimage.extend_from_slice(&l1_chain_id.to_be_bytes());
+        slot_preimage.extend_from_slice(bridge_address.as_slice());
+        slot_preimage.extend_from_slice(return_msg_hash.as_slice());
+        let signal_slot: FixedBytes<32> = keccak256(&slot_preimage);
+
+        tracing::info!(
+            "L1 callback simulation found return signal: slot={}, destChainId={}",
+            signal_slot,
+            msg.destChainId
+        );
+        Ok(Some((msg, signal_slot)))
     }
 }
 
