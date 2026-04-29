@@ -24,37 +24,36 @@ pub enum UserOpStatus {
     Executed,
 }
 
-/// Disk-backed user op status store using sled.
+/// Disk-backed user op status store using fjall.
 ///
-/// Two keyspaces live in this store:
-/// - default tree: keyed by `u64` UserOp id (L1→L2→L1 path).
-/// - `by_hash` tree: keyed by L2 tx hash `B256` (L2→L1→L2 mempool-picked txs).
+/// Two partitions live in this store:
+/// - `by_id`: keyed by `u64` UserOp id (L1→L2→L1 path).
+/// - `by_hash`: keyed by L2 tx hash `B256` (L2→L1→L2 mempool-picked txs).
 #[derive(Clone)]
 pub struct UserOpStatusStore {
-    db: sled::Db,
-    by_hash: sled::Tree,
+    by_id: fjall::PartitionHandle,
+    by_hash: fjall::PartitionHandle,
 }
 
 impl UserOpStatusStore {
     pub fn open(path: &str) -> Result<Self, anyhow::Error> {
-        let db = sled::open(path)
-            .map_err(|e| anyhow::anyhow!("Failed to open user op status store: {}", e))?;
-        let by_hash = db
-            .open_tree("by_hash")
-            .map_err(|e| anyhow::anyhow!("Failed to open by_hash tree: {}", e))?;
-        Ok(Self { db, by_hash })
+        let keyspace = fjall::Config::new(path).open()?;
+        let by_id = keyspace.open_partition("by_id", fjall::PartitionCreateOptions::default())?;
+        let by_hash =
+            keyspace.open_partition("by_hash", fjall::PartitionCreateOptions::default())?;
+        Ok(Self { by_id, by_hash })
     }
 
     pub fn set(&self, id: u64, status: &UserOpStatus) {
         if let Ok(value) = serde_json::to_vec(status)
-            && let Err(e) = self.db.insert(id.to_be_bytes(), value)
+            && let Err(e) = self.by_id.insert(id.to_be_bytes(), value)
         {
-            error!("Failed to write user op status: {}", e);
+            error!("Failed to write user op status: {e}");
         }
     }
 
     pub fn get(&self, id: u64) -> Option<UserOpStatus> {
-        self.db
+        self.by_id
             .get(id.to_be_bytes())
             .ok()
             .flatten()
@@ -62,14 +61,14 @@ impl UserOpStatusStore {
     }
 
     pub fn remove(&self, id: u64) {
-        let _ = self.db.remove(id.to_be_bytes());
+        let _ = self.by_id.remove(id.to_be_bytes());
     }
 
     pub fn set_by_hash(&self, hash: B256, status: &UserOpStatus) {
         if let Ok(value) = serde_json::to_vec(status)
             && let Err(e) = self.by_hash.insert(hash.as_slice(), value)
         {
-            error!("Failed to write tx status by hash: {}", e);
+            error!("Failed to write tx status by hash: {e}");
         }
     }
 
