@@ -5,13 +5,9 @@ use crate::node::proposal_manager::{
 };
 use alloy::primitives::{Address, B256, FixedBytes};
 use common::shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft};
-use std::collections::VecDeque;
 use std::time::Instant;
 use taiko_protocol::shasta::manifest::{BlockManifest, DerivationSourceManifest};
 use tracing::{debug, warn};
-
-#[allow(dead_code)]
-pub type Proposals = VecDeque<Proposal>;
 
 #[derive(Default, Clone)]
 pub struct Proposal {

@@ -9,16 +9,11 @@ pub struct RealtimeConfig {
     pub realtime_inbox: Address,
     pub proposer_multicall: Address,
     pub bridge: Address,
-    /// L1 SignalService — needed for L1 callback simulation
-    /// (state_override on `_receivedSignals` to pass fast-signal check).
-    pub signal_service: Address,
     /// L2 SignalService address — used on the L2 side for signal operations.
     pub l2_signal_service: Address,
     pub raiko_url: String,
     pub raiko_api_key: Option<String>,
     pub proof_type: ProofType,
-    pub raiko_network: String,
-    pub raiko_l1_network: String,
     pub raiko_poll_interval_ms: u64,
     pub raiko_max_retries: u32,
     pub bridge_rpc_addr: String,
@@ -42,7 +37,6 @@ impl ConfigTrait for RealtimeConfig {
         let realtime_inbox = read_contract_address("REALTIME_INBOX_ADDRESS")?;
         let proposer_multicall = read_contract_address("PROPOSER_MULTICALL_ADDRESS")?;
         let bridge = read_contract_address("L1_BRIDGE_ADDRESS")?;
-        let signal_service = read_contract_address("L1_SIGNAL_SERVICE_ADDRESS")?;
         let l2_signal_service = read_contract_address("L2_SIGNAL_SERVICE_ADDRESS")?;
 
         let raiko_url =
@@ -51,10 +45,6 @@ impl ConfigTrait for RealtimeConfig {
         let proof_type: ProofType = std::env::var("PROOF_TYPE")
             .unwrap_or_else(|_| "sp1".to_string())
             .parse()?;
-        let raiko_network =
-            std::env::var("RAIKO_L2_NETWORK").unwrap_or_else(|_| "taiko_mainnet".to_string());
-        let raiko_l1_network =
-            std::env::var("RAIKO_L1_NETWORK").unwrap_or_else(|_| "ethereum".to_string());
 
         let raiko_poll_interval_ms: u64 = std::env::var("RAIKO_POLL_INTERVAL_MS")
             .ok()
@@ -85,13 +75,10 @@ impl ConfigTrait for RealtimeConfig {
             realtime_inbox,
             proposer_multicall,
             bridge,
-            signal_service,
             l2_signal_service,
             raiko_url,
             raiko_api_key,
             proof_type,
-            raiko_network,
-            raiko_l1_network,
             raiko_poll_interval_ms,
             raiko_max_retries,
             bridge_rpc_addr,

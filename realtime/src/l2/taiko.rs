@@ -1,8 +1,6 @@
-#![allow(dead_code)]
-
 use super::execution_layer::L2ExecutionLayer;
 use crate::l1::protocol_config::ProtocolConfig;
-use crate::l2::bindings::{Anchor, ICheckpointStore::Checkpoint};
+use crate::l2::bindings::ICheckpointStore::Checkpoint;
 use crate::node::proposal_manager::l2_block_payload::L2BlockV2Payload;
 use alloy::primitives::FixedBytes;
 use alloy::{
@@ -32,14 +30,13 @@ use common::{
 use pacaya::l2::config::TaikoConfig;
 use std::sync::Arc;
 use taiko_alethia_reth::validation::ANCHOR_V3_V4_GAS_LIMIT;
-use tracing::{debug, trace};
+use tracing::trace;
 
 pub struct Taiko {
     protocol_config: ProtocolConfig,
     l2_execution_layer: Arc<L2ExecutionLayer>,
     driver: Arc<TaikoDriver>,
     slot_clock: Arc<SlotClock>,
-    coinbase: String,
     l2_engine: L2Engine,
 }
 
@@ -73,7 +70,6 @@ impl Taiko {
             ),
             driver: Arc::new(TaikoDriver::new(&driver_config, metrics).await?),
             slot_clock,
-            coinbase: format!("0x{}", hex::encode(taiko_config.signer.get_address())),
             l2_engine,
         })
     }
@@ -97,44 +93,8 @@ impl Taiko {
             .await
     }
 
-    pub fn get_protocol_config(&self) -> &ProtocolConfig {
-        &self.protocol_config
-    }
-
     pub async fn get_latest_l2_block_id(&self) -> Result<u64, Error> {
         self.l2_execution_layer.common().get_latest_block_id().await
-    }
-
-    pub async fn get_l2_block_by_number(
-        &self,
-        number: u64,
-        full_txs: bool,
-    ) -> Result<alloy::rpc::types::Block, Error> {
-        self.l2_execution_layer
-            .common()
-            .get_block_by_number(number, full_txs)
-            .await
-    }
-
-    pub async fn fetch_l2_blocks_until_latest(
-        &self,
-        start_block: u64,
-        full_txs: bool,
-    ) -> Result<Vec<alloy::rpc::types::Block>, Error> {
-        let start_time = std::time::Instant::now();
-        let end_block = self.get_latest_l2_block_id().await?;
-        let mut blocks = Vec::with_capacity(usize::try_from(end_block - start_block + 1)?);
-        for block_number in start_block..=end_block {
-            let block = self.get_l2_block_by_number(block_number, full_txs).await?;
-            blocks.push(block);
-        }
-        debug!(
-            "Fetched L2 blocks from {} to {} in {} ms",
-            start_block,
-            end_block,
-            start_time.elapsed().as_millis()
-        );
-        Ok(blocks)
     }
 
     pub async fn get_transaction_by_hash(
@@ -335,14 +295,6 @@ impl Taiko {
         new_head_block_number: u64,
     ) -> Result<common::l2::taiko_driver::models::ReorgStaleBlockResponse, Error> {
         self.driver.reorg_stale_block(new_head_block_number).await
-    }
-
-    pub fn decode_anchor_id_from_tx_data(data: &[u8]) -> Result<u64, Error> {
-        L2ExecutionLayer::decode_anchor_id_from_tx_data(data)
-    }
-
-    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4WithSignalSlotsCall, Error> {
-        L2ExecutionLayer::get_anchor_tx_data(data)
     }
 }
 

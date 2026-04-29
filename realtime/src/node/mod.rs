@@ -6,7 +6,6 @@ use common::{
     fork_info::ForkInfo,
     l1::{ethereum_l1::EthereumL1, transaction_error::TransactionError},
     l2::taiko_driver::{TaikoDriver, models::BuildPreconfBlockResponse},
-    metrics::Metrics,
     shared::{l2_slot_info_v2::L2SlotContext, l2_tx_lists::PreBuiltTxList},
     utils::{self as common_utils, cancellation_token::CancellationToken},
 };
@@ -34,8 +33,6 @@ pub struct Node {
     taiko: Arc<Taiko>,
     watchdog: common_utils::watchdog::Watchdog,
     operator: Operator<ExecutionLayer, common::l1::slot_clock::RealClock, TaikoDriver>,
-    #[allow(dead_code)]
-    metrics: Arc<Metrics>,
     proposal_manager: BatchManager,
     head_verifier: HeadVerifier,
     transaction_error_channel: Receiver<TransactionError>,
@@ -49,7 +46,6 @@ impl Node {
         cancel_token: CancellationToken,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
-        metrics: Arc<Metrics>,
         batch_builder_config: BatchBuilderConfig,
         transaction_error_channel: Receiver<TransactionError>,
         fork_info: ForkInfo,
@@ -59,7 +55,6 @@ impl Node {
         preconf_only: bool,
         proof_request_bypass: bool,
         bridge_rpc_addr: String,
-        l1_chain_id: u64,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -84,14 +79,12 @@ impl Node {
             batch_builder_config,
             ethereum_l1.clone(),
             taiko.clone(),
-            metrics.clone(),
             cancel_token.clone(),
             last_finalized_block_hash,
             raiko_client,
             basefee_sharing_pctg,
             proof_request_bypass,
             bridge_rpc_addr,
-            l1_chain_id,
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;
@@ -110,7 +103,6 @@ impl Node {
             taiko,
             watchdog,
             operator,
-            metrics,
             proposal_manager,
             head_verifier,
             transaction_error_channel,

@@ -42,8 +42,6 @@ pub struct L2ExecutionLayer {
     pub bridge: Bridge::BridgeInstance<DynProvider>,
     pub signal_service: Address,
     pub chain_id: u64,
-    #[allow(dead_code)]
-    pub config: TaikoConfig,
     l2_call_signer: Arc<Signer>,
 }
 
@@ -77,7 +75,6 @@ impl L2ExecutionLayer {
             signal_service,
             chain_id,
             l2_call_signer,
-            config: taiko_config,
         })
     }
 
@@ -188,56 +185,6 @@ impl L2ExecutionLayer {
             )
             .map_err(|e| anyhow::anyhow!("Failed to decode anchor id from tx data: {}", e))?;
         Ok(tx_data._checkpoint.blockNumber.to::<u64>())
-    }
-
-    pub fn get_anchor_tx_data(data: &[u8]) -> Result<Anchor::anchorV4WithSignalSlotsCall, Error> {
-        let tx_data =
-            <Anchor::anchorV4WithSignalSlotsCall as alloy::sol_types::SolCall>::abi_decode_validate(
-                data,
-            )
-            .map_err(|e| anyhow::anyhow!("Failed to decode anchor tx data: {}", e))?;
-        Ok(tx_data)
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_head_l1_origin(&self) -> Result<u64, Error> {
-        let response = self
-            .provider
-            .raw_request::<_, serde_json::Value>(
-                std::borrow::Cow::Borrowed("taiko_headL1Origin"),
-                (),
-            )
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to fetch taiko_headL1Origin: {}", e))?;
-
-        let hex_str = response
-            .get("blockID")
-            .or_else(|| response.get("blockId"))
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Missing or invalid block id in taiko_headL1Origin response")
-            })?;
-
-        u64::from_str_radix(hex_str.trim_start_matches("0x"), 16)
-            .map_err(|e| anyhow::anyhow!("Failed to parse 'blockID' as u64: {}", e))
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_last_synced_block_params_from_geth(&self) -> Result<Checkpoint, Error> {
-        self.get_latest_anchor_transaction_input()
-            .await
-            .map_err(|e| anyhow::anyhow!("get_last_synced_block_params_from_geth: {e}"))
-            .and_then(|input| Self::decode_block_params_from_tx_data(&input))
-    }
-
-    #[allow(dead_code)]
-    pub fn decode_block_params_from_tx_data(data: &[u8]) -> Result<Checkpoint, Error> {
-        let tx_data =
-            <Anchor::anchorV4WithSignalSlotsCall as alloy::sol_types::SolCall>::abi_decode_validate(
-                data,
-            )
-            .map_err(|e| anyhow::anyhow!("Failed to decode block params from tx data: {}", e))?;
-        Ok(tx_data._checkpoint)
     }
 }
 

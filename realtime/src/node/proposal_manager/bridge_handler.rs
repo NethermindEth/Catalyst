@@ -143,8 +143,6 @@ pub struct BridgeHandler {
     taiko: Arc<Taiko>,
     rx: Receiver<UserOp>,
     status_store: UserOpStatusStore,
-    #[allow(dead_code)]
-    l1_chain_id: u64,
 }
 
 impl BridgeHandler {
@@ -153,7 +151,6 @@ impl BridgeHandler {
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
         cancellation_token: CancellationToken,
-        l1_chain_id: u64,
         last_finalized_block_number: Arc<AtomicU64>,
     ) -> Result<Self, anyhow::Error> {
         let (tx, rx) = mpsc::channel::<UserOp>(1024);
@@ -416,7 +413,6 @@ impl BridgeHandler {
             taiko,
             rx,
             status_store,
-            l1_chain_id,
         })
     }
 

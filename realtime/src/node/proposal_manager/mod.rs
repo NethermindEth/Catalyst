@@ -17,7 +17,6 @@ use anyhow::Error;
 use async_submitter::AsyncSubmitter;
 use batch_builder::BatchBuilder;
 use bridge_handler::BridgeHandler;
-use common::metrics::Metrics;
 use common::{batch_builder::BatchBuilderConfig, shared::l2_slot_info_v2::L2SlotContext};
 use common::{
     l1::{ethereum_l1::EthereumL1, traits::ELTrait},
@@ -33,8 +32,6 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
-use crate::node::L2SlotInfoV2;
-
 const MIN_ANCHOR_OFFSET: u64 = 2;
 
 pub struct BatchManager {
@@ -44,10 +41,6 @@ pub struct BatchManager {
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
     pub taiko: Arc<Taiko>,
     l1_height_lag: u64,
-    #[allow(dead_code)]
-    metrics: Arc<Metrics>,
-    #[allow(dead_code)]
-    cancel_token: CancellationToken,
     last_finalized_block_hash: B256,
     last_finalized_block_number: Arc<AtomicU64>,
     /// L1→L2 return signal slot discovered during Pass 2 (L2Direct pre-sim).
@@ -69,14 +62,12 @@ impl BatchManager {
         config: BatchBuilderConfig,
         ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
         taiko: Arc<Taiko>,
-        metrics: Arc<Metrics>,
         cancel_token: CancellationToken,
         last_finalized_block_hash: B256,
         raiko_client: RaikoClient,
         basefee_sharing_pctg: u8,
         proof_request_bypass: bool,
         bridge_rpc_addr: String,
-        l1_chain_id: u64,
     ) -> Result<Self, Error> {
         info!(
             "Batch builder config:\n\
@@ -108,7 +99,6 @@ impl BatchManager {
                 ethereum_l1.clone(),
                 taiko.clone(),
                 cancel_token.clone(),
-                l1_chain_id,
                 last_finalized_block_number.clone(),
             )
             .await?,
@@ -122,18 +112,12 @@ impl BatchManager {
         );
 
         Ok(Self {
-            batch_builder: BatchBuilder::new(
-                config,
-                ethereum_l1.slot_clock.clone(),
-                metrics.clone(),
-            ),
+            batch_builder: BatchBuilder::new(config, ethereum_l1.slot_clock.clone()),
             async_submitter,
             bridge_handler,
             ethereum_l1,
             taiko,
             l1_height_lag,
-            metrics,
-            cancel_token,
             last_finalized_block_hash,
             last_finalized_block_number,
             pending_return_signal: None,
@@ -547,7 +531,6 @@ impl BatchManager {
         self.batch_builder = batch_builder::BatchBuilder::new(
             self.batch_builder.get_config().clone(),
             self.ethereum_l1.slot_clock.clone(),
-            self.metrics.clone(),
         );
 
         Ok(())
@@ -624,23 +607,5 @@ impl BatchManager {
 
         self.last_finalized_block_hash = last_finalized_hash;
         Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub async fn reanchor_block(
-        &mut self,
-        pending_tx_list: PreBuiltTxList,
-        l2_slot_info: L2SlotInfoV2,
-    ) -> Result<BuildPreconfBlockResponse, Error> {
-        let l2_slot_context = L2SlotContext {
-            info: l2_slot_info,
-            end_of_sequencing: false,
-        };
-
-        let block = self
-            .add_new_l2_block(pending_tx_list, &l2_slot_context, OperationType::Reanchor)
-            .await?;
-
-        Ok(block)
     }
 }

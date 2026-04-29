@@ -12,10 +12,6 @@ pub struct RaikoClient {
     pub base_url: String,
     pub api_key: Option<String>,
     pub proof_type: ProofType,
-    #[allow(dead_code)]
-    l2_network: String,
-    #[allow(dead_code)]
-    l1_network: String,
     poll_interval: Duration,
     max_retries: u32,
 }
@@ -105,8 +101,6 @@ impl RaikoClient {
             base_url: config.raiko_url.clone(),
             api_key: config.raiko_api_key.clone(),
             proof_type: config.proof_type,
-            l2_network: config.raiko_network.clone(),
-            l1_network: config.raiko_l1_network.clone(),
             poll_interval: Duration::from_millis(config.raiko_poll_interval_ms),
             max_retries: config.raiko_max_retries,
         }

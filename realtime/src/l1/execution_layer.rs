@@ -3,7 +3,6 @@ use super::proposal_tx_builder::ProposalTxBuilder;
 use super::protocol_config::ProtocolConfig;
 use crate::l1::bindings::RealTimeInbox::{self, RealTimeInboxInstance};
 use crate::node::proposal_manager::proposal::Proposal;
-use crate::raiko::RaikoClient;
 use crate::shared_abi::bindings::{
     Bridge, Bridge::MessageSent, IBridge::Message, SignalService::SignalSent,
 };
@@ -45,8 +44,6 @@ pub struct ExecutionLayer {
     pub transaction_monitor: TransactionMonitor,
     contract_addresses: ContractAddresses,
     realtime_inbox: RealTimeInboxInstance<DynProvider>,
-    #[allow(dead_code)]
-    raiko_client: RaikoClient,
     proof_type: crate::l1::bindings::ProofType,
     mock_mode: bool,
     extra_gas_percentage: u64,
@@ -100,12 +97,10 @@ impl ELTrait for ExecutionLayer {
             realtime_inbox: specific_config.realtime_inbox,
             proposer_multicall: specific_config.proposer_multicall,
             bridge: specific_config.bridge,
-            signal_service: specific_config.signal_service,
         };
 
         let proof_type = specific_config.proof_type;
         let mock_mode = specific_config.mock_mode;
-        let raiko_client = specific_config.raiko_client;
         let extra_gas_percentage = common_config.extra_gas_percentage;
 
         Ok(Self {
@@ -115,7 +110,6 @@ impl ELTrait for ExecutionLayer {
             transaction_monitor,
             contract_addresses,
             realtime_inbox,
-            raiko_client,
             proof_type,
             mock_mode,
             extra_gas_percentage,
@@ -182,11 +176,6 @@ impl PreconfOperator for ExecutionLayer {
 }
 
 impl ExecutionLayer {
-    #[allow(dead_code)]
-    pub fn get_raiko_client(&self) -> &RaikoClient {
-        &self.raiko_client
-    }
-
     /// Returns a clone of the configured contract addresses (L1 inbox,
     /// bridge, signal service, proposer multicall). Useful for callers that
     /// need to reference these during block building.

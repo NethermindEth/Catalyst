@@ -138,17 +138,11 @@ pub async fn create_realtime_node(
     let bridge_rpc_addr = realtime_config.bridge_rpc_addr.clone();
     let raiko_client = raiko::RaikoClient::new(&realtime_config);
 
-    let l1_chain_id = {
-        use common::l1::traits::ELTrait;
-        ethereum_l1.execution_layer.common().chain_id()
-    };
-
     let node = Node::new(
         node_config,
         cancel_token.clone(),
         ethereum_l1.clone(),
         taiko.clone(),
-        metrics.clone(),
         batch_builder_config,
         transaction_error_receiver,
         fork_info,
@@ -158,7 +152,6 @@ pub async fn create_realtime_node(
         preconf_only,
         proof_request_bypass,
         bridge_rpc_addr,
-        l1_chain_id,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;

@@ -6,11 +6,7 @@ use crate::node::proposal_manager::{
 };
 use alloy::primitives::{B256, FixedBytes};
 use anyhow::Error;
-use common::metrics::Metrics;
-use common::{
-    batch_builder::BatchBuilderConfig,
-    shared::l2_block_v2::{L2BlockV2, L2BlockV2Draft},
-};
+use common::{batch_builder::BatchBuilderConfig, shared::l2_block_v2::L2BlockV2Draft};
 use common::{l1::slot_clock::SlotClock, shared::anchor_block_info::AnchorBlockInfo};
 use std::{collections::VecDeque, sync::Arc};
 use tracing::{debug, info, trace, warn};
@@ -20,22 +16,15 @@ pub struct BatchBuilder {
     proposals_to_send: VecDeque<Proposal>,
     current_proposal: Option<Proposal>,
     slot_clock: Arc<SlotClock>,
-    #[allow(dead_code)]
-    metrics: Arc<Metrics>,
 }
 
 impl BatchBuilder {
-    pub fn new(
-        config: BatchBuilderConfig,
-        slot_clock: Arc<SlotClock>,
-        metrics: Arc<Metrics>,
-    ) -> Self {
+    pub fn new(config: BatchBuilderConfig, slot_clock: Arc<SlotClock>) -> Self {
         Self {
             config,
             proposals_to_send: VecDeque::new(),
             current_proposal: None,
             slot_clock,
-            metrics,
         }
     }
 
@@ -120,19 +109,6 @@ impl BatchBuilder {
         }
     }
 
-    /// Add a pre-built L2BlockV2 directly to the current proposal.
-    /// Used during recovery to bypass the draft/payload flow.
-    #[allow(dead_code)]
-    pub fn add_recovered_l2_block(&mut self, l2_block: L2BlockV2) -> Result<(), Error> {
-        if let Some(current_proposal) = self.current_proposal.as_mut() {
-            current_proposal.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
-            current_proposal.l2_blocks.push(l2_block);
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("No current batch for recovered block"))
-        }
-    }
-
     pub fn add_user_op(&mut self, user_op_data: UserOp) -> Result<&Proposal, Error> {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
             current_proposal.user_ops.push(user_op_data.clone());
@@ -140,16 +116,6 @@ impl BatchBuilder {
             Ok(current_proposal)
         } else {
             Err(anyhow::anyhow!("No current batch"))
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn add_l2_user_op_id(&mut self, id: u64) -> Result<(), Error> {
-        if let Some(current_proposal) = self.current_proposal.as_mut() {
-            current_proposal.l2_user_op_ids.push(id);
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("No current batch for L2 user op id"))
         }
     }
 
