@@ -225,7 +225,7 @@ impl TransactionMonitorThread {
 
     fn notify_result(self, success: bool) {
         if let Err(err) = self.tx_result_notifier.send(success) {
-            error!("Failed to send transaction result signal: {}", err);
+            debug!("Transaction result ({err}) signal dropped (receiver not listening)");
         }
     }
 
