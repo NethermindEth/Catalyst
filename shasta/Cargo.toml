@@ -14,17 +14,12 @@ axum = { workspace = true }
 common = { workspace = true }
 hex = { workspace = true }
 pacaya = { workspace = true }
-reqwest = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 taiko_alethia_reth = { workspace = true }
 taiko_bindings = { workspace = true }
 taiko_protocol = { workspace = true }
-taiko_rpc = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 mockito = { workspace = true }

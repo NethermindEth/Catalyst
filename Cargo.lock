@@ -2194,7 +2194,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.37.3"
+version = "1.37.4"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -2204,7 +2204,6 @@ dependencies = [
  "axum",
  "chrono",
  "dotenvy",
- "ecdsa",
  "elliptic-curve",
  "flate2",
  "futures-util",
@@ -2217,7 +2216,6 @@ dependencies = [
  "prometheus",
  "protocol",
  "reqwest 0.13.2",
- "secp256k1 0.30.0",
  "serde",
  "serde_json",
  "strum",
@@ -5675,22 +5673,15 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.37.3"
+version = "1.37.4"
 dependencies = [
- "alloy",
- "alloy-json-rpc",
  "anyhow",
  "axum",
- "chrono",
- "clap",
  "common",
- "pacaya",
  "permissionless",
  "rustls",
- "serde_json",
  "shasta",
  "tokio",
- "tokio-util",
  "tracing",
 ]
 
@@ -6273,7 +6264,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.37.3"
+version = "1.37.4"
 dependencies = [
  "anyhow",
  "discv5 0.10.2",
@@ -6285,24 +6276,18 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.37.3"
+version = "1.37.4"
 dependencies = [
  "alloy",
- "alloy-json-rpc",
- "alloy-rlp",
  "anyhow",
  "chrono",
  "common",
  "hex",
  "mockito",
- "protocol",
- "reqwest 0.13.2",
  "serde",
  "serde_json",
  "tokio",
- "tokio-util",
  "tracing",
- "tracing-subscriber 0.3.23",
 ]
 
 [[package]]
@@ -6406,26 +6391,22 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.37.3"
+version = "1.37.4"
 dependencies = [
  "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=637f7a150f72fe8d6cc5949a41aebb638a5305cf)",
  "alloy",
  "anyhow",
  "bindings",
- "blst",
  "common",
  "pacaya",
  "preconfirmation-driver",
  "preconfirmation-types",
  "protocol",
- "reqwest 0.13.2",
- "rustls",
  "secp256k1 0.30.0",
  "serde_json",
  "shasta",
  "ssz_rs",
  "tokio",
- "tokio-util",
  "tracing",
  "urc",
 ]
@@ -10161,7 +10142,7 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.37.3"
+version = "1.37.4"
 dependencies = [
  "alethia-reth-consensus 0.6.0 (git+https://github.com/taikoxyz/alethia-reth.git?rev=637f7a150f72fe8d6cc5949a41aebb638a5305cf)",
  "alloy",
@@ -10175,14 +10156,9 @@ dependencies = [
  "pacaya",
  "protocol",
  "rand 0.10.1",
- "reqwest 0.13.2",
- "rpc",
- "serde",
  "serde_json",
  "tokio",
- "tokio-util",
  "tracing",
- "tracing-subscriber 0.3.23",
 ]
 
 [[package]]
@@ -11441,10 +11417,9 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.37.3"
+version = "1.37.4"
 dependencies = [
  "alloy",
- "alloy-json-rpc",
  "anyhow",
  "blst",
  "clap",
