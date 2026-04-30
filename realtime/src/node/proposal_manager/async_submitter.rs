@@ -73,11 +73,16 @@ impl AsyncSubmitter {
 
     /// Submit a proposal asynchronously. Spawns a background task that fetches the ZK proof
     /// from Raiko and then sends the L1 transaction. Results are retrieved via `try_recv_result`.
-    pub fn submit(&mut self, proposal: Proposal, status_store: Option<UserOpStatusStore>) {
-        assert!(
-            !self.is_busy(),
-            "Cannot submit while another submission is in flight"
-        );
+    pub fn submit(
+        &mut self,
+        proposal: Proposal,
+        status_store: Option<UserOpStatusStore>,
+    ) -> Result<(), Error> {
+        if self.is_busy() {
+            return Err(anyhow::anyhow!(
+                "Cannot submit while another submission is in flight"
+            ));
+        }
 
         let (result_tx, result_rx) = oneshot::channel();
         let raiko_client = self.raiko_client.clone();
@@ -129,6 +134,7 @@ impl AsyncSubmitter {
         });
 
         self.in_flight = Some(InFlightSubmission { result_rx, handle });
+        Ok(())
     }
 
     pub fn abort(&mut self) {

@@ -497,8 +497,7 @@ impl L1BridgeHandlerOps for ExecutionLayer {
     }
 }
 
-/// `Bridge.sendMessage(Message)` selector.
-const SEND_MESSAGE_SELECTOR: [u8; 4] = [0x1b, 0xdb, 0x00, 0x37];
+use crate::shared_abi::SEND_MESSAGE_SELECTOR;
 
 /// Recursively search call frames for a CALL to `bridge_address` with the
 /// `sendMessage` function selector. Returns the decoded `IBridge.Message`

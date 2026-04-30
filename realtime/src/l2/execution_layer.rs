@@ -33,7 +33,7 @@ use common::{
 };
 use pacaya::l2::config::TaikoConfig;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 pub struct L2ExecutionLayer {
     common: ExecutionLayerCommon,
@@ -140,6 +140,10 @@ impl L2ExecutionLayer {
         common::crypto::fixed_k_signer::sign_hash_deterministic(GOLDEN_TOUCH_PRIVATE_KEY, hash)
     }
 
+    /// Stubbed out — the realtime fork does not run the funds_controller flow
+    /// (it has no L2→L1 bridge sweep), but `Taiko` must still implement the
+    /// `Bridgeable` trait. Return an explicit error so accidental wiring is
+    /// noisy instead of silently dropping ETH.
     pub async fn transfer_eth_from_l2_to_l1(
         &self,
         _amount: u128,
@@ -147,8 +151,9 @@ impl L2ExecutionLayer {
         _preconfer_address: Address,
         _bridge_relayer_fee: u64,
     ) -> Result<(), Error> {
-        warn!("Implement bridge transfer logic here");
-        Ok(())
+        Err(anyhow::anyhow!(
+            "transfer_eth_from_l2_to_l1 is not implemented for the realtime fork"
+        ))
     }
 
     pub async fn get_last_synced_anchor_block_id_from_geth(&self) -> Result<u64, Error> {
@@ -191,7 +196,11 @@ impl L2ExecutionLayer {
 // Surge: L2 EL ops for Bridge Handler
 
 pub trait L2BridgeHandlerOps {
-    async fn construct_l2_call_tx(&self, message: Message) -> Result<Transaction, Error>;
+    async fn construct_l2_call_tx(
+        &self,
+        message: Message,
+        base_fee: u64,
+    ) -> Result<Transaction, Error>;
     async fn find_message_and_signal_slot(
         &self,
         block_id: u64,
@@ -205,7 +214,11 @@ pub trait L2BridgeHandlerOps {
 }
 
 impl L2BridgeHandlerOps for L2ExecutionLayer {
-    async fn construct_l2_call_tx(&self, message: Message) -> Result<Transaction, Error> {
+    async fn construct_l2_call_tx(
+        &self,
+        message: Message,
+        base_fee: u64,
+    ) -> Result<Transaction, Error> {
         use alloy::signers::local::PrivateKeySigner;
         use std::str::FromStr;
 
@@ -223,7 +236,7 @@ impl L2BridgeHandlerOps for L2ExecutionLayer {
             .bridge
             .processMessage(message, Bytes::new())
             .gas(3_000_000)
-            .max_fee_per_gas(1_000_000_000)
+            .max_fee_per_gas(u128::from(base_fee))
             .max_priority_fee_per_gas(0)
             .nonce(nonce)
             .chain_id(self.chain_id);
@@ -372,10 +385,7 @@ impl L2BridgeHandlerOps for L2ExecutionLayer {
 
 // Surge: L2 mempool tx scanning and simulation
 
-/// `Bridge.sendMessage(Message)` selector — used for call-based detection
-/// in the trace tree because the L2 bridge is behind a DELEGATECALL proxy
-/// and the Nethermind callTracer doesn't surface event logs from proxied calls.
-const SEND_MESSAGE_SELECTOR: [u8; 4] = [0x1b, 0xdb, 0x00, 0x37];
+use crate::shared_abi::SEND_MESSAGE_SELECTOR;
 
 impl L2ExecutionLayer {
     /// Trace a transaction to detect any `Bridge.sendMessage` call it makes.

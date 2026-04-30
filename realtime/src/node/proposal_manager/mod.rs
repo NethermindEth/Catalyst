@@ -68,6 +68,7 @@ impl BatchManager {
         basefee_sharing_pctg: u8,
         proof_request_bypass: bool,
         bridge_rpc_addr: String,
+        user_op_status_db_path: String,
     ) -> Result<Self, Error> {
         info!(
             "Batch builder config:\n\
@@ -100,6 +101,7 @@ impl BatchManager {
                 taiko.clone(),
                 cancel_token.clone(),
                 last_finalized_block_number.clone(),
+                &user_op_status_db_path,
             )
             .await?,
         ));
@@ -183,7 +185,7 @@ impl BatchManager {
             batch.last_finalized_block_hash,
         );
 
-        self.async_submitter.submit(batch, Some(status_store));
+        self.async_submitter.submit(batch, Some(status_store))?;
         Ok(())
     }
 
@@ -289,6 +291,7 @@ impl BatchManager {
     async fn add_pending_user_ops_to_draft_block(
         &mut self,
         l2_draft_block: &mut L2BlockV2Draft,
+        base_fee: u64,
     ) -> Result<Option<(UserOp, FixedBytes<32>)>, anyhow::Error> {
         let routed = {
             let mut handler = self.bridge_handler.lock().await;
@@ -304,7 +307,7 @@ impl BatchManager {
         let l2_call_bridge_tx = self
             .taiko
             .l2_execution_layer()
-            .construct_l2_call_tx(routed.l2_call.message_from_l1)
+            .construct_l2_call_tx(routed.l2_call.message_from_l1, base_fee)
             .await?;
 
         info!("Inserting processMessage tx into L2 block");
@@ -399,15 +402,20 @@ impl BatchManager {
     ) -> Result<BuildPreconfBlockResponse, Error> {
         let mut anchor_signal_slots: Vec<FixedBytes<32>> = vec![];
 
-        // Process L1→L2 UserOps (via surge_sendUserOp RPC)
+        // Stage additions for the in-flight proposal but defer committing them
+        // to `batch_builder` until `advance_head_to_new_l2_block` succeeds.
+        // Otherwise a failed advance leaks state (signal slots / user ops)
+        // into the proposal that does not correspond to any built L2 block.
+
         debug!("Checking for pending UserOps (L1→L2 deposits)");
-        if let Some((user_op_data, signal_slot)) = self
-            .add_pending_user_ops_to_draft_block(&mut l2_draft_block)
-            .await?
-        {
-            self.batch_builder.add_user_op(user_op_data)?;
-            self.batch_builder.add_signal_slot(signal_slot)?;
-            anchor_signal_slots.push(signal_slot);
+        let pending_user_op = self
+            .add_pending_user_ops_to_draft_block(
+                &mut l2_draft_block,
+                l2_slot_context.info.base_fee(),
+            )
+            .await?;
+        if let Some((_, signal_slot)) = &pending_user_op {
+            anchor_signal_slots.push(*signal_slot);
         } else {
             debug!("No L1→L2 UserOps pending");
         }
@@ -420,28 +428,16 @@ impl BatchManager {
 
         // Copy rather than take — the pre-simulated slot is passed as a hint
         // to `find_l1_call` after preconf so the L1Call's requiredReturnSignal
-        // matches the slot we inject into the anchor. Cleared below.
+        // matches the slot we inject into the anchor. The take() happens only
+        // in the Ok arm below so a failed advance lets the next attempt
+        // re-discover the same slot from the mempool scan.
         let pending_return_slot_hint = self.pending_return_signal;
-        if let Some(return_slot) = self.pending_return_signal.take() {
+        if let Some(return_slot) = self.pending_return_signal {
             info!(
                 "Injecting L2→L1→L2 return signal into anchor fast signals: slot={}",
                 return_slot
             );
-            self.batch_builder.add_signal_slot(return_slot)?;
             anchor_signal_slots.push(return_slot);
-        }
-
-        if let Some(tx_hash) = self.pending_mempool_tx_hash.take() {
-            self.batch_builder.add_l2_mempool_tx_hash(tx_hash)?;
-            let status_store = self.bridge_handler.lock().await.status_store();
-            status_store.set_by_hash(
-                tx_hash,
-                &crate::node::proposal_manager::bridge_handler::UserOpStatus::Pending,
-            );
-            info!(
-                "Tracking L2→L1→L2 mempool tx {} under status store (Pending)",
-                tx_hash
-            );
         }
 
         let payload = self.batch_builder.add_l2_draft_block(l2_draft_block)?;
@@ -457,6 +453,27 @@ impl BatchManager {
             .await
         {
             Ok(preconfed_block) => {
+                // Commit staged additions now that the L2 block is built.
+                if let Some((user_op_data, signal_slot)) = pending_user_op {
+                    self.batch_builder.add_user_op(user_op_data)?;
+                    self.batch_builder.add_signal_slot(signal_slot)?;
+                }
+                if let Some(return_slot) = self.pending_return_signal.take() {
+                    self.batch_builder.add_signal_slot(return_slot)?;
+                }
+                if let Some(tx_hash) = self.pending_mempool_tx_hash.take() {
+                    self.batch_builder.add_l2_mempool_tx_hash(tx_hash)?;
+                    let status_store = self.bridge_handler.lock().await.status_store();
+                    status_store.set_by_hash(
+                        tx_hash,
+                        &crate::node::proposal_manager::bridge_handler::UserOpStatus::Pending,
+                    );
+                    info!(
+                        "Tracking L2→L1→L2 mempool tx {} under status store (Pending)",
+                        tx_hash
+                    );
+                }
+
                 self.batch_builder.set_proposal_checkpoint(Checkpoint {
                     blockNumber: U48::from(preconfed_block.number),
                     stateRoot: preconfed_block.state_root,
@@ -485,6 +502,11 @@ impl BatchManager {
             Err(err) => {
                 error!("Failed to advance head to new L2 block: {}", err);
                 self.remove_last_l2_block();
+                // Leave `pending_return_signal` / `pending_mempool_tx_hash`
+                // intact so the next attempt re-injects them. The L1→L2 user op
+                // was consumed from the bridge handler queue and is dropped on
+                // this failure — it is not committed to the proposal so no
+                // L1/L2 state mismatch occurs.
                 Err(anyhow::anyhow!(
                     "Failed to advance head to new L2 block: {}",
                     err

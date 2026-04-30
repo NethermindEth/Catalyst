@@ -151,9 +151,10 @@ impl BridgeHandler {
         taiko: Arc<Taiko>,
         cancellation_token: CancellationToken,
         last_finalized_block_number: Arc<AtomicU64>,
+        status_store_path: &str,
     ) -> Result<Self, anyhow::Error> {
         let (tx, rx) = mpsc::channel::<UserOp>(1024);
-        let status_store = UserOpStatusStore::open("data/user_op_status")?;
+        let status_store = UserOpStatusStore::open(status_store_path)?;
 
         let rpc_context = BridgeRpcContext {
             tx,

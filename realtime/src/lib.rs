@@ -136,6 +136,7 @@ pub async fn create_realtime_node(
     let preconf_only = realtime_config.preconf_only;
     let proof_request_bypass = realtime_config.proof_request_bypass;
     let bridge_rpc_addr = realtime_config.bridge_rpc_addr.clone();
+    let user_op_status_db_path = realtime_config.user_op_status_db_path.clone();
     let raiko_client = raiko::RaikoClient::new(&realtime_config);
 
     let node = Node::new(
@@ -152,6 +153,7 @@ pub async fn create_realtime_node(
         preconf_only,
         proof_request_bypass,
         bridge_rpc_addr,
+        user_op_status_db_path,
     )
     .await
     .map_err(|e| anyhow::anyhow!("Failed to create Node: {}", e))?;

@@ -16,7 +16,9 @@ pub struct RealtimeConfig {
     pub proof_type: ProofType,
     pub raiko_poll_interval_ms: u64,
     pub raiko_max_retries: u32,
+    pub raiko_timeout_sec: u64,
     pub bridge_rpc_addr: String,
+    pub user_op_status_db_path: String,
     pub preconf_only: bool,
     pub proof_request_bypass: bool,
     /// When true, overrides the SubProof bit flag to MOCK_ECDSA (0b00000001)
@@ -56,8 +58,18 @@ impl ConfigTrait for RealtimeConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(60);
 
+        let raiko_timeout_sec: u64 = std::env::var("RAIKO_TIMEOUT_SEC")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30);
+
+        // Default to loopback so the unauthenticated surge_* JSON-RPC endpoints
+        // are not exposed externally unless an operator opts in.
         let bridge_rpc_addr =
-            std::env::var("BRIDGE_RPC_ADDR").unwrap_or_else(|_| "0.0.0.0:4545".to_string());
+            std::env::var("BRIDGE_RPC_ADDR").unwrap_or_else(|_| "127.0.0.1:4545".to_string());
+
+        let user_op_status_db_path = std::env::var("USER_OP_STATUS_DB_PATH")
+            .unwrap_or_else(|_| "data/user_op_status".to_string());
 
         let preconf_only = std::env::var("PRECONF_ONLY")
             .map(|v| v.to_lowercase() != "false" && v != "0")
@@ -81,7 +93,9 @@ impl ConfigTrait for RealtimeConfig {
             proof_type,
             raiko_poll_interval_ms,
             raiko_max_retries,
+            raiko_timeout_sec,
             bridge_rpc_addr,
+            user_op_status_db_path,
             preconf_only,
             proof_request_bypass,
             mock_mode,
@@ -94,13 +108,20 @@ impl fmt::Display for RealtimeConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "RealTime inbox: {:#?}", self.realtime_inbox)?;
         writeln!(f, "Proposer multicall: {:#?}", self.proposer_multicall)?;
+        writeln!(f, "L1 bridge: {:#?}", self.bridge)?;
+        writeln!(f, "L2 signal service: {:#?}", self.l2_signal_service)?;
         writeln!(f, "Raiko URL: {}", self.raiko_url)?;
+        writeln!(f, "Raiko max retries: {}", self.raiko_max_retries)?;
+        writeln!(f, "Raiko timeout: {}s", self.raiko_timeout_sec)?;
         writeln!(
             f,
             "Proof type: {} (bit flag: {})",
             self.proof_type,
             self.proof_type.proof_bit_flag()
         )?;
+        writeln!(f, "Mock mode: {}", self.mock_mode)?;
+        writeln!(f, "Bridge RPC addr: {}", self.bridge_rpc_addr)?;
+        writeln!(f, "User op status DB path: {}", self.user_op_status_db_path)?;
         writeln!(f, "Preconf only: {}", self.preconf_only)?;
         writeln!(f, "Proof request bypass: {}", self.proof_request_bypass)?;
         Ok(())

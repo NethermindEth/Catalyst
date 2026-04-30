@@ -55,6 +55,7 @@ impl Node {
         preconf_only: bool,
         proof_request_bypass: bool,
         bridge_rpc_addr: String,
+        user_op_status_db_path: String,
     ) -> Result<Self, Error> {
         let operator = Operator::new(
             ethereum_l1.execution_layer.clone(),
@@ -85,6 +86,7 @@ impl Node {
             basefee_sharing_pctg,
             proof_request_bypass,
             bridge_rpc_addr,
+            user_op_status_db_path,
         )
         .await
         .map_err(|e| anyhow::anyhow!("Failed to create BatchManager: {}", e))?;

@@ -96,8 +96,12 @@ pub struct RaikoProof {
 
 impl RaikoClient {
     pub fn new(config: &RealtimeConfig) -> Self {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(config.raiko_timeout_sec))
+            .build()
+            .expect("reqwest client builder with a timeout should not fail");
         Self {
-            client: Client::new(),
+            client,
             base_url: config.raiko_url.clone(),
             api_key: config.raiko_api_key.clone(),
             proof_type: config.proof_type,
