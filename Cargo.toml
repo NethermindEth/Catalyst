@@ -5,6 +5,7 @@ members = [
     "node",
     "pacaya",
     "permissionless",
+    "realtime",
     "shasta",
     "tools/p2p_boot_node",
     "urc",
@@ -13,7 +14,7 @@ resolver = "2"
 default-members = ["node"]
 
 [workspace.package]
-version = "1.37.4"
+version = "1.38.0"
 edition = "2024"
 repository = "https://github.com/NethermindEth/Catalyst"
 license = "MIT"
@@ -59,6 +60,7 @@ discv5 = { version = "0.10", default-features = false, features = ["libp2p"] }
 dotenvy = { version = "0.15", default-features = false }
 ecdsa = { version = "0.16", default-features = false }
 elliptic-curve = { version = "0.13", default-features = false }
+fjall = { version = "2" }
 flate2 = { version = "1.1", default-features = false, features = ["zlib"] }
 futures = { version = "0.3.31", default-features = false }
 futures-util = { version = "0.3", default-features = false }
@@ -85,6 +87,7 @@ permissionless = { path = "permissionless" }
 prometheus = { version = "0.14", default-features = false }
 rand = { version = "0.10", default-features = false }
 rand_core = { version = "0.9", default-features = false }
+realtime = { path = "realtime" }
 reqwest = { version = "0.13", default-features = true, features = ["json"] }
 rustls = { version = "0.23", default-features = true }
 secp256k1 = { version = "0.30", features = ["recovery", "rand"] }
