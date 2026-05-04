@@ -13,20 +13,14 @@ get_status_duration = []
 
 [dependencies]
 alloy = { workspace = true }
-alloy-json-rpc = { workspace = true }
-alloy-rlp = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 common = { workspace = true }
 hex = { workspace = true }
-reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-taiko_protocol = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 mockito = { workspace = true }

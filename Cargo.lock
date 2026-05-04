@@ -2210,7 +2210,6 @@ dependencies = [
  "axum",
  "chrono",
  "dotenvy",
- "ecdsa",
  "elliptic-curve",
  "flate2",
  "futures-util",
@@ -2223,7 +2222,6 @@ dependencies = [
  "prometheus",
  "protocol",
  "reqwest 0.13.2",
- "secp256k1 0.30.0",
  "serde",
  "serde_json",
  "strum",
@@ -5769,21 +5767,14 @@ dependencies = [
 name = "node"
 version = "1.38.0"
 dependencies = [
- "alloy",
- "alloy-json-rpc",
  "anyhow",
  "axum",
- "chrono",
- "clap",
  "common",
- "pacaya",
  "permissionless",
  "realtime",
  "rustls",
- "serde_json",
  "shasta",
  "tokio",
- "tokio-util",
  "tracing",
 ]
 
@@ -6381,21 +6372,15 @@ name = "pacaya"
 version = "1.38.0"
 dependencies = [
  "alloy",
- "alloy-json-rpc",
- "alloy-rlp",
  "anyhow",
  "chrono",
  "common",
  "hex",
  "mockito",
- "protocol",
- "reqwest 0.13.2",
  "serde",
  "serde_json",
  "tokio",
- "tokio-util",
  "tracing",
- "tracing-subscriber 0.3.23",
 ]
 
 [[package]]
@@ -6523,20 +6508,16 @@ dependencies = [
  "alloy",
  "anyhow",
  "bindings",
- "blst",
  "common",
  "pacaya",
  "preconfirmation-driver",
  "preconfirmation-types",
  "protocol",
- "reqwest 0.13.2",
- "rustls",
  "secp256k1 0.30.0",
  "serde_json",
  "shasta",
  "ssz_rs",
  "tokio",
- "tokio-util",
  "tracing",
  "urc",
 ]
@@ -10337,14 +10318,9 @@ dependencies = [
  "pacaya",
  "protocol",
  "rand 0.10.1",
- "reqwest 0.13.2",
- "rpc",
- "serde",
  "serde_json",
  "tokio",
- "tokio-util",
  "tracing",
- "tracing-subscriber 0.3.23",
 ]
 
 [[package]]
@@ -11612,7 +11588,6 @@ name = "urc"
 version = "1.38.0"
 dependencies = [
  "alloy",
- "alloy-json-rpc",
  "anyhow",
  "blst",
  "clap",
