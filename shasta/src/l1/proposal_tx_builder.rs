@@ -1,5 +1,6 @@
 use alloy::{
     consensus::SidecarBuilder,
+    eips::BlockNumberOrTag,
     eips::eip7594::BlobTransactionSidecarEip7594,
     network::{TransactionBuilder, TransactionBuilder7594},
     primitives::{
@@ -74,6 +75,7 @@ pub struct ProposalTxBuilder {
     from: Address,
     to: Address,
     num_forced_inclusion: u16,
+    slot_duration_sec: u64,
 }
 
 impl ProposalTxBuilder {
@@ -84,6 +86,7 @@ impl ProposalTxBuilder {
         from: Address,
         to: Address,
         num_forced_inclusion: u16,
+        slot_duration_sec: u64,
     ) -> Self {
         Self {
             provider,
@@ -92,10 +95,35 @@ impl ProposalTxBuilder {
             from,
             to,
             num_forced_inclusion,
+            slot_duration_sec,
         }
     }
 
+    async fn get_latest_block_timestamp(&self) -> Result<u64, Error> {
+        let latest_block = self
+            .provider
+            .get_block_by_number(BlockNumberOrTag::Latest)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Latest block not found"))?;
+        Ok(latest_block.header.timestamp)
+    }
+
     async fn build_propose_tx(&self) -> Result<TransactionRequest, Error> {
+        let latest_block_timestamp = self.get_latest_block_timestamp().await?;
+        if latest_block_timestamp + self.slot_duration_sec
+            < self.l2_blocks.last().map(|b| b.timestamp_sec).unwrap_or(0)
+        {
+            // If last L2 block timestamp exceed next L1 block timestamp,
+            // we should skip proposal to prevent a Reorg and try in the next slot
+            warn!(
+                "Latest block timestamp ({}) is more than {} seconds behind the last L2 block timestamp ({})",
+                latest_block_timestamp,
+                self.slot_duration_sec,
+                self.l2_blocks.last().map(|b| b.timestamp_sec).unwrap_or(0)
+            );
+            return Err(anyhow::anyhow!(TransactionError::EstimationTooEarly));
+        }
+
         let tx_blob = self
             .build_propose_blob()
             .await

@@ -45,6 +45,7 @@ pub struct ExecutionLayer {
     inbox_instance: InboxInstance<DynProvider>,
     operators_cache: OperatorsCache,
     extra_gas_percentage: u64,
+    slot_duration_sec: u64,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -104,6 +105,7 @@ impl ELTrait for ExecutionLayer {
             inbox_instance,
             operators_cache,
             extra_gas_percentage: common_config.extra_gas_percentage,
+            slot_duration_sec: common_config.slot_duration_sec,
         })
     }
 
@@ -204,6 +206,7 @@ impl ExecutionLayer {
             self.common().preconfer_address(),
             self.contract_addresses.shasta_inbox,
             num_forced_inclusion,
+            self.slot_duration_sec,
         );
 
         self.transaction_monitor
