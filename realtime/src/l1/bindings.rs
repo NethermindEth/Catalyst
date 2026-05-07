@@ -30,6 +30,7 @@ sol! {
 
     struct ProposeInput {
         BlobReference blobReference;
+        uint16 numForcedInclusions;
         bytes32[] signalSlots;
         uint48 maxAnchorBlockNumber;
     }
@@ -39,6 +40,7 @@ sol! {
     /// L1 callback in the same multicall produces them).
     struct ProposeInputV2 {
         BlobReference blobReference;
+        uint16 numForcedInclusions;
         bytes32[] existingSignals;
         bytes32[] requiredReturnSignals;
         uint48 maxAnchorBlockNumber;

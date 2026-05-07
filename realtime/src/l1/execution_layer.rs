@@ -47,6 +47,8 @@ pub struct ExecutionLayer {
     proof_type: crate::l1::bindings::ProofType,
     mock_mode: bool,
     extra_gas_percentage: u64,
+    proposal_cipher: crate::privacy::ProposalCipher,
+    fi_max_per_proposal: u16,
 }
 
 impl ELTrait for ExecutionLayer {
@@ -103,6 +105,21 @@ impl ELTrait for ExecutionLayer {
         let mock_mode = specific_config.mock_mode;
         let extra_gas_percentage = common_config.extra_gas_percentage;
 
+        let proposal_cipher = match (specific_config.privacy_mode, specific_config.privacy_symmetric_key) {
+            (true, Some(key)) => crate::privacy::ProposalCipher::enabled(key),
+            (true, None) => {
+                return Err(anyhow!(
+                    "SURGE_PRIVACY_MODE=true but no SURGE_PRIVACY_SYMMETRIC_KEY configured"
+                ));
+            }
+            (false, _) => crate::privacy::ProposalCipher::disabled(),
+        };
+        if proposal_cipher.is_enabled() {
+            tracing::info!("Proposal blob privacy mode: enabled (AES-256-GCM, scheme 0x01)");
+        } else {
+            tracing::info!("Proposal blob privacy mode: disabled (scheme 0x00)");
+        }
+
         Ok(Self {
             common,
             provider,
@@ -113,11 +130,33 @@ impl ELTrait for ExecutionLayer {
             proof_type,
             mock_mode,
             extra_gas_percentage,
+            proposal_cipher,
+            fi_max_per_proposal: specific_config.fi_max_per_proposal,
         })
     }
 
     fn common(&self) -> &ExecutionLayerCommon {
         &self.common
+    }
+}
+
+impl ExecutionLayer {
+    /// Cipher used to wrap compressed manifests before they become blob payloads.
+    /// Cheap to clone (just an `Option<[u8; 32]>`).
+    pub fn proposal_cipher(&self) -> crate::privacy::ProposalCipher {
+        self.proposal_cipher.clone()
+    }
+
+    /// Reads the FI queue head/tail from the RealTimeInbox. Used by the proposer to
+    /// decide how many forced inclusions to consume in the next proposal.
+    pub async fn get_forced_inclusion_state(&self) -> Result<(u64, u64), Error> {
+        let res = self
+            .realtime_inbox
+            .getForcedInclusionState()
+            .call()
+            .await
+            .map_err(|e| anyhow!("getForcedInclusionState failed: {e}"))?;
+        Ok((res.head_.to::<u64>(), res.tail_.to::<u64>()))
     }
 }
 
@@ -196,11 +235,34 @@ impl ExecutionLayer {
             batch.zk_proof.is_some(),
         );
 
+        // Decide how many forced inclusions to consume from the queue. Capped by
+        // `fi_max_per_proposal`; the contract enforces consumption of any "due"
+        // FI (one whose timestamp + forcedInclusionDelay has passed) — so if the
+        // due-count exceeds the cap, the propose call will revert and the
+        // operator must increase the cap.
+        let (head, tail) = match self.get_forced_inclusion_state().await {
+            Ok(state) => state,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to read forced-inclusion state, proceeding with 0: {e}"
+                );
+                (0, 0)
+            }
+        };
+        let pending = tail.saturating_sub(head);
+        let num_forced_inclusions = pending.min(u64::from(self.fi_max_per_proposal)) as u16;
+        if num_forced_inclusions > 0 {
+            info!(
+                "Consuming {num_forced_inclusions} forced inclusion(s) (queue head={head}, tail={tail})"
+            );
+        }
+
         let builder = ProposalTxBuilder::new(
             self.provider.clone(),
             self.extra_gas_percentage,
             self.proof_type,
             self.mock_mode,
+            self.proposal_cipher.clone(),
         );
 
         let tx = builder
@@ -208,6 +270,7 @@ impl ExecutionLayer {
                 batch,
                 self.preconfer_address,
                 self.contract_addresses.clone(),
+                num_forced_inclusions,
             )
             .await?;
 

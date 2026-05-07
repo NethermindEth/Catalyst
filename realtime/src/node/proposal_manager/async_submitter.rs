@@ -179,7 +179,17 @@ async fn submission_task(
             blocks: block_manifests,
         };
         let manifest_data = manifest.encode_and_compress()?;
-        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
+
+        // Privacy: wrap with the same cipher used by the L1 proposal_tx_builder.
+        // Both sites MUST agree, otherwise the blob hashes Raiko computes here
+        // will not match the hashes recorded on L1 by `propose`, and the proof's
+        // commitment will diverge from on-chain state.
+        let blob_payload = ethereum_l1
+            .execution_layer
+            .proposal_cipher()
+            .wrap(&manifest_data)?;
+
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&blob_payload);
         let sidecar: alloy::eips::eip7594::BlobTransactionSidecarEip7594 =
             sidecar_builder.build_7594()?;
 

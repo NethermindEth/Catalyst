@@ -35,6 +35,7 @@ pub struct ProposalTxBuilder {
     extra_gas_percentage: u64,
     proof_type: ProofType,
     mock_mode: bool,
+    cipher: crate::privacy::ProposalCipher,
 }
 
 impl ProposalTxBuilder {
@@ -43,12 +44,14 @@ impl ProposalTxBuilder {
         extra_gas_percentage: u64,
         proof_type: ProofType,
         mock_mode: bool,
+        cipher: crate::privacy::ProposalCipher,
     ) -> Self {
         Self {
             provider,
             extra_gas_percentage,
             proof_type,
             mock_mode,
+            cipher,
         }
     }
 
@@ -67,9 +70,10 @@ impl ProposalTxBuilder {
         batch: Proposal,
         from: Address,
         contract_addresses: ContractAddresses,
+        num_forced_inclusions: u16,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
-            .build_propose_blob(batch, from, contract_addresses)
+            .build_propose_blob(batch, from, contract_addresses, num_forced_inclusions)
             .await?;
 
         let tx_blob_gas =
@@ -94,6 +98,7 @@ impl ProposalTxBuilder {
         batch: Proposal,
         from: Address,
         contract_addresses: ContractAddresses,
+        num_forced_inclusions: u16,
     ) -> Result<TransactionRequest, Error> {
         // Collect required return signals from all l1_calls that expect an L1→L2
         // return signal to be produced by their invoked target. When non-empty, the
@@ -118,6 +123,7 @@ impl ProposalTxBuilder {
                 contract_addresses.realtime_inbox,
                 use_deferred,
                 &required_return_signals,
+                num_forced_inclusions,
             )
             .await?;
 
@@ -222,6 +228,7 @@ impl ProposalTxBuilder {
         inbox_address: Address,
         use_deferred: bool,
         required_return_signals: &[alloy::primitives::FixedBytes<32>],
+        num_forced_inclusions: u16,
     ) -> Result<(Vec<Multicall::Call>, BlobTransactionSidecarEip7594), anyhow::Error> {
         let mut block_manifests = <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
         for l2_block in &batch.l2_blocks {
@@ -247,7 +254,14 @@ impl ProposalTxBuilder {
             .encode_and_compress()
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
-        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
+        // Privacy: prepend the scheme byte and (if enabled) AES-256-GCM-encrypt the
+        // compressed manifest. The driver and prover apply the inverse on the bytes
+        // they fetch from the beacon node. The blob hash on L1 is over these wrapped
+        // bytes; both sites (here and async_submitter) MUST use the same cipher so
+        // the L1 hash and the bytes Raiko sees stay consistent.
+        let blob_payload = self.cipher.wrap(&manifest_data)?;
+
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&blob_payload);
         let sidecar: BlobTransactionSidecarEip7594 = sidecar_builder.build_7594()?;
 
         let inbox = RealTimeInbox::new(inbox_address, self.provider.clone());
@@ -287,6 +301,7 @@ impl ProposalTxBuilder {
             // Classic propose flow
             let propose_input = ProposeInput {
                 blobReference: blob_reference,
+                numForcedInclusions: num_forced_inclusions,
                 signalSlots: batch.signal_slots.clone(),
                 maxAnchorBlockNumber: U48::from(batch.max_anchor_block_number),
             };
@@ -318,6 +333,7 @@ impl ProposalTxBuilder {
 
         let propose_input_v2 = ProposeInputV2 {
             blobReference: blob_reference,
+            numForcedInclusions: num_forced_inclusions,
             existingSignals: existing_signals,
             requiredReturnSignals: required_return_signals.to_vec(),
             maxAnchorBlockNumber: U48::from(batch.max_anchor_block_number),
