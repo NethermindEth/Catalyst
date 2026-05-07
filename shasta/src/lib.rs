@@ -95,9 +95,8 @@ pub async fn create_shasta_node(
         max_blocks_to_reanchor: shasta_config.max_blocks_to_reanchor,
         watchdog_max_counter: config.watchdog_max_counter,
     };
-        
-    let max_blocks_per_batch = if config.max_blocks_per_batch == 0
-    {
+
+    let max_blocks_per_batch = if config.max_blocks_per_batch == 0 {
         taiko_protocol::shasta::constants::DERIVATION_SOURCE_MAX_BLOCKS.try_into()?
     } else {
         config.max_blocks_per_batch
