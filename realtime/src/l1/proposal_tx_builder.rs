@@ -64,7 +64,6 @@ impl ProposalTxBuilder {
     /// `recover_from_failed_submission` (reorg back to last finalized head).
     const BLOB_TX_GAS_LIMIT: u64 = 3_000_000;
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_tx(
         &self,
         batch: Proposal,
@@ -92,7 +91,6 @@ impl ProposalTxBuilder {
         Ok(tx_blob)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_blob(
         &self,
         batch: Proposal,

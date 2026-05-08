@@ -105,7 +105,10 @@ impl ELTrait for ExecutionLayer {
         let mock_mode = specific_config.mock_mode;
         let extra_gas_percentage = common_config.extra_gas_percentage;
 
-        let proposal_cipher = match (specific_config.privacy_mode, specific_config.privacy_symmetric_key) {
+        let proposal_cipher = match (
+            specific_config.privacy_mode,
+            specific_config.privacy_symmetric_key,
+        ) {
             (true, Some(key)) => crate::privacy::ProposalCipher::enabled(key),
             (true, None) => {
                 return Err(anyhow!(
@@ -240,17 +243,21 @@ impl ExecutionLayer {
         // FI (one whose timestamp + forcedInclusionDelay has passed) — so if the
         // due-count exceeds the cap, the propose call will revert and the
         // operator must increase the cap.
-        let (head, tail) = match self.get_forced_inclusion_state().await {
-            Ok(state) => state,
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to read forced-inclusion state, proceeding with 0: {e}"
-                );
-                (0, 0)
-            }
-        };
+        //
+        // If the FI-state RPC fails, we error out and skip this slot rather than
+        // proceed with `numForcedInclusions = 0`: when there are actually due
+        // forced inclusions, the on-chain `propose` call would revert with
+        // `UnprocessedForcedInclusionIsDue`, burning blob-tx gas. Skipping the
+        // slot preserves the chain's progression and lets the next tick retry.
+        let (head, tail) = self
+            .get_forced_inclusion_state()
+            .await
+            .map_err(|e| anyhow!("FI-state RPC failed; skipping propose for this slot: {e}"))?;
         let pending = tail.saturating_sub(head);
-        let num_forced_inclusions = pending.min(u64::from(self.fi_max_per_proposal)) as u16;
+        // Bounded by `fi_max_per_proposal: u16`, so the truncating cast would be
+        // safe — but `cast_possible_truncation` is workspace-deny, so use try_from.
+        let num_forced_inclusions = u16::try_from(pending.min(u64::from(self.fi_max_per_proposal)))
+            .unwrap_or(self.fi_max_per_proposal);
         if num_forced_inclusions > 0 {
             info!(
                 "Consuming {num_forced_inclusions} forced inclusion(s) (queue head={head}, tail={tail})"

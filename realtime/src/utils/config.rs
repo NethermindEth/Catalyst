@@ -2,9 +2,10 @@ use crate::l1::bindings::ProofType;
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::config::{ConfigTrait, address_parse_error};
+use std::fmt;
 use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RealtimeConfig {
     pub realtime_inbox: Address,
     pub proposer_multicall: Address,
@@ -150,7 +151,40 @@ impl ConfigTrait for RealtimeConfig {
     }
 }
 
-use std::fmt;
+/// Manual `Debug` impl that redacts `privacy_symmetric_key`. The derived impl
+/// would print the raw 32-byte key if a `RealtimeConfig` was ever logged via
+/// `{:?}`; for a long-running process that's a leak waiting to happen.
+impl fmt::Debug for RealtimeConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RealtimeConfig")
+            .field("realtime_inbox", &self.realtime_inbox)
+            .field("proposer_multicall", &self.proposer_multicall)
+            .field("bridge", &self.bridge)
+            .field("l2_signal_service", &self.l2_signal_service)
+            .field("raiko_url", &self.raiko_url)
+            .field(
+                "raiko_api_key",
+                &self.raiko_api_key.as_ref().map(|_| "<set>"),
+            )
+            .field("proof_type", &self.proof_type)
+            .field("raiko_poll_interval_ms", &self.raiko_poll_interval_ms)
+            .field("raiko_max_retries", &self.raiko_max_retries)
+            .field("raiko_timeout_sec", &self.raiko_timeout_sec)
+            .field("bridge_rpc_addr", &self.bridge_rpc_addr)
+            .field("user_op_status_db_path", &self.user_op_status_db_path)
+            .field("preconf_only", &self.preconf_only)
+            .field("proof_request_bypass", &self.proof_request_bypass)
+            .field("mock_mode", &self.mock_mode)
+            .field("privacy_mode", &self.privacy_mode)
+            .field(
+                "privacy_symmetric_key",
+                &self.privacy_symmetric_key.as_ref().map(|_| "<redacted>"),
+            )
+            .field("fi_max_per_proposal", &self.fi_max_per_proposal)
+            .finish()
+    }
+}
+
 impl fmt::Display for RealtimeConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "RealTime inbox: {:#?}", self.realtime_inbox)?;
@@ -172,6 +206,15 @@ impl fmt::Display for RealtimeConfig {
         writeln!(f, "Preconf only: {}", self.preconf_only)?;
         writeln!(f, "Proof request bypass: {}", self.proof_request_bypass)?;
         writeln!(f, "Privacy mode: {}", self.privacy_mode)?;
+        writeln!(
+            f,
+            "Privacy symmetric key: {}",
+            if self.privacy_symmetric_key.is_some() {
+                "<set>"
+            } else {
+                "<unset>"
+            }
+        )?;
         writeln!(f, "FI max per proposal: {}", self.fi_max_per_proposal)?;
         Ok(())
     }

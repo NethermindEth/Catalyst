@@ -31,7 +31,7 @@
 pub mod aes;
 
 use alloy::primitives::U256;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 /// Length of the Shasta `[bytes32(version) || bytes32(size)]` outer frame.
 const SHASTA_FRAME_LEN: usize = 64;
