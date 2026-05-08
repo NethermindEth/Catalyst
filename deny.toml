@@ -19,8 +19,8 @@ ignore = [
     "RUSTSEC-2024-0436", # paste - no longer maintained
     "RUSTSEC-2023-0071", # https://github.com/NethermindEth/Catalyst/issues/735
     "RUSTSEC-2025-0141", # unmaintained advisory detected, used by alethia-reth
-    "RUSTSEC-2026-0002", # lru IterMut soundness; transitive (discv5/kona), upgrade when deps allow
-    "RUSTSEC-2026-0105", # core2 unmaintained, no safe upgrade; transitive via kona → libp2p → multihash, check again after taiko-mono dependency update
+    "RUSTSEC-2026-0118", # hickory-proto NSEC3 OOM; no safe upgrade, transitive via kona → libp2p-dns
+    "RUSTSEC-2026-0119", # hickory-proto O(n²) CPU; no safe upgrade, transitive via kona → libp2p-dns
 ]
 
 [licenses]
@@ -76,7 +76,7 @@ allow-git = [
     "https://github.com/taikoxyz/taiko-mono.git",
     "https://github.com/paradigmxyz/reth.git",
     "https://github.com/taikoxyz/alethia-reth",
-    "https://github.com/op-rs/kona",
+    "https://github.com/ethereum-optimism/optimism",
 ]
 
 [sources.allow-org]

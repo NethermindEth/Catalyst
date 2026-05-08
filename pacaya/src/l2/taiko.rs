@@ -227,7 +227,7 @@ impl Taiko {
             )
             .await?;
         let tx_list = std::iter::once(anchor_tx)
-            .chain(l2_block.prebuilt_tx_list.tx_list.into_iter())
+            .chain(l2_block.prebuilt_tx_list.tx_list)
             .collect::<Vec<_>>();
 
         let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;

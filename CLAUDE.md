@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Catalyst is a Rust-based preconfirmation sidecar for the Taiko Stack, implementing validator registration, lookahead submissions/disputes, and L2 block preconfirmation duties. It's a multi-crate Cargo workspace targeting Rust 1.93 (edition 2024).
+Catalyst is a Rust-based preconfirmation sidecar for the Taiko Stack, implementing validator registration, lookahead submissions/disputes, and L2 block preconfirmation duties. It's a multi-crate Cargo workspace targeting Rust 1.95 (edition 2024).
 
 ## Common Commands
 
