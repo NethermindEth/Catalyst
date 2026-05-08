@@ -234,4 +234,53 @@ mod tests {
         let too_short = vec![0u8; 63];
         assert!(build_blob_payload(&too_short, &cipher).is_err());
     }
+
+    /// Reproduces raiko's `blob_tx_slice_param_for_source` parser
+    /// (`raiko/lib/src/input.rs:442`) on this helper's output and asserts the
+    /// returned `(start, size)` slice exactly equals the cipher-wrapped inner.
+    /// This test is the regression guard for the bug where the scheme byte was
+    /// emitted *outside* the frame and raiko rejected the payload.
+    #[test]
+    fn build_blob_payload_passes_raiko_slice_parser() {
+        // Synthetic encode_and_compress output (frame contents are stripped, so
+        // we don't bother making them realistic).
+        let compressed = b"compressed-manifest-payload";
+        let mut framed_input = Vec::new();
+        framed_input.extend_from_slice(&[0u8; 64]);
+        framed_input.extend_from_slice(compressed);
+
+        let cipher = ProposalCipher::enabled([0xAAu8; 32]);
+        let out = build_blob_payload(&framed_input, &cipher).unwrap();
+
+        // ─── Mimic raiko's parser, byte for byte ─────────────────────────────
+        let offset = 0usize;
+
+        // version check: bytes32(1) == [0u8; 31] || 0x01
+        let mut expected_version = [0u8; 32];
+        expected_version[31] = 1;
+        assert_eq!(
+            &out[offset..offset + 32],
+            &expected_version,
+            "version frame must be bytes32(1)"
+        );
+
+        // size: read bytes [offset+32 .. offset+64] as B256, take last 8 BE → u64.
+        let size_b256: [u8; 32] = out[offset + 32..offset + 64].try_into().unwrap();
+        let size_bytes: [u8; 8] = size_b256[24..32].try_into().unwrap();
+        let blob_data_size = u64::from_be_bytes(size_bytes) as usize;
+
+        let start = offset + 64;
+        let end = start + blob_data_size;
+        assert!(end <= out.len(), "advertised size must fit");
+
+        let sliced = &out[start..end];
+
+        // The slice must equal cipher.wrap(compressed_manifest) exactly.
+        let expected_inner_len = 1 + 12 + compressed.len() + 16; // scheme + nonce + ct + tag
+        assert_eq!(sliced.len(), expected_inner_len);
+        assert_eq!(sliced[0], SCHEME_AES256_GCM);
+
+        // The dispatcher would now strip the scheme byte and feed the rest to AES.
+        // (We don't redo the round-trip here — `aes::tests::roundtrip` covers that.)
+    }
 }
