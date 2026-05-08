@@ -230,39 +230,47 @@ impl ProposalTxBuilder {
         required_return_signals: &[alloy::primitives::FixedBytes<32>],
         num_forced_inclusions: u16,
     ) -> Result<(Vec<Multicall::Call>, BlobTransactionSidecarEip7594), anyhow::Error> {
-        let mut block_manifests = <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
-        for l2_block in &batch.l2_blocks {
-            block_manifests.push(BlockManifest {
-                timestamp: l2_block.timestamp_sec,
-                coinbase: l2_block.coinbase,
-                anchor_block_number: l2_block.anchor_block_number,
-                gas_limit: l2_block.gas_limit_without_anchor,
-                transactions: l2_block
-                    .prebuilt_tx_list
-                    .tx_list
-                    .iter()
-                    .map(|tx| tx.clone().into())
-                    .collect(),
-            });
-        }
-
-        let manifest = DerivationSourceManifest {
-            blocks: block_manifests,
+        // Prefer the blob_payload that async_submitter computed before the Raiko
+        // call. AES-256-GCM uses a random nonce, so re-encrypting here would
+        // produce a different ciphertext (and different blob hash) than the one
+        // Raiko proved against — the proof would no longer match the on-chain
+        // blob hash and `propose` would revert. Falling back to compute-on-the-fly
+        // is only safe in plaintext mode (deterministic output) and we keep it as
+        // a defensive fallback for codepaths that bypass async_submitter.
+        let blob_payload = match batch.blob_payload.as_ref() {
+            Some(payload) => payload.clone(),
+            None => {
+                if self.cipher.is_enabled() {
+                    tracing::warn!(
+                        "Proposal.blob_payload missing in privacy mode — re-encrypting will mint a fresh nonce. \
+                         If a Raiko proof was generated against a different nonce this propose call will revert."
+                    );
+                }
+                let mut block_manifests =
+                    <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
+                for l2_block in &batch.l2_blocks {
+                    block_manifests.push(BlockManifest {
+                        timestamp: l2_block.timestamp_sec,
+                        coinbase: l2_block.coinbase,
+                        anchor_block_number: l2_block.anchor_block_number,
+                        gas_limit: l2_block.gas_limit_without_anchor,
+                        transactions: l2_block
+                            .prebuilt_tx_list
+                            .tx_list
+                            .iter()
+                            .map(|tx| tx.clone().into())
+                            .collect(),
+                    });
+                }
+                let manifest = DerivationSourceManifest {
+                    blocks: block_manifests,
+                };
+                let manifest_data = manifest
+                    .encode_and_compress()
+                    .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
+                crate::privacy::build_blob_payload(&manifest_data, &self.cipher)?
+            }
         };
-
-        let manifest_data = manifest
-            .encode_and_compress()
-            .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
-
-        // Privacy: re-frame the compressed manifest as [Shasta frame(64B) ||
-        // scheme(1B) || scheme_body]. The privacy scheme byte must sit *inside*
-        // the Shasta frame, otherwise raiko's blob_tx_slice_param_for_source and
-        // the driver's ExtractVersionAndSize will read the scheme as the first
-        // byte of the version field and reject the blob. Both blob-emitting sites
-        // (here and async_submitter) MUST use the same helper so the L1-blob hash
-        // and the bytes Raiko sees stay consistent.
-        let blob_payload =
-            crate::privacy::build_blob_payload(&manifest_data, &self.cipher)?;
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&blob_payload);
         let sidecar: BlobTransactionSidecarEip7594 = sidecar_builder.build_7594()?;
