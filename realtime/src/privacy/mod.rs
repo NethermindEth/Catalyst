@@ -10,14 +10,77 @@
 //! `RealTimeInbox.saveForcedInclusion`. Catalyst only references their blob hashes via
 //! `numForcedInclusions` on the propose input — it never re-encrypts FI payloads.
 //!
-//! Byte layout (mirrors `raiko/lib/src/privacy/`):
+//! Wire layout (full blob payload buffer fed into `SidecarBuilder::from_slice`):
+//!
+//! ```text
+//! [ bytes32(version=1) (32B) ] [ bytes32(size) (32B) ] [ scheme (1B) ] [ scheme_body ]
+//!                                                       └───── inner ────────┘
+//!                                                       size = 1 + len(scheme_body)
+//! ```
+//!
+//! Inner shape per scheme (mirrors `raiko/lib/src/privacy/`):
 //!
 //! - Plaintext (scheme 0x00): `[0x00 || compressed_manifest]`
 //! - AES-256-GCM (scheme 0x01): `[0x01 || nonce(12B) || ciphertext || tag(16B)]`
+//!
+//! [`build_blob_payload`] is the helper that performs the end-to-end transform from
+//! `manifest.encode_and_compress()` framed bytes to the corrected `[frame || inner]`
+//! buffer; both the L1 proposal-tx builder and the Raiko-request submitter use it so
+//! the bytes hashed on L1 match the bytes Raiko sees.
 
 pub mod aes;
 
+use alloy::primitives::U256;
 use anyhow::{anyhow, Result};
+
+/// Length of the Shasta `[bytes32(version) || bytes32(size)]` outer frame.
+const SHASTA_FRAME_LEN: usize = 64;
+
+/// `SHASTA_PAYLOAD_VERSION` from `taiko_protocol::shasta::constants`. Hard-coded here
+/// to keep the privacy module self-contained; if upstream bumps this value, this constant
+/// must be updated in lockstep (the unit tests will catch a mismatch on round-trip).
+const SHASTA_PAYLOAD_VERSION: u8 = 0x01;
+
+/// Re-frames the output of `taiko_protocol::shasta::manifest::DerivationSourceManifest::
+/// encode_and_compress` so the privacy scheme byte sits *inside* the Shasta frame, not
+/// before it.
+///
+/// `framed_input` is `encode_and_compress`'s return value: `[frame(64) || compressed_manifest]`.
+/// The frame is stripped, the compressed manifest is wrapped via `cipher` (producing
+/// `[scheme || scheme_body]`), and a fresh frame with the new size is prepended. The
+/// returned buffer is what `SidecarBuilder::from_slice` should consume.
+///
+/// Without this re-framing, `cipher.wrap(framed_input)` would emit
+/// `[scheme || frame || compressed_manifest]`, which causes raiko's
+/// `blob_tx_slice_param_for_source` to read the scheme byte as the first byte of the
+/// version field and reject the blob.
+pub fn build_blob_payload(framed_input: &[u8], cipher: &ProposalCipher) -> Result<Vec<u8>> {
+    if framed_input.len() < SHASTA_FRAME_LEN {
+        return Err(anyhow!(
+            "encode_and_compress output shorter than Shasta frame: {} < {}",
+            framed_input.len(),
+            SHASTA_FRAME_LEN
+        ));
+    }
+    let compressed_manifest = &framed_input[SHASTA_FRAME_LEN..];
+
+    // [scheme(1B) || scheme_body]
+    let inner = cipher.wrap(compressed_manifest)?;
+
+    let mut out = Vec::with_capacity(SHASTA_FRAME_LEN + inner.len());
+
+    // bytes32(version) = [0u8; 31] || SHASTA_PAYLOAD_VERSION
+    let mut version = [0u8; 32];
+    version[31] = SHASTA_PAYLOAD_VERSION;
+    out.extend_from_slice(&version);
+
+    // bytes32(size) = U256(inner.len()).to_be_bytes::<32>()
+    let size_bytes: [u8; 32] = U256::from(inner.len()).to_be_bytes();
+    out.extend_from_slice(&size_bytes);
+
+    out.extend_from_slice(&inner);
+    Ok(out)
+}
 
 /// Plaintext (no encryption).
 pub const SCHEME_PLAIN: u8 = 0x00;
@@ -108,5 +171,67 @@ mod tests {
         assert_eq!(a.len(), b.len());
         assert_ne!(a, b);
         assert_ne!(&a[1..13], &b[1..13]); // nonces differ
+    }
+
+    /// Builds a synthetic `encode_and_compress` output (`[frame(64) || compressed]`)
+    /// and verifies `build_blob_payload` re-emits the frame around the cipher-wrapped
+    /// inner — version byte at index 31, size matching `inner.len()`, scheme byte at
+    /// index 64. This is the layout raiko's `blob_tx_slice_param_for_source` and the
+    /// driver's `ExtractVersionAndSize` both expect.
+    #[test]
+    fn build_blob_payload_reframes_around_inner() {
+        // Synthesize what encode_and_compress would have returned.
+        let compressed = b"compressed-manifest-bytes";
+        let mut framed_input = Vec::with_capacity(64 + compressed.len());
+        let mut version = [0u8; 32];
+        version[31] = SHASTA_PAYLOAD_VERSION;
+        framed_input.extend_from_slice(&version);
+        let size_bytes: [u8; 32] = U256::from(compressed.len()).to_be_bytes();
+        framed_input.extend_from_slice(&size_bytes);
+        framed_input.extend_from_slice(compressed);
+
+        // Privacy disabled: inner = [0x00 || compressed].
+        let cipher = ProposalCipher::disabled();
+        let out = build_blob_payload(&framed_input, &cipher).unwrap();
+
+        // Frame: version[31] = 0x01.
+        assert_eq!(out[..31], [0u8; 31]);
+        assert_eq!(out[31], SHASTA_PAYLOAD_VERSION);
+
+        // Frame: size = U256(inner.len()) = U256(1 + compressed.len()).
+        let expected_size: [u8; 32] = U256::from(1 + compressed.len()).to_be_bytes();
+        assert_eq!(&out[32..64], &expected_size);
+
+        // Inner: scheme byte at 64, then the compressed manifest.
+        assert_eq!(out[64], SCHEME_PLAIN);
+        assert_eq!(&out[65..], compressed);
+    }
+
+    #[test]
+    fn build_blob_payload_encrypted_path() {
+        let compressed = b"some-compressed-bytes";
+        let mut framed_input = Vec::with_capacity(64 + compressed.len());
+        framed_input.extend_from_slice(&[0u8; 32]); // version (with last byte unset is fine; we strip)
+        framed_input.extend_from_slice(&[0u8; 32]); // size (we strip)
+        framed_input.extend_from_slice(compressed);
+
+        let cipher = ProposalCipher::enabled([0x42u8; 32]);
+        let out = build_blob_payload(&framed_input, &cipher).unwrap();
+
+        // Re-emitted frame.
+        assert_eq!(out[31], SHASTA_PAYLOAD_VERSION);
+        // Inner length = 1 (scheme) + 12 (nonce) + len(compressed) (ct) + 16 (tag).
+        let expected_inner_len = 1 + 12 + compressed.len() + 16;
+        let expected_size: [u8; 32] = U256::from(expected_inner_len).to_be_bytes();
+        assert_eq!(&out[32..64], &expected_size);
+        assert_eq!(out[64], SCHEME_AES256_GCM);
+        assert_eq!(out.len(), 64 + expected_inner_len);
+    }
+
+    #[test]
+    fn build_blob_payload_rejects_short_input() {
+        let cipher = ProposalCipher::disabled();
+        let too_short = vec![0u8; 63];
+        assert!(build_blob_payload(&too_short, &cipher).is_err());
     }
 }

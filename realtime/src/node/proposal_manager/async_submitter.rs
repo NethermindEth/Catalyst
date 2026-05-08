@@ -180,14 +180,13 @@ async fn submission_task(
         };
         let manifest_data = manifest.encode_and_compress()?;
 
-        // Privacy: wrap with the same cipher used by the L1 proposal_tx_builder.
-        // Both sites MUST agree, otherwise the blob hashes Raiko computes here
-        // will not match the hashes recorded on L1 by `propose`, and the proof's
-        // commitment will diverge from on-chain state.
-        let blob_payload = ethereum_l1
-            .execution_layer
-            .proposal_cipher()
-            .wrap(&manifest_data)?;
+        // Privacy: re-frame [Shasta frame(64B) || scheme(1B) || scheme_body] using
+        // the same cipher and helper as the L1 proposal_tx_builder. Both sites MUST
+        // agree, otherwise the blob hashes Raiko computes here will not match the
+        // hashes recorded on L1 by `propose`, and the proof's commitment will
+        // diverge from on-chain state.
+        let cipher = ethereum_l1.execution_layer.proposal_cipher();
+        let blob_payload = crate::privacy::build_blob_payload(&manifest_data, &cipher)?;
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&blob_payload);
         let sidecar: alloy::eips::eip7594::BlobTransactionSidecarEip7594 =

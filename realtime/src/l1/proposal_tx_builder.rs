@@ -254,12 +254,15 @@ impl ProposalTxBuilder {
             .encode_and_compress()
             .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
 
-        // Privacy: prepend the scheme byte and (if enabled) AES-256-GCM-encrypt the
-        // compressed manifest. The driver and prover apply the inverse on the bytes
-        // they fetch from the beacon node. The blob hash on L1 is over these wrapped
-        // bytes; both sites (here and async_submitter) MUST use the same cipher so
-        // the L1 hash and the bytes Raiko sees stay consistent.
-        let blob_payload = self.cipher.wrap(&manifest_data)?;
+        // Privacy: re-frame the compressed manifest as [Shasta frame(64B) ||
+        // scheme(1B) || scheme_body]. The privacy scheme byte must sit *inside*
+        // the Shasta frame, otherwise raiko's blob_tx_slice_param_for_source and
+        // the driver's ExtractVersionAndSize will read the scheme as the first
+        // byte of the version field and reject the blob. Both blob-emitting sites
+        // (here and async_submitter) MUST use the same helper so the L1-blob hash
+        // and the bytes Raiko sees stay consistent.
+        let blob_payload =
+            crate::privacy::build_blob_payload(&manifest_data, &self.cipher)?;
 
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&blob_payload);
         let sidecar: BlobTransactionSidecarEip7594 = sidecar_builder.build_7594()?;
