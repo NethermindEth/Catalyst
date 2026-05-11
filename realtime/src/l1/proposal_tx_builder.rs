@@ -18,12 +18,13 @@ use alloy::{
         Address, Bytes, U256,
         aliases::{U24, U48},
     },
-    providers::DynProvider,
+    providers::{DynProvider, Provider},
     rpc::types::TransactionRequest,
     sol_types::SolValue,
 };
+use alloy_json_rpc::RpcError;
 use anyhow::Error;
-use common::l1::fees_per_gas::FeesPerGas;
+use common::l1::{fees_per_gas::FeesPerGas, tools, transaction_error::TransactionError};
 use taiko_protocol::shasta::{
     BlobCoder,
     manifest::{BlockManifest, DerivationSourceManifest},
@@ -52,15 +53,6 @@ impl ProposalTxBuilder {
         }
     }
 
-    /// Gas estimation is skipped for blob transactions because `eth_estimateGas`
-    /// cannot simulate blobs — the `BLOBHASH` opcode returns zero during estimation,
-    /// causing spurious reverts that mask the real outcome. Instead we use a fixed
-    /// gas limit and rely on the `TransactionMonitor`'s receipt check: if the on-chain
-    /// execution reverts, the monitor sends `TransactionError::TransactionReverted`
-    /// through the error channel, and the node's main loop triggers
-    /// `recover_from_failed_submission` (reorg back to last finalized head).
-    const BLOB_TX_GAS_LIMIT: u64 = 3_000_000;
-
     #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_tx(
         &self,
@@ -72,8 +64,29 @@ impl ProposalTxBuilder {
             .build_propose_blob(batch, from, contract_addresses)
             .await?;
 
-        let tx_blob_gas =
-            Self::BLOB_TX_GAS_LIMIT + Self::BLOB_TX_GAS_LIMIT * self.extra_gas_percentage / 100;
+        // Estimate gas. If the simulator reverts (RpcError::ErrorResp), the on-chain
+        // execution would revert too — surface as EstimationFailed so the node can
+        // reorg back to the last finalized head without burning the inclusion fee.
+        // For transport-level errors, fall back to sending without an estimate.
+        let tx_blob_gas = match self.provider.estimate_gas(tx_blob.clone()).await {
+            Ok(gas) => gas,
+            Err(e) => {
+                warn!(
+                    "Build proposeBatch: Failed to estimate gas for blob transaction: {}",
+                    e
+                );
+                match e {
+                    RpcError::ErrorResp(err) => {
+                        return Err(anyhow::anyhow!(
+                            tools::convert_error_payload(&err.to_string())
+                                .unwrap_or(TransactionError::EstimationFailed)
+                        ));
+                    }
+                    _ => return Ok(tx_blob),
+                }
+            }
+        };
+        let tx_blob_gas = tx_blob_gas + tx_blob_gas * self.extra_gas_percentage / 100;
 
         let fees_per_gas = match FeesPerGas::get_fees_per_gas(&self.provider).await {
             Ok(fees_per_gas) => fees_per_gas,
