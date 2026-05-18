@@ -756,7 +756,7 @@ impl ProposalManager {
             .await?;
         let max_blocks_to_reanchor =
             (self.max_blocks_to_reanchor).min(info.slot_timestamp() - info.parent_timestamp());
-        let first_block_timestamp = info.slot_timestamp() - max_blocks_to_reanchor;
+        let first_block_timestamp = info.slot_timestamp() - max_blocks_to_reanchor + 1;
         let l2_slot_info = L2SlotInfoV2::new_from_other(info, first_block_timestamp);
         Ok((l2_slot_info, max_blocks_to_reanchor))
     }
