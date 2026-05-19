@@ -31,7 +31,7 @@ use proposal::Proposals;
 pub struct ProposalManager {
     proposal_builder: ProposalBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-    pub taiko: Arc<Taiko>,
+    taiko: Arc<Taiko>,
     block_advancer: Arc<dyn BlockAdvancer>,
     l1_height_lag: u64,
     min_anchor_offset: u64,
