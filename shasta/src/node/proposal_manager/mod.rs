@@ -31,7 +31,7 @@ use proposal::Proposals;
 pub struct ProposalManager {
     proposal_builder: ProposalBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-    pub taiko: Arc<Taiko>,
+    taiko: Arc<Taiko>,
     block_advancer: Arc<dyn BlockAdvancer>,
     l1_height_lag: u64,
     min_anchor_offset: u64,
@@ -756,7 +756,7 @@ impl ProposalManager {
             .await?;
         let max_blocks_to_reanchor =
             (self.max_blocks_to_reanchor).min(info.slot_timestamp() - info.parent_timestamp());
-        let first_block_timestamp = info.slot_timestamp() - max_blocks_to_reanchor;
+        let first_block_timestamp = info.slot_timestamp() - max_blocks_to_reanchor + 1;
         let l2_slot_info = L2SlotInfoV2::new_from_other(info, first_block_timestamp);
         Ok((l2_slot_info, max_blocks_to_reanchor))
     }
