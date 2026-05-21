@@ -5,10 +5,9 @@
 //! Re-using a (key, nonce) pair under AES-GCM is catastrophic, so we MUST never
 //! derive the nonce deterministically.
 
-use aes_gcm::aead::{Aead, KeyInit, Payload};
+use aes_gcm::aead::rand_core::RngCore;
+use aes_gcm::aead::{Aead, KeyInit, OsRng, Payload};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
-use rand::RngCore;
-use rand::rngs::OsRng;
 
 /// Length of the AES-GCM nonce in bytes.
 pub const NONCE_LEN: usize = 12;

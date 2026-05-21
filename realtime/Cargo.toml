@@ -20,7 +20,6 @@ fjall = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
-rand = "0.8"
 http = { workspace = true }
 jsonrpsee = { workspace = true }
 jsonwebtoken = { workspace = true }

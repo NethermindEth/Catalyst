@@ -7099,6 +7099,7 @@ dependencies = [
 name = "realtime"
 version = "1.38.3"
 dependencies = [
+ "aes-gcm",
  "alethia-reth-consensus 0.7.1",
  "alloy",
  "alloy-json-rpc",
