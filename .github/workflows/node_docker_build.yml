@@ -19,7 +19,7 @@ env:
   DOCKER_PUBLIC_REGISTRY: docker.io
   DOCKER_PUBLIC_REPOSITORY: nethermind/catalyst-node
   DOCKER_REGISTRY: nethermind.jfrog.io
-  DOCKER_REPOSITORY_PROD: core-oci-local-prod/catalyst-node
+  DOCKER_REPOSITORY_STAGING: core-oci-local-staging/catalyst-node
   MASTER_BRANCH: refs/heads/master
 
 jobs:
@@ -68,7 +68,7 @@ jobs:
           push: true
           build-args: |
             BLST_PORTABLE=1
-          outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }},push-by-digest=true,name-canonical=true
+          outputs: type=image,name=${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }},push-by-digest=true,name-canonical=true
 
       - name: Set digest output
         id: digest
@@ -102,12 +102,12 @@ jobs:
         id: tags
         run: |
           REF="${{ github.ref }}"
-          REALTIME_TAG="realtime-${{ steps.sha.outputs.short }}"
+          SHA_TAG="sha-${{ steps.sha.outputs.short }}"
           SOURCE_PROMOTE_TAG="${{ steps.sha.outputs.tag }}"
           IS_MASTER=false
           IS_TAG=false
           VERSION_TAG=""
-          PROMOTE_TAGS="$REALTIME_TAG"
+          PROMOTE_TAGS="$SHA_TAG"
 
           if [[ "$REF" == refs/tags/* ]]; then
             IS_TAG=true
@@ -131,7 +131,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}
+          images: ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}
           tags: ${{ steps.tags.outputs.tag_list }}
 
       - name: Create and push manifest list
@@ -153,7 +153,7 @@ jobs:
       - name: Tag with commit SHA
         run: |
           docker buildx imagetools create \
-            -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}:${{ steps.sha.outputs.tag }} \
+            -t ${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}:${{ steps.sha.outputs.tag }} \
             ${{ needs.build.outputs.digest-amd64 }} \
             ${{ needs.build.outputs.digest-arm64 }}
 
@@ -178,7 +178,7 @@ jobs:
           SOURCE_TAG="${{ steps.tags.outputs.source_promote_tag }}"
           echo "Tags to promote: $PROMOTE_TAGS"
           for tag in $PROMOTE_TAGS; do
-            source_image="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}:${SOURCE_TAG}"
+            source_image="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}:${SOURCE_TAG}"
             prod_image="${{ env.DOCKER_PUBLIC_REGISTRY }}/${{ env.DOCKER_PUBLIC_REPOSITORY }}:${tag}"
             echo ""
             echo "=== Promoting tag: ${tag} ==="
@@ -222,7 +222,7 @@ jobs:
           
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Repository Information" >> $GITHUB_STEP_SUMMARY
-          echo "- **Production**: \`${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_PROD }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Staging**: \`${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Production**: \`${{ env.DOCKER_PUBLIC_REGISTRY }}/${{ env.DOCKER_PUBLIC_REPOSITORY }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: \`${{ github.sha }}\` (\`${{ steps.sha.outputs.short }}\`)" >> $GITHUB_STEP_SUMMARY
