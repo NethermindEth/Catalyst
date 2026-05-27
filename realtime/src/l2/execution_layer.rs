@@ -52,7 +52,7 @@ impl L2ExecutionLayer {
         signal_service: Address,
     ) -> Result<Self, Error> {
         let provider =
-            alloy_tools::create_alloy_provider_without_wallet(&taiko_config.taiko_geth_url).await?;
+            alloy_tools::create_alloy_provider_without_wallet(&taiko_config.l2_rpc_url).await?;
 
         let chain_id = provider
             .get_chain_id()
@@ -60,7 +60,7 @@ impl L2ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to get chain ID: {}", e))?;
         info!("L2 Chain ID: {}", chain_id);
 
-        let anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
+        let anchor = Anchor::new(taiko_config.anchor_address, provider.clone());
         let bridge = Bridge::new(bridge_address, provider.clone());
 
         let common =

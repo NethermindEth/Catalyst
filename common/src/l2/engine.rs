@@ -31,7 +31,7 @@ impl L2EngineConfig {
             crate::utils::file_operations::read_jwt_secret(&config.jwt_secret_file_path)
                 .map_err(|e| anyhow::anyhow!("Failed to read JWT secret for L2 engine: {}", e))?;
         Ok(Self {
-            auth_url: config.taiko_geth_auth_rpc_url.clone(),
+            auth_url: config.l2_auth_rpc_url.clone(),
             rpc_timeout: config.rpc_l2_execution_layer_timeout,
             jwt_secret_bytes,
             max_bytes_per_tx_list: config.max_bytes_per_tx_list,

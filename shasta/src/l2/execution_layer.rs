@@ -30,9 +30,9 @@ pub struct L2ExecutionLayer {
 impl L2ExecutionLayer {
     pub async fn new(taiko_config: TaikoConfig) -> Result<Self, Error> {
         let provider =
-            alloy_tools::create_alloy_provider_without_wallet(&taiko_config.taiko_geth_url).await?;
+            alloy_tools::create_alloy_provider_without_wallet(&taiko_config.l2_rpc_url).await?;
 
-        let shasta_anchor = Anchor::new(taiko_config.taiko_anchor_address, provider.clone());
+        let shasta_anchor = Anchor::new(taiko_config.anchor_address, provider.clone());
 
         let common =
             ExecutionLayerCommon::new(provider.clone(), taiko_config.signer.get_address()).await?;
@@ -123,11 +123,11 @@ impl L2ExecutionLayer {
         );
 
         let provider =
-            alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.taiko_geth_url)
+            alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.l2_rpc_url)
                 .await?;
 
         pacaya::l2::execution_layer::L2ExecutionLayer::transfer_eth_from_l2_to_l1_with_provider(
-            self.config.taiko_bridge_address,
+            self.config.bridge_l2_address,
             provider,
             amount,
             self.common.chain_id(),
