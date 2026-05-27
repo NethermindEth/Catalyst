@@ -35,7 +35,7 @@ pub struct Config {
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
     pub rpc_driver_retry_timeout: Duration,
-    // Taiko contracts
+    // L2 contracts
     pub anchor_address: Address,
     pub bridge_l2_address: Address,
     // Batch building parameters
@@ -272,7 +272,7 @@ impl Config {
 
         const BRIDGE_L2_ADDRESS: &str = "BRIDGE_L2_ADDRESS";
         let bridge_l2_address_str = if let Some(val) =
-            get_env_with_deprecation(BRIDGE_L2_ADDRESS, "TAIKO_BRIDGE_ADDRESS")
+            get_env_with_deprecation(BRIDGE_L2_ADDRESS, "TAIKO_BRIDGE_L2_ADDRESS")
         {
             val
         } else {
@@ -393,7 +393,7 @@ impl Config {
 
         let threshold_l1_token = threshold_l1_token
             .parse::<u128>()
-            .map_err(|e| anyhow::anyhow!("THRESHOLD_TAIKO must be a number: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("THRESHOLD_L1_TOKEN must be a number: {}", e))?;
 
         // 1 ETH
         let amount_to_bridge_from_l2_to_l1 = std::env::var("AMOUNT_TO_BRIDGE_FROM_L2_TO_L1")
