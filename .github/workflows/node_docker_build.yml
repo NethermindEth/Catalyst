@@ -113,18 +113,24 @@ jobs:
             IS_TAG=true
             VERSION_TAG=${REF#refs/tags/}
             echo "tag_list=type=raw,value=$VERSION_TAG" >> $GITHUB_OUTPUT
+            PROMOTE_TAGS="$SHA_TAG $VERSION_TAG"
           elif [[ "$REF" == ${{ env.MASTER_BRANCH }} ]]; then
             IS_MASTER=true
             echo "tag_list=type=raw,value=latest" >> $GITHUB_OUTPUT
+            PROMOTE_TAGS="$SHA_TAG latest"
           else
             echo "tag_list=type=sha,value=${{ github.sha }}" >> $GITHUB_OUTPUT
           fi
+
+          # Staging gets the SHA tag plus whatever the conditional ref produced.
+          STAGING_TAGS="$PROMOTE_TAGS"
 
           echo "is_master=$IS_MASTER" >> $GITHUB_OUTPUT
           echo "is_tag=$IS_TAG" >> $GITHUB_OUTPUT
           echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
           echo "source_promote_tag=$SOURCE_PROMOTE_TAG" >> $GITHUB_OUTPUT
           echo "promote_tags=$PROMOTE_TAGS" >> $GITHUB_OUTPUT
+          echo "staging_tags=$STAGING_TAGS" >> $GITHUB_OUTPUT
           echo "PROMOTE_TAGS=$PROMOTE_TAGS" >> $GITHUB_ENV
 
       - name: Generate Docker metadata
@@ -198,31 +204,32 @@ jobs:
 
       - name: Summary
         run: |
+          STAGING_REPO="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}"
+          PROD_REPO="${{ env.DOCKER_PUBLIC_REGISTRY }}/${{ env.DOCKER_PUBLIC_REPOSITORY }}"
+          STAGING_TAGS="${{ steps.tags.outputs.staging_tags }}"
+          PROMOTE_TAGS_OUT="${{ steps.tags.outputs.promote_tags }}"
+
           echo "## Catalyst Node Docker build Completed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Tags Promoted" >> $GITHUB_STEP_SUMMARY
-          
-          # Get tags from step output (more reliable than env var)
-          TAGS_STRING="${{ steps.tags.outputs.promote_tags }}"
-          
-          # If step output is empty, try environment variable
-          if [ -z "$TAGS_STRING" ]; then
-            TAGS_STRING="$PROMOTE_TAGS"
-          fi
-          
-          # Split tags by space and display each one
-          if [ -n "$TAGS_STRING" ]; then
-            # Convert space-separated string to array and iterate
-            for tag in $TAGS_STRING; do
-              echo "- \`${tag}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ github.sha }}\` (\`${{ steps.sha.outputs.short }}\`)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Staging — \`${STAGING_REPO}\`" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$STAGING_TAGS" ]; then
+            for tag in $STAGING_TAGS; do
+              echo "- \`${STAGING_REPO}:${tag}\`" >> $GITHUB_STEP_SUMMARY
             done
           else
-            echo "- No tags available" >> $GITHUB_STEP_SUMMARY
+            echo "- _No tags pushed_" >> $GITHUB_STEP_SUMMARY
           fi
-          
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Repository Information" >> $GITHUB_STEP_SUMMARY
-          echo "- **Staging**: \`${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Production**: \`${{ env.DOCKER_PUBLIC_REGISTRY }}/${{ env.DOCKER_PUBLIC_REPOSITORY }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Platforms**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: \`${{ github.sha }}\` (\`${{ steps.sha.outputs.short }}\`)" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Production — \`${PROD_REPO}\`" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$PROMOTE_TAGS_OUT" ]; then
+            for tag in $PROMOTE_TAGS_OUT; do
+              echo "- \`${PROD_REPO}:${tag}\`" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "- _No tags promoted_" >> $GITHUB_STEP_SUMMARY
+          fi
