@@ -15,6 +15,9 @@ pub struct EthereumL1Config {
     pub bridge: Address,
     pub proof_type: ProofType,
     pub mock_mode: bool,
+    pub privacy_mode: bool,
+    pub privacy_symmetric_key: Option<[u8; 32]>,
+    pub fi_max_per_proposal: u16,
 }
 
 impl TryFrom<RealtimeConfig> for EthereumL1Config {
@@ -27,6 +30,9 @@ impl TryFrom<RealtimeConfig> for EthereumL1Config {
             bridge: config.bridge,
             proof_type: config.proof_type,
             mock_mode: config.mock_mode,
+            privacy_mode: config.privacy_mode,
+            privacy_symmetric_key: config.privacy_symmetric_key,
+            fi_max_per_proposal: config.fi_max_per_proposal,
         })
     }
 }

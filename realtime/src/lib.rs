@@ -2,6 +2,7 @@ mod chain_monitor;
 mod l1;
 mod l2;
 mod node;
+mod privacy;
 pub mod raiko;
 mod shared_abi;
 mod utils;
