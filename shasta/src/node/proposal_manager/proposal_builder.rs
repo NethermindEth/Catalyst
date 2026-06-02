@@ -239,7 +239,7 @@ impl ProposalBuilder {
                 proposal.anchor_state_root = anchor_info.state_root();
             }
 
-            let prebuilt_tx_list = PreBuiltTxList::new(tx_list.clone());
+            let prebuilt_tx_list = PreBuiltTxList::new(tx_list);
             let bytes_length = prebuilt_tx_list.get_bytes_length();
 
             let l2_draft_block = L2BlockV2Draft {
