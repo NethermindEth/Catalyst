@@ -37,6 +37,15 @@ pub struct Proposal {
 
     // ZK proof (populated after Raiko call)
     pub zk_proof: Option<Vec<u8>>,
+
+    /// Pre-encrypted blob payload (full Shasta-framed inner buffer that goes to
+    /// `SidecarBuilder::from_slice`). Populated by `async_submitter` before the
+    /// Raiko call so the blob hashes Raiko's proof commits to are byte-identical
+    /// to the blob hashes posted on L1. Without this, AES-256-GCM's random nonce
+    /// would make `proposal_tx_builder`'s second `build_blob_payload` call
+    /// produce a different ciphertext and a different blob hash than the one
+    /// Raiko proved against.
+    pub blob_payload: Option<Vec<u8>>,
 }
 
 impl Proposal {

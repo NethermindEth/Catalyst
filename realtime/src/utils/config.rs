@@ -2,9 +2,10 @@ use crate::l1::bindings::ProofType;
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::config::{ConfigTrait, address_parse_error};
+use std::fmt;
 use std::str::FromStr;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RealtimeConfig {
     pub realtime_inbox: Address,
     pub proposer_multicall: Address,
@@ -25,6 +26,16 @@ pub struct RealtimeConfig {
     /// regardless of `proof_type`. Allows using a real Raiko proof type string
     /// while routing on-chain to the DummyProofVerifier.
     pub mock_mode: bool,
+    /// When true, the proposer encrypts every blob payload with AES-256-GCM under
+    /// `privacy_symmetric_key` before posting to L1 (scheme 0x01). When false, blobs
+    /// are emitted with the explicit plaintext scheme byte (0x00). Driver and raiko
+    /// must be configured the same way.
+    pub privacy_mode: bool,
+    /// 32-byte AES-256-GCM key used by Catalyst when `privacy_mode == true`. Required
+    /// in privacy mode; ignored otherwise.
+    pub privacy_symmetric_key: Option<[u8; 32]>,
+    /// Maximum number of forced inclusions to consume per proposal.
+    pub fi_max_per_proposal: u16,
 }
 
 impl ConfigTrait for RealtimeConfig {
@@ -83,6 +94,40 @@ impl ConfigTrait for RealtimeConfig {
             .map(|v| v.to_lowercase() != "false" && v != "0")
             .unwrap_or(false);
 
+        let privacy_mode = std::env::var("SURGE_PRIVACY_MODE")
+            .map(|v| v.to_lowercase() != "false" && v != "0")
+            .unwrap_or(false);
+
+        let privacy_symmetric_key = match std::env::var("SURGE_PRIVACY_SYMMETRIC_KEY") {
+            Ok(hex_str) => {
+                let s = hex_str.strip_prefix("0x").unwrap_or(&hex_str);
+                let bytes = hex::decode(s).map_err(|e| {
+                    anyhow::anyhow!("SURGE_PRIVACY_SYMMETRIC_KEY: invalid hex: {e}")
+                })?;
+                if bytes.len() != 32 {
+                    return Err(anyhow::anyhow!(
+                        "SURGE_PRIVACY_SYMMETRIC_KEY: expected 32 bytes, got {}",
+                        bytes.len()
+                    ));
+                }
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&bytes);
+                Some(arr)
+            }
+            Err(_) => None,
+        };
+
+        if privacy_mode && privacy_symmetric_key.is_none() {
+            return Err(anyhow::anyhow!(
+                "SURGE_PRIVACY_MODE=true requires SURGE_PRIVACY_SYMMETRIC_KEY to be set"
+            ));
+        }
+
+        let fi_max_per_proposal: u16 = std::env::var("FI_MAX_PER_PROPOSAL")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(4);
+
         Ok(RealtimeConfig {
             realtime_inbox,
             proposer_multicall,
@@ -99,11 +144,47 @@ impl ConfigTrait for RealtimeConfig {
             preconf_only,
             proof_request_bypass,
             mock_mode,
+            privacy_mode,
+            privacy_symmetric_key,
+            fi_max_per_proposal,
         })
     }
 }
 
-use std::fmt;
+/// Manual `Debug` impl that redacts `privacy_symmetric_key`. The derived impl
+/// would print the raw 32-byte key if a `RealtimeConfig` was ever logged via
+/// `{:?}`; for a long-running process that's a leak waiting to happen.
+impl fmt::Debug for RealtimeConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RealtimeConfig")
+            .field("realtime_inbox", &self.realtime_inbox)
+            .field("proposer_multicall", &self.proposer_multicall)
+            .field("bridge", &self.bridge)
+            .field("l2_signal_service", &self.l2_signal_service)
+            .field("raiko_url", &self.raiko_url)
+            .field(
+                "raiko_api_key",
+                &self.raiko_api_key.as_ref().map(|_| "<set>"),
+            )
+            .field("proof_type", &self.proof_type)
+            .field("raiko_poll_interval_ms", &self.raiko_poll_interval_ms)
+            .field("raiko_max_retries", &self.raiko_max_retries)
+            .field("raiko_timeout_sec", &self.raiko_timeout_sec)
+            .field("bridge_rpc_addr", &self.bridge_rpc_addr)
+            .field("user_op_status_db_path", &self.user_op_status_db_path)
+            .field("preconf_only", &self.preconf_only)
+            .field("proof_request_bypass", &self.proof_request_bypass)
+            .field("mock_mode", &self.mock_mode)
+            .field("privacy_mode", &self.privacy_mode)
+            .field(
+                "privacy_symmetric_key",
+                &self.privacy_symmetric_key.as_ref().map(|_| "<redacted>"),
+            )
+            .field("fi_max_per_proposal", &self.fi_max_per_proposal)
+            .finish()
+    }
+}
+
 impl fmt::Display for RealtimeConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "RealTime inbox: {:#?}", self.realtime_inbox)?;
@@ -124,6 +205,17 @@ impl fmt::Display for RealtimeConfig {
         writeln!(f, "User op status DB path: {}", self.user_op_status_db_path)?;
         writeln!(f, "Preconf only: {}", self.preconf_only)?;
         writeln!(f, "Proof request bypass: {}", self.proof_request_bypass)?;
+        writeln!(f, "Privacy mode: {}", self.privacy_mode)?;
+        writeln!(
+            f,
+            "Privacy symmetric key: {}",
+            if self.privacy_symmetric_key.is_some() {
+                "<set>"
+            } else {
+                "<unset>"
+            }
+        )?;
+        writeln!(f, "FI max per proposal: {}", self.fi_max_per_proposal)?;
         Ok(())
     }
 }

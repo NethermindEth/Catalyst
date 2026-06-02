@@ -89,6 +89,7 @@ impl BatchBuilder {
             signal_slots: vec![],
             l1_calls: vec![],
             zk_proof: None,
+            blob_payload: None,
         });
     }
 

@@ -35,6 +35,7 @@ pub struct ProposalTxBuilder {
     extra_gas_percentage: u64,
     proof_type: ProofType,
     mock_mode: bool,
+    cipher: crate::privacy::ProposalCipher,
 }
 
 impl ProposalTxBuilder {
@@ -43,12 +44,14 @@ impl ProposalTxBuilder {
         extra_gas_percentage: u64,
         proof_type: ProofType,
         mock_mode: bool,
+        cipher: crate::privacy::ProposalCipher,
     ) -> Self {
         Self {
             provider,
             extra_gas_percentage,
             proof_type,
             mock_mode,
+            cipher,
         }
     }
 
@@ -61,15 +64,15 @@ impl ProposalTxBuilder {
     /// `recover_from_failed_submission` (reorg back to last finalized head).
     const BLOB_TX_GAS_LIMIT: u64 = 3_000_000;
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_tx(
         &self,
         batch: Proposal,
         from: Address,
         contract_addresses: ContractAddresses,
+        num_forced_inclusions: u16,
     ) -> Result<TransactionRequest, Error> {
         let tx_blob = self
-            .build_propose_blob(batch, from, contract_addresses)
+            .build_propose_blob(batch, from, contract_addresses, num_forced_inclusions)
             .await?;
 
         let tx_blob_gas =
@@ -88,12 +91,12 @@ impl ProposalTxBuilder {
         Ok(tx_blob)
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn build_propose_blob(
         &self,
         batch: Proposal,
         from: Address,
         contract_addresses: ContractAddresses,
+        num_forced_inclusions: u16,
     ) -> Result<TransactionRequest, Error> {
         // Collect required return signals from all l1_calls that expect an L1→L2
         // return signal to be produced by their invoked target. When non-empty, the
@@ -118,6 +121,7 @@ impl ProposalTxBuilder {
                 contract_addresses.realtime_inbox,
                 use_deferred,
                 &required_return_signals,
+                num_forced_inclusions,
             )
             .await?;
 
@@ -222,32 +226,51 @@ impl ProposalTxBuilder {
         inbox_address: Address,
         use_deferred: bool,
         required_return_signals: &[alloy::primitives::FixedBytes<32>],
+        num_forced_inclusions: u16,
     ) -> Result<(Vec<Multicall::Call>, BlobTransactionSidecarEip7594), anyhow::Error> {
-        let mut block_manifests = <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
-        for l2_block in &batch.l2_blocks {
-            block_manifests.push(BlockManifest {
-                timestamp: l2_block.timestamp_sec,
-                coinbase: l2_block.coinbase,
-                anchor_block_number: l2_block.anchor_block_number,
-                gas_limit: l2_block.gas_limit_without_anchor,
-                transactions: l2_block
-                    .prebuilt_tx_list
-                    .get_tx_list()
-                    .iter()
-                    .map(|tx| tx.clone().into())
-                    .collect(),
-            });
-        }
-
-        let manifest = DerivationSourceManifest {
-            blocks: block_manifests,
+        // Prefer the blob_payload that async_submitter computed before the Raiko
+        // call. AES-256-GCM uses a random nonce, so re-encrypting here would
+        // produce a different ciphertext (and different blob hash) than the one
+        // Raiko proved against — the proof would no longer match the on-chain
+        // blob hash and `propose` would revert. Falling back to compute-on-the-fly
+        // is only safe in plaintext mode (deterministic output) and we keep it as
+        // a defensive fallback for codepaths that bypass async_submitter.
+        let blob_payload = match batch.blob_payload.as_ref() {
+            Some(payload) => payload.clone(),
+            None => {
+                if self.cipher.is_enabled() {
+                    tracing::warn!(
+                        "Proposal.blob_payload missing in privacy mode — re-encrypting will mint a fresh nonce. \
+                         If a Raiko proof was generated against a different nonce this propose call will revert."
+                    );
+                }
+                let mut block_manifests =
+                    <Vec<BlockManifest>>::with_capacity(batch.l2_blocks.len());
+                for l2_block in &batch.l2_blocks {
+                    block_manifests.push(BlockManifest {
+                        timestamp: l2_block.timestamp_sec,
+                        coinbase: l2_block.coinbase,
+                        anchor_block_number: l2_block.anchor_block_number,
+                        gas_limit: l2_block.gas_limit_without_anchor,
+                        transactions: l2_block
+                            .prebuilt_tx_list
+                            .get_tx_list()
+                            .iter()
+                            .map(|tx| tx.clone().into())
+                            .collect(),
+                    });
+                }
+                let manifest = DerivationSourceManifest {
+                    blocks: block_manifests,
+                };
+                let manifest_data = manifest
+                    .encode_and_compress()
+                    .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
+                crate::privacy::build_blob_payload(&manifest_data, &self.cipher)?
+            }
         };
 
-        let manifest_data = manifest
-            .encode_and_compress()
-            .map_err(|e| Error::msg(format!("Can't encode and compress manifest: {e}")))?;
-
-        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&manifest_data);
+        let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&blob_payload);
         let sidecar: BlobTransactionSidecarEip7594 = sidecar_builder.build_7594()?;
 
         let inbox = RealTimeInbox::new(inbox_address, self.provider.clone());
@@ -287,6 +310,7 @@ impl ProposalTxBuilder {
             // Classic propose flow
             let propose_input = ProposeInput {
                 blobReference: blob_reference,
+                numForcedInclusions: num_forced_inclusions,
                 signalSlots: batch.signal_slots.clone(),
                 maxAnchorBlockNumber: U48::from(batch.max_anchor_block_number),
             };
@@ -318,6 +342,7 @@ impl ProposalTxBuilder {
 
         let propose_input_v2 = ProposeInputV2 {
             blobReference: blob_reference,
+            numForcedInclusions: num_forced_inclusions,
             existingSignals: existing_signals,
             requiredReturnSignals: required_return_signals.to_vec(),
             maxAnchorBlockNumber: U48::from(batch.max_anchor_block_number),
