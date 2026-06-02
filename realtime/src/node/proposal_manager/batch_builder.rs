@@ -41,11 +41,12 @@ impl BatchBuilder {
             };
 
             let mut new_total_bytes =
-                batch.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
+                batch.total_bytes + l2_draft_block.prebuilt_tx_list.get_bytes_length();
 
             if !self.config.is_within_bytes_limit(new_total_bytes) {
                 batch.compress();
-                new_total_bytes = batch.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
+                new_total_bytes =
+                    batch.total_bytes + l2_draft_block.prebuilt_tx_list.get_bytes_length();
                 if !self.config.is_within_bytes_limit(new_total_bytes) {
                     let start = std::time::Instant::now();
                     let mut batch_clone = batch.clone();
@@ -168,14 +169,14 @@ impl BatchBuilder {
         if let Some(current_proposal) = self.current_proposal.as_mut() {
             let removed_block = current_proposal.l2_blocks.pop();
             if let Some(removed_block) = removed_block {
-                current_proposal.total_bytes -= removed_block.prebuilt_tx_list.bytes_length;
+                current_proposal.total_bytes -= removed_block.prebuilt_tx_list.get_bytes_length();
                 if current_proposal.l2_blocks.is_empty() {
                     self.current_proposal = None;
                 }
                 debug!(
                     "Removed L2 block from batch: {} txs, {} bytes",
-                    removed_block.prebuilt_tx_list.tx_list.len(),
-                    removed_block.prebuilt_tx_list.bytes_length
+                    removed_block.prebuilt_tx_list.get_tx_list().len(),
+                    removed_block.prebuilt_tx_list.get_bytes_length()
                 );
             }
         }
@@ -299,7 +300,7 @@ impl BatchBuilder {
     ) -> bool {
         let number_of_pending_txs = pending_tx_list
             .as_ref()
-            .map(|tx_list| tx_list.tx_list.len())
+            .map(|tx_list| tx_list.get_tx_list().len())
             .unwrap_or(0) as u64;
 
         if self.is_empty_block_required(current_l2_slot_timestamp) || end_of_sequencing {

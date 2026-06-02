@@ -55,13 +55,13 @@ impl ProposalBuilder {
             };
 
             let mut new_total_bytes =
-                proposal.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
+                proposal.total_bytes + l2_draft_block.prebuilt_tx_list.get_bytes_length();
 
             if !self.config.is_within_bytes_limit(new_total_bytes) {
                 // first compression, compressing the proposal without the new L2 block
                 proposal.compress();
                 new_total_bytes =
-                    proposal.total_bytes + l2_draft_block.prebuilt_tx_list.bytes_length;
+                    proposal.total_bytes + l2_draft_block.prebuilt_tx_list.get_bytes_length();
                 if !self.config.is_within_bytes_limit(new_total_bytes) {
                     // second compression, compressing the proposal with the new L2 block
                     // we can tolerate the processing overhead as it's a very rare case
@@ -239,14 +239,11 @@ impl ProposalBuilder {
                 proposal.anchor_state_root = anchor_info.state_root();
             }
 
-            let bytes_length = crate::shared::l2_tx_lists::rlp_encode(&tx_list).len() as u64;
+            let prebuilt_tx_list = PreBuiltTxList::new(tx_list.clone());
+            let bytes_length = prebuilt_tx_list.get_bytes_length();
 
             let l2_draft_block = L2BlockV2Draft {
-                prebuilt_tx_list: PreBuiltTxList {
-                    tx_list: tx_list.clone(),
-                    estimated_gas_used: 0,
-                    bytes_length,
-                },
+                prebuilt_tx_list: prebuilt_tx_list.clone(),
                 timestamp_sec: l2_block_timestamp_sec,
                 gas_limit_without_anchor: gas_limit,
             };
@@ -260,11 +257,7 @@ impl ProposalBuilder {
             }
 
             let l2_block = L2BlockV2::new_from(
-                crate::shared::l2_tx_lists::PreBuiltTxList {
-                    tx_list,
-                    estimated_gas_used: 0,
-                    bytes_length,
-                },
+                prebuilt_tx_list,
                 l2_block_timestamp_sec,
                 coinbase,
                 anchor_info.id(),
@@ -468,7 +461,7 @@ impl ProposalBuilder {
     ) -> bool {
         let number_of_pending_txs = pending_tx_list
             .as_ref()
-            .map(|tx_list| tx_list.tx_list.len())
+            .map(|tx_list| tx_list.get_tx_list().len())
             .unwrap_or(0) as u64;
 
         if self.is_empty_block_required(current_l2_slot_timestamp) || end_of_sequencing {
@@ -621,11 +614,7 @@ mod tests {
 
     fn make_draft_block(timestamp: u64, bytes_len: u64) -> L2BlockV2Draft {
         L2BlockV2Draft {
-            prebuilt_tx_list: PreBuiltTxList {
-                tx_list: vec![],
-                estimated_gas_used: 0,
-                bytes_length: bytes_len,
-            },
+            prebuilt_tx_list: PreBuiltTxList::empty_with_bytes_length(bytes_len),
             timestamp_sec: timestamp,
             gas_limit_without_anchor: 1_000_000,
         }
@@ -815,11 +804,11 @@ mod tests {
     #[test]
     fn test_should_new_block_be_created_enough_txs() {
         let builder = make_builder();
-        let tx_list = Some(PreBuiltTxList {
-            tx_list: vec![make_tx(), make_tx(), make_tx()],
-            estimated_gas_used: 0,
-            bytes_length: 0,
-        });
+        let tx_list = Some(PreBuiltTxList::empty_with_tx_list(vec![
+            make_tx(),
+            make_tx(),
+            make_tx(),
+        ]));
 
         assert!(builder.should_new_block_be_created(&tx_list, 1000, false));
     }
@@ -830,11 +819,7 @@ mod tests {
         create_proposal(&mut builder, 1, 100, 1000);
         let _ = builder.add_l2_draft_block(make_draft_block(1000, 100));
 
-        let tx_list = Some(PreBuiltTxList {
-            tx_list: vec![make_tx()],
-            estimated_gas_used: 0,
-            bytes_length: 0,
-        });
+        let tx_list = Some(PreBuiltTxList::empty_with_tx_list(vec![make_tx()]));
 
         assert!(!builder.should_new_block_be_created(&tx_list, 1001, false));
     }
