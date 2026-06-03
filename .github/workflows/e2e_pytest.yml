@@ -44,7 +44,7 @@ jobs:
         with:
           repository: NethermindEth/simple-taiko-node-nethermind
           path: simple-taiko-node-nethermind
-          ref: main
+          ref: feat/unzen
           submodules: true
 
       - name: Set up Docker Buildx
@@ -84,7 +84,7 @@ jobs:
         run: |
           cp .env.example .env
           chmod +x deploy-taiko-full.sh
-          ./deploy-taiko-full.sh --client geth --force
+          ./deploy-taiko-full.sh --client alethia-reth --force
         env:
           SECONDS_PER_SLOT: 12
 
