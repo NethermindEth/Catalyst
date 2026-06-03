@@ -37,6 +37,15 @@ pub struct Proposal {
 
     // ZK proof (populated after Raiko call)
     pub zk_proof: Option<Vec<u8>>,
+
+    /// Pre-encrypted blob payload (full Shasta-framed inner buffer that goes to
+    /// `SidecarBuilder::from_slice`). Populated by `async_submitter` before the
+    /// Raiko call so the blob hashes Raiko's proof commits to are byte-identical
+    /// to the blob hashes posted on L1. Without this, AES-256-GCM's random nonce
+    /// would make `proposal_tx_builder`'s second `build_blob_payload` call
+    /// produce a different ciphertext and a different blob hash than the one
+    /// Raiko proved against.
+    pub blob_payload: Option<Vec<u8>>,
 }
 
 impl Proposal {
@@ -52,7 +61,7 @@ impl Proposal {
                 gas_limit: l2_block.gas_limit_without_anchor,
                 transactions: l2_block
                     .prebuilt_tx_list
-                    .tx_list
+                    .get_tx_list()
                     .iter()
                     .map(|tx| tx.clone().into())
                     .collect(),
@@ -94,14 +103,14 @@ impl Proposal {
     pub fn add_l2_block(&mut self, l2_block: L2BlockV2) -> L2BlockV2Payload {
         let l2_payload = L2BlockV2Payload {
             coinbase: self.coinbase,
-            tx_list: l2_block.prebuilt_tx_list.tx_list.clone(),
+            tx_list: l2_block.prebuilt_tx_list.get_tx_list().clone(),
             timestamp_sec: l2_block.timestamp_sec,
             gas_limit_without_anchor: l2_block.gas_limit_without_anchor,
             anchor_block_id: self.max_anchor_block_number,
             anchor_block_hash: self.max_anchor_block_hash,
             anchor_state_root: self.max_anchor_state_root,
         };
-        self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
+        self.total_bytes += l2_block.prebuilt_tx_list.get_bytes_length();
         self.l2_blocks.push(l2_block);
         l2_payload
     }

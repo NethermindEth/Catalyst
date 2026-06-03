@@ -200,12 +200,13 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
             Err(_) => return false,
         };
 
-        let mut new_total_bytes = batch.total_bytes() + l2_block.prebuilt_tx_list.bytes_length;
+        let mut new_total_bytes =
+            batch.total_bytes() + l2_block.prebuilt_tx_list.get_bytes_length();
 
         if !self.config.is_within_bytes_limit(new_total_bytes) {
             // first compression, compressing the batch without the new L2 block
             batch.compress();
-            new_total_bytes = batch.total_bytes() + l2_block.prebuilt_tx_list.bytes_length;
+            new_total_bytes = batch.total_bytes() + l2_block.prebuilt_tx_list.get_bytes_length();
             if !self.config.is_within_bytes_limit(new_total_bytes) {
                 // second compression, compressing the batch with the new L2 block
                 // we can tolerate the processing overhead as it's a very rare case
@@ -233,7 +234,7 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
     ) -> Option<L2Block> {
         let tx_list_len = pending_tx_list
             .as_ref()
-            .map(|tx_list| tx_list.tx_list.len())
+            .map(|tx_list| tx_list.get_tx_list().len())
             .unwrap_or(0);
 
         if !self.should_new_block_be_created(
@@ -249,8 +250,8 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
         if let Some(pending_tx_list) = pending_tx_list {
             tracing::debug!(
                 "Creating new block with pending tx list length: {}, bytes length: {}",
-                pending_tx_list.tx_list.len(),
-                pending_tx_list.bytes_length
+                pending_tx_list.get_tx_list().len(),
+                pending_tx_list.get_bytes_length()
             );
             Some(L2Block::new_from(pending_tx_list, l2_slot_timestamp))
         } else {
@@ -262,14 +263,15 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
         if let Some(current_proposal) = self.current_batch.as_mut() {
             let removed_block = current_proposal.l2_blocks_mut().pop();
             if let Some(removed_block) = removed_block {
-                *current_proposal.total_bytes_mut() -= removed_block.prebuilt_tx_list.bytes_length;
+                *current_proposal.total_bytes_mut() -=
+                    removed_block.prebuilt_tx_list.get_bytes_length();
                 if current_proposal.l2_blocks().is_empty() {
                     self.current_batch = None;
                 }
                 debug!(
                     "Removed L2 block from batch: {} txs, {} bytes",
-                    removed_block.prebuilt_tx_list.tx_list.len(),
-                    removed_block.prebuilt_tx_list.bytes_length
+                    removed_block.prebuilt_tx_list.get_tx_list().len(),
+                    removed_block.prebuilt_tx_list.get_bytes_length()
                 );
             }
         }
@@ -298,7 +300,7 @@ impl<B: BatchLike, F> BatchBuilderCore<B, F> {
 
     pub fn add_l2_block(&mut self, l2_block: L2Block) -> Result<(), anyhow::Error> {
         if let Some(current_batch) = self.current_batch.as_mut() {
-            *current_batch.total_bytes_mut() += l2_block.prebuilt_tx_list.bytes_length;
+            *current_batch.total_bytes_mut() += l2_block.prebuilt_tx_list.get_bytes_length();
             self.last_l2_block_timestamp = l2_block.timestamp_sec;
             current_batch.l2_blocks_mut().push(l2_block);
             debug!(
@@ -425,11 +427,7 @@ mod tests {
         assert!(!core.should_new_block_be_created(3, 1000, false));
 
         let l2_block = L2Block {
-            prebuilt_tx_list: PreBuiltTxList {
-                tx_list: vec![],
-                estimated_gas_used: 0,
-                bytes_length: 0,
-            },
+            prebuilt_tx_list: PreBuiltTxList::empty(),
             timestamp_sec: 1000,
         };
         core.add_l2_block(l2_block).unwrap();

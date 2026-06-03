@@ -30,7 +30,7 @@ pub struct L2ExecutionLayer {
 impl L2ExecutionLayer {
     pub async fn new(taiko_config: TaikoConfig) -> Result<Self, Error> {
         let provider =
-            alloy_tools::create_alloy_provider_without_wallet(&taiko_config.taiko_geth_url).await?;
+            alloy_tools::create_alloy_provider_without_wallet(&taiko_config.l2_rpc_url).await?;
 
         let chain_id = provider
             .get_chain_id()
@@ -38,7 +38,7 @@ impl L2ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to get chain ID: {}", e))?;
         info!("L2 Chain ID: {}", chain_id);
 
-        let taiko_anchor = TaikoAnchor::new(taiko_config.taiko_anchor_address, provider.clone());
+        let taiko_anchor = TaikoAnchor::new(taiko_config.anchor_address, provider.clone());
 
         let common =
             ExecutionLayerCommon::new(provider.clone(), taiko_config.signer.get_address()).await?;
@@ -133,11 +133,11 @@ impl L2ExecutionLayer {
         );
 
         let provider =
-            alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.taiko_geth_url)
+            alloy_tools::construct_alloy_provider(&self.config.signer, &self.config.l2_rpc_url)
                 .await?;
 
         Self::transfer_eth_from_l2_to_l1_with_provider(
-            self.config.taiko_bridge_address,
+            self.config.bridge_l2_address,
             provider,
             amount,
             self.chain_id,
@@ -151,7 +151,7 @@ impl L2ExecutionLayer {
     }
 
     pub async fn transfer_eth_from_l2_to_l1_with_provider(
-        taiko_bridge_address: Address,
+        bridge_l2_address: Address,
         provider: DynProvider,
         amount: u128,
         src_chain_id: u64,
@@ -159,7 +159,7 @@ impl L2ExecutionLayer {
         preconfer_address: Address,
         bridge_relayer_fee: u64,
     ) -> Result<(), Error> {
-        let contract = Bridge::new(taiko_bridge_address, provider.clone());
+        let contract = Bridge::new(bridge_l2_address, provider.clone());
         let gas_limit = contract
             .getMessageMinGasLimit(Uint::<256, 4>::from(0))
             .call()

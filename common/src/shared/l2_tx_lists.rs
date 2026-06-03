@@ -61,21 +61,68 @@ pub struct PreBuiltTxList {
         alias = "txList",
         deserialize_with = "deserialize_tx_list"
     )]
-    pub tx_list: Vec<Transaction>,
+    tx_list: Vec<Transaction>,
 
     #[serde(rename = "EstimatedGasUsed", alias = "estimatedGasUsed")]
-    pub estimated_gas_used: u64,
+    estimated_gas_used: u64,
 
     #[serde(rename = "BytesLength", alias = "bytesLength")]
-    pub bytes_length: u64,
+    bytes_length: u64,
 }
 
 impl PreBuiltTxList {
+    pub fn new(tx_list: Vec<Transaction>) -> Self {
+        let bytes_length = rlp_encode(&tx_list).len() as u64;
+        Self {
+            tx_list,
+            estimated_gas_used: 0,
+            bytes_length,
+        }
+    }
+
     pub fn empty() -> Self {
         PreBuiltTxList {
             tx_list: Vec::new(),
             estimated_gas_used: 0,
             bytes_length: 0,
+        }
+    }
+
+    pub fn empty_with_tx_list(tx_list: Vec<Transaction>) -> Self {
+        PreBuiltTxList {
+            tx_list,
+            estimated_gas_used: 0,
+            bytes_length: 0,
+        }
+    }
+
+    pub fn take_tx_list(self) -> Vec<Transaction> {
+        self.tx_list
+    }
+
+    pub fn get_tx_list(&self) -> &Vec<Transaction> {
+        &self.tx_list
+    }
+
+    pub fn push_tx(&mut self, tx: Transaction) {
+        self.tx_list.push(tx);
+        self.bytes_length = rlp_encode(&self.tx_list).len() as u64;
+    }
+
+    pub fn get_estimated_gas_used(&self) -> u64 {
+        self.estimated_gas_used
+    }
+
+    pub fn get_bytes_length(&self) -> u64 {
+        self.bytes_length
+    }
+
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn empty_with_bytes_length(bytes_length: u64) -> Self {
+        PreBuiltTxList {
+            tx_list: Vec::new(),
+            estimated_gas_used: 0,
+            bytes_length,
         }
     }
 }

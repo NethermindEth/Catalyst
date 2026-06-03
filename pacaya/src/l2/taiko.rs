@@ -211,7 +211,7 @@ impl Taiko {
     ) -> Result<BuildPreconfBlockResponse, Error> {
         tracing::debug!(
             "Submitting new L2 block to the Taiko driver with {} txs",
-            l2_block.prebuilt_tx_list.tx_list.len()
+            l2_block.prebuilt_tx_list.get_tx_list().len()
         );
 
         let base_fee_config = self.get_base_fee_config();
@@ -227,7 +227,7 @@ impl Taiko {
             )
             .await?;
         let tx_list = std::iter::once(anchor_tx)
-            .chain(l2_block.prebuilt_tx_list.tx_list)
+            .chain(l2_block.prebuilt_tx_list.take_tx_list())
             .collect::<Vec<_>>();
 
         let tx_list_bytes = l2_tx_lists::encode_and_compress(&tx_list)?;

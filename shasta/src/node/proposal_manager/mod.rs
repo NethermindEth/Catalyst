@@ -31,7 +31,7 @@ use proposal::Proposals;
 pub struct ProposalManager {
     proposal_builder: ProposalBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-    pub taiko: Arc<Taiko>,
+    taiko: Arc<Taiko>,
     block_advancer: Arc<dyn BlockAdvancer>,
     l1_height_lag: u64,
     min_anchor_offset: u64,
@@ -175,11 +175,8 @@ impl ProposalManager {
                 forced_inclusion.len()
             );
             let fi_block = L2BlockV2Draft {
-                prebuilt_tx_list: PreBuiltTxList {
-                    tx_list: forced_inclusion,
-                    estimated_gas_used: 0,
-                    bytes_length: 0,
-                },
+                // No need to calculate the byte length for forced inclusion, as it is not included in the proposal's blobs.
+                prebuilt_tx_list: PreBuiltTxList::empty_with_tx_list(forced_inclusion),
                 timestamp_sec: l2_slot_context.info.parent_timestamp() + 1,
                 gas_limit_without_anchor: l2_slot_context.info.parent_gas_limit_without_anchor(),
             };
@@ -701,11 +698,7 @@ impl ProposalManager {
                 l2_slot_info.slot_timestamp(),
             );
 
-            let pending_tx_list = PreBuiltTxList {
-                tx_list: txs,
-                estimated_gas_used: 0,
-                bytes_length: 0,
-            };
+            let pending_tx_list = PreBuiltTxList::new(txs);
 
             let is_last_reanchored_block = current_block_pos + 1 == blocks.len()
                 || processed_blocks + 1 == max_blocks_to_reanchor;
@@ -756,7 +749,7 @@ impl ProposalManager {
             .await?;
         let max_blocks_to_reanchor =
             (self.max_blocks_to_reanchor).min(info.slot_timestamp() - info.parent_timestamp());
-        let first_block_timestamp = info.slot_timestamp() - max_blocks_to_reanchor;
+        let first_block_timestamp = info.slot_timestamp() - max_blocks_to_reanchor + 1;
         let l2_slot_info = L2SlotInfoV2::new_from_other(info, first_block_timestamp);
         Ok((l2_slot_info, max_blocks_to_reanchor))
     }

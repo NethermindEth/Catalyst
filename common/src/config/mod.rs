@@ -26,18 +26,18 @@ pub struct Config {
     pub l1_slots_per_epoch: u64,
     pub preconf_heartbeat_ms: u64,
     // L2
-    pub taiko_geth_rpc_url: String,
-    pub taiko_geth_auth_rpc_url: String,
-    pub taiko_driver_url: String,
-    /// jwt secret file path for taiko-geth and taiko-driver
+    pub l2_rpc_url: String,
+    pub l2_auth_rpc_url: String,
+    pub l2_driver_url: String,
+    /// jwt secret file path for L2 EL and L2 driver
     pub jwt_secret_file_path: String,
     pub rpc_l2_execution_layer_timeout: Duration,
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
     pub rpc_driver_retry_timeout: Duration,
-    // Taiko contracts
-    pub taiko_anchor_address: Address,
-    pub taiko_bridge_address: Address,
+    // L2 contracts
+    pub anchor_address: Address,
+    pub bridge_l2_address: Address,
     // Batch building parameters
     pub max_bytes_size_of_batch: u64,
     pub max_blocks_per_batch: u16,
@@ -55,7 +55,7 @@ pub struct Config {
     // Thresholds for balances
     pub funds_monitor_interval_sec: u64,
     pub threshold_eth: u128,
-    pub threshold_taiko: u128,
+    pub threshold_l1_token: u128,
     // Bridging
     pub disable_bridging: bool,
     pub amount_to_bridge_from_l2_to_l1: u128,
@@ -95,6 +95,30 @@ pub fn address_parse_error(
         value,
         value.len()
     )
+}
+
+fn get_env_with_deprecation(new_key: &str, deprecated_key: &str) -> Option<String> {
+    let new_val = std::env::var(new_key).ok();
+    let deprecated_val = std::env::var(deprecated_key).ok();
+
+    match (new_val, deprecated_val) {
+        (Some(new), Some(_)) => {
+            warn!(
+                "Both {} and deprecated {} are set; using {}",
+                new_key, deprecated_key, new_key
+            );
+            Some(new)
+        }
+        (Some(new), None) => Some(new),
+        (None, Some(old)) => {
+            warn!(
+                "{} is deprecated and will be removed in a future release; use {} instead",
+                deprecated_key, new_key
+            );
+            Some(old)
+        }
+        (None, None) => None,
+    }
 }
 
 impl Config {
@@ -236,22 +260,31 @@ impl Config {
             })?;
         let rpc_l2_execution_layer_timeout = Duration::from_millis(rpc_l2_execution_layer_timeout);
 
-        const TAIKO_ANCHOR_ADDRESS: &str = "TAIKO_ANCHOR_ADDRESS";
-        let taiko_anchor_address_str = std::env::var(TAIKO_ANCHOR_ADDRESS)
-            .unwrap_or("0x1670010000000000000000000000000000010001".to_string());
-        let taiko_anchor_address = Address::from_str(&taiko_anchor_address_str)
-            .map_err(|e| address_parse_error(TAIKO_ANCHOR_ADDRESS, e, &taiko_anchor_address_str))?;
+        const ANCHOR_ADDRESS: &str = "ANCHOR_ADDRESS";
+        let anchor_address_str =
+            if let Some(val) = get_env_with_deprecation(ANCHOR_ADDRESS, "TAIKO_ANCHOR_ADDRESS") {
+                val
+            } else {
+                "0x1670010000000000000000000000000000010001".to_string()
+            };
+        let anchor_address = Address::from_str(&anchor_address_str)
+            .map_err(|e| address_parse_error(ANCHOR_ADDRESS, e, &anchor_address_str))?;
 
-        const BRIDGE_ADDRESS: &str = "TAIKO_BRIDGE_L2_ADDRESS";
-        let taiko_bridge_address_str = std::env::var(BRIDGE_ADDRESS).unwrap_or_else(|_| {
+        const BRIDGE_L2_ADDRESS: &str = "BRIDGE_L2_ADDRESS";
+        let bridge_l2_address_str = if let Some(val) =
+            get_env_with_deprecation(BRIDGE_L2_ADDRESS, "TAIKO_BRIDGE_L2_ADDRESS")
+        {
+            val
+        } else {
             warn!(
                 "No Bridge contract address found in {} env var, using default",
-                BRIDGE_ADDRESS
+                BRIDGE_L2_ADDRESS
             );
             default_empty_address.clone()
-        });
-        let taiko_bridge_address = Address::from_str(&taiko_bridge_address_str)
-            .map_err(|e| address_parse_error(BRIDGE_ADDRESS, e, &taiko_bridge_address_str))?;
+        };
+
+        let bridge_l2_address = Address::from_str(&bridge_l2_address_str)
+            .map_err(|e| address_parse_error(BRIDGE_L2_ADDRESS, e, &bridge_l2_address_str))?;
 
         let blobs_per_batch = std::env::var("BLOBS_PER_BATCH")
             .unwrap_or("5".to_string())
@@ -354,12 +387,13 @@ impl Config {
             .parse::<u128>()
             .map_err(|e| anyhow::anyhow!("THRESHOLD_ETH must be a number: {}", e))?;
 
-        // 1000 TAIKO
-        let threshold_taiko =
-            std::env::var("THRESHOLD_TAIKO").unwrap_or("10000000000000000000000".to_string());
-        let threshold_taiko = threshold_taiko
+        // 0 L1 tokens
+        let threshold_l1_token = get_env_with_deprecation("THRESHOLD_L1_TOKEN", "THRESHOLD_TAIKO")
+            .unwrap_or("0".to_string());
+
+        let threshold_l1_token = threshold_l1_token
             .parse::<u128>()
-            .map_err(|e| anyhow::anyhow!("THRESHOLD_TAIKO must be a number: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("THRESHOLD_L1_TOKEN must be a number: {}", e))?;
 
         // 1 ETH
         let amount_to_bridge_from_l2_to_l1 = std::env::var("AMOUNT_TO_BRIDGE_FROM_L2_TO_L1")
@@ -461,14 +495,31 @@ impl Config {
             .parse::<u16>()
             .map_err(|e| anyhow::anyhow!("INTERNAL_SERVER_PORT must be a number: {}", e))?;
 
+        let l2_rpc_url = get_env_with_deprecation("L2_RPC_URL", "TAIKO_GETH_RPC_URL")
+            .unwrap_or_else(|| {
+                warn!("No L2 RPC URL found in L2_RPC_URL env var, using default");
+                "ws://127.0.0.1:1234".to_string()
+            });
+
+        let l2_auth_rpc_url =
+            get_env_with_deprecation("L2_AUTH_RPC_URL", "TAIKO_GETH_AUTH_RPC_URL").unwrap_or_else(
+                || {
+                    warn!("No L2 auth RPC URL found in L2_AUTH_RPC_URL env var, using default");
+                    "http://127.0.0.1:1235".to_string()
+                },
+            );
+
+        let l2_driver_url = get_env_with_deprecation("L2_DRIVER_URL", "TAIKO_DRIVER_URL")
+            .unwrap_or_else(|| {
+                warn!("No L2 driver URL found in L2_DRIVER_URL env var, using default");
+                "http://127.0.0.1:1236".to_string()
+            });
+
         let config = Self {
             preconfer_address,
-            taiko_geth_rpc_url: std::env::var("TAIKO_GETH_RPC_URL")
-                .unwrap_or("ws://127.0.0.1:1234".to_string()),
-            taiko_geth_auth_rpc_url: std::env::var("TAIKO_GETH_AUTH_RPC_URL")
-                .unwrap_or("http://127.0.0.1:1235".to_string()),
-            taiko_driver_url: std::env::var("TAIKO_DRIVER_URL")
-                .unwrap_or("http://127.0.0.1:1236".to_string()),
+            l2_rpc_url,
+            l2_auth_rpc_url,
+            l2_driver_url,
             catalyst_node_ecdsa_private_key,
             l1_rpc_urls: std::env::var("L1_RPC_URLS")
                 .unwrap_or("wss://127.0.0.1".to_string())
@@ -489,8 +540,8 @@ impl Config {
             rpc_driver_preconf_timeout,
             rpc_driver_status_timeout,
             rpc_driver_retry_timeout,
-            taiko_anchor_address,
-            taiko_bridge_address,
+            anchor_address,
+            bridge_l2_address,
             max_bytes_size_of_batch,
             max_blocks_per_batch,
             max_time_shift_between_blocks_sec,
@@ -503,7 +554,7 @@ impl Config {
             delay_between_tx_attempts_sec,
             funds_monitor_interval_sec,
             threshold_eth,
-            threshold_taiko,
+            threshold_l1_token,
             amount_to_bridge_from_l2_to_l1,
             disable_bridging,
             max_bytes_per_tx_list,
@@ -528,9 +579,9 @@ impl Config {
         info!(
             r#"
 Configuration:{}
-Taiko geth L2 RPC URL: {},
-Taiko geth auth RPC URL: {},
-Taiko driver URL: {},
+L2 RPC URL: {},
+L2 auth RPC URL: {},
+L2 driver URL: {},
 L1 RPC URL: {},
 Consensus layer URL: {},
 Consensus layer timeout: {}ms,
@@ -545,9 +596,9 @@ rpc L2 EL timeout: {}ms
 rpc driver preconf timeout: {}ms
 rpc driver status timeout: {}ms
 rpc driver retry timeout: {}ms
-taiko anchor address: {}
-taiko bridge address: {}
-max bytes per tx list from taiko driver: {}
+anchor address: {}
+bridge L2 address: {}
+max bytes per tx list from L2 driver: {}
 throttling factor: {}
 min pending tx list size: {} bytes
 max bytes size of batch: {}
@@ -562,7 +613,7 @@ max attempts to wait tx: {}
 delay between tx attempts: {}s
 funds_monitor_interval_sec: {}s
 threshold_eth: {}
-threshold_taiko: {}
+threshold_l1_token: {}
 amount to bridge from l2 to l1: {}
 disable bridging: {}
 min number of transaction to create a L2 block: {}
@@ -584,9 +635,9 @@ internal server port: {}
             } else {
                 "".to_string()
             },
-            config.taiko_geth_rpc_url,
-            config.taiko_geth_auth_rpc_url,
-            config.taiko_driver_url,
+            config.l2_rpc_url,
+            config.l2_auth_rpc_url,
+            config.l2_driver_url,
             match config.l1_rpc_urls.split_first() {
                 Some((first, rest)) => {
                     let mut urls = vec![format!("{} (main)", first)];
@@ -608,8 +659,8 @@ internal server port: {}
             config.rpc_driver_preconf_timeout.as_millis(),
             config.rpc_driver_status_timeout.as_millis(),
             config.rpc_driver_retry_timeout.as_millis(),
-            config.taiko_anchor_address,
-            config.taiko_bridge_address,
+            config.anchor_address,
+            config.bridge_l2_address,
             config.max_bytes_per_tx_list,
             config.throttling_factor,
             config.min_bytes_per_tx_list,
@@ -625,7 +676,7 @@ internal server port: {}
             config.delay_between_tx_attempts_sec,
             funds_monitor_interval_sec,
             threshold_eth,
-            threshold_taiko,
+            threshold_l1_token,
             config.amount_to_bridge_from_l2_to_l1,
             config.disable_bridging,
             config.preconf_min_txs,

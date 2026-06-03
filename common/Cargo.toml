@@ -8,6 +8,7 @@ publish = false
 
 [features]
 test-gas = []
+test-utils = []
 
 [dependencies]
 alloy = { workspace = true, features = [

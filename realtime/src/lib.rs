@@ -2,6 +2,7 @@ mod chain_monitor;
 mod l1;
 mod l2;
 mod node;
+mod privacy;
 pub mod raiko;
 mod shared_abi;
 mod utils;
@@ -65,7 +66,7 @@ pub async fn create_realtime_node(
         metrics.clone(),
         taiko_config,
         l2_engine,
-        config.taiko_bridge_address,
+        config.bridge_l2_address,
         realtime_config.l2_signal_service,
     )
     .await?;
@@ -109,7 +110,7 @@ pub async fn create_realtime_node(
                 .first()
                 .ok_or_else(|| anyhow::anyhow!("L1 RPC URL is required"))?
                 .clone(),
-            config.taiko_geth_rpc_url.clone(),
+            config.l2_rpc_url.clone(),
             realtime_config.realtime_inbox,
             cancel_token.clone(),
             "ProposedAndProved",
