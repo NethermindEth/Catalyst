@@ -55,7 +55,6 @@ pub struct Config {
     // Thresholds for balances
     pub funds_monitor_interval_sec: u64,
     pub threshold_eth: u128,
-    pub threshold_l1_token: u128,
     // Bridging
     pub disable_bridging: bool,
     pub amount_to_bridge_from_l2_to_l1: u128,
@@ -387,14 +386,6 @@ impl Config {
             .parse::<u128>()
             .map_err(|e| anyhow::anyhow!("THRESHOLD_ETH must be a number: {}", e))?;
 
-        // 0 L1 tokens
-        let threshold_l1_token = get_env_with_deprecation("THRESHOLD_L1_TOKEN", "THRESHOLD_TAIKO")
-            .unwrap_or("0".to_string());
-
-        let threshold_l1_token = threshold_l1_token
-            .parse::<u128>()
-            .map_err(|e| anyhow::anyhow!("THRESHOLD_L1_TOKEN must be a number: {}", e))?;
-
         // 1 ETH
         let amount_to_bridge_from_l2_to_l1 = std::env::var("AMOUNT_TO_BRIDGE_FROM_L2_TO_L1")
             .unwrap_or("1000000000000000000".to_string())
@@ -554,7 +545,6 @@ impl Config {
             delay_between_tx_attempts_sec,
             funds_monitor_interval_sec,
             threshold_eth,
-            threshold_l1_token,
             amount_to_bridge_from_l2_to_l1,
             disable_bridging,
             max_bytes_per_tx_list,
@@ -613,7 +603,6 @@ max attempts to wait tx: {}
 delay between tx attempts: {}s
 funds_monitor_interval_sec: {}s
 threshold_eth: {}
-threshold_l1_token: {}
 amount to bridge from l2 to l1: {}
 disable bridging: {}
 min number of transaction to create a L2 block: {}
@@ -676,7 +665,6 @@ internal server port: {}
             config.delay_between_tx_attempts_sec,
             funds_monitor_interval_sec,
             threshold_eth,
-            threshold_l1_token,
             config.amount_to_bridge_from_l2_to_l1,
             config.disable_bridging,
             config.preconf_min_txs,

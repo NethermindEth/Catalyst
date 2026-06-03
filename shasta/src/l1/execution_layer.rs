@@ -5,7 +5,7 @@ use crate::l1::config::ContractAddresses;
 use alloy::{
     eips::BlockNumberOrTag,
     hex::ToHexExt,
-    primitives::{Address, U256, aliases::U48},
+    primitives::{Address, aliases::U48},
     providers::{DynProvider, Provider},
     rpc::client::BatchRequest,
     sol_types::SolCall,
@@ -435,22 +435,5 @@ impl WhitelistProvider for ExecutionLayer {
             })?;
 
         Ok(operators.activeSince > 0)
-    }
-}
-
-impl common::l1::traits::PreconferBondProvider for ExecutionLayer {
-    async fn get_preconfer_total_bonds(&self) -> Result<U256, Error> {
-        let bond = self
-            .inbox_instance
-            .getBond(self.common().preconfer_address())
-            .call()
-            .await
-            .map_err(|e| {
-                Error::msg(format!(
-                    "Failed to get bond value for the preconfer from inbox: {e}",
-                ))
-            })?;
-
-        Ok(U256::from(bond.balance))
     }
 }
