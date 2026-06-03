@@ -235,7 +235,7 @@ impl Node {
                 .should_new_block_be_created(&pending_tx_list, &l2_slot_context)
                 && (pending_tx_list
                     .as_ref()
-                    .is_some_and(|pre_built_list| !pre_built_list.tx_list.is_empty())
+                    .is_some_and(|pre_built_list| !pre_built_list.get_tx_list().is_empty())
                     || self.proposal_manager.has_pending_user_ops().await)
             {
                 let preconfed_block = self
@@ -439,7 +439,7 @@ impl Node {
                     "Txs: {:<4} |",
                     pending_tx_list
                         .as_ref()
-                        .map_or(0, |tx_list| tx_list.tx_list.len())
+                        .map_or(0, |tx_list| tx_list.get_tx_list().len())
                 )
             } else {
                 "Txs: unknown |".to_string()

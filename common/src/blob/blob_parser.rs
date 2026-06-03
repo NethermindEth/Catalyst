@@ -160,7 +160,7 @@ mod tests {
         let str = r#"[{"BytesLength":220,"EstimatedGasUsed":0,"TxList":[{"accessList":[],"chainId":"0x28c59","gas":"0x33450","gasPrice":null,"hash":"0xf629a812d6aa6e9980dc4345f9cb922d3ebab9fb4cd37d2f5e5f39084c0edf3f","input":"0x","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x77359400","nonce":"0x2","r":"0xad528609b97f7ba8b8775aaf97d2229907ad2eac1b95f76fb567a3ae3bde46b9","s":"0x56e6fbe4b033c9c5d2098d21dfb0115a7ce7d5be760f947da30fee18c255546d","to":"0x5291a539174785fadc93effe9c9ceb7a54719ae4","type":"0x2","v":"0x1","value":"0x1550f7dca70000","yParity":"0x1"},{"accessList":[],"chainId":"0x28c59","gas":"0x33450","gasPrice":null,"hash":"0xca77045ed7340eaa0cc465f100c0470e162af9106acf56285729529ddee0e743","input":"0x","maxFeePerGas":"0x6fc23ac00","maxPriorityFeePerGas":"0x77359400","nonce":"0x3","r":"0xc79c04f7aa8d01eaa607ed9b69446fa8b3c3b9c0774d87ce7ed331df34bf8cc7","s":"0x19ba8dc8d6c6c3c3f69e54ea6fa61ec898deb1ec2ad412353756ea300aa1bc5a","to":"0x5291a539174785fadc93effe9c9ceb7a54719ae4","type":"0x2","v":"0x1","value":"0x1550f7dca70000","yParity":"0x1"}]}]"#;
         let value: serde_json::Value = serde_json::from_str(str).unwrap();
         let pending_lists = decompose_pending_lists_json_from_geth(value).unwrap();
-        let txs = pending_lists[0].tx_list.clone();
+        let txs = pending_lists[0].get_tx_list().clone();
         let compress = encode_and_compress(&txs).unwrap();
         let sidecar_builder: SidecarBuilder<BlobCoder> = SidecarBuilder::from_slice(&compress);
         let blob = sidecar_builder.build_7594().unwrap();

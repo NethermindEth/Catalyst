@@ -40,7 +40,7 @@ impl Proposal {
                 gas_limit: l2_block.gas_limit_without_anchor,
                 transactions: l2_block
                     .prebuilt_tx_list
-                    .tx_list
+                    .get_tx_list()
                     .iter()
                     .map(|tx| tx.clone().into())
                     .collect(),
@@ -88,7 +88,7 @@ impl Proposal {
         let l2_payload = L2BlockV2Payload {
             proposal_id: self.id,
             coinbase: self.coinbase,
-            tx_list: fi_block.prebuilt_tx_list.tx_list,
+            tx_list: fi_block.prebuilt_tx_list.take_tx_list(),
             timestamp_sec: fi_block.timestamp_sec,
             gas_limit_without_anchor: fi_block.gas_limit_without_anchor,
             anchor_block_id: anchor_params.blockNumber.to::<u64>(),
@@ -104,7 +104,7 @@ impl Proposal {
         let l2_payload = L2BlockV2Payload {
             proposal_id: self.id,
             coinbase: self.coinbase,
-            tx_list: l2_block.prebuilt_tx_list.tx_list.clone(),
+            tx_list: l2_block.prebuilt_tx_list.get_tx_list().clone(),
             timestamp_sec: l2_block.timestamp_sec,
             gas_limit_without_anchor: l2_block.gas_limit_without_anchor,
             anchor_block_id: self.anchor_block_id,
@@ -112,7 +112,7 @@ impl Proposal {
             anchor_state_root: self.anchor_state_root,
             is_forced_inclusion: false,
         };
-        self.total_bytes += l2_block.prebuilt_tx_list.bytes_length;
+        self.total_bytes += l2_block.prebuilt_tx_list.get_bytes_length();
         self.l2_blocks.push(l2_block);
         l2_payload
     }
@@ -128,11 +128,11 @@ impl Proposal {
 
     pub fn remove_last_l2_block(&mut self) -> Option<L2BlockV2> {
         let removed = self.l2_blocks.pop()?;
-        self.total_bytes -= removed.prebuilt_tx_list.bytes_length;
+        self.total_bytes -= removed.prebuilt_tx_list.get_bytes_length();
         debug!(
             "Removed L2 block from proposal: {} txs, {} bytes",
-            removed.prebuilt_tx_list.tx_list.len(),
-            removed.prebuilt_tx_list.bytes_length
+            removed.prebuilt_tx_list.get_tx_list().len(),
+            removed.prebuilt_tx_list.get_bytes_length()
         );
         Some(removed)
     }
@@ -188,11 +188,7 @@ mod test {
         let tx: alloy::rpc::types::Transaction = serde_json::from_str(json_data).unwrap();
 
         let l2_block = L2BlockV2 {
-            prebuilt_tx_list: PreBuiltTxList {
-                tx_list: vec![tx],
-                estimated_gas_used: 0,
-                bytes_length: 0,
-            },
+            prebuilt_tx_list: PreBuiltTxList::empty_with_tx_list(vec![tx]),
             timestamp_sec: 0,
             coinbase: Address::ZERO,
             anchor_block_number: 0,
@@ -200,7 +196,7 @@ mod test {
         };
 
         // RLP encode the transactions
-        let buffer = rlp_encode(&l2_block.prebuilt_tx_list.tx_list);
+        let buffer = rlp_encode(l2_block.prebuilt_tx_list.get_tx_list());
 
         let mut proposal = Proposal {
             id: 0,

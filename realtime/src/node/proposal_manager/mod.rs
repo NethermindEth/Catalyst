@@ -311,10 +311,7 @@ impl BatchManager {
             .await?;
 
         info!("Inserting processMessage tx into L2 block");
-        l2_draft_block
-            .prebuilt_tx_list
-            .tx_list
-            .push(l2_call_bridge_tx);
+        l2_draft_block.prebuilt_tx_list.push_tx(l2_call_bridge_tx);
 
         Ok(Some((routed.user_op, routed.l2_call.signal_slot_on_l2)))
     }
@@ -333,7 +330,7 @@ impl BatchManager {
         let l2_el = self.taiko.l2_execution_layer();
         let l1_el = &self.ethereum_l1.execution_layer;
 
-        for tx in &pending_tx_list.tx_list {
+        for tx in pending_tx_list.get_tx_list() {
             let from = tx.inner.signer();
             let Some(to) = tx.inner.to() else {
                 continue; // skip contract creation txs

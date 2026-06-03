@@ -38,7 +38,7 @@ fn build_sidecar_from_l2_blocks(
             gas_limit: l2_block.gas_limit_without_anchor,
             transactions: l2_block
                 .prebuilt_tx_list
-                .tx_list
+                .get_tx_list()
                 .iter()
                 .map(|tx| tx.clone().into())
                 .collect(),

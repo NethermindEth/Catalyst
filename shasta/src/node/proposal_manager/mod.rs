@@ -175,11 +175,8 @@ impl ProposalManager {
                 forced_inclusion.len()
             );
             let fi_block = L2BlockV2Draft {
-                prebuilt_tx_list: PreBuiltTxList {
-                    tx_list: forced_inclusion,
-                    estimated_gas_used: 0,
-                    bytes_length: 0,
-                },
+                // No need to calculate the byte length for forced inclusion, as it is not included in the proposal's blobs.
+                prebuilt_tx_list: PreBuiltTxList::empty_with_tx_list(forced_inclusion),
                 timestamp_sec: l2_slot_context.info.parent_timestamp() + 1,
                 gas_limit_without_anchor: l2_slot_context.info.parent_gas_limit_without_anchor(),
             };
@@ -701,11 +698,7 @@ impl ProposalManager {
                 l2_slot_info.slot_timestamp(),
             );
 
-            let pending_tx_list = PreBuiltTxList {
-                tx_list: txs,
-                estimated_gas_used: 0,
-                bytes_length: 0,
-            };
+            let pending_tx_list = PreBuiltTxList::new(txs);
 
             let is_last_reanchored_block = current_block_pos + 1 == blocks.len()
                 || processed_blocks + 1 == max_blocks_to_reanchor;

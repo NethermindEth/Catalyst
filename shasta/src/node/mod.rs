@@ -685,7 +685,7 @@ impl Node {
                     "Txs: {:<4} |",
                     pending_tx_list
                         .as_ref()
-                        .map_or(0, |tx_list| tx_list.tx_list.len())
+                        .map_or(0, |tx_list| tx_list.get_tx_list().len())
                 )
             } else {
                 "Txs: unknown |".to_string()
