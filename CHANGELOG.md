@@ -2,6 +2,63 @@
 
 All notable changes to Catalyst are documented here, organized by release version.
 
+## [v1.39.1] — 2026-05-03
+
+### Features
+- Realtime: encrypt proposal blobs and consume forced inclusions (#958)
+
+### Fixes
+- Realtime: estimate gas instead of using a fixed blob tx gas limit
+- Fix calculation of reanchored proposal (#965)
+
+### Refactors
+- Deprecate legacy environment variable names in favor of new names (#963)
+- Encapsulate `PreBuiltTxList` fields (#965)
+
+---
+
+## [v1.38.4] — 2026-05-19
+
+### Fixes
+- Correct timestamp calculation for the first reanchor block (#962)
+
+### Dependencies
+- Upgraded to Rust 1.95, Alloy 1.8, and updated taiko-mono (#960)
+
+---
+
+## [v1.38.2] — 2026-05-07
+
+### Features
+- Added realtime fork as a new sibling crate (#953)
+- Added a new e2e workflow using the Nethermind client (#950)
+- Removed upper bound check for `max_blocks_per_batch` (#959)
+
+### Fixes
+- Shasta: check L2 block timestamp before submission (#957)
+- E2E workflow fixes and flag fixes (#946, #947, #948, #949)
+
+### Chores
+- Removed unused dependencies (#955)
+
+---
+
+## [v1.37.1] — 2026-04-10
+
+### Features
+- Added ejection grace period support (#940)
+- Added a metric to verify that the driver is synced with Geth (#932)
+
+### Fixes
+- Use `EJECTION_GRACE_PERIOD_MS` consistently (#943)
+- Cap blocks per batch at the Shasta protocol limit (#933)
+
+### Refactors
+- Replaced warp with axum (#936)
+
+### Changes
+- Removed Pacaya fork crate (#941)
+
 ## [v1.35.1] — 2026-03-31
 
 ### Features
