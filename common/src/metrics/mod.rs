@@ -26,7 +26,6 @@ pub fn metrics_route(metrics: Arc<Metrics>) -> Router {
 
 pub struct Metrics {
     preconfer_eth_balance: Gauge,
-    preconfer_taiko_balance: Gauge,
     preconfer_l2_eth_balance: Gauge,
     blocks_preconfirmed: Counter,
     blocks_reanchored: Counter,
@@ -59,18 +58,8 @@ impl Metrics {
         )
         .expect("Failed to create preconfer_eth_balance gauge");
 
-        let preconfer_taiko_balance = Gauge::new(
-            "preconfer_taiko_balance",
-            "TAIKO balance of the preconfer wallet",
-        )
-        .expect("Failed to create preconfer_taiko_balance gauge");
-
         if let Err(err) = registry.register(Box::new(preconfer_eth_balance.clone())) {
             error!("Error: Failed to register preconfer_eth_balance: {}", err);
-        }
-
-        if let Err(err) = registry.register(Box::new(preconfer_taiko_balance.clone())) {
-            error!("Error: Failed to register preconfer_taiko_balance: {}", err);
         }
 
         let preconfer_l2_eth_balance = Gauge::new(
@@ -294,7 +283,6 @@ impl Metrics {
 
         Self {
             preconfer_eth_balance,
-            preconfer_taiko_balance,
             preconfer_l2_eth_balance,
             blocks_preconfirmed,
             blocks_reanchored,
@@ -320,11 +308,6 @@ impl Metrics {
 
     pub fn set_preconfer_eth_balance(&self, balance: alloy::primitives::U256) {
         self.preconfer_eth_balance
-            .set(Metrics::u256_to_f64(balance));
-    }
-
-    pub fn set_preconfer_taiko_balance(&self, balance: alloy::primitives::U256) {
-        self.preconfer_taiko_balance
             .set(Metrics::u256_to_f64(balance));
     }
 
@@ -487,7 +470,6 @@ mod tests {
 
         // Set some test values
         metrics.set_preconfer_eth_balance(alloy::primitives::U256::from(1000000000000000000u128));
-        metrics.set_preconfer_taiko_balance(alloy::primitives::U256::from(2000000000000000000u128));
         metrics.inc_blocks_preconfirmed();
         metrics.inc_by_blocks_reanchored(1);
         metrics.inc_by_batch_recovered(1);
@@ -506,7 +488,6 @@ mod tests {
 
         // Verify the output contains our metrics
         assert!(output.contains("preconfer_eth_balance 1"));
-        assert!(output.contains("preconfer_taiko_balance 2"));
         assert!(output.contains("blocks_preconfirmed 1"));
         assert!(output.contains("blocks_reanchored 1"));
         assert!(output.contains("batch_recovered 1"));

@@ -2,10 +2,11 @@
 
 All notable changes to Catalyst are documented here, organized by release version.
 
-## [v1.39.1] — 2026-05-03
+## [v1.39.2] — 2026-05-03
 
 ### Features
 - Realtime: encrypt proposal blobs and consume forced inclusions (#958)
+- Remove L1 Taiko token threshold (#966)
 
 ### Fixes
 - Realtime: estimate gas instead of using a fixed blob tx gas limit

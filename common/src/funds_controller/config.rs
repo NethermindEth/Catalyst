@@ -4,7 +4,6 @@ use std::time::Duration;
 
 pub struct Thresholds {
     pub eth: U256,
-    pub taiko: U256,
 }
 
 pub struct FundsControllerConfig {
@@ -21,7 +20,6 @@ impl From<&Config> for FundsControllerConfig {
         Self {
             thresholds: Thresholds {
                 eth: U256::from(config.threshold_eth),
-                taiko: U256::from(config.threshold_l1_token),
             },
             amount_to_bridge_from_l2_to_l1: config.amount_to_bridge_from_l2_to_l1,
             disable_bridging: config.disable_bridging,

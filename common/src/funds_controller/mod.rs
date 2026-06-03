@@ -9,14 +9,14 @@ use tokio::time::sleep;
 use tracing::{error, info, warn};
 
 use crate::{
-    l1::traits::{ELTrait, PreconferBondProvider, PreconferProvider},
+    l1::traits::{ELTrait, PreconferProvider},
     l2::traits::Bridgeable,
     metrics::Metrics,
 };
 
 pub struct FundsController<L1, L2>
 where
-    L1: ELTrait + PreconferBondProvider + PreconferProvider + Send + Sync + 'static,
+    L1: ELTrait + PreconferProvider + Send + Sync + 'static,
     L2: Bridgeable + Send + Sync + 'static,
 {
     config: FundsControllerConfig,
@@ -28,7 +28,7 @@ where
 
 impl<L1, L2> FundsController<L1, L2>
 where
-    L1: ELTrait + PreconferBondProvider + PreconferProvider + Send + Sync + 'static,
+    L1: ELTrait + PreconferProvider + Send + Sync + 'static,
     L2: Bridgeable + Send + Sync + 'static,
 {
     pub fn new(
@@ -74,23 +74,6 @@ where
     }
 
     async fn check_initial_funds(&self) -> Result<(), Error> {
-        // Check TAIKO TOKEN balance
-        let total_balance = self
-            .l1_execution_layer
-            .get_preconfer_total_bonds()
-            .await
-            .map_err(|e| Error::msg(format!("Failed to fetch bond balance: {e}")))?;
-
-        if total_balance < self.config.thresholds.taiko {
-            anyhow::bail!(
-                "Total balance ({}) is below the required threshold ({})",
-                total_balance,
-                self.config.thresholds.taiko
-            );
-        }
-
-        info!("Preconfer taiko balance are sufficient: {}", total_balance);
-
         // Check ETH balance
         let balance = self
             .l1_execution_layer
@@ -123,16 +106,6 @@ where
                 "-".to_string()
             }
         };
-        let taiko_balance_str = match self.l1_execution_layer.get_preconfer_total_bonds().await {
-            Ok(balance) => {
-                self.metrics.set_preconfer_taiko_balance(balance);
-                format!("{balance}")
-            }
-            Err(e) => {
-                warn!("Failed to get preconfer taiko balance: {}", e);
-                "-".to_string()
-            }
-        };
 
         let preconfer_address = self.l1_execution_layer.get_preconfer_address();
         let l2_eth_balance = self.taiko.get_balance(preconfer_address).await;
@@ -148,8 +121,8 @@ where
         };
 
         info!(
-            "Balances - ETH: {}, L2 ETH: {}, TAIKO: {}",
-            eth_balance_str, l2_eth_balance_str, taiko_balance_str
+            "Balances - ETH: {}, L2 ETH: {}",
+            eth_balance_str, l2_eth_balance_str
         );
 
         if !self.config.disable_bridging
