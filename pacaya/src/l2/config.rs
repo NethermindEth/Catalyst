@@ -7,11 +7,11 @@ use std::time::Duration;
 
 #[derive(Clone)]
 pub struct TaikoConfig {
-    pub taiko_geth_url: String,
+    pub l2_rpc_url: String,
     pub driver_url: String,
     pub jwt_secret_bytes: [u8; 32],
-    pub taiko_anchor_address: Address,
-    pub taiko_bridge_address: Address,
+    pub anchor_address: Address,
+    pub bridge_l2_address: Address,
     pub rpc_driver_preconf_timeout: Duration,
     pub rpc_driver_status_timeout: Duration,
     pub rpc_driver_retry_timeout: Duration,
@@ -32,11 +32,11 @@ impl TaikoConfig {
         .await?;
 
         Ok(Self {
-            taiko_geth_url: config.taiko_geth_rpc_url.clone(),
-            driver_url: config.taiko_driver_url.clone(),
+            l2_rpc_url: config.l2_rpc_url.clone(),
+            driver_url: config.l2_driver_url.clone(),
             jwt_secret_bytes,
-            taiko_anchor_address: config.taiko_anchor_address,
-            taiko_bridge_address: config.taiko_bridge_address,
+            anchor_address: config.anchor_address,
+            bridge_l2_address: config.bridge_l2_address,
             rpc_driver_preconf_timeout: config.rpc_driver_preconf_timeout,
             rpc_driver_status_timeout: config.rpc_driver_status_timeout,
             rpc_driver_retry_timeout: config.rpc_driver_retry_timeout,
