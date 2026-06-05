@@ -21,21 +21,6 @@
             "name": "basefeeSharingPctg",
             "type": "uint8",
             "internalType": "uint8"
-          },
-          {
-            "name": "forcedInclusionDelay",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "forcedInclusionFeeInGwei",
-            "type": "uint64",
-            "internalType": "uint64"
-          },
-          {
-            "name": "forcedInclusionFeeDoubleThreshold",
-            "type": "uint64",
-            "internalType": "uint64"
           }
         ]
       }
@@ -215,21 +200,6 @@
             "name": "basefeeSharingPctg",
             "type": "uint8",
             "internalType": "uint8"
-          },
-          {
-            "name": "forcedInclusionDelay",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "forcedInclusionFeeInGwei",
-            "type": "uint64",
-            "internalType": "uint64"
-          },
-          {
-            "name": "forcedInclusionFeeDoubleThreshold",
-            "type": "uint64",
-            "internalType": "uint64"
           }
         ]
       }
