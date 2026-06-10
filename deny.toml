@@ -21,6 +21,7 @@ ignore = [
     "RUSTSEC-2025-0141", # unmaintained advisory detected, used by alethia-reth
     "RUSTSEC-2026-0118", # hickory-proto NSEC3 OOM; no safe upgrade, transitive via kona → libp2p-dns
     "RUSTSEC-2026-0119", # hickory-proto O(n²) CPU; no safe upgrade, transitive via kona → libp2p-dns
+    "RUSTSEC-2026-0173", # `proc-macro-error2` crate is no longer maintained; no safe upgrade
 ]
 
 [licenses]
