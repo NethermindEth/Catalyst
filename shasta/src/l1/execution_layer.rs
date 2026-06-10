@@ -164,14 +164,6 @@ impl PreconfOperator for ExecutionLayer {
         // It requires multiple RPC calls that we want to skip for every heartbeat in Shasta.
         Ok(0)
     }
-
-    async fn get_handover_window_slots(&self) -> Result<u64, Error> {
-        // Return a constant value from node config for Shasta
-        // since we don't have access to the TaikoWrapper contract in Shasta.
-        Err(anyhow::anyhow!(
-            "Not implemented for Shasta execution layer"
-        ))
-    }
 }
 
 impl ExecutionLayer {

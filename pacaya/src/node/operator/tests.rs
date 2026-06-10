@@ -29,7 +29,6 @@ mod tests {
         current_operator_address: Address,
         next_operator_address: Address,
         taiko_inbox_height: u64,
-        handover_window_slots: u64,
     }
 
     impl PreconfOperator for ExecutionLayerMock {
@@ -47,35 +46,6 @@ mod tests {
 
         async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
             Ok(self.taiko_inbox_height)
-        }
-
-        async fn get_handover_window_slots(&self) -> Result<u64, Error> {
-            Ok(self.handover_window_slots)
-        }
-    }
-
-    struct ExecutionLayerMockError {}
-    impl PreconfOperator for ExecutionLayerMockError {
-        fn get_preconfer_address(&self) -> Address {
-            PRECONFER_ADDRESS
-        }
-
-        async fn get_operators_for_current_and_next_epoch(
-            &self,
-            _: u64,
-            _: u64,
-        ) -> Result<(Address, Address), OperatorError> {
-            Err(OperatorError::Any(Error::from(anyhow::anyhow!(
-                "test error"
-            ))))
-        }
-
-        async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
-            Err(Error::from(anyhow::anyhow!("test error")))
-        }
-
-        async fn get_handover_window_slots(&self) -> Result<u64, Error> {
-            Err(Error::from(anyhow::anyhow!("test error")))
         }
     }
 
@@ -559,41 +529,6 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_long_handover_window_from_config() {
-        let mut operator = create_operator_with_long_handover_window_from_config();
-        assert_eq!(operator.handover_window_slots, HANDOVER_WINDOW_SLOTS);
-        assert_eq!(
-            operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(
-                false,
-                true,
-                false,
-                false,
-                true,
-                #[cfg(feature = "get_status_duration")]
-                None,
-            )
-        );
-
-        // during get_status, new handover window slots should be loaded from config
-        assert_eq!(operator.handover_window_slots, 10);
-
-        // another get_status call should not change the handover window slots
-        operator.get_status(&get_l2_slot_info()).await.unwrap();
-        assert_eq!(operator.handover_window_slots, 10);
-    }
-
-    #[tokio::test]
-    async fn test_get_status_with_error_in_execution_layer() {
-        let operator =
-            create_operator_with_error_in_execution_layer(Arc::new(ExecutionLayerMockError {}));
-        assert_eq!(
-            operator.get_handover_window_slots().await,
-            HANDOVER_WINDOW_SLOTS
-        );
-    }
-
     struct ExecutionLayerMockErrorToEarly {}
     impl PreconfOperator for ExecutionLayerMockErrorToEarly {
         fn get_preconfer_address(&self) -> Address {
@@ -610,10 +545,6 @@ mod tests {
 
         async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
             Ok(0)
-        }
-
-        async fn get_handover_window_slots(&self) -> Result<u64, Error> {
-            Ok(HANDOVER_WINDOW_SLOTS)
         }
     }
 
@@ -833,7 +764,6 @@ mod tests {
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
-            last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
                 end_of_sequencing_block_hash: B256::ZERO,
@@ -842,11 +772,9 @@ mod tests {
                 current_operator_address,
                 next_operator_address,
                 taiko_inbox_height: 0,
-                handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS,
-            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
             handover_start_buffer_ms: 1000,
             next_operator: false,
             continuing_role: false,
@@ -884,7 +812,6 @@ mod tests {
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
-            last_config_reload_epoch: 0,
             taiko: Arc::new(TaikoMock {
                 end_of_sequencing_block_hash: get_test_hash(),
             }),
@@ -892,11 +819,9 @@ mod tests {
                 current_operator_address,
                 next_operator_address,
                 taiko_inbox_height: 0,
-                handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS,
-            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
             handover_start_buffer_ms: 1000,
             next_operator: false,
             continuing_role: false,
@@ -921,7 +846,6 @@ mod tests {
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
-            last_config_reload_epoch: 0,
             taiko: Arc::new(TaikoUnsyncedMock {
                 end_of_sequencing_block_hash: get_test_hash(),
             }),
@@ -929,11 +853,9 @@ mod tests {
                 current_operator_address,
                 next_operator_address,
                 taiko_inbox_height: 0,
-                handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS,
-            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
             handover_start_buffer_ms: 1000,
             next_operator: false,
             continuing_role: false,
@@ -952,7 +874,6 @@ mod tests {
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
-            last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
                 end_of_sequencing_block_hash: B256::ZERO,
@@ -961,43 +882,9 @@ mod tests {
                 current_operator_address: PRECONFER_ADDRESS,
                 next_operator_address: PRECONFER_ADDRESS,
                 taiko_inbox_height: 1000,
-                handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS,
-            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
-            handover_start_buffer_ms: 1000,
-            next_operator: false,
-            continuing_role: false,
-            simulate_not_submitting_at_the_end_of_epoch: false,
-            was_synced_preconfer: false,
-            current_operator_address: Address::ZERO,
-            last_ejection_timestamp: None,
-            ejection_grace_period_sec: 4,
-        }
-    }
-
-    fn create_operator_with_long_handover_window_from_config()
-    -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
-        let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
-        slot_clock.clock.timestamp = 32 * 12 + 25 * 12; // second epoch 26th slot
-        Operator {
-            fork_info: ForkInfo::default(),
-            cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
-            last_config_reload_epoch: 0,
-            cancel_counter: 0,
-            taiko: Arc::new(TaikoMock {
-                end_of_sequencing_block_hash: B256::ZERO,
-            }),
-            execution_layer: Arc::new(ExecutionLayerMock {
-                current_operator_address: PRECONFER_ADDRESS,
-                next_operator_address: OTHER_OPERATOR_ADDRESS,
-                taiko_inbox_height: 0,
-                handover_window_slots: 10,
-            }),
-            slot_clock: Arc::new(slot_clock),
-            handover_window_slots: HANDOVER_WINDOW_SLOTS,
-            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
             handover_start_buffer_ms: 1000,
             next_operator: false,
             continuing_role: false,
@@ -1016,7 +903,6 @@ mod tests {
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
-            last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
                 end_of_sequencing_block_hash: B256::ZERO,
@@ -1024,7 +910,6 @@ mod tests {
             execution_layer,
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS,
-            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
             handover_start_buffer_ms: 1000,
             next_operator: true,
             continuing_role: false,
@@ -1056,7 +941,6 @@ mod tests {
                 },
             },
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
-            last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
                 end_of_sequencing_block_hash: B256::ZERO,
@@ -1065,11 +949,9 @@ mod tests {
                 current_operator_address: PRECONFER_ADDRESS,
                 next_operator_address: PRECONFER_ADDRESS,
                 taiko_inbox_height: 0,
-                handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS,
-            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
             handover_start_buffer_ms: 1000,
             next_operator: false,
             continuing_role: false,
@@ -1091,7 +973,6 @@ mod tests {
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
-            last_config_reload_epoch: 0,
             cancel_counter: 0,
             taiko: Arc::new(TaikoMock {
                 end_of_sequencing_block_hash: B256::ZERO,
@@ -1100,11 +981,9 @@ mod tests {
                 current_operator_address: PRECONFER_ADDRESS,
                 next_operator_address: PRECONFER_ADDRESS,
                 taiko_inbox_height: 0,
-                handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
             slot_clock: Arc::new(slot_clock),
             handover_window_slots: HANDOVER_WINDOW_SLOTS,
-            handover_window_slots_default: HANDOVER_WINDOW_SLOTS,
             handover_start_buffer_ms: 1000,
             next_operator: false,
             continuing_role: false,

@@ -11,7 +11,6 @@ pub trait PreconfOperator {
         current_slot_timestamp: u64,
     ) -> impl Future<Output = Result<(Address, Address), OperatorError>> + Send;
     fn get_l2_height_from_taiko_inbox(&self) -> impl Future<Output = Result<u64, Error>> + Send;
-    fn get_handover_window_slots(&self) -> impl Future<Output = Result<u64, Error>> + Send;
 }
 
 pub trait WhitelistProvider: Send + Sync {

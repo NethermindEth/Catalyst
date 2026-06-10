@@ -205,12 +205,6 @@ impl PreconfOperator for ExecutionLayer {
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
         Ok(0)
     }
-
-    async fn get_handover_window_slots(&self) -> Result<u64, Error> {
-        Err(anyhow::anyhow!(
-            "Not implemented for RealTime execution layer"
-        ))
-    }
 }
 
 impl ExecutionLayer {
