@@ -159,11 +159,6 @@ impl PreconfOperator for ExecutionLayer {
             .await
     }
 
-    async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-        // Return true for Shasta because we want to skip that check in the operator crate
-        Ok(true)
-    }
-
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
         // Retrieving the L2 height directly from the Inbox is not supported in Shasta.
         // It requires multiple RPC calls that we want to skip for every heartbeat in Shasta.

@@ -202,10 +202,6 @@ impl PreconfOperator for ExecutionLayer {
         Ok((self.preconfer_address, self.preconfer_address))
     }
 
-    async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-        Ok(true)
-    }
-
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
         Ok(0)
     }

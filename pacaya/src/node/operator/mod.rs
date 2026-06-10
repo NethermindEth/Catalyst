@@ -74,25 +74,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         // feature get_status_duration
         #[cfg(feature = "get_status_duration")]
         let start = std::time::Instant::now();
-        if !self
-            .execution_layer
-            .is_preconf_router_specified_in_taiko_wrapper()
-            .await?
-        {
-            warn!("PreconfRouter is not specified in TaikoWrapper");
-            self.reset();
-            return Ok(Status::new(
-                false,
-                false,
-                false,
-                false,
-                false,
-                #[cfg(feature = "get_status_duration")]
-                None,
-            ));
-        }
-        #[cfg(feature = "get_status_duration")]
-        let check_taiko_wrapper = start.elapsed();
 
         let l1_slot: u64 = self.slot_clock.get_current_slot_of_epoch()?;
 
@@ -151,7 +132,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
 
         #[cfg(feature = "get_status_duration")]
         let durations = status::StatusCheckDurations {
-            check_taiko_wrapper,
             check_handover_window_slots,
             check_current_operator,
             check_handover_window,

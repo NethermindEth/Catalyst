@@ -28,7 +28,6 @@ mod tests {
     struct ExecutionLayerMock {
         current_operator_address: Address,
         next_operator_address: Address,
-        is_preconf_router_specified: bool,
         taiko_inbox_height: u64,
         handover_window_slots: u64,
     }
@@ -44,10 +43,6 @@ mod tests {
             _: u64,
         ) -> Result<(Address, Address), OperatorError> {
             Ok((self.current_operator_address, self.next_operator_address))
-        }
-
-        async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-            Ok(self.is_preconf_router_specified)
         }
 
         async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
@@ -73,10 +68,6 @@ mod tests {
             Err(OperatorError::Any(Error::from(anyhow::anyhow!(
                 "test error"
             ))))
-        }
-
-        async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-            Err(Error::from(anyhow::anyhow!("test error")))
         }
 
         async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
@@ -128,38 +119,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_preconf_router_not_specified() {
-        let mut operator = create_operator(
-            32 * 12 + 2, // first l1 slot, second l2 slot
-            true,
-            false,
-            false,
-        );
-        operator.next_operator = true;
-        operator.was_synced_preconfer = true;
-        operator.continuing_role = false;
-        assert_eq!(
-            operator.get_status(&get_l2_slot_info()).await.unwrap(),
-            Status::new(
-                false,
-                false,
-                false,
-                false,
-                false,
-                #[cfg(feature = "get_status_duration")]
-                None,
-            ),
-        );
-    }
-
-    #[tokio::test]
     async fn test_end_of_sequencing() {
         // End of sequencing
         let mut operator = create_operator(
             (31u64 - HANDOVER_WINDOW_SLOTS) * 12 + 5 * 2, // l1 slot before handover window, 5th l2 slot
             true,
             false,
-            true,
         );
         operator.next_operator = false;
         operator.was_synced_preconfer = true;
@@ -181,7 +146,6 @@ mod tests {
             (31 - HANDOVER_WINDOW_SLOTS) * 12 + 5 * 2, // l1 slot before handover window, 5th l2 slot
             false,
             false,
-            true,
         );
         operator.next_operator = false;
         operator.was_synced_preconfer = false;
@@ -201,7 +165,6 @@ mod tests {
         // Continuing role
         let mut operator = create_operator(
             (31 - HANDOVER_WINDOW_SLOTS) * 12 + 5 * 2, // l1 slot before handover window, 5th l2 slot
-            true,
             true,
             true,
         );
@@ -225,7 +188,6 @@ mod tests {
             (31 - HANDOVER_WINDOW_SLOTS) * 12 + 4 * 2, // l1 slot before handover window, 4th l2 slot
             true,
             false,
-            true,
         );
         operator.next_operator = false;
         operator.was_synced_preconfer = true;
@@ -250,7 +212,6 @@ mod tests {
             32 * 12 + 2, // first l1 slot, second l2 slot
             true,
             false,
-            true,
         );
         operator.next_operator = true;
         operator.was_synced_preconfer = true;
@@ -272,7 +233,6 @@ mod tests {
             32 * 12 + 2, // first l1 slot, second l2 slot
             false,
             false,
-            true,
         );
         operator.was_synced_preconfer = true;
         operator.continuing_role = true;
@@ -296,7 +256,6 @@ mod tests {
             32 * 12 + 12 + 2, // second l1 slot, second l2 slot
             true,
             false,
-            true,
         );
         operator.next_operator = true;
         operator.was_synced_preconfer = true;
@@ -317,7 +276,6 @@ mod tests {
             32 * 12 + 12 + 2, // second l1 slot, second l2 slot
             false,
             false,
-            true,
         );
         operator.was_synced_preconfer = true;
         assert_eq!(
@@ -339,7 +297,6 @@ mod tests {
         let mut operator = create_operator_with_unsynced_driver_and_geth(
             31 * 12, // last slot of epoch
             false,
-            true,
             true,
         );
         operator.was_synced_preconfer = true;
@@ -377,7 +334,6 @@ mod tests {
             31 * 12, // last slot of epoch
             false,
             true,
-            true,
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
@@ -396,7 +352,6 @@ mod tests {
             32 * 12, // first slot of next epoch
             true,
             false,
-            true,
         );
         operator.next_operator = true;
         operator.was_synced_preconfer = true;
@@ -418,7 +373,6 @@ mod tests {
             32 * 12, // first slot of next epoch
             true,
             false,
-            true,
         );
         operator.next_operator = true;
         operator.was_synced_preconfer = true;
@@ -444,7 +398,6 @@ mod tests {
             20 * 12, // middle of epoch
             false,
             false,
-            true,
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
@@ -464,7 +417,6 @@ mod tests {
             32 * 12, // first slot of next epoch
             false,
             false,
-            true,
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
@@ -483,7 +435,6 @@ mod tests {
             31 * 12, // last slot
             false,
             false,
-            true,
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
@@ -506,7 +457,6 @@ mod tests {
             (32 - HANDOVER_WINDOW_SLOTS) * 12, // handover buffer
             false,
             true,
-            true,
         );
         // Override the handover start buffer to be larger than the mock timestamp
         assert_eq!(
@@ -525,7 +475,6 @@ mod tests {
         let mut operator = create_operator(
             (32 - HANDOVER_WINDOW_SLOTS + 1) * 12, // handover window after the buffer
             false,
-            true,
             true,
         );
         // Override the handover start buffer to be larger than the mock timestamp
@@ -549,7 +498,6 @@ mod tests {
         let mut operator = create_operator_with_end_of_sequencing_marker_received(
             (32 - HANDOVER_WINDOW_SLOTS) * 12, // handover buffer
             false,
-            true,
             true,
         );
         // Override the handover start buffer to be larger than the mock timestamp
@@ -577,7 +525,6 @@ mod tests {
             31 * 12, // last slot of epoch (handover window)
             true,
             true,
-            true,
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
@@ -597,7 +544,6 @@ mod tests {
             20 * 12, // middle of epoch
             true,
             false,
-            true,
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
@@ -662,10 +608,6 @@ mod tests {
             Err(OperatorError::OperatorCheckTooEarly)
         }
 
-        async fn is_preconf_router_specified_in_taiko_wrapper(&self) -> Result<bool, Error> {
-            Ok(true)
-        }
-
         async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
             Ok(0)
         }
@@ -702,7 +644,6 @@ mod tests {
             31 * 12, // last slot of epoch
             true,
             false,
-            true,
         );
         assert_eq!(
             operator.get_status(&get_l2_slot_info()).await.unwrap(),
@@ -722,7 +663,7 @@ mod tests {
     async fn test_get_l1_statuses_for_operator_continuing_role() {
         let mut operator = create_operator(
             0, // first slot of epoch
-            true, true, true,
+            true, true,
         );
         operator.next_operator = true;
         operator.continuing_role = true;
@@ -743,7 +684,7 @@ mod tests {
 
         let mut operator = create_operator(
             12, // second slot of epoch
-            true, true, true,
+            true, true,
         );
         operator.next_operator = true;
         operator.continuing_role = true;
@@ -763,7 +704,6 @@ mod tests {
 
         let mut operator = create_operator(
             2 * 12, // third slot of epoch
-            true,
             true,
             true,
         );
@@ -788,7 +728,6 @@ mod tests {
         let mut operator = create_operator(
             31 * 12, // last slot of epoch
             false,
-            true,
             true,
         );
         operator.was_synced_preconfer = false;
@@ -886,7 +825,6 @@ mod tests {
         timestamp: u64,
         current_operator: bool,
         next_operator: bool,
-        is_preconf_router_specified: bool,
     ) -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
@@ -903,7 +841,6 @@ mod tests {
             execution_layer: Arc::new(ExecutionLayerMock {
                 current_operator_address,
                 next_operator_address,
-                is_preconf_router_specified,
                 taiko_inbox_height: 0,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
@@ -939,7 +876,6 @@ mod tests {
         timestamp: u64,
         current_operator: bool,
         next_operator: bool,
-        is_preconf_router_specified: bool,
     ) -> Operator<ExecutionLayerMock, MockClock, TaikoMock> {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
@@ -955,7 +891,6 @@ mod tests {
             execution_layer: Arc::new(ExecutionLayerMock {
                 current_operator_address,
                 next_operator_address,
-                is_preconf_router_specified,
                 taiko_inbox_height: 0,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
@@ -978,7 +913,6 @@ mod tests {
         timestamp: u64,
         current_operator: bool,
         next_operator: bool,
-        is_preconf_router_specified: bool,
     ) -> Operator<ExecutionLayerMock, MockClock, TaikoUnsyncedMock> {
         let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
         slot_clock.clock.timestamp = timestamp;
@@ -994,7 +928,6 @@ mod tests {
             execution_layer: Arc::new(ExecutionLayerMock {
                 current_operator_address,
                 next_operator_address,
-                is_preconf_router_specified,
                 taiko_inbox_height: 0,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
@@ -1027,7 +960,6 @@ mod tests {
             execution_layer: Arc::new(ExecutionLayerMock {
                 current_operator_address: PRECONFER_ADDRESS,
                 next_operator_address: PRECONFER_ADDRESS,
-                is_preconf_router_specified: true,
                 taiko_inbox_height: 1000,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
@@ -1060,7 +992,6 @@ mod tests {
             execution_layer: Arc::new(ExecutionLayerMock {
                 current_operator_address: PRECONFER_ADDRESS,
                 next_operator_address: OTHER_OPERATOR_ADDRESS,
-                is_preconf_router_specified: true,
                 taiko_inbox_height: 0,
                 handover_window_slots: 10,
             }),
@@ -1133,7 +1064,6 @@ mod tests {
             execution_layer: Arc::new(ExecutionLayerMock {
                 current_operator_address: PRECONFER_ADDRESS,
                 next_operator_address: PRECONFER_ADDRESS,
-                is_preconf_router_specified: true,
                 taiko_inbox_height: 0,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
@@ -1169,7 +1099,6 @@ mod tests {
             execution_layer: Arc::new(ExecutionLayerMock {
                 current_operator_address: PRECONFER_ADDRESS,
                 next_operator_address: PRECONFER_ADDRESS,
-                is_preconf_router_specified: true,
                 taiko_inbox_height: 0,
                 handover_window_slots: HANDOVER_WINDOW_SLOTS,
             }),
