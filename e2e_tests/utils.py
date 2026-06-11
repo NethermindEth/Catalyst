@@ -138,7 +138,7 @@ def spam_n_blocks(eth_client, private_key, n, preconf_min_txs):
     account = eth_client.eth.account.from_key(private_key)
     last_tx_hash = None
     for i in range(n):
-        nonce = eth_client.eth.get_transaction_count(account.address)
+        nonce = eth_client.eth.get_transaction_count(account.address, "pending")
         for j in range(preconf_min_txs):
             last_tx_hash = send_transaction(
                 nonce, account, "0.00009", eth_client, private_key
