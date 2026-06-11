@@ -85,13 +85,19 @@ def test_handover_transaction(
         nonce, account, "0.00007", l2_client_node1, env_vars.l2_prefunded_priv_key
     )
     assert wait_for_tx_to_be_included(l2_client_node1, tx_hash), (
-        "Transaction should be included in L2 Node 1"
+        "Transaction 1 should be included in L2 Node 1"
+    )
+    assert wait_for_tx_to_be_included(l2_client_node2, tx_hash), (
+        "Transaction 1 should be included in L2 Node 2"
     )
     tx_hash = send_transaction(
         nonce + 1, account, "0.00008", l2_client_node2, env_vars.l2_prefunded_priv_key
     )
     assert wait_for_tx_to_be_included(l2_client_node2, tx_hash), (
-        "Transaction should be included in L2 Node 2"
+        "Transaction 2 should be included in L2 Node 2"
+    )
+    assert wait_for_tx_to_be_included(l2_client_node1, tx_hash), (
+        "Transaction 2 should be included in L2 Node 1"
     )
 
 

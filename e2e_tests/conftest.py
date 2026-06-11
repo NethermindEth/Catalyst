@@ -209,7 +209,11 @@ def global_setup(l1_client, l2_client_node1, l2_client_node2, env_vars):
             break
 
         print(f"Current operator is empty address, waiting...")
-        time.sleep(10)
+        time.sleep(30)
+
+    # Wait a bit to allow Nth L2 client to fully sync and be ready for tests
+    print("Waiting 30 seconds for L2 clients to be fully ready...")
+    time.sleep(30)
 
     yield
     print("Global teardown after all tests")
