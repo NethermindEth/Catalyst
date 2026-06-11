@@ -48,7 +48,7 @@ jobs:
           submodules: true
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
   
       - name: Docker Build Catalyst Node
         run: |
@@ -151,7 +151,7 @@ jobs:
           docker ps
 
       - name: Set up Python (Shasta)
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -174,7 +174,7 @@ jobs:
 
       - name: Upload Shasta pytest log file
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: shasta-pytest-logs
           path: |
