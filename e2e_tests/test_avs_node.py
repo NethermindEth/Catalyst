@@ -80,33 +80,23 @@ def test_handover_transaction(
     nonce = l2_client_node1.eth.get_transaction_count(account.address)
     l2_node_2_block_number = l2_client_node2.eth.block_number
     print(f"L2 Node 2 Block Number: {l2_node_2_block_number}")
+    
     tx_hash = send_transaction(
         nonce, account, "0.00007", l2_client_node1, env_vars.l2_prefunded_priv_key
     )
-
-    res = wait_for_tx_to_be_included(l2_client_node1, tx_hash)
-    print_account_nonce(l2_client_node1, l2_client_node2, account.address)
-    assert res, (
+    assert wait_for_tx_to_be_included(l2_client_node1, tx_hash), (
         "Transaction 1 should be included in L2 Node 1"
     )
-
-    res = wait_for_tx_to_be_included(l2_client_node2, tx_hash)
-    print_account_nonce(l2_client_node1, l2_client_node2, account.address)
-    assert res, (
+    assert wait_for_tx_to_be_included(l2_client_node2, tx_hash), (
         "Transaction 1 should be included in L2 Node 2"
     )
+
     tx_hash = send_transaction(
         nonce + 1, account, "0.00008", l2_client_node2, env_vars.l2_prefunded_priv_key
     )
-
-    res = wait_for_tx_to_be_included(l2_client_node2, tx_hash)
-    print_account_nonce(l2_client_node1, l2_client_node2, account.address)
-    assert res, (
+    assert wait_for_tx_to_be_included(l2_client_node2, tx_hash), (
         "Transaction 2 should be included in L2 Node 2"
     )
-
-    res = wait_for_tx_to_be_included(l2_client_node1, tx_hash)
-    print_account_nonce(l2_client_node1, l2_client_node2, account.address)
     assert wait_for_tx_to_be_included(l2_client_node1, tx_hash), (
         "Transaction 2 should be included in L2 Node 1"
     )
