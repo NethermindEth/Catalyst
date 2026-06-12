@@ -19,7 +19,6 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     execution_layer: Arc<T>,
     slot_clock: Arc<SlotClock<U>>,
     taiko: Arc<V>,
-    handover_window_slots_default: u64,
     handover_window_slots: u64,
     handover_start_buffer_ms: u64,
     next_operator: bool,
@@ -28,7 +27,6 @@ pub struct Operator<T: PreconfOperator, U: Clock, V: StatusProvider> {
     was_synced_preconfer: bool,
     cancel_token: CancellationToken,
     cancel_counter: u64,
-    last_config_reload_epoch: u64,
     fork_info: ForkInfo,
     current_operator_address: Address,
     last_ejection_timestamp: Option<u64>,
@@ -52,7 +50,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             execution_layer,
             slot_clock,
             taiko,
-            handover_window_slots_default: handover_window_slots,
             handover_window_slots,
             handover_start_buffer_ms,
             next_operator: false,
@@ -61,7 +58,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             was_synced_preconfer: false,
             cancel_token,
             cancel_counter: 0,
-            last_config_reload_epoch: 0,
             fork_info,
             current_operator_address: Address::ZERO,
             last_ejection_timestamp: None,
@@ -74,39 +70,9 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         // feature get_status_duration
         #[cfg(feature = "get_status_duration")]
         let start = std::time::Instant::now();
-        if !self
-            .execution_layer
-            .is_preconf_router_specified_in_taiko_wrapper()
-            .await?
-        {
-            warn!("PreconfRouter is not specified in TaikoWrapper");
-            self.reset();
-            return Ok(Status::new(
-                false,
-                false,
-                false,
-                false,
-                false,
-                #[cfg(feature = "get_status_duration")]
-                None,
-            ));
-        }
-        #[cfg(feature = "get_status_duration")]
-        let check_taiko_wrapper = start.elapsed();
 
         let l1_slot: u64 = self.slot_clock.get_current_slot_of_epoch()?;
-
         let epoch = self.slot_clock.get_current_epoch()?;
-        if epoch > self.last_config_reload_epoch {
-            self.handover_window_slots = self.get_handover_window_slots().await;
-            debug!(
-                "Reloaded router config. Handover window slots: {}",
-                self.handover_window_slots
-            );
-            self.last_config_reload_epoch = epoch;
-        }
-        #[cfg(feature = "get_status_duration")]
-        let check_handover_window_slots = start.elapsed();
 
         let current_operator = self.is_current_operator(epoch).await?;
         #[cfg(feature = "get_status_duration")]
@@ -151,8 +117,6 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
 
         #[cfg(feature = "get_status_duration")]
         let durations = status::StatusCheckDurations {
-            check_taiko_wrapper,
-            check_handover_window_slots,
             check_current_operator,
             check_handover_window,
             check_driver_status,
@@ -437,18 +401,5 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
             .await?;
 
         Ok(l2_slot_info.parent_id() >= taiko_inbox_height)
-    }
-
-    async fn get_handover_window_slots(&self) -> u64 {
-        match self.execution_layer.get_handover_window_slots().await {
-            Ok(router_config) => router_config,
-            Err(e) => {
-                warn!(
-                    "Failed to get preconf router config, using default handover window slots: {}",
-                    e
-                );
-                self.handover_window_slots_default
-            }
-        }
     }
 }
