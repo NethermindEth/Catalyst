@@ -535,3 +535,13 @@ def check_empty_forced_inclusion_store(l1_client, env_vars):
     assert forced_inclusion_store_is_empty(l1_client, env_vars), (
         "Forced inclusion store should be empty"
     )
+
+def print_account_nonce(node1, node2, address):
+    node1_latest = node1.eth.get_transaction_count(address)
+    node1_pending = node1.eth.get_transaction_count(address, "pending")
+    node2_latest = node2.eth.get_transaction_count(address)
+    node2_pending = node2.eth.get_transaction_count(address, "pending")
+    print(f"Node 1 Latest Transaction Count: {node1_latest}")
+    print(f"Node 1 Pending Transaction Count: {node1_pending}")
+    print(f"Node 2 Latest Transaction Count: {node2_latest}")
+    print(f"Node 2 Pending Transaction Count: {node2_pending}")
