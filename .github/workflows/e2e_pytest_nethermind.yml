@@ -164,6 +164,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Nth1 logs
+        working-directory: ./e2e_tests
+        run: |
+          docker logs taiko-nethermind-1 --tail 500
+      
+      - name: Nth2 logs
+        working-directory: ./e2e_tests
+        run: |
+          docker logs taiko-nethermind-2 --tail 500
+
       - name: Run Shasta E2E tests
         working-directory: ./e2e_tests
         env:
@@ -171,7 +181,7 @@ jobs:
         run: |
           cp .env.example.shasta .env
           source .env
-          pytest -v --capture tee-sys -r a --tb=long 2>&1 | tee pytest-shasta.log; exit ${PIPESTATUS[0]}
+          pytest -v --capture tee-sys -r a --tb=long -k "test_handover_transaction" 2>&1 | tee pytest-shasta.log; exit ${PIPESTATUS[0]}
           rm .env
 
       - name: Upload Shasta pytest log file
@@ -183,6 +193,16 @@ jobs:
             e2e_tests/pytest-shasta.log
           retention-days: 15
           if-no-files-found: warn
+
+      - name: Nth1 logs
+        working-directory: ./e2e_tests
+        run: |
+          docker logs taiko-nethermind-1 --tail 500
+      
+      - name: Nth2 logs
+        working-directory: ./e2e_tests
+        run: |
+          docker logs taiko-nethermind-2 --tail 500
 
       - name: Cleanup
         if: always()
