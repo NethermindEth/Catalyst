@@ -163,7 +163,7 @@ jobs:
           if [ $elapsed -ge $timeout ]; then
             echo "Warning: Timeout waiting for L2 node1 peer connection, but continuing with tests"
           fi
-          timeout=120
+          
           elapsed=0
           while [ $elapsed -lt $timeout ]; do
             if curl -s http://localhost:8647 -X POST -H "Content-Type: application/json" \
