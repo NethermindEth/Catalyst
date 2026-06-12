@@ -64,7 +64,7 @@ def get_seconds_to_handover_window(beacon_client):
         return 0
 
 
-def wait_for_tx_to_be_included(eth_client, tx_hash, timeout=10):
+def wait_for_tx_to_be_included(eth_client, tx_hash, timeout=60):
     try:
         receipt = eth_client.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
         if receipt.status == 1:
@@ -138,7 +138,7 @@ def spam_n_blocks(eth_client, private_key, n, preconf_min_txs):
     account = eth_client.eth.account.from_key(private_key)
     last_tx_hash = None
     for i in range(n):
-        nonce = eth_client.eth.get_transaction_count(account.address, "pending")
+        nonce = eth_client.eth.get_transaction_count(account.address)
         for j in range(preconf_min_txs):
             last_tx_hash = send_transaction(
                 nonce, account, "0.00009", eth_client, private_key
