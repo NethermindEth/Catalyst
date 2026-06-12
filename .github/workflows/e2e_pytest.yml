@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   e2e-tests-shasta:
-    name: E2E Tests (Shasta)
+    name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 180
     if: |
@@ -222,6 +222,6 @@ jobs:
         run: |
           ./remove-taiko-full.sh --force
           
-      - name: Summary (Shasta)
+      - name: Summary
         run: |
           echo "## Shasta E2E tests completed :green_circle:" >> $GITHUB_STEP_SUMMARY
