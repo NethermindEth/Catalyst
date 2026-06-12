@@ -80,7 +80,7 @@ def test_handover_transaction(
     nonce = l2_client_node1.eth.get_transaction_count(account.address)
     l2_node_2_block_number = l2_client_node2.eth.block_number
     print(f"L2 Node 2 Block Number: {l2_node_2_block_number}")
-    
+
     tx_hash = send_transaction(
         nonce, account, "0.00007", l2_client_node1, env_vars.l2_prefunded_priv_key
     )
