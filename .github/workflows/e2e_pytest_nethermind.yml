@@ -149,6 +149,8 @@ jobs:
         working-directory: ./e2e_tests
         run: |
           docker ps
+          docker inspect taiko-nethermind-1
+          docker inspect taiko-nethermind-2
 
       - name: Set up Python (Shasta)
         uses: actions/setup-python@v6
