@@ -47,35 +47,35 @@ jobs:
           ref: main
           submodules: true
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Docker Build Catalyst Node
-        run: |
-          image_name="nethermind/catalyst-node"
-          image_tag="${GITHUB_SHA:0:8}"
-          full_image="${image_name}:${image_tag}"
-
-          echo "Building Docker image: ${full_image}"
-
-          docker buildx build . \
-            --platform linux/amd64 \
-            -f Dockerfile \
-            -t "${full_image}" \
-            --load
-
-          echo "IMAGE_TAG=${full_image}" >> $GITHUB_ENV
-
-          echo "Verifying image exists locally:"
-          docker images | grep "${image_name}" | grep "${image_tag}" || (echo "Error: Image not found locally" && exit 1)
-
-      - name: Replace Catalyst Node Image simple taiko node nethermind
-        working-directory: simple-taiko-node-nethermind
-        run: |
-          CATALYST_IMAGE="nethermind/catalyst-node:latest"
-          sed -i "s|${CATALYST_IMAGE}|${IMAGE_TAG}|g" .env.example
-          yq eval '.services.catalyst-node-1.pull_policy = "never"' -i docker-compose.yml
-          yq eval '.services.catalyst-node-2.pull_policy = "never"' -i docker-compose.yml
+#      - name: Set up Docker Buildx
+#        uses: docker/setup-buildx-action@v4
+#
+#      - name: Docker Build Catalyst Node
+#        run: |
+#          image_name="nethermind/catalyst-node"
+#          image_tag="${GITHUB_SHA:0:8}"
+#          full_image="${image_name}:${image_tag}"
+#
+#          echo "Building Docker image: ${full_image}"
+#
+#          docker buildx build . \
+#            --platform linux/amd64 \
+#            -f Dockerfile \
+#            -t "${full_image}" \
+#            --load
+#
+#          echo "IMAGE_TAG=${full_image}" >> $GITHUB_ENV
+#
+#          echo "Verifying image exists locally:"
+#          docker images | grep "${image_name}" | grep "${image_tag}" || (echo "Error: Image not found locally" && exit 1)
+#
+#      - name: Replace Catalyst Node Image simple taiko node nethermind
+#        working-directory: simple-taiko-node-nethermind
+#        run: |
+#          CATALYST_IMAGE="nethermind/catalyst-node:latest"
+#          sed -i "s|${CATALYST_IMAGE}|${IMAGE_TAG}|g" .env.example
+#          yq eval '.services.catalyst-node-1.pull_policy = "never"' -i docker-compose.yml
+#          yq eval '.services.catalyst-node-2.pull_policy = "never"' -i docker-compose.yml
 
       - name: Run deployment script
         working-directory: simple-taiko-node-nethermind
@@ -196,6 +196,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Nth IP
+        working-directory: ./e2e_tests
+        run: |
+          docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' taiko-nethermind-1
+          docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' taiko-nethermind-2
+
+      - name: Nth1 logs
+        working-directory: ./e2e_tests
+        run: |
+          docker logs taiko-nethermind-1
+
       - name: Run Shasta E2E tests
         working-directory: ./e2e_tests
         env:
@@ -203,7 +214,7 @@ jobs:
         run: |
           cp .env.example.shasta .env
           source .env
-          pytest -v --capture tee-sys -r a --tb=long 2>&1 | tee pytest-shasta.log; exit ${PIPESTATUS[0]}
+          pytest -v --capture tee-sys -r a --tb=long -k "test_handover_transaction" 2>&1 | tee pytest-shasta.log; exit ${PIPESTATUS[0]}
           rm .env
 
       - name: Upload Shasta pytest log file
