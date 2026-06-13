@@ -145,6 +145,10 @@ jobs:
             echo "Warning: Timeout waiting for L2 node, but continuing with tests"
           fi
 
+      - name: Nth1 logs
+        run: |
+          docker logs taiko-nethermind-1
+
       - name: Wait for L2 nodes p2p connection
         run: |
           check_peer() {
