@@ -64,8 +64,6 @@ jobs:
             -t "${full_image}" \
             --load
 
-          docker builder prune -a -f
-
           echo "IMAGE_TAG=${full_image}" >> $GITHUB_ENV
 
           echo "Verifying image exists locally:"
@@ -88,10 +86,6 @@ jobs:
           ./deploy-taiko-full.sh --client nethermind --force
         env:
           SECONDS_PER_SLOT: 12
-
-      - name: Nth1 logs
-        run: |
-          docker logs taiko-nethermind-1
 
       - name: Wait for L1 services to be ready
         run: |
