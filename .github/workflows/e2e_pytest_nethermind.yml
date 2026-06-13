@@ -44,7 +44,7 @@ jobs:
         with:
           repository: NethermindEth/simple-taiko-node-nethermind
           path: simple-taiko-node-nethermind
-          ref: main
+          ref: fix/p2p
           submodules: true
 
 #      - name: Set up Docker Buildx
@@ -171,6 +171,7 @@ jobs:
 
             echo "Timeout waiting for peer connection, restarting L2 EL Nethermind..."
             docker compose --profile taiko-el-nethermind down -v
+            sleep 10
             docker compose --profile taiko-el-nethermind up -d
 
             sleep 10
