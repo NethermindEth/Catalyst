@@ -47,35 +47,35 @@ jobs:
           ref: main
           submodules: true
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Docker Build Catalyst Node
-        run: |
-          image_name="nethermind/catalyst-node"
-          image_tag="${GITHUB_SHA:0:8}"
-          full_image="${image_name}:${image_tag}"
-
-          echo "Building Docker image: ${full_image}"
-
-          docker buildx build . \
-            --platform linux/amd64 \
-            -f Dockerfile \
-            -t "${full_image}" \
-            --load
-
-          echo "IMAGE_TAG=${full_image}" >> $GITHUB_ENV
-
-          echo "Verifying image exists locally:"
-          docker images | grep "${image_name}" | grep "${image_tag}" || (echo "Error: Image not found locally" && exit 1)
-
-      - name: Replace Catalyst Node Image simple taiko node nethermind
-        working-directory: simple-taiko-node-nethermind
-        run: |
-          CATALYST_IMAGE="nethermind/catalyst-node:latest"
-          sed -i "s|${CATALYST_IMAGE}|${IMAGE_TAG}|g" .env.example
-          yq eval '.services.catalyst-node-1.pull_policy = "never"' -i docker-compose.yml
-          yq eval '.services.catalyst-node-2.pull_policy = "never"' -i docker-compose.yml
+#      - name: Set up Docker Buildx
+#        uses: docker/setup-buildx-action@v4
+#
+#      - name: Docker Build Catalyst Node
+#        run: |
+#          image_name="nethermind/catalyst-node"
+#          image_tag="${GITHUB_SHA:0:8}"
+#          full_image="${image_name}:${image_tag}"
+#
+#          echo "Building Docker image: ${full_image}"
+#
+#          docker buildx build . \
+#            --platform linux/amd64 \
+#            -f Dockerfile \
+#            -t "${full_image}" \
+#            --load
+#
+#          echo "IMAGE_TAG=${full_image}" >> $GITHUB_ENV
+#
+#          echo "Verifying image exists locally:"
+#          docker images | grep "${image_name}" | grep "${image_tag}" || (echo "Error: Image not found locally" && exit 1)
+#
+#      - name: Replace Catalyst Node Image simple taiko node nethermind
+#        working-directory: simple-taiko-node-nethermind
+#        run: |
+#          CATALYST_IMAGE="nethermind/catalyst-node:latest"
+#          sed -i "s|${CATALYST_IMAGE}|${IMAGE_TAG}|g" .env.example
+#          yq eval '.services.catalyst-node-1.pull_policy = "never"' -i docker-compose.yml
+#          yq eval '.services.catalyst-node-2.pull_policy = "never"' -i docker-compose.yml
 
       - name: Run deployment script
         working-directory: simple-taiko-node-nethermind
