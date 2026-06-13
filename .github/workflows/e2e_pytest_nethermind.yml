@@ -87,6 +87,10 @@ jobs:
         env:
           SECONDS_PER_SLOT: 12
 
+      - name: Nth1 logs
+        run: |
+          docker logs taiko-nethermind-1
+
       - name: Wait for L1 services to be ready
         run: |
           echo "Waiting for L1 services to be ready..."
