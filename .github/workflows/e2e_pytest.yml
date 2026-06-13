@@ -147,37 +147,40 @@ jobs:
       
       - name: Wait for L2 nodes p2p connection
         run: |
-          echo "Waiting for L2 nodes to establish p2p connection..."
-          timeout=120
-          elapsed=0
-          while [ $elapsed -lt $timeout ]; do
-            if curl -s http://localhost:8547 -X POST -H "Content-Type: application/json" \
-              --data '{"jsonrpc":"2.0","id":0,"method":"net_peerCount","params":[]}' | grep -q '"0x1"'; then
-              echo "L2 node1 has connected to its peer"
-              break
-            fi
-            echo "Waiting for L2 node1 peer connection... ($elapsed/$timeout seconds)"
-            sleep 12
-            elapsed=$((elapsed + 12))
-          done
-          if [ $elapsed -ge $timeout ]; then
-            echo "Warning: Timeout waiting for L2 node1 peer connection, but continuing with tests"
-          fi
-          
-          elapsed=0
-          while [ $elapsed -lt $timeout ]; do
-            if curl -s http://localhost:8647 -X POST -H "Content-Type: application/json" \
-              --data '{"jsonrpc":"2.0","id":0,"method":"net_peerCount","params":[]}' | grep -q '"0x1"'; then
-              echo "L2 node2 has connected to its peer"
-              break
-            fi
-            echo "Waiting for L2 node2 peer connection... ($elapsed/$timeout seconds)"
-            sleep 12
-            elapsed=$((elapsed + 12))
-          done
-          if [ $elapsed -ge $timeout ]; then
-            echo "Warning: Timeout waiting for L2 node2 peer connection, but continuing with tests"
-          fi
+          check_peer() {
+            local rpc_url=$1
+            local node_name=$2
+
+            timeout=60
+            elapsed=0
+
+            while [ $elapsed -lt $timeout ]; do
+              peer_count=$(curl -s "$rpc_url" \
+                -X POST \
+                -H "Content-Type: application/json" \
+                --data '{"jsonrpc":"2.0","id":0,"method":"net_peerCount","params":[]}' \
+                | grep -o '"result":"0x[^"]*"' \
+                | cut -d'"' -f4)
+
+              if [ "$peer_count" != "0x0" ] && [ -n "$peer_count" ]; then
+                echo "$node_name has connected peer(s): $peer_count"
+                return 0
+              fi
+
+              echo "Waiting for $node_name peer connection... ($elapsed/$timeout seconds)"
+              sleep 12
+              elapsed=$((elapsed + 12))
+            done
+
+            echo "$node_name failed to establish a peer connection within ${timeout}s"
+            return 1
+          }
+
+          echo "Checking node1..."
+          check_peer "http://localhost:8547" "L2 node1"
+
+          echo "Checking node2..."
+          check_peer "http://localhost:8647" "L2 node2"
 
       - name: docker ps
         working-directory: ./e2e_tests
