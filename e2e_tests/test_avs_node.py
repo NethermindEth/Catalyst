@@ -90,6 +90,7 @@ def test_handover_transaction(
     assert wait_for_tx_to_be_included(l2_client_node2, tx_hash), (
         "Transaction 1 should be included in L2 Node 2"
     )
+
     tx_hash = send_transaction(
         nonce + 1, account, "0.00008", l2_client_node2, env_vars.l2_prefunded_priv_key
     )
