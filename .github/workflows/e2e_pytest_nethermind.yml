@@ -176,11 +176,33 @@ jobs:
             return 1
           }
 
-          echo "Checking node1..."
-          check_peer "http://localhost:8547" "L2 node1"
+          max_attempts=3
+          attempt=1
 
-          echo "Checking node2..."
-          check_peer "http://localhost:8647" "L2 node2"
+          while [ $attempt -le $max_attempts ]; do
+            echo "P2P check attempt $attempt/$max_attempts"
+
+            if check_peer "http://localhost:8547" "L2 node1" && \
+               check_peer "http://localhost:8647" "L2 node2"; then
+              echo "Both nodes established P2P connections"
+              exit 0
+            fi
+
+            if [ $attempt -lt $max_attempts ]; then
+              echo "P2P check failed, restarting docker compose..."
+
+              docker compose --profile taiko-el-nethermind down -v
+              docker compose --profile taiko-el-nethermind up -d
+
+              echo "Waiting for services to start..."
+              sleep 30
+            fi
+
+            attempt=$((attempt + 1))
+          done
+
+          echo "Failed to establish P2P connections after $max_attempts attempts"
+          exit 1
 
       - name: docker ps
         working-directory: ./e2e_tests
