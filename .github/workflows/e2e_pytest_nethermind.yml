@@ -146,6 +146,7 @@ jobs:
           fi
 
       - name: Wait for L2 nodes p2p connection
+        working-directory: simple-taiko-node-nethermind
         run: |
           check_peer() {
             local rpc_url=$1
