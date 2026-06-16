@@ -542,4 +542,15 @@ mod tests {
         let slot_clock: SlotClock = SlotClock::new(0, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
         assert_eq!(slot_clock.get_epoch_duration(), Duration::from_secs(384));
     }
+
+    #[test]
+    fn test_get_next_epoch_start_timestamp() {
+        let mut slot_clock = SlotClock::<MockClock>::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        slot_clock.clock.timestamp = 100;
+        let next_epoch_start_timestamp = slot_clock.get_next_epoch_start_timestamp().unwrap();
+        assert_eq!(next_epoch_start_timestamp, SLOT_DURATION * 32);
+        slot_clock.clock.timestamp = 400;
+        let next_epoch_start_timestamp = slot_clock.get_next_epoch_start_timestamp().unwrap();
+        assert_eq!(next_epoch_start_timestamp, SLOT_DURATION * 32 * 2);
+    }
 }
