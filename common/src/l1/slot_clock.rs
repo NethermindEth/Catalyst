@@ -545,7 +545,8 @@ mod tests {
 
     #[test]
     fn test_get_next_epoch_start_timestamp() {
-        let mut slot_clock = SlotClock::<MockClock>::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let mut slot_clock =
+            SlotClock::<MockClock>::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
         slot_clock.clock.timestamp = 100;
         let next_epoch_start_timestamp = slot_clock.get_next_epoch_start_timestamp().unwrap();
         assert_eq!(next_epoch_start_timestamp, SLOT_DURATION * 32);
