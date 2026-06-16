@@ -244,13 +244,16 @@ impl Node {
             } else {
                 // It is for handover window
                 let taiko_geth_height = l2_slot_ctx.info.parent_id();
-                let verification_slot = self.ethereum_l1.slot_clock.get_next_epoch_start_slot()?;
+                let verification_timestamp = self
+                    .ethereum_l1
+                    .slot_clock
+                    .get_next_epoch_start_timestamp()?;
                 let verifier_result = Verifier::new_with_taiko_height(
                     taiko_geth_height,
                     self.taiko.clone(),
                     self.proposal_manager
                         .clone_without_proposals(inbox_forced_inclusion_state.head),
-                    verification_slot,
+                    verification_timestamp,
                     self.cancel_token.clone(),
                     self.last_safe_l2_block_finder.clone(),
                 )
@@ -403,10 +406,7 @@ impl Node {
     /// Returns true if the operation succeeds
     async fn has_verified_unsent_proposals(&mut self) -> Result<bool, Error> {
         if let Some(mut verifier) = self.verifier.take() {
-            match verifier
-                .verify(self.ethereum_l1.clone(), self.metrics.clone())
-                .await
-            {
+            match verifier.verify(self.metrics.clone()).await {
                 Ok(res) => match res {
                     VerificationResult::SlotNotValid => {
                         self.verifier = Some(verifier);

@@ -1,15 +1,12 @@
 use super::proposal_manager::ProposalManager;
 use crate::{
-    l1::execution_layer::ExecutionLayer,
     l2::taiko::Taiko,
     metrics::Metrics,
     node::{LastSafeL2BlockFinder, proposal_manager::proposal::Proposals},
 };
 use alloy::primitives::B256;
 use anyhow::Error;
-use common::{
-    l1::ethereum_l1::EthereumL1, utils::cancellation_token::CancellationToken, utils::types::*,
-};
+use common::utils::cancellation_token::CancellationToken;
 use std::{cmp::Ordering, sync::Arc};
 use tokio::task::JoinHandle;
 use tracing::{debug, info, warn};
@@ -29,7 +26,7 @@ struct PreconfirmationRootBlock {
 }
 
 pub struct Verifier {
-    verification_slot: Slot,
+    verification_timestamp: u64,
     verifier_thread: Option<VerifierThread>,
     verifier_thread_handle: Option<JoinHandle<Result<Proposals, Error>>>,
     last_safe_l2_block_finder: Arc<LastSafeL2BlockFinder>,
@@ -44,20 +41,20 @@ struct VerifierThread {
 
 impl Verifier {
     pub async fn new_with_taiko_height(
-        taiko_geth_height: u64,
+        l2_height: u64,
         taiko: Arc<Taiko>,
         proposal_manager: ProposalManager,
-        verification_slot: Slot,
+        verification_timestamp: u64,
         cancel_token: CancellationToken,
         last_safe_l2_block_finder: Arc<LastSafeL2BlockFinder>,
     ) -> Result<Self, Error> {
-        let hash = taiko.get_l2_block_hash(taiko_geth_height).await?;
+        let hash = taiko.get_l2_block_hash(l2_height).await?;
         debug!(
-            "Verifier created with taiko_geth_height: {}, hash: {}, verification_slot: {}",
-            taiko_geth_height, hash, verification_slot
+            "Verifier created with l2_height: {}, hash: {}, verification_timestamp: {}",
+            l2_height, hash, verification_timestamp
         );
         let preconfirmation_root = PreconfirmationRootBlock {
-            number: taiko_geth_height,
+            number: l2_height,
             hash,
         };
         Ok(Self {
@@ -67,18 +64,10 @@ impl Verifier {
                 proposal_manager,
                 cancel_token,
             }),
-            verification_slot,
+            verification_timestamp,
             verifier_thread_handle: None,
             last_safe_l2_block_finder,
         })
-    }
-
-    pub fn is_slot_valid(&self, current_slot: Slot) -> bool {
-        current_slot >= self.verification_slot
-    }
-
-    pub fn get_verification_slot(&self) -> Slot {
-        self.verification_slot
     }
 
     async fn start_verification_thread(&mut self, taiko_inbox_height: u64, metrics: Arc<Metrics>) {
@@ -96,11 +85,7 @@ impl Verifier {
     }
 
     /// Returns true if the operation succeeds
-    pub async fn verify(
-        &mut self,
-        ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
-        metrics: Arc<Metrics>,
-    ) -> Result<VerificationResult, Error> {
+    pub async fn verify(&mut self, metrics: Arc<Metrics>) -> Result<VerificationResult, Error> {
         if let Some(handle) = self.verifier_thread_handle.as_mut() {
             if handle.is_finished() {
                 debug!("Verifier thread handle has finished");
@@ -125,18 +110,19 @@ impl Verifier {
                 Ok(VerificationResult::VerificationInProgress)
             }
         } else {
-            let head_slot = ethereum_l1.consensus_layer.get_head_slot_number().await?;
+            let taiko_inbox_height = self
+                .last_safe_l2_block_finder
+                .get_when_timestamp_reached(self.verification_timestamp)
+                .await?;
 
-            if !self.is_slot_valid(head_slot) {
+            let Some(taiko_inbox_height) = taiko_inbox_height else {
                 info!(
-                    "Slot {} is not valid for verification, target slot {}, skipping",
-                    head_slot,
-                    self.get_verification_slot()
+                    "Taiko inbox height is not yet reached for verification timestamp {}, skipping",
+                    self.verification_timestamp
                 );
                 return Ok(VerificationResult::SlotNotValid);
-            }
+            };
 
-            let taiko_inbox_height = self.last_safe_l2_block_finder.get().await?;
             self.start_verification_thread(taiko_inbox_height, metrics)
                 .await;
 
@@ -210,7 +196,7 @@ impl VerifierThread {
     async fn handle_unprocessed_blocks(
         &mut self,
         taiko_inbox_height: u64,
-        taiko_geth_height: u64,
+        l2_height: u64,
     ) -> Result<(), Error> {
         let start = std::time::Instant::now();
 
@@ -236,7 +222,7 @@ impl VerifierThread {
         self.proposal_manager.reset_builder().await?;
         let mut parent_timestamp = None;
 
-        for current_height in first_block..=taiko_geth_height {
+        for current_height in first_block..=l2_height {
             if self.cancel_token.is_cancelled() {
                 return Err(anyhow::anyhow!("Verification cancelled"));
             }

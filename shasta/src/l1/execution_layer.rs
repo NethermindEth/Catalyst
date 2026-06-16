@@ -281,6 +281,65 @@ impl ExecutionLayer {
         Ok(state)
     }
 
+    pub async fn get_inbox_state_and_head_timestamp(&self) -> Result<(CoreState, u64), Error> {
+        // Batch these calls so they are served by the same RPC backend node.
+        let client = self.provider.client();
+        let mut batch = BatchRequest::new(client);
+
+        let latest_block_call_params = json!(["latest", false]);
+        let latest_block_waiter = batch
+            .add_call("eth_getBlockByNumber", &latest_block_call_params)
+            .map_err(|e| anyhow::anyhow!("Failed to add latest block call to batch: {e}"))?;
+
+        let core_state_calldata = self.get_core_state_calldata(&self.inbox_instance);
+        let core_state_call_params = json!([{
+            "to": self.contract_addresses.shasta_inbox,
+            "data": core_state_calldata,
+        }, "latest"]);
+        let core_state_waiter = batch
+            .add_call("eth_call", &core_state_call_params)
+            .map_err(|e| anyhow::anyhow!("Failed to add core state call to batch: {e}"))?;
+
+        batch
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to send batch request: {e}"))?;
+
+        let core_state_result: serde_json::Value = core_state_waiter
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get core state from batch: {e}"))?;
+        let latest_block_result: serde_json::Value = latest_block_waiter
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get latest block from batch: {e}"))?;
+
+        let core_state_bytes = hex::decode(
+            core_state_result
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Invalid core state result format"))?
+                .strip_prefix("0x")
+                .unwrap_or_default(),
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to decode core state: {e}"))?;
+
+        let state = <Inbox::getCoreStateCall as SolCall>::abi_decode_returns(&core_state_bytes)
+            .map_err(|e| anyhow::anyhow!("Failed to decode core state response: {e}"))?;
+
+        let head_timestamp_hex = latest_block_result
+            .get("timestamp")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| anyhow::anyhow!("Missing timestamp in latest block response"))?;
+
+        let head_timestamp = u64::from_str_radix(
+            head_timestamp_hex
+                .strip_prefix("0x")
+                .unwrap_or(head_timestamp_hex),
+            16,
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to parse latest block timestamp: {e}"))?;
+
+        Ok((state, head_timestamp))
+    }
+
     pub async fn get_inbox_next_proposal_id(&self) -> Result<u64, Error> {
         let state = self
             .inbox_instance

@@ -167,6 +167,12 @@ impl<T: Clock> SlotClock<T> {
         Ok((self.get_epoch_for_slot(slot) + 1) * self.slots_per_epoch)
     }
 
+    pub fn get_next_epoch_start_timestamp(&self) -> Result<u64, Error> {
+        let next_epoch_start_slot = self.get_next_epoch_start_slot()?;
+        let start_of_next_epoch = self.start_of(next_epoch_start_slot)?;
+        Ok(start_of_next_epoch.as_secs())
+    }
+
     pub fn get_epoch_begin_timestamp(&self, epoch: Epoch) -> Result<u64, Error> {
         let slot = epoch * self.slots_per_epoch;
         let start_of_slot = self.start_of(slot)?;

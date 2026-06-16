@@ -36,8 +36,34 @@ impl LastSafeL2BlockFinder {
         }
     }
 
+    pub async fn get_when_timestamp_reached(&self, timestamp: u64) -> Result<Option<u64>, Error> {
+        let (inbox_state, head_timestamp) = self
+            .ethereum_l1
+            .execution_layer
+            .get_inbox_state_and_head_timestamp()
+            .await?;
+
+        tracing::debug!(
+            "LastSafeL2BlockFinder::get_when_timestamp_reached(): Current head timestamp {}, target timestamp {}",
+            head_timestamp,
+            timestamp
+        );
+
+        if head_timestamp < timestamp {
+            return Ok(None);
+        }
+        self.get_impl(inbox_state).await.map(Some)
+    }
+
     pub async fn get(&self) -> Result<u64, Error> {
         let inbox_state = self.ethereum_l1.execution_layer.get_inbox_state().await?;
+        self.get_impl(inbox_state).await
+    }
+
+    async fn get_impl(
+        &self,
+        inbox_state: taiko_bindings::inbox::IInbox::CoreState,
+    ) -> Result<u64, Error> {
         if inbox_state.nextProposalId == 1 {
             self.taiko.l2_execution_layer().get_head_l1_origin().await.or_else(|_| {
                 tracing::warn!("LastSafeL2BlockFinder::get(): Failed to get L2 head from get_head_l1_origin, but nextProposalId is 1, so returning L2 height as 0");
