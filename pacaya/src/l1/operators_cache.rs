@@ -39,6 +39,9 @@ impl OperatorsCacheState {
     }
 }
 
+/// if latest block is older than this, node is stuck
+const MAX_BLOCK_AGE_SECS: u64 = 60;
+
 /// Cached result of get_operators_for_current_and_next_epoch.
 /// Operators only change once per L1 slot (12s), so we avoid repeating the RPC call every L2 slot (2s).
 /// Key is current_slot_timestamp.
@@ -61,10 +64,16 @@ impl OperatorsCache {
         &self,
         current_slot_timestamp: u64,
     ) -> Result<OperatorsCacheState, Error> {
-        if let Some(cached) = self.read_cached_state()
-            && cached.timestamp == current_slot_timestamp
-        {
-            return Ok(cached);
+        if let Some(cached) = self.read_cached_state() {
+            if cached.timestamp == current_slot_timestamp {
+                return Ok(cached);
+            } else if cached.timestamp.saturating_add(MAX_BLOCK_AGE_SECS) < current_slot_timestamp {
+                tracing::warn!(
+                    "OperatorsCache: cached operators are too old (cached: {}, current: {})",
+                    cached.timestamp,
+                    current_slot_timestamp
+                );
+            }
         }
 
         let res = self
