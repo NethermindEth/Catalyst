@@ -49,18 +49,6 @@ async fn status_handler(State(state): State<StatusState>) -> impl IntoResponse {
         None => (None, None),
     };
 
-    // Epoch begin timestamp
-    let epoch_begin = match epoch {
-        Some(epoch) => match state.slot_clock.get_epoch_begin_timestamp(epoch) {
-            Ok(ts) => Some(ts),
-            Err(e) => {
-                errors.push(format!("Failed to get epoch begin timestamp: {}", e));
-                None
-            }
-        },
-        None => None,
-    };
-
     // Slot begin timestamp
     let slot_begin = match state.slot_clock.get_current_slot_begin_timestamp() {
         Ok(ts) => Some(ts),
@@ -71,23 +59,16 @@ async fn status_handler(State(state): State<StatusState>) -> impl IntoResponse {
     };
 
     // Operators
-    let (current_operator, next_operator) = match (epoch_begin, slot_begin) {
-        (Some(epoch_begin), Some(slot_begin)) => {
+    let (current_operator, next_operator) = match slot_begin {
+        Some(slot_begin) => {
             match state
                 .el
-                .get_operators_for_current_and_next_epoch(epoch_begin, slot_begin)
+                .get_operators_for_current_and_next_epoch(slot_begin)
                 .await
             {
-                Ok((current, next)) => (Some(current), Some(next)),
+                Ok(cache) => (Some(cache.current_operator()), Some(cache.next_operator())),
                 Err(e) => {
-                    let msg = match e {
-                        pacaya::l1::operators_cache::OperatorError::OperatorCheckTooEarly => {
-                            "Operator check too early".to_string()
-                        }
-                        pacaya::l1::operators_cache::OperatorError::Any(err) => {
-                            format!("Failed to get operators: {}", err)
-                        }
-                    };
+                    let msg = format!("Failed to get operators: {}", e);
                     errors.push(msg);
                     (None, None)
                 }

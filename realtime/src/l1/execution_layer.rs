@@ -32,7 +32,8 @@ use common::{
         transaction_monitor::TransactionMonitor,
     },
 };
-use pacaya::l1::{operators_cache::OperatorError, traits::PreconfOperator};
+use pacaya::l1::operators_cache::OperatorsCacheState;
+use pacaya::l1::traits::PreconfOperator;
 use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 use tracing::info;
@@ -194,12 +195,15 @@ impl PreconfOperator for ExecutionLayer {
 
     async fn get_operators_for_current_and_next_epoch(
         &self,
-        _current_epoch_timestamp: u64,
-        _current_slot_timestamp: u64,
-    ) -> Result<(Address, Address), OperatorError> {
+        current_slot_timestamp: u64,
+    ) -> Result<OperatorsCacheState, Error> {
         // RealTime: anyone can propose, but we still use operator tracking for slot management.
         // Return self as both current and next operator.
-        Ok((self.preconfer_address, self.preconfer_address))
+        Ok(OperatorsCacheState::new(
+            current_slot_timestamp,
+            self.preconfer_address,
+            self.preconfer_address,
+        ))
     }
 
     async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {

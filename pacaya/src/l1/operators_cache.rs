@@ -2,23 +2,48 @@ use crate::l1::bindings::PreconfWhitelist;
 use alloy::{
     primitives::Address,
     providers::{DynProvider, Provider},
-    rpc::client::BatchRequest,
-    sol_types::SolCall,
 };
 use anyhow::Error;
-use serde_json::json;
-use std::sync::{OnceLock, RwLock};
+use std::sync::RwLock;
 
-pub enum OperatorError {
-    OperatorCheckTooEarly,
-    Any(Error),
+#[derive(Clone, Debug)]
+struct Operators {
+    current: Address,
+    next: Address,
+}
+
+#[derive(Clone, Debug)]
+pub struct OperatorsCacheState {
+    timestamp: u64,
+    operators: Operators,
+}
+
+impl OperatorsCacheState {
+    pub fn new(timestamp: u64, current: Address, next: Address) -> Self {
+        Self {
+            timestamp,
+            operators: Operators { current, next },
+        }
+    }
+
+    pub fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+
+    pub fn current_operator(&self) -> Address {
+        self.operators.current
+    }
+
+    pub fn next_operator(&self) -> Address {
+        self.operators.next
+    }
 }
 
 /// Cached result of get_operators_for_current_and_next_epoch.
 /// Operators only change once per L1 slot (12s), so we avoid repeating the RPC call every L2 slot (2s).
 /// Key is current_slot_timestamp.
 pub struct OperatorsCache {
-    cache: RwLock<Option<(u64, (Address, Address))>>,
+    cache: RwLock<Option<OperatorsCacheState>>,
     provider: DynProvider,
     whitelist_address: Address,
 }
@@ -34,195 +59,139 @@ impl OperatorsCache {
 
     pub async fn get_operators_for_current_and_next_epoch(
         &self,
-        current_epoch_timestamp: u64,
         current_slot_timestamp: u64,
-    ) -> Result<(Address, Address), OperatorError> {
-        if let Ok(guard) = self.cache.read()
-            && let Some((cached_ts, addresses)) = *guard
-            && cached_ts == current_slot_timestamp
+    ) -> Result<OperatorsCacheState, Error> {
+        if let Some(cached) = self.read_cached_state()
+            && cached.timestamp == current_slot_timestamp
         {
-            return Ok(addresses);
+            return Ok(cached);
         }
-        let (result, should_cache) = self
-            .get_operators_for_current_and_next_epoch_internal(
-                current_slot_timestamp,
-                current_epoch_timestamp,
+
+        let res = self
+            .get_operators_for_current_and_next_epoch_internal(current_slot_timestamp)
+            .await;
+
+        match res {
+            Ok(Some(operators)) => {
+                let state = OperatorsCacheState {
+                    timestamp: current_slot_timestamp,
+                    operators,
+                };
+                self.update_cache(state.clone());
+                Ok(state)
+            }
+            Ok(None) => self.read_cache_or_error(current_slot_timestamp),
+            Err(e) => {
+                tracing::trace!(
+                    "OperatorsCache: Error for slot timestamp {}: {}",
+                    current_slot_timestamp,
+                    e
+                );
+                self.read_cache_or_error(current_slot_timestamp)
+            }
+        }
+    }
+
+    fn read_cached_state(&self) -> Option<OperatorsCacheState> {
+        match self.cache.read() {
+            Ok(guard) => guard.clone(),
+            Err(e) => {
+                tracing::warn!("OperatorsCache: failed to read cache due to poisoned lock: {e}");
+                None
+            }
+        }
+    }
+
+    fn update_cache(&self, state: OperatorsCacheState) {
+        match self.cache.write() {
+            Ok(mut guard) => {
+                *guard = Some(state);
+            }
+            Err(e) => {
+                tracing::warn!("OperatorsCache: failed to update cache due to poisoned lock: {e}");
+            }
+        }
+    }
+
+    fn read_cache_or_error(
+        &self,
+        current_slot_timestamp: u64,
+    ) -> Result<OperatorsCacheState, Error> {
+        self.read_cached_state().ok_or_else(|| {
+            anyhow::anyhow!(
+                "OperatorsCache: cache is empty, slot timestamp {}",
+                current_slot_timestamp
             )
-            .await?;
-        if should_cache && let Ok(mut guard) = self.cache.write() {
-            *guard = Some((current_slot_timestamp, result));
-        }
-        Ok(result)
+        })
     }
 
     async fn get_operators_for_current_and_next_epoch_internal(
         &self,
         current_slot_timestamp: u64,
-        current_epoch_timestamp: u64,
-    ) -> Result<((Address, Address), bool), OperatorError> {
+    ) -> Result<Option<Operators>, Error> {
         tracing::trace!(
-            "get_operators_for_current_and_next_epoch_internal, for slot timestamp: {}, epoch timestamp: {}",
-            current_slot_timestamp,
-            current_epoch_timestamp
+            "OperatorsCache: for slot timestamp: {}",
+            current_slot_timestamp
         );
-        let contract = PreconfWhitelist::new(self.whitelist_address, &self.provider);
-        let current_epoch_call_data = Self::get_current_epoch_call_data(&contract);
-        let next_epoch_call_data = Self::get_next_epoch_call_data(&contract);
-
-        // Use BatchRequest to send all calls in a single RPC request
-        // This ensures the load balancer forwards all calls to the same RPC node
-        let client = self.provider.client();
-        let mut batch = BatchRequest::new(client);
-
-        let block_waiter = batch
-            .add_call("eth_getBlockByNumber", &("latest", false))
+        let block_header = self
+            .provider
+            .get_block(alloy::eips::BlockId::latest())
+            .await
             .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to add block call to batch: {e}"
-                )))
-            })?;
+                anyhow::anyhow!(
+                    "Failed to get latest block for slot timestamp {}: {}",
+                    current_slot_timestamp,
+                    e
+                )
+            })?
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No latest block found for slot timestamp {}",
+                    current_slot_timestamp
+                )
+            })?
+            .header;
 
-        let current_operator_call_params = json!([{
-        "to": self.whitelist_address,
-        "data": format!("0x{}", hex::encode(current_epoch_call_data))
-    }, "latest"]);
-        let current_operator_waiter = batch
-            .add_call("eth_call", &current_operator_call_params)
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to add current operator call to batch: {e}"
-                )))
-            })?;
-
-        let next_operator_call_params = json!([{
-        "to": self.whitelist_address,
-        "data": format!("0x{}", hex::encode(next_epoch_call_data))
-    }, "latest"]);
-        let next_operator_waiter = batch
-            .add_call("eth_call", &next_operator_call_params)
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to add next operator call to batch: {e}"
-                )))
-            })?;
-
-        batch.send().await.map_err(|e| {
-            OperatorError::Any(Error::msg(format!("Failed to send batch request: {e}")))
-        })?;
-
-        let block_result: serde_json::Value = block_waiter.await.map_err(|e| {
-            OperatorError::Any(Error::msg(format!("Failed to get block from batch: {e}")))
-        })?;
-        let block: alloy::rpc::types::Block = serde_json::from_value(block_result)
-            .map_err(|e| OperatorError::Any(Error::msg(format!("Failed to parse block: {e}"))))?;
-        let latest_block_timestamp = block.header.timestamp;
-
-        if latest_block_timestamp < current_epoch_timestamp {
-            return Err(OperatorError::OperatorCheckTooEarly);
-        }
-
-        let current_operator_result: serde_json::Value =
-            current_operator_waiter.await.map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to get current operator from batch: {}, contract: {:?}",
-                    e, self.whitelist_address
-                )))
-            })?;
-
-        let next_operator_result: serde_json::Value = next_operator_waiter.await.map_err(|e| {
-            OperatorError::Any(Error::msg(format!(
-                "Failed to get next operator from batch: {}, contract: {:?}",
-                e, self.whitelist_address
-            )))
-        })?;
-
-        let current_operator_bytes = hex::decode(
-            current_operator_result
-                .as_str()
-                .ok_or_else(|| {
-                    OperatorError::Any(Error::msg("Invalid current operator result format"))
-                })?
-                .strip_prefix("0x")
-                .unwrap_or_default(),
-        )
-        .map_err(|e| {
-            OperatorError::Any(Error::msg(format!(
-                "Failed to decode current operator: {e}"
-            )))
-        })?;
-        let current_operator =
-            <PreconfWhitelist::getOperatorForCurrentEpochCall as SolCall>::abi_decode_returns(
-                &current_operator_bytes,
-            )
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to decode current operator response: {e}"
-                )))
-            })?;
-
-        let next_operator_bytes = hex::decode(
-            next_operator_result
-                .as_str()
-                .ok_or_else(|| {
-                    OperatorError::Any(Error::msg("Invalid next operator result format"))
-                })?
-                .strip_prefix("0x")
-                .unwrap_or_default(),
-        )
-        .map_err(|e| {
-            OperatorError::Any(Error::msg(format!("Failed to decode next operator: {e}")))
-        })?;
-        let next_operator =
-            <PreconfWhitelist::getOperatorForNextEpochCall as SolCall>::abi_decode_returns(
-                &next_operator_bytes,
-            )
-            .map_err(|e| {
-                OperatorError::Any(Error::msg(format!(
-                    "Failed to decode next operator response: {e}"
-                )))
-            })?;
-
-        // if rpc is behind the current slot, return the operator data but don't cache it
-        if latest_block_timestamp < current_slot_timestamp {
-            tracing::debug!(
-                "RPC behind current slot (latest: {}, current: {}), not caching operator data",
-                latest_block_timestamp,
+        if block_header.timestamp < current_slot_timestamp {
+            tracing::trace!(
+                "OperatorsCache: RPC behind current slot (latest: {}, current: {}), not caching operator data",
+                block_header.timestamp,
                 current_slot_timestamp
             );
-            return Ok(((current_operator, next_operator), false));
+            return Ok(None);
         }
 
-        Ok(((current_operator, next_operator), true))
-    }
-
-    /// cached as constant since function has no parameters
-    fn get_current_epoch_call_data(
-        contract: &PreconfWhitelist::PreconfWhitelistInstance<&DynProvider>,
-    ) -> &'static [u8] {
-        static CALL_DATA: OnceLock<Vec<u8>> = OnceLock::new();
-        CALL_DATA.get_or_init(|| {
-        let tx_req = contract
+        let whitelist = PreconfWhitelist::new(self.whitelist_address, &self.provider);
+        let block_id = alloy::eips::BlockId::Hash(block_header.hash.into());
+        let current_op = whitelist
             .getOperatorForCurrentEpoch()
-            .into_transaction_request();
-        tx_req
-            .input
-            .input
-            .as_ref()
-            .expect("get_current_epoch_call_data: Failed to get current epoch call data. Check the whitelist contract bindings.")
-            .to_vec()
-    })
-    }
+            .block(block_id)
+            .call()
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to get current operator for slot timestamp {}: {}",
+                    current_slot_timestamp,
+                    e
+                )
+            })?;
 
-    /// cached as constant since function has no parameters
-    fn get_next_epoch_call_data(
-        contract: &PreconfWhitelist::PreconfWhitelistInstance<&DynProvider>,
-    ) -> &'static [u8] {
-        static CALL_DATA: OnceLock<Vec<u8>> = OnceLock::new();
-        CALL_DATA.get_or_init(|| {
-        let tx_req = contract
+        let next_op = whitelist
             .getOperatorForNextEpoch()
-            .into_transaction_request();
-        tx_req.input.input.as_ref().expect("get_next_epoch_call_data: Failed to get next epoch call data. Check the whitelist contract bindings.").to_vec()
-    })
+            .block(block_id)
+            .call()
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to get next operator for slot timestamp {}: {}",
+                    current_slot_timestamp,
+                    e
+                )
+            })?;
+
+        Ok(Some(Operators {
+            current: current_op,
+            next: next_op,
+        }))
     }
 }

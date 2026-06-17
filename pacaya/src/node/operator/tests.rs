@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::l1::operators_cache::OperatorError;
+    use crate::l1::operators_cache::OperatorsCacheState;
     use crate::node::operator::*;
     use alloy::primitives::B256;
     use alloy::primitives::{Address, address};
@@ -38,10 +38,13 @@ mod tests {
 
         async fn get_operators_for_current_and_next_epoch(
             &self,
-            _: u64,
-            _: u64,
-        ) -> Result<(Address, Address), OperatorError> {
-            Ok((self.current_operator_address, self.next_operator_address))
+            current_slot_timestamp: u64,
+        ) -> Result<OperatorsCacheState, Error> {
+            Ok(OperatorsCacheState::new(
+                current_slot_timestamp,
+                self.current_operator_address,
+                self.next_operator_address,
+            ))
         }
 
         async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
@@ -537,10 +540,13 @@ mod tests {
 
         async fn get_operators_for_current_and_next_epoch(
             &self,
-            _: u64,
-            _: u64,
-        ) -> Result<(Address, Address), OperatorError> {
-            Err(OperatorError::OperatorCheckTooEarly)
+            current_slot_timestamp: u64,
+        ) -> Result<OperatorsCacheState, Error> {
+            Ok(OperatorsCacheState::new(
+                current_slot_timestamp - 12, // simulate error by returning previous slot timestamp
+                OTHER_OPERATOR_ADDRESS,
+                PRECONFER_ADDRESS,
+            ))
         }
 
         async fn get_l2_height_from_taiko_inbox(&self) -> Result<u64, Error> {
@@ -899,7 +905,8 @@ mod tests {
     fn create_operator_with_error_in_execution_layer<T: PreconfOperator>(
         execution_layer: Arc<T>,
     ) -> Operator<T, MockClock, TaikoMock> {
-        let slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
+        let mut slot_clock = SlotClock::<MockClock>::new(0, 0, 12, 32, 2000);
+        slot_clock.clock.timestamp = 32 * 12; // last slot of epoch
         Operator {
             fork_info: ForkInfo::default(),
             cancel_token: CancellationToken::new(Arc::new(Metrics::new())),
