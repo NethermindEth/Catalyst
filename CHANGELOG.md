@@ -2,6 +2,22 @@
 
 All notable changes to Catalyst are documented here, organized by release version.
 
+## [Unreleased]
+
+### Features
+- Fetch operator and core state at a specific block/hash context (#975)
+- Realtime: align `RealTimeInbox` config ABI with deployed contract (#968)
+
+### Fixes
+- Verifier: check head timestamp during verification (#974)
+- Improve E2E test reliability (#971, #972, #973)
+- Address security audit findings (#970)
+
+### Chores
+- Remove outdated checks (#969)
+
+---
+
 ## [v1.39.2] — 2026-05-03
 
 ### Features
