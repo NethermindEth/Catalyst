@@ -23,7 +23,7 @@ use common::{
     },
 };
 use pacaya::l1::{
-    operators_cache::{OperatorError, OperatorsCache},
+    operators_cache::{OperatorsCache, OperatorsCacheState},
     traits::{PreconfOperator, WhitelistProvider},
 };
 use serde_json::json;
@@ -148,14 +148,10 @@ impl PreconfOperator for ExecutionLayer {
 
     async fn get_operators_for_current_and_next_epoch(
         &self,
-        current_epoch_timestamp: u64,
         current_slot_timestamp: u64,
-    ) -> Result<(Address, Address), OperatorError> {
+    ) -> Result<OperatorsCacheState, Error> {
         self.operators_cache
-            .get_operators_for_current_and_next_epoch(
-                current_epoch_timestamp,
-                current_slot_timestamp,
-            )
+            .get_operators_for_current_and_next_epoch(current_slot_timestamp)
             .await
     }
 

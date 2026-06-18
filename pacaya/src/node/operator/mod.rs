@@ -1,7 +1,7 @@
 mod status;
 mod tests;
 
-use crate::l1::{OperatorError, PreconfOperator};
+use crate::l1::PreconfOperator;
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::{
@@ -193,31 +193,29 @@ impl<T: PreconfOperator, U: Clock, V: StatusProvider> Operator<T, U, V> {
         let epoch_timestamp = self.slot_clock.get_epoch_begin_timestamp(epoch)?;
         let my_address = self.execution_layer.get_preconfer_address();
 
-        let (current_op, next_op) = match self
+        let op_cache = self
             .execution_layer
-            .get_operators_for_current_and_next_epoch(epoch_timestamp, current_slot_timestamp)
-            .await
-        {
-            Ok(ops) => ops,
-            Err(OperatorError::OperatorCheckTooEarly) => {
-                debug!("Operator check too early, using cached next operator");
-                return Ok(self.next_operator);
-            }
-            Err(OperatorError::Any(e)) => {
-                return Err(Error::msg(format!(
-                    "Failed to check current epoch operator: {e}"
-                )));
-            }
+            .get_operators_for_current_and_next_epoch(current_slot_timestamp)
+            .await?;
+
+        if op_cache.timestamp() < epoch_timestamp {
+            debug!("Operator check too early, using cached next operator");
+            return Ok(self.next_operator);
         };
 
-        self.handle_operator_change(current_op, next_op, current_slot_timestamp, my_address);
+        self.handle_operator_change(
+            op_cache.current_operator(),
+            op_cache.next_operator(),
+            current_slot_timestamp,
+            my_address,
+        );
 
         if self.is_within_ejection_grace()? {
             return Ok(false);
         }
 
-        let is_current = current_op == my_address;
-        let is_next = next_op == my_address;
+        let is_current = op_cache.current_operator() == my_address;
+        let is_next = op_cache.next_operator() == my_address;
 
         self.next_operator = is_next;
         self.continuing_role = is_current && is_next;
