@@ -37,21 +37,19 @@ impl LastSafeL2BlockFinder {
     }
 
     pub async fn get_when_timestamp_reached(&self, timestamp: u64) -> Result<Option<u64>, Error> {
-        let (inbox_state, head_timestamp) = self
+        let Some(inbox_state) = self
             .ethereum_l1
             .execution_layer
-            .get_inbox_state_and_head_timestamp()
-            .await?;
-
-        tracing::debug!(
-            "LastSafeL2BlockFinder::get_when_timestamp_reached(): Current head timestamp {}, target timestamp {}",
-            head_timestamp,
-            timestamp
-        );
-
-        if head_timestamp < timestamp {
+            .get_inbox_state_when_timestamp_reached(timestamp)
+            .await?
+        else {
+            tracing::debug!(
+                "LastSafeL2BlockFinder::get_when_timestamp_reached(): inbox state is None, timestamp {} not reached yet",
+                timestamp
+            );
             return Ok(None);
-        }
+        };
+
         self.get_impl(inbox_state).await.map(Some)
     }
 
