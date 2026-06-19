@@ -3,7 +3,7 @@ use super::proposal_tx_builder::ProposalTxBuilder;
 use crate::forced_inclusion::InboxForcedInclusionState;
 use crate::l1::config::ContractAddresses;
 use alloy::{
-    eips::BlockNumberOrTag,
+    eips::{BlockId, BlockNumberOrTag},
     hex::ToHexExt,
     primitives::{Address, aliases::U48},
     providers::{DynProvider, Provider},
@@ -275,6 +275,38 @@ impl ExecutionLayer {
             .map_err(|e| anyhow::anyhow!("Failed to call getInboxState for Inbox: {e}"))?;
 
         Ok(state)
+    }
+
+    pub async fn get_inbox_state_when_timestamp_reached(
+        &self,
+        timestamp: u64,
+    ) -> Result<Option<CoreState>, Error> {
+        let block_header = self
+            .provider
+            .get_block(BlockId::latest())
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch latest block: {e}"))?
+            .ok_or_else(|| anyhow::anyhow!("Latest block not found"))?
+            .header;
+
+        if block_header.timestamp < timestamp {
+            tracing::debug!(
+                "get_inbox_state_when_timestamp_reached: Current head timestamp {}",
+                block_header.timestamp
+            );
+            return Ok(None);
+        }
+
+        let block_number = BlockId::Number(BlockNumberOrTag::Number(block_header.number));
+        let core_state = self
+            .inbox_instance
+            .getCoreState()
+            .block(block_number)
+            .call()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to call getCoreState for Inbox: {e}"))?;
+
+        Ok(Some(core_state))
     }
 
     pub async fn get_inbox_next_proposal_id(&self) -> Result<u64, Error> {

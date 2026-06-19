@@ -167,6 +167,12 @@ impl<T: Clock> SlotClock<T> {
         Ok((self.get_epoch_for_slot(slot) + 1) * self.slots_per_epoch)
     }
 
+    pub fn get_next_epoch_start_timestamp(&self) -> Result<u64, Error> {
+        let next_epoch_start_slot = self.get_next_epoch_start_slot()?;
+        let start_of_next_epoch = self.start_of(next_epoch_start_slot)?;
+        Ok(start_of_next_epoch.as_secs())
+    }
+
     pub fn get_epoch_begin_timestamp(&self, epoch: Epoch) -> Result<u64, Error> {
         let slot = epoch * self.slots_per_epoch;
         let start_of_slot = self.start_of(slot)?;
@@ -312,7 +318,8 @@ mod tests {
 
     #[test]
     fn test_duration_to_next_slot() {
-        let slot_clock: SlotClock = SlotClock::new(0, 5, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock: SlotClock =
+            SlotClock::new(0, 5, SLOT_DURATION, SLOTS_PER_EPOCH, PRECONF_HEART_BEAT_MS);
 
         let now = Duration::from_secs(10);
         let duration_to_next_slot = slot_clock.duration_to_next_slot_from(now).unwrap();
@@ -321,8 +328,13 @@ mod tests {
 
     #[test]
     fn test_slot_of() {
-        let slot_clock: SlotClock =
-            SlotClock::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock: SlotClock = SlotClock::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
 
         let now = Duration::from_secs(25);
         let slot = slot_clock.slot_of(now).unwrap();
@@ -331,8 +343,13 @@ mod tests {
 
     #[test]
     fn test_duration_to_slot() {
-        let slot_clock: SlotClock =
-            SlotClock::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock: SlotClock = SlotClock::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
 
         let now = Duration::from_secs(10);
         let slot = Slot::from(2u64);
@@ -342,8 +359,13 @@ mod tests {
 
     #[test]
     fn test_start_of() {
-        let slot_clock: SlotClock =
-            SlotClock::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock: SlotClock = SlotClock::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
 
         let start_of_slot = slot_clock.start_of(Slot::from(3u64)).unwrap();
         assert_eq!(start_of_slot, Duration::from_secs(36));
@@ -356,7 +378,7 @@ mod tests {
             genesis_slot,
             1721387493,
             SLOT_DURATION,
-            32,
+            SLOTS_PER_EPOCH,
             PRECONF_HEART_BEAT_MS,
         );
 
@@ -367,8 +389,13 @@ mod tests {
 
     #[test]
     fn test_get_epoch_for_slot() {
-        let slot_clock: SlotClock =
-            SlotClock::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock: SlotClock = SlotClock::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
         let epoch = slot_clock.get_epoch_for_slot(Slot::from(3u64));
         assert_eq!(epoch, Epoch::from(0u64));
 
@@ -383,7 +410,7 @@ mod tests {
             genesis_slot,
             1721387493,
             SLOT_DURATION,
-            32,
+            SLOTS_PER_EPOCH,
             PRECONF_HEART_BEAT_MS,
         );
 
@@ -414,8 +441,13 @@ mod tests {
 
     #[test]
     fn test_get_current_slot_of_epoch() {
-        let slot_clock: SlotClock =
-            SlotClock::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock: SlotClock = SlotClock::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
 
         assert_eq!(slot_clock.slot_of_epoch(1234), 18);
         assert_eq!(slot_clock.slot_of_epoch(293482), 10);
@@ -423,8 +455,13 @@ mod tests {
 
     #[test]
     fn test_is_current_slot_in_last_n_slots_of_epoch() {
-        let slot_clock: SlotClock =
-            SlotClock::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock: SlotClock = SlotClock::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
 
         assert!(!slot_clock.is_slot_in_last_n_slots_of_epoch(0, 2));
         assert!(!slot_clock.is_slot_in_last_n_slots_of_epoch(1, 2));
@@ -444,8 +481,13 @@ mod tests {
             }
         }
 
-        let slot_clock =
-            SlotClock::<MockClock>::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock = SlotClock::<MockClock>::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
 
         let duration = slot_clock.time_from_n_last_slots_of_epoch(29, 3).unwrap();
         assert_eq!(duration, Duration::from_secs(5));
@@ -458,8 +500,13 @@ mod tests {
             }
         }
 
-        let slot_clock =
-            SlotClock::<MockClock2>::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock = SlotClock::<MockClock2>::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
 
         let duration = slot_clock.time_from_n_last_slots_of_epoch(29, 3).unwrap();
         assert_eq!(duration, Duration::from_secs(5));
@@ -467,8 +514,13 @@ mod tests {
 
     #[test]
     fn test_get_l2_slot_number_within_l1_slot() {
-        let mut slot_clock: SlotClock<MockClock> =
-            SlotClock::<MockClock>::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let mut slot_clock: SlotClock<MockClock> = SlotClock::<MockClock>::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
         slot_clock.clock.timestamp = 36;
 
         let l2_slot_number_within_l1_slot =
@@ -483,8 +535,13 @@ mod tests {
 
     #[test]
     fn test_get_l2_slot_begin_timestamp() {
-        let mut slot_clock =
-            SlotClock::<MockClock>::new(0u64, 5, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let mut slot_clock = SlotClock::<MockClock>::new(
+            0u64,
+            5,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
 
         slot_clock.clock.timestamp = 22;
         assert_eq!(slot_clock.get_l2_slot_begin_timestamp().unwrap(), 20);
@@ -504,8 +561,9 @@ mod tests {
 
     #[test]
     fn test_get_l2_slots_per_epoch() {
-        let slot_clock: SlotClock = SlotClock::new(0, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
-        assert_eq!(slot_clock.get_l2_slots_per_epoch(), 32 * 4);
+        let slot_clock: SlotClock =
+            SlotClock::new(0, 0, SLOT_DURATION, SLOTS_PER_EPOCH, PRECONF_HEART_BEAT_MS);
+        assert_eq!(slot_clock.get_l2_slots_per_epoch(), SLOTS_PER_EPOCH * 4);
     }
 
     #[test]
@@ -518,8 +576,13 @@ mod tests {
             }
         }
 
-        let slot_clock =
-            SlotClock::<MockClock>::new(0u64, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock = SlotClock::<MockClock>::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
 
         // Test case 1: L1 block timestamp is at slot 6
         assert_eq!(slot_clock.slots_since_l1_block(72).unwrap(), 2);
@@ -533,7 +596,28 @@ mod tests {
 
     #[test]
     fn test_get_epoch_duration() {
-        let slot_clock: SlotClock = SlotClock::new(0, 0, SLOT_DURATION, 32, PRECONF_HEART_BEAT_MS);
+        let slot_clock: SlotClock =
+            SlotClock::new(0, 0, SLOT_DURATION, SLOTS_PER_EPOCH, PRECONF_HEART_BEAT_MS);
         assert_eq!(slot_clock.get_epoch_duration(), Duration::from_secs(384));
+    }
+
+    #[test]
+    fn test_get_next_epoch_start_timestamp() {
+        let mut slot_clock = SlotClock::<MockClock>::new(
+            0u64,
+            0,
+            SLOT_DURATION,
+            SLOTS_PER_EPOCH,
+            PRECONF_HEART_BEAT_MS,
+        );
+        slot_clock.clock.timestamp = 100;
+        let next_epoch_start_timestamp = slot_clock.get_next_epoch_start_timestamp().unwrap();
+        assert_eq!(next_epoch_start_timestamp, SLOT_DURATION * SLOTS_PER_EPOCH);
+        slot_clock.clock.timestamp = 400;
+        let next_epoch_start_timestamp = slot_clock.get_next_epoch_start_timestamp().unwrap();
+        assert_eq!(
+            next_epoch_start_timestamp,
+            SLOT_DURATION * SLOTS_PER_EPOCH * 2
+        );
     }
 }
