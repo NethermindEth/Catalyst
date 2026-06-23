@@ -2,7 +2,7 @@
 
 All notable changes to Catalyst are documented here, organized by release version.
 
-## [Unreleased]
+## [v1.40.0] — 2026-06-23
 
 ### Features
 - Fetch operator and core state at a specific block/hash context (#975)
