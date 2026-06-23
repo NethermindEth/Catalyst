@@ -2960,7 +2960,7 @@ dependencies = [
  "async-trait",
  "bindings",
  "event-scanner",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "protocol",
  "rpc",
  "thiserror 2.0.18",
@@ -5498,9 +5498,9 @@ dependencies = [
 
 [[package]]
 name = "metrics"
-version = "0.24.5"
+version = "0.24.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff56c2e7dce6bd462e3b8919986a617027481b1dcc703175b58cf9dd98a2f071"
+checksum = "89550ee9f79e88fef3119de263694973a8adb26c21d75322164fb8c493039fe2"
 dependencies = [
  "portable-atomic",
  "rapidhash",
@@ -6583,7 +6583,7 @@ dependencies = [
  "dashmap",
  "driver",
  "jsonrpsee",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "preconfirmation-net",
  "preconfirmation-types",
  "protocol",
@@ -6616,7 +6616,7 @@ dependencies = [
  "libp2p-allow-block-list",
  "libp2p-connection-limits",
  "libp2p-request-response",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "metrics-exporter-prometheus",
  "preconfirmation-types",
  "rand 0.8.6",
@@ -6896,9 +6896,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.14"
+version = "0.11.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
+checksum = "4fcb935c5bec503c2f0e306bdd3e58bb9029dcb14fa8d9ac76e3a5256ac0763e"
 dependencies = [
  "aws-lc-rs",
  "bytes",
@@ -7265,7 +7265,7 @@ dependencies = [
  "alloy-eips 1.8.3",
  "alloy-primitives",
  "derive_more",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "parking_lot",
  "pin-project",
  "reth-chainspec 2.0.0 (git+https://github.com/paradigmxyz/reth?tag=v2.0.0)",
@@ -7291,7 +7291,7 @@ dependencies = [
  "alloy-eips 2.0.4",
  "alloy-primitives",
  "derive_more",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "parking_lot",
  "pin-project",
  "reth-chainspec 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
@@ -7475,7 +7475,7 @@ dependencies = [
  "alloy-primitives",
  "derive_more",
  "eyre",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "page_size",
  "quanta",
  "reth-db-api",
@@ -7503,7 +7503,7 @@ dependencies = [
  "arrayvec",
  "bytes",
  "derive_more",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "modular-bitfield",
  "reth-codecs 0.3.1",
  "reth-db-models 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
@@ -7556,7 +7556,7 @@ dependencies = [
  "enr",
  "futures",
  "itertools 0.14.0",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "rand 0.9.4",
  "reth-chainspec 1.9.3",
  "reth-ethereum-forks 1.9.3",
@@ -7870,7 +7870,7 @@ source = "git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a
 dependencies = [
  "alloy-primitives",
  "fixed-cache",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "parking_lot",
  "reth-errors 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
  "reth-metrics 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
@@ -7986,7 +7986,7 @@ name = "reth-metrics"
 version = "1.9.3"
 source = "git+https://github.com/paradigmxyz/reth?tag=v1.9.3#27a8c0f5a6dfb27dea84c5751776ecabdd069646"
 dependencies = [
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "metrics-derive",
 ]
 
@@ -7995,7 +7995,7 @@ name = "reth-metrics"
 version = "2.0.0"
 source = "git+https://github.com/paradigmxyz/reth?tag=v2.0.0#eb4c15e5e36d8776d46629beae4c0a69af7ab04f"
 dependencies = [
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "metrics-derive",
 ]
 
@@ -8005,7 +8005,7 @@ version = "2.0.0"
 source = "git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f#27bfddeada3953edc22759080a3659ccea62ca1f"
 dependencies = [
  "futures",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "metrics-derive",
  "tokio",
  "tokio-util",
@@ -8110,7 +8110,7 @@ dependencies = [
  "alloy-rpc-types 2.0.4",
  "derive_more",
  "futures-util",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "reth-chain-state 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
  "reth-ethereum-engine-primitives 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
  "reth-execution-cache",
@@ -8284,7 +8284,7 @@ dependencies = [
  "alloy-rpc-types-engine 2.0.4",
  "eyre",
  "itertools 0.14.0",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "notify",
  "parking_lot",
  "rayon",
@@ -8514,7 +8514,7 @@ dependencies = [
  "dashmap",
  "futures-util",
  "libc",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "parking_lot",
  "pin-project",
  "rayon",
@@ -8565,7 +8565,7 @@ dependencies = [
  "auto_impl",
  "bitflags",
  "futures-util",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "parking_lot",
  "pin-project",
  "reth-chain-state 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
@@ -8628,7 +8628,7 @@ dependencies = [
  "alloy-trie",
  "auto_impl",
  "itertools 0.14.0",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "reth-execution-errors 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
  "reth-metrics 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
  "reth-primitives-traits 0.3.1",
@@ -8694,7 +8694,7 @@ version = "2.0.0"
 source = "git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f#27bfddeada3953edc22759080a3659ccea62ca1f"
 dependencies = [
  "alloy-primitives",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "parking_lot",
  "reth-db-api",
  "reth-execution-errors 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
@@ -8721,7 +8721,7 @@ dependencies = [
  "crossbeam-utils",
  "derive_more",
  "itertools 0.14.0",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "rayon",
  "reth-execution-errors 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
  "reth-metrics 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
@@ -8761,7 +8761,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-trie",
  "auto_impl",
- "metrics 0.24.5",
+ "metrics 0.24.6",
  "rayon",
  "reth-execution-errors 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
  "reth-metrics 2.0.0 (git+https://github.com/paradigmxyz/reth?rev=27bfddeada3953edc22759080a3659ccea62ca1f)",
