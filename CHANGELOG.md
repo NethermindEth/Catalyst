@@ -2,6 +2,13 @@
 
 All notable changes to Catalyst are documented here, organized by release version.
 
+## [Unreleased]
+
+### Fixes
+- Disable forced inclusions on mainnet (#980)
+
+---
+
 ## [v1.40.0] — 2026-06-23
 
 ### Features
