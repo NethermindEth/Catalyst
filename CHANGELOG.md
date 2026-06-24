@@ -2,6 +2,13 @@
 
 All notable changes to Catalyst are documented here, organized by release version.
 
+## [Unreleased]
+
+### Features
+- Add MAX_FORCED_INCLUSIONS_PER_PROPOSAL env var (#980)
+
+---
+
 ## [v1.40.0] — 2026-06-23
 
 ### Features

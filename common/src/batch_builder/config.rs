@@ -21,6 +21,8 @@ pub struct BatchBuilderConfig {
     pub preconf_max_skipped_l2_slots: u64,
     /// Duration in seconds for which we build a proposal before sending it to L1
     pub proposal_max_time_sec: u64,
+    /// Maximum number of forced inclusions in a proposal
+    pub max_forced_inclusions: u16,
 }
 
 impl BatchBuilderConfig {

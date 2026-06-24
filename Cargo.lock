@@ -2338,7 +2338,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -5787,7 +5787,7 @@ dependencies = [
 
 [[package]]
 name = "node"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -6202,7 +6202,7 @@ dependencies = [
 
 [[package]]
 name = "p2p-boot-node"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "anyhow",
  "discv5",
@@ -6214,7 +6214,7 @@ dependencies = [
 
 [[package]]
 name = "pacaya"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "alloy",
  "anyhow",
@@ -6347,7 +6347,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissionless"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "alethia-reth-consensus 0.7.1",
  "alloy",
@@ -7098,7 +7098,7 @@ dependencies = [
 
 [[package]]
 name = "realtime"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "aes-gcm",
  "alethia-reth-consensus 0.7.1",
@@ -10240,7 +10240,7 @@ dependencies = [
 
 [[package]]
 name = "shasta"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "alethia-reth-consensus 0.7.1",
  "alloy",
@@ -11476,7 +11476,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "urc"
-version = "1.40.0"
+version = "1.41.0"
 dependencies = [
  "alloy",
  "anyhow",
