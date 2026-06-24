@@ -326,28 +326,13 @@ impl Config {
             );
         }
 
-        let max_allowed = taiko_protocol::shasta::constants::MAX_FORCED_INCLUSIONS_PER_PROPOSAL;
-
-        let max_forced_inclusions_per_proposal =
-            std::env::var("MAX_FORCED_INCLUSIONS_PER_PROPOSAL")
-                .unwrap_or_else(|_| max_allowed.to_string())
-                .parse::<u16>()
-                .map_err(|e| {
-                    anyhow::anyhow!(
-                        "MAX_FORCED_INCLUSIONS_PER_PROPOSAL must be a number: {e}"
-                    )
-                })
-                .map(|value| {
-                    if value > max_allowed {
-                        warn!(
-                            "MAX_FORCED_INCLUSIONS_PER_PROPOSAL exceeds the protocol limit; using the maximum allowed value ({} > {})",
-                            value, max_allowed
-                        );
-                        max_allowed
-                    } else {
-                        value
-                    }
-                })?;
+        const MAX_FORCED_INCLUSIONS_PER_PROPOSAL: &str = "MAX_FORCED_INCLUSIONS_PER_PROPOSAL";
+        let max_forced_inclusions_per_proposal = std::env::var(MAX_FORCED_INCLUSIONS_PER_PROPOSAL)
+            .map_err(|e| anyhow::anyhow!("{MAX_FORCED_INCLUSIONS_PER_PROPOSAL} must be set: {e}"))?
+            .parse::<u16>()
+            .map_err(|e| {
+                anyhow::anyhow!("{MAX_FORCED_INCLUSIONS_PER_PROPOSAL} must be a number: {e}")
+            })?;
 
         let min_anchor_offset = std::env::var("MIN_ANCHOR_OFFSET")
             .unwrap_or("2".to_string())
