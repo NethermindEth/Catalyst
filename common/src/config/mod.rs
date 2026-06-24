@@ -43,6 +43,7 @@ pub struct Config {
     pub max_blocks_per_batch: u16,
     pub max_time_shift_between_blocks_sec: u64,
     pub max_anchor_height_offset_reduction: u64,
+    pub max_forced_inclusions_per_proposal: u16,
     /// Minimum offset between calculated anchor block ID and latest L1 height
     pub min_anchor_offset: u64,
     // Transaction parameters
@@ -325,6 +326,29 @@ impl Config {
             );
         }
 
+        let max_allowed = taiko_protocol::shasta::constants::MAX_FORCED_INCLUSIONS_PER_PROPOSAL;
+
+        let max_forced_inclusions_per_proposal =
+            std::env::var("MAX_FORCED_INCLUSIONS_PER_PROPOSAL")
+                .unwrap_or_else(|_| max_allowed.to_string())
+                .parse::<u16>()
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "MAX_FORCED_INCLUSIONS_PER_PROPOSAL must be a number: {e}"
+                    )
+                })
+                .map(|value| {
+                    if value > max_allowed {
+                        warn!(
+                            "MAX_FORCED_INCLUSIONS_PER_PROPOSAL exceeds the protocol limit; using the maximum allowed value ({} > {})",
+                            value, max_allowed
+                        );
+                        max_allowed
+                    } else {
+                        value
+                    }
+                })?;
+
         let min_anchor_offset = std::env::var("MIN_ANCHOR_OFFSET")
             .unwrap_or("2".to_string())
             .parse::<u64>()
@@ -537,6 +561,7 @@ impl Config {
             max_blocks_per_batch,
             max_time_shift_between_blocks_sec,
             max_anchor_height_offset_reduction,
+            max_forced_inclusions_per_proposal,
             min_anchor_offset,
             min_priority_fee_per_gas_wei,
             tx_fees_increase_percentage,
@@ -595,6 +620,7 @@ max bytes size of batch: {}
 max blocks per batch value: {}
 max time shift between blocks: {}s
 max anchor height offset reduction value: {}
+max forced inclusions per proposal: {}
 min anchor offset: {}
 min priority fee per gas: {}wei
 tx fees increase percentage: {}
@@ -657,6 +683,7 @@ internal server port: {}
             config.max_blocks_per_batch,
             config.max_time_shift_between_blocks_sec,
             config.max_anchor_height_offset_reduction,
+            config.max_forced_inclusions_per_proposal,
             config.min_anchor_offset,
             config.min_priority_fee_per_gas_wei,
             config.tx_fees_increase_percentage,

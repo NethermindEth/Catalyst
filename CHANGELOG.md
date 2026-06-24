@@ -4,8 +4,8 @@ All notable changes to Catalyst are documented here, organized by release versio
 
 ## [Unreleased]
 
-### Fixes
-- Disable forced inclusions on mainnet (#980)
+### Features
+- Add MAX_FORCED_INCLUSIONS_PER_PROPOSAL env var (#980)
 
 ---
 
