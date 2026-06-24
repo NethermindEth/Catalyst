@@ -375,6 +375,7 @@ mod tests {
                 preconf_min_txs: 5,
                 preconf_max_skipped_l2_slots: 3,
                 proposal_max_time_sec: 100,
+                max_forced_inclusions: 10,
             },
             Arc::new(SlotClock::new(0, 5, 12, 32, 3000)),
             Arc::new(Metrics::new()),
@@ -398,6 +399,7 @@ mod tests {
             preconf_min_txs: 5,
             preconf_max_skipped_l2_slots: 3,
             proposal_max_time_sec: 100,
+            max_forced_inclusions: 10,
         };
 
         let slot_clock = Arc::new(SlotClock::new(0, 5, 12, 32, 2000));

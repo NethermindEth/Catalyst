@@ -87,9 +87,7 @@ impl ProposalBuilder {
     /// can accept more forced inclusion blocks.
     pub fn can_add_forced_inclusion(&self) -> bool {
         self.current_proposal.as_ref().is_some_and(|p| {
-            p.l2_blocks.is_empty()
-                && p.num_forced_inclusion
-                    < taiko_protocol::shasta::constants::MAX_FORCED_INCLUSIONS_PER_PROPOSAL
+            p.l2_blocks.is_empty() && p.num_forced_inclusion < self.config.max_forced_inclusions
         })
     }
 
@@ -572,6 +570,7 @@ mod tests {
             preconf_min_txs: 3,
             preconf_max_skipped_l2_slots: 5,
             proposal_max_time_sec: 120,
+            max_forced_inclusions: 10,
         }
     }
 
@@ -596,6 +595,7 @@ mod tests {
             preconf_min_txs: 3,
             preconf_max_skipped_l2_slots: 5,
             proposal_max_time_sec: 120,
+            max_forced_inclusions: 10,
         }
     }
 

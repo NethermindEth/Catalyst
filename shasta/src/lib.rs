@@ -25,6 +25,9 @@ use config::ShastaConfig;
 use l1::execution_layer::ExecutionLayer;
 use node::Node;
 use std::sync::Arc;
+use taiko_protocol::shasta::constants::{
+    MAX_FORCED_INCLUSIONS_PER_PROPOSAL, TAIKO_MAINNET_CHAIN_ID,
+};
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -104,6 +107,16 @@ pub async fn create_shasta_node(
 
     let max_anchor_height_offset = taiko.get_protocol_config().get_max_anchor_height_offset();
 
+    // Disable forced inclusions on mainnet
+    let max_forced_inclusions =
+        if taiko.l2_execution_layer().common().chain_id() == TAIKO_MAINNET_CHAIN_ID {
+            0
+        } else {
+            MAX_FORCED_INCLUSIONS_PER_PROPOSAL
+        };
+
+    info!("Max forced inclusions per proposal: {max_forced_inclusions}");
+
     let proposal_builder_config = BatchBuilderConfig {
         max_bytes_size_of_batch: config.max_bytes_size_of_batch,
         max_blocks_per_batch,
@@ -115,6 +128,7 @@ pub async fn create_shasta_node(
         preconf_min_txs: config.preconf_min_txs,
         preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
         proposal_max_time_sec: config.proposal_max_time_sec,
+        max_forced_inclusions,
     };
 
     let chain_monitor = Arc::new(

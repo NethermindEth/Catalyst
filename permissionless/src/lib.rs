@@ -108,6 +108,8 @@ pub async fn create_permissionless_node(
         preconf_min_txs: config.preconf_min_txs,
         preconf_max_skipped_l2_slots: config.preconf_max_skipped_l2_slots,
         proposal_max_time_sec: config.proposal_max_time_sec,
+        max_forced_inclusions:
+            taiko_protocol::shasta::constants::MAX_FORCED_INCLUSIONS_PER_PROPOSAL,
     };
 
     let preconfirmation_driver = Arc::new(
