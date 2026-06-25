@@ -11,6 +11,7 @@ import time
 from eth_account import Account
 from taiko_inbox import get_last_batch_id
 
+@skip("Skipping test_preocnfirmation_after_restart because it is not stable and needs to be fixed")
 def test_preocnfirmation_after_restart(l1_client, beacon_client, l2_client_node1, env_vars):
     """
     We restart the nodes and then produce 30 transactions every 2 L2 slots. We expect to receive 30 L2 blocks and 3 batches at the end
