@@ -220,16 +220,16 @@ impl VerifierThread {
 
         // Sync FI with L1 chain
         self.proposal_manager.reset_builder().await?;
-        let mut parent_timestamp = None;
+        let mut parent_info = None;
 
         for current_height in first_block..=l2_height {
             if self.cancel_token.is_cancelled() {
                 return Err(anyhow::anyhow!("Verification cancelled"));
             }
 
-            parent_timestamp = Some(
+            parent_info = Some(
                 self.proposal_manager
-                    .recover_from_l2_block(current_height, parent_timestamp)
+                    .recover_from_l2_block(current_height, parent_info)
                     .await?,
             );
         }

@@ -28,6 +28,11 @@ use crate::node::L2SlotInfoV2;
 use block_advancer::BlockAdvancer;
 use proposal::Proposals;
 
+pub struct RecoveredBlockInfo {
+    proposal_id: u64,
+    timestamp: u64,
+}
+
 pub struct ProposalManager {
     proposal_builder: ProposalBuilder,
     ethereum_l1: Arc<EthereumL1<ExecutionLayer>>,
@@ -464,24 +469,29 @@ impl ProposalManager {
     pub async fn recover_from_l2_block(
         &mut self,
         block_height: u64,
-        parent_timestamp: Option<u64>,
-    ) -> Result<u64, Error> {
+        parent_info: Option<RecoveredBlockInfo>,
+    ) -> Result<RecoveredBlockInfo, Error> {
         debug!("Recovering from L2 block {}", block_height);
 
-        let parent_timestamp = if let Some(ts) = parent_timestamp {
-            ts
+        let parent_info = if let Some(info) = parent_info {
+            info
         } else {
             if block_height == 0 {
                 return Err(anyhow::anyhow!(
-                    "recover_from_l2_block: parent_timestamp must be provided for genesis (block_height == 0)"
+                    "recover_from_l2_block: parent_info must be provided for genesis (block_height == 0)"
                 ));
             }
 
-            self.taiko
+            let block = self
+                .taiko
                 .get_l2_block_by_number(block_height - 1, false)
-                .await?
-                .header
-                .timestamp()
+                .await?;
+
+            RecoveredBlockInfo {
+                proposal_id: crate::l2::extra_data::ExtraData::decode(block.header.extra_data())?
+                    .proposal_id,
+                timestamp: block.header.timestamp(),
+            }
         };
 
         let block = self
@@ -489,7 +499,15 @@ impl ProposalManager {
             .get_l2_block_by_number(block_height, true)
             .await?;
 
-        self.validate_block_timestamp(block_height, block.header.timestamp(), parent_timestamp)?;
+        let proposal_id =
+            crate::l2::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
+
+        self.validate_block_timestamp(
+            block_height,
+            block.header.timestamp(),
+            parent_info.timestamp,
+        )?;
+        self.validate_block_proposal_id(block_height, proposal_id, parent_info.proposal_id)?;
 
         let (anchor_tx, txs) = match block.transactions.as_transactions() {
             Some(txs) => txs.split_first().ok_or_else(|| {
@@ -516,9 +534,6 @@ impl ProposalManager {
             })?;
 
         let coinbase = block.header.beneficiary();
-
-        let proposal_id =
-            crate::l2::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
 
         let anchor_tx_data = Taiko::get_anchor_tx_data(anchor_tx.input())?;
         let anchor_info = AnchorBlockInfo::from_precomputed_data(
@@ -557,7 +572,27 @@ impl ProposalManager {
                 is_forced_inclusion,
             )
             .await?;
-        Ok(block.header.timestamp())
+        Ok(RecoveredBlockInfo {
+            proposal_id,
+            timestamp: block.header.timestamp(),
+        })
+    }
+
+    fn validate_block_proposal_id(
+        &self,
+        block_height: u64,
+        proposal_id: u64,
+        parent_proposal_id: u64,
+    ) -> Result<(), Error> {
+        match proposal_id.checked_sub(parent_proposal_id) {
+            Some(diff) if diff <= 1 => Ok(()),
+            _ => Err(anyhow::anyhow!(
+                "Proposal ID validation failed at block {}: proposal_id={} parent_proposal_id={}",
+                block_height,
+                proposal_id,
+                parent_proposal_id,
+            )),
+        }
     }
 
     fn validate_block_timestamp(
