@@ -3,11 +3,16 @@ use anyhow::Error;
 use http::{HeaderMap, HeaderValue};
 use jsonrpsee::{
     core::client::{ClientT, Error as JsonRpcError},
-    http_client::{HttpClient, HttpClientBuilder},
+    http_client::{CustomCertStore, HttpClient, HttpClientBuilder},
 };
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
+use rustls::RootCertStore;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fs;
+use std::io::BufReader;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::sync::RwLock;
 
@@ -33,12 +38,18 @@ fn create_jwt_token(secret: &[u8]) -> Result<String, Box<dyn std::error::Error>>
     )?)
 }
 
-#[derive(Debug)]
+pub struct TlsConfig {
+    pub ca_cert: PathBuf,
+    pub client_cert: PathBuf,
+    pub client_key: PathBuf,
+}
+
 pub struct JSONRPCClient {
     url: String,
     timeout: Duration,
     jwt_secret: Option<[u8; 32]>,
     client: RwLock<HttpClient>,
+    tls_config: Option<TlsConfig>,
 }
 
 impl JSONRPCClient {
@@ -62,6 +73,7 @@ impl JSONRPCClient {
             timeout,
             jwt_secret: Some(jwt_secret),
             client: RwLock::new(client),
+            tls_config: None,
         })
     }
 
@@ -97,6 +109,7 @@ impl JSONRPCClient {
             timeout,
             jwt_secret: None,
             client: RwLock::new(client),
+            tls_config: None,
         })
     }
 
@@ -105,6 +118,64 @@ impl JSONRPCClient {
             .request_timeout(timeout)
             .build(url)
             .map_err(|e| anyhow::anyhow!("Failed to create HTTP client: {e}"))?;
+        Ok(client)
+    }
+
+    pub fn new_with_tls_and_timeout(
+        url: &str,
+        timeout: Duration,
+        tls_config: TlsConfig,
+    ) -> Result<Self, Error> {
+        let client = Self::create_client_with_tls(url, timeout, &tls_config)?;
+        Ok(Self {
+            url: url.to_string(),
+            timeout,
+            jwt_secret: None,
+            client: RwLock::new(client),
+            tls_config: Some(tls_config),
+        })
+    }
+
+    fn load_certs(path: &Path) -> anyhow::Result<Vec<CertificateDer<'static>>> {
+        let mut reader = BufReader::new(fs::File::open(path)?);
+        Ok(rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?)
+    }
+
+    fn load_key(path: &Path) -> anyhow::Result<PrivateKeyDer<'static>> {
+        let mut reader = BufReader::new(fs::File::open(path)?);
+        rustls_pemfile::private_key(&mut reader)?
+            .ok_or_else(|| anyhow::anyhow!("no private key found in {}", path.display()))
+    }
+
+    fn create_client_with_tls(
+        url: &str,
+        timeout: Duration,
+        tls_config: &TlsConfig,
+    ) -> Result<HttpClient, Error> {
+        // rustls 0.23 needs a process-wide default crypto provider installed once.
+        // jsonrpsee's own tls feature uses "ring", so match that here to avoid conflicts.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
+        // Trust anchor used to verify the *server's* certificate.
+        let mut roots = RootCertStore::empty();
+        for cert in Self::load_certs(&tls_config.ca_cert)? {
+            roots.add(cert)?;
+        }
+
+        // Our own identity, presented to the server for mTLS.
+        let client_certs = Self::load_certs(&tls_config.client_cert)?;
+        let client_key = Self::load_key(&tls_config.client_key)?;
+
+        let tls_config: CustomCertStore = rustls::ClientConfig::builder()
+            .with_root_certificates(roots)
+            .with_client_auth_cert(client_certs, client_key)?;
+
+        let client = HttpClientBuilder::new()
+            .request_timeout(timeout)
+            .with_custom_cert_store(tls_config)
+            .build(url)
+            .map_err(|e| anyhow::anyhow!("Failed to create HTTP client with TLS: {e}"))?;
+
         Ok(client)
     }
 
@@ -153,8 +224,10 @@ impl JSONRPCClient {
     }
 
     async fn recreate_client(&self) -> Result<(), Error> {
-        let new_client = (if let Some(jwt_secret) = self.jwt_secret {
-            Self::create_client_with_jwt(&self.url, self.timeout, &jwt_secret)
+        let new_client = (if let Some(tls_config) = &self.tls_config {
+            Self::create_client_with_tls(&self.url, self.timeout, tls_config)
+        } else if let Some(jwt_secret) = &self.jwt_secret {
+            Self::create_client_with_jwt(&self.url, self.timeout, jwt_secret)
         } else {
             Self::create_client(&self.url, self.timeout)
         })
