@@ -7,11 +7,9 @@ use jsonrpsee::{
 };
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use rustls::RootCertStore;
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fs;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -137,14 +135,11 @@ impl JSONRPCClient {
     }
 
     fn load_certs(path: &Path) -> anyhow::Result<Vec<CertificateDer<'static>>> {
-        let mut reader = BufReader::new(fs::File::open(path)?);
-        Ok(rustls_pemfile::certs(&mut reader).collect::<Result<Vec<_>, _>>()?)
+        Ok(CertificateDer::pem_file_iter(path)?.collect::<Result<Vec<_>, _>>()?)
     }
 
     fn load_key(path: &Path) -> anyhow::Result<PrivateKeyDer<'static>> {
-        let mut reader = BufReader::new(fs::File::open(path)?);
-        rustls_pemfile::private_key(&mut reader)?
-            .ok_or_else(|| anyhow::anyhow!("no private key found in {}", path.display()))
+        Ok(PrivateKeyDer::from_pem_file(path)?)
     }
 
     fn create_client_with_tls(
