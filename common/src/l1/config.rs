@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::signer::{Signer, create_signer};
+use crate::signer::{Signer, Web3SignerInfo, create_signer};
 use alloy::primitives::Address;
 use anyhow::Error;
 use std::sync::Arc;
@@ -26,12 +26,15 @@ pub struct EthereumL1Config {
 
 impl EthereumL1Config {
     pub async fn new(config: &Config) -> Result<Self, Error> {
-        let signer = create_signer(
+        let w3s_info = Web3SignerInfo::new(
             config.web3signer_l1_url.clone(),
-            config.catalyst_node_ecdsa_private_key.clone(),
+            config.web3signer_root_certificate_path.clone(),
+            config.web3signer_client_certificate_path.clone(),
+            config.web3signer_client_key_path.clone(),
             config.preconfer_address,
-        )
-        .await?;
+        )?;
+        let signer =
+            create_signer(w3s_info, config.catalyst_node_ecdsa_private_key.clone()).await?;
 
         Ok(Self {
             execution_rpc_urls: config.l1_rpc_urls.clone(),

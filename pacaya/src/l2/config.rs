@@ -1,7 +1,7 @@
 use alloy::primitives::Address;
 use anyhow::Error;
 use common::config::Config;
-use common::signer::{Signer, create_signer};
+use common::signer::{Signer, Web3SignerInfo, create_signer};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,12 +24,15 @@ impl TaikoConfig {
         let jwt_secret_bytes =
             common::utils::file_operations::read_jwt_secret(&config.jwt_secret_file_path)
                 .map_err(|e| anyhow::anyhow!("Failed to read JWT secret for Taiko: {}", e))?;
-        let signer = create_signer(
+        let w3s_info = Web3SignerInfo::new(
             config.web3signer_l2_url.clone(),
-            config.catalyst_node_ecdsa_private_key.clone(),
+            config.web3signer_root_certificate_path.clone(),
+            config.web3signer_client_certificate_path.clone(),
+            config.web3signer_client_key_path.clone(),
             config.preconfer_address,
-        )
-        .await?;
+        )?;
+        let signer =
+            create_signer(w3s_info, config.catalyst_node_ecdsa_private_key.clone()).await?;
 
         Ok(Self {
             l2_rpc_url: config.l2_rpc_url.clone(),

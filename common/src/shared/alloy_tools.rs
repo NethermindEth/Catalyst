@@ -94,10 +94,8 @@ pub async fn construct_alloy_provider(
             );
             let preconfer_address = *address;
 
-            let tx_signer = crate::signer::web3signer::Web3TxSigner::new(
-                web3signer.clone(),
-                preconfer_address,
-            )?;
+            let tx_signer =
+                crate::signer::Web3TxSigner::new(web3signer.clone(), preconfer_address)?;
             let wallet = EthereumWallet::new(tx_signer);
 
             Ok(create_alloy_provider_with_wallet(wallet, execution_ws_rpc_url).await?)

@@ -16,6 +16,9 @@ pub struct Config {
     pub preconfer_address: Option<Address>,
     pub web3signer_l1_url: Option<String>,
     pub web3signer_l2_url: Option<String>,
+    pub web3signer_root_certificate_path: Option<String>,
+    pub web3signer_client_certificate_path: Option<String>,
+    pub web3signer_client_key_path: Option<String>,
     pub catalyst_node_ecdsa_private_key: Option<String>,
     // L1
     pub l1_rpc_urls: Vec<String>,
@@ -141,22 +144,35 @@ impl Config {
         let web3signer_l1_url = std::env::var(WEB3SIGNER_L1_URL).ok();
         const WEB3SIGNER_L2_URL: &str = "WEB3SIGNER_L2_URL";
         let web3signer_l2_url = std::env::var(WEB3SIGNER_L2_URL).ok();
+        const WEB3SIGNER_ROOT_CERTIFICATE_PATH: &str = "WEB3SIGNER_ROOT_CERTIFICATE_PATH";
+        let web3signer_root_certificate_path = std::env::var(WEB3SIGNER_ROOT_CERTIFICATE_PATH).ok();
+        const WEB3SIGNER_CLIENT_CERTIFICATE_PATH: &str = "WEB3SIGNER_CLIENT_CERTIFICATE_PATH";
+        let web3signer_client_certificate_path =
+            std::env::var(WEB3SIGNER_CLIENT_CERTIFICATE_PATH).ok();
+        const WEB3SIGNER_CLIENT_KEY_PATH: &str = "WEB3SIGNER_CLIENT_KEY_PATH";
+        let web3signer_client_key_path = std::env::var(WEB3SIGNER_CLIENT_KEY_PATH).ok();
 
         if catalyst_node_ecdsa_private_key.is_none() {
             if web3signer_l1_url.is_none()
                 || web3signer_l2_url.is_none()
                 || preconfer_address.is_none()
+                || web3signer_root_certificate_path.is_none()
+                || web3signer_client_certificate_path.is_none()
+                || web3signer_client_key_path.is_none()
             {
                 return Err(anyhow::anyhow!(
-                    "When {CATALYST_NODE_ECDSA_PRIVATE_KEY} is not set, {WEB3SIGNER_L1_URL}, {WEB3SIGNER_L2_URL} and {PRECONFER_ADDRESS} must be set"
+                    "When {CATALYST_NODE_ECDSA_PRIVATE_KEY} is not set, {WEB3SIGNER_L1_URL}, {WEB3SIGNER_L2_URL}, {WEB3SIGNER_ROOT_CERTIFICATE_PATH}, {WEB3SIGNER_CLIENT_CERTIFICATE_PATH}, {WEB3SIGNER_CLIENT_KEY_PATH} and {PRECONFER_ADDRESS} must be set"
                 ));
             }
         } else if web3signer_l1_url.is_some()
             || web3signer_l2_url.is_some()
             || preconfer_address.is_some()
+            || web3signer_root_certificate_path.is_some()
+            || web3signer_client_certificate_path.is_some()
+            || web3signer_client_key_path.is_some()
         {
             return Err(anyhow::anyhow!(
-                "When {CATALYST_NODE_ECDSA_PRIVATE_KEY} is set, {WEB3SIGNER_L1_URL}, {WEB3SIGNER_L2_URL} and {PRECONFER_ADDRESS} must not be set"
+                "When {CATALYST_NODE_ECDSA_PRIVATE_KEY} is set, {WEB3SIGNER_L1_URL}, {WEB3SIGNER_L2_URL}, {WEB3SIGNER_ROOT_CERTIFICATE_PATH}, {WEB3SIGNER_CLIENT_CERTIFICATE_PATH}, {WEB3SIGNER_CLIENT_KEY_PATH} and {PRECONFER_ADDRESS} must not be set"
             ));
         }
 
@@ -531,6 +547,9 @@ impl Config {
             blob_indexer_url: std::env::var("BLOB_INDEXER_URL").ok(),
             web3signer_l1_url,
             web3signer_l2_url,
+            web3signer_root_certificate_path,
+            web3signer_client_certificate_path,
+            web3signer_client_key_path,
             l1_slot_duration_sec,
             l1_slots_per_epoch,
             preconf_heartbeat_ms,
@@ -588,6 +607,9 @@ Consensus layer timeout: {}ms,
 Blob Indexer URL: {},
 Web3signer L1 URL: {},
 Web3signer L2 URL: {},
+Web3signer root certificate path: {},
+Web3signer client certificate path: {},
+Web3signer client key path: {},
 L1 slot duration: {}s
 L1 slots per epoch: {}
 L2 slot duration (heart beat): {}
@@ -651,6 +673,18 @@ internal server port: {}
             config.blob_indexer_url.as_deref().unwrap_or("not set"),
             config.web3signer_l1_url.as_deref().unwrap_or("not set"),
             config.web3signer_l2_url.as_deref().unwrap_or("not set"),
+            config
+                .web3signer_root_certificate_path
+                .as_deref()
+                .unwrap_or("not set"),
+            config
+                .web3signer_client_certificate_path
+                .as_deref()
+                .unwrap_or("not set"),
+            config
+                .web3signer_client_key_path
+                .as_deref()
+                .unwrap_or("not set"),
             config.l1_slot_duration_sec,
             config.l1_slots_per_epoch,
             config.preconf_heartbeat_ms,

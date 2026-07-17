@@ -1,4 +1,7 @@
-use crate::utils::rpc_client::{JSONRPCClient, TlsConfig};
+use crate::{
+    signer::web3signer_info::Web3SignerInfo,
+    utils::rpc_client::{JSONRPCClient, TlsConfig},
+};
 use alloy::{
     consensus::{
         Transaction, TxEnvelope,
@@ -13,30 +16,18 @@ use async_trait::async_trait;
 use hex;
 use serde_json::{Map, Value};
 use std::sync::Arc;
-use std::time::Duration;
-use std::path::PathBuf;
-use tracing::{debug, error, info};
 
-pub struct Web3SignerInfo<'a> {
-    pub url: &'a str,
-    pub timeout: Duration,
-    pub signer_address: &'a str,
-    pub ca_cert: PathBuf,
-    pub client_cert: PathBuf,
-    pub client_key: PathBuf,
-}
+use tracing::{debug, error, info};
 
 pub struct Web3Signer {
     client: JSONRPCClient,
 }
 
 impl Web3Signer {
-    pub async fn new(
-        info: Web3SignerInfo<'_>
-    ) -> Result<Self, Error> {
+    pub async fn new(info: Web3SignerInfo) -> Result<Self, Error> {
         info!("Web3Signer: Creating new Web3Signer with URL: {}", info.url);
         let client = JSONRPCClient::new_with_tls_and_timeout(
-            info.url,
+            &info.url,
             info.timeout,
             TlsConfig {
                 ca_cert: info.ca_cert,
@@ -44,7 +35,7 @@ impl Web3Signer {
                 client_key: info.client_key,
             },
         )?;
-        if !Self::is_signer_key_available(&client, info.signer_address).await? {
+        if !Self::is_signer_key_available(&client, &info.signer_address).await? {
             return Err(anyhow::anyhow!(
                 "Web3Signer: Signer key is not available for address {}",
                 info.signer_address
@@ -223,6 +214,7 @@ async fn check_signer_correctness(tx_envelope: &TxEnvelope, from: Address) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn test_is_signer_key_available() {
