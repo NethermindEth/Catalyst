@@ -473,6 +473,14 @@ impl ProposalManager {
     ) -> Result<RecoveredBlockInfo, Error> {
         debug!("Recovering from L2 block {}", block_height);
 
+        let block = self
+            .taiko
+            .get_l2_block_by_number(block_height, true)
+            .await?;
+
+        let proposal_id =
+            crate::l2::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
+
         let parent_info = if let Some(info) = parent_info {
             info
         } else {
@@ -482,25 +490,29 @@ impl ProposalManager {
                 ));
             }
 
-            let block = self
+            let parent_block = self
                 .taiko
                 .get_l2_block_by_number(block_height - 1, false)
                 .await?;
 
+            let parent_proposal_id =
+                crate::l2::extra_data::ExtraData::decode(parent_block.header.extra_data())?
+                    .proposal_id;
+
+            if proposal_id != parent_proposal_id + 1 {
+                return Err(anyhow::anyhow!(
+                    "recover_from_l2_block: proposal ID validation failed at the first recovered block {}: proposal_id={} parent_proposal_id={}",
+                    block_height,
+                    proposal_id,
+                    parent_proposal_id,
+                ));
+            }
+
             RecoveredBlockInfo {
-                proposal_id: crate::l2::extra_data::ExtraData::decode(block.header.extra_data())?
-                    .proposal_id,
-                timestamp: block.header.timestamp(),
+                proposal_id: parent_proposal_id,
+                timestamp: parent_block.header.timestamp(),
             }
         };
-
-        let block = self
-            .taiko
-            .get_l2_block_by_number(block_height, true)
-            .await?;
-
-        let proposal_id =
-            crate::l2::extra_data::ExtraData::decode(block.header.extra_data())?.proposal_id;
 
         self.validate_block_timestamp(
             block_height,
