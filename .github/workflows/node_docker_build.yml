@@ -163,44 +163,41 @@ jobs:
             ${{ needs.build.outputs.digest-amd64 }} \
             ${{ needs.build.outputs.digest-arm64 }}
 
-      - name: Setup ORAS
-        uses: oras-project/setup-oras@v1
-
-      - name: Login to JFrog Artifactory with ORAS
-        run: |
-          oras login ${{ env.DOCKER_REGISTRY }} \
-            -u ${{ secrets.ARTIFACTORY_CORE_USERNAME }} \
-            -p ${{ secrets.ARTIFACTORY_CORE_TOKEN_DEVELOPER }}
-
       - name: Login to Docker Hub
-        run: |
-          oras login ${{ env.DOCKER_PUBLIC_REGISTRY }} \
-            -u ${{ secrets.DOCKER_USERNAME }} \
-            -p ${{ secrets.DOCKER_PASSWORD }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_PUBLIC_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Promote to Docker Hub Production
+        id: promote
+        env:
+          SOURCE_TAG: ${{ steps.tags.outputs.source_promote_tag }}
         run: |
-          set -e
-          SOURCE_TAG="${{ steps.tags.outputs.source_promote_tag }}"
+          set -euo pipefail
+          source_image="${DOCKER_REGISTRY}/${DOCKER_REPOSITORY_STAGING}:${SOURCE_TAG}"
           echo "Tags to promote: $PROMOTE_TAGS"
+          : > subject.checksums.txt
           for tag in $PROMOTE_TAGS; do
-            source_image="${{ env.DOCKER_REGISTRY }}/${{ env.DOCKER_REPOSITORY_STAGING }}:${SOURCE_TAG}"
-            prod_image="${{ env.DOCKER_PUBLIC_REGISTRY }}/${{ env.DOCKER_PUBLIC_REPOSITORY }}:${tag}"
+            target_image="${DOCKER_PUBLIC_REGISTRY}/${DOCKER_PUBLIC_REPOSITORY}:${tag}"
             echo ""
-            echo "=== Promoting tag: ${tag} ==="
-            echo "Source: ${source_image}"
-            echo "Target: ${prod_image}"
-            
-            if ! oras cp -r "${source_image}" "${prod_image}"; then
-              echo "ERROR: Failed to promote tag ${tag}" >&2
-              echo "Source: ${source_image}" >&2
-              echo "Target: ${prod_image}" >&2
-              exit 1
-            fi
-            echo "✓ Successfully promoted ${tag}"
+            echo "=== Promoting ${source_image} -> ${target_image} ==="
+
+            # Copy the full multi-arch manifest list registry-to-registry.
+            # A plain docker pull/tag/push would flatten the index to the
+            # runner's architecture (amd64) and silently drop the arm64 image.
+            docker buildx imagetools create -t "${target_image}" "${source_image}"
+
+            # Record the promoted manifest digest for provenance/attestation.
+            DIGEST=$(docker buildx imagetools inspect "${target_image}" --raw | sha256sum | cut -d' ' -f1)
+            echo "${DIGEST}  ${target_image}" >> subject.checksums.txt
+            echo "✓ Promoted ${tag} (sha256:${DIGEST})"
           done
           echo ""
           echo "All tags promoted successfully"
+          echo "--- subject.checksums.txt ---"
+          cat subject.checksums.txt
 
       - name: Summary
         run: |
