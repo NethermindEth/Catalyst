@@ -111,7 +111,7 @@ pub async fn create_realtime_node(
                 .first()
                 .ok_or_else(|| anyhow::anyhow!("L1 RPC URL is required"))?
                 .clone(),
-            config.l2_rpc_url.clone(),
+            config.l2_ws_rpc_url.clone(),
             realtime_config.realtime_inbox,
             cancel_token.clone(),
             "ProposedAndProved",

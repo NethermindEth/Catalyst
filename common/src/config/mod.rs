@@ -27,6 +27,7 @@ pub struct Config {
     pub preconf_heartbeat_ms: u64,
     // L2
     pub l2_rpc_url: String,
+    pub l2_ws_rpc_url: String,
     pub l2_auth_rpc_url: String,
     pub l2_driver_url: String,
     /// jwt secret file path for L2 EL and L2 driver
@@ -119,6 +120,34 @@ fn get_env_with_deprecation(new_key: &str, deprecated_key: &str) -> Option<Strin
         }
         (None, None) => None,
     }
+}
+
+fn resolve_l2_ws_rpc_url(
+    l2_rpc_url: &str,
+    configured_l2_ws_rpc_url: Option<String>,
+) -> Result<String, Error> {
+    let (source, url) = match configured_l2_ws_rpc_url {
+        Some(url) => ("L2_WS_RPC_URL", url),
+        None => ("L2_RPC_URL", l2_rpc_url.to_string()),
+    };
+
+    let parsed = reqwest::Url::parse(&url)
+        .map_err(|error| anyhow::anyhow!("{source} must be a valid URL: {error}"))?;
+
+    if matches!(parsed.scheme(), "ws" | "wss") {
+        return Ok(url);
+    }
+
+    if source == "L2_RPC_URL" {
+        return Err(anyhow::anyhow!(
+            "L2_WS_RPC_URL must be set to a ws:// or wss:// URL when L2_RPC_URL does not use WebSocket"
+        ));
+    }
+
+    Err(anyhow::anyhow!(
+        "L2_WS_RPC_URL must use the ws or wss scheme, got '{}'",
+        parsed.scheme()
+    ))
 }
 
 impl Config {
@@ -501,6 +530,9 @@ impl Config {
                 "ws://127.0.0.1:1234".to_string()
             });
 
+        let l2_ws_rpc_url =
+            resolve_l2_ws_rpc_url(&l2_rpc_url, std::env::var("L2_WS_RPC_URL").ok())?;
+
         let l2_auth_rpc_url =
             get_env_with_deprecation("L2_AUTH_RPC_URL", "TAIKO_GETH_AUTH_RPC_URL").unwrap_or_else(
                 || {
@@ -518,6 +550,7 @@ impl Config {
         let config = Self {
             preconfer_address,
             l2_rpc_url,
+            l2_ws_rpc_url,
             l2_auth_rpc_url,
             l2_driver_url,
             catalyst_node_ecdsa_private_key,
@@ -580,6 +613,7 @@ impl Config {
             r#"
 Configuration:{}
 L2 RPC URL: {},
+L2 WebSocket RPC URL: {},
 L2 auth RPC URL: {},
 L2 driver URL: {},
 L1 RPC URL: {},
@@ -636,6 +670,7 @@ internal server port: {}
                 "".to_string()
             },
             config.l2_rpc_url,
+            config.l2_ws_rpc_url,
             config.l2_auth_rpc_url,
             config.l2_driver_url,
             match config.l1_rpc_urls.split_first() {
@@ -695,5 +730,49 @@ internal server port: {}
         );
 
         Ok(config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_l2_ws_rpc_url;
+
+    #[test]
+    fn explicit_l2_ws_rpc_url_is_used_with_http_rpc() {
+        let resolved = resolve_l2_ws_rpc_url(
+            "http://127.0.0.1:8545",
+            Some("ws://127.0.0.1:8546".to_string()),
+        )
+        .unwrap();
+
+        assert_eq!(resolved, "ws://127.0.0.1:8546");
+    }
+
+    #[test]
+    fn legacy_websocket_l2_rpc_url_is_reused() {
+        let resolved = resolve_l2_ws_rpc_url("wss://l2.example", None).unwrap();
+
+        assert_eq!(resolved, "wss://l2.example");
+    }
+
+    #[test]
+    fn http_l2_rpc_url_requires_explicit_websocket_url() {
+        let error = resolve_l2_ws_rpc_url("https://l2.example", None)
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("L2_WS_RPC_URL must be set"));
+    }
+
+    #[test]
+    fn explicit_l2_ws_rpc_url_rejects_non_websocket_scheme() {
+        let error = resolve_l2_ws_rpc_url(
+            "http://127.0.0.1:8545",
+            Some("http://127.0.0.1:8546".to_string()),
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(error.contains("L2_WS_RPC_URL must use the ws or wss scheme"));
     }
 }
