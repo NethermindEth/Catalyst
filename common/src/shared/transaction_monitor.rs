@@ -42,7 +42,7 @@ pub struct TxMonitorHandles {
     pub tx_result_receiver: tokio::sync::oneshot::Receiver<bool>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TransactionMonitorConfig {
     min_priority_fee_per_gas_wei: u128,
     tx_fees_increase_percentage: u128,

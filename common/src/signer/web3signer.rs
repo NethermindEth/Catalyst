@@ -1,4 +1,7 @@
-use crate::utils::rpc_client::JSONRPCClient;
+use crate::{
+    signer::web3signer_info::Web3SignerInfo,
+    utils::rpc_client::{JSONRPCClient, TlsConfig},
+};
 use alloy::{
     consensus::{
         Transaction, TxEnvelope,
@@ -13,26 +16,29 @@ use async_trait::async_trait;
 use hex;
 use serde_json::{Map, Value};
 use std::sync::Arc;
-use std::time::Duration;
+
 use tracing::{debug, error, info};
 
-#[derive(Debug)]
 pub struct Web3Signer {
     client: JSONRPCClient,
 }
 
 impl Web3Signer {
-    pub async fn new(
-        rpc_url: &str,
-        timeout: Duration,
-        signer_address: &str,
-    ) -> Result<Self, Error> {
-        info!("Web3Signer: Creating new Web3Signer with URL: {}", rpc_url);
-        let client = JSONRPCClient::new_with_timeout(rpc_url, timeout)?;
-        if !Self::is_signer_key_available(&client, signer_address).await? {
+    pub async fn new(info: Web3SignerInfo) -> Result<Self, Error> {
+        info!("Web3Signer: Creating new Web3Signer with URL: {}", info.url);
+        let client = JSONRPCClient::new_with_tls_and_timeout(
+            &info.url,
+            info.timeout,
+            TlsConfig {
+                ca_cert: info.ca_cert,
+                client_cert: info.client_cert,
+                client_key: info.client_key,
+            },
+        )?;
+        if !Self::is_signer_key_available(&client, &info.signer_address).await? {
             return Err(anyhow::anyhow!(
                 "Web3Signer: Signer key is not available for address {}",
-                signer_address
+                info.signer_address
             ));
         }
         Ok(Self { client })
@@ -137,7 +143,7 @@ impl Web3Signer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Web3TxSigner {
     inner: Arc<Web3Signer>,
     address: Address,
@@ -208,6 +214,7 @@ async fn check_signer_correctness(tx_envelope: &TxEnvelope, from: Address) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn test_is_signer_key_available() {
